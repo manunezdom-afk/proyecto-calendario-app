@@ -10,7 +10,7 @@ const AVATAR_2 =
 const CALENDAR_DAYS = [
   { day: 'LUN', num: 16 },
   { day: 'MAR', num: 17 },
-  { day: 'MIÉ', num: 18, active: true },
+  { day: 'MIÉ', num: 18 },
   { day: 'JUE', num: 19 },
   { day: 'VIE', num: 20 },
   { day: 'SÁB', num: 21 },
@@ -124,6 +124,8 @@ function EveningEventCard({ event, onDelete }) {
 // ─── Main view ────────────────────────────────────────────────────────────────
 export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask }) {
   const [showModal, setShowModal] = useState(false)
+  const [activeDay, setActiveDay] = useState(18)          // selected day number
+  const [calView, setCalView] = useState('mes')           // 'mes' | 'semana'
 
   const focusEvents = events.filter((e) => e.section === 'focus')
   const eveningEvents = events.filter((e) => e.section === 'evening')
@@ -153,34 +155,51 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
               </h1>
             </div>
             <div className="bg-surface-container-low p-1 rounded-xl flex">
-              <button className="px-4 py-1.5 text-xs font-bold rounded-lg bg-surface-container-lowest shadow-sm text-on-surface">
-                Mes
-              </button>
-              <button className="px-4 py-1.5 text-xs font-bold rounded-lg text-outline">
-                Semana
-              </button>
+              {['mes', 'semana'].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setCalView(v)}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-lg capitalize transition-all ${
+                    calView === v
+                      ? 'bg-surface-container-lowest shadow-sm text-on-surface'
+                      : 'text-outline'
+                  }`}
+                >
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </button>
+              ))}
             </div>
           </div>
 
           {/* Calendar Strip */}
           <div className="grid grid-cols-7 gap-2">
-            {CALENDAR_DAYS.map(({ day, num, active }) => (
-              <div key={day} className="flex flex-col items-center gap-2">
-                <span className={`text-[10px] font-bold uppercase ${active ? 'text-primary' : 'text-outline'}`}>
-                  {day}
-                </span>
-                {active ? (
-                  <div className="w-10 h-14 flex flex-col items-center justify-center rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20">
-                    <span>{num}</span>
-                    <div className="w-1 h-1 bg-white rounded-full mt-1" />
-                  </div>
-                ) : (
-                  <div className="w-10 h-14 flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-semibold">
-                    {num}
-                  </div>
-                )}
-              </div>
-            ))}
+            {CALENDAR_DAYS.map(({ day, num }) => {
+              const isActive = num === activeDay
+              return (
+                <button
+                  key={day}
+                  onClick={() => {
+                    setActiveDay(num)
+                    console.log(`[Sanctuary] 📅 Day selected: ${day} ${num}`)
+                  }}
+                  className="flex flex-col items-center gap-2 focus:outline-none"
+                >
+                  <span className={`text-[10px] font-bold uppercase ${isActive ? 'text-primary' : 'text-outline'}`}>
+                    {day}
+                  </span>
+                  {isActive ? (
+                    <div className="w-10 h-14 flex flex-col items-center justify-center rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20">
+                      <span>{num}</span>
+                      <div className="w-1 h-1 bg-white rounded-full mt-1" />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-14 flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-semibold hover:bg-surface-container transition-colors">
+                      {num}
+                    </div>
+                  )}
+                </button>
+              )
+            })}
           </div>
         </header>
 

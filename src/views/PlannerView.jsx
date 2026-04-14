@@ -110,7 +110,7 @@ export default function PlannerView({ onAddEvent }) {
                   Martes, 24 de Oct
                 </p>
                 <h2 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface">
-                  Flujo Diario
+                  Mi Día
                 </h2>
               </div>
               <button
@@ -198,7 +198,7 @@ export default function PlannerView({ onAddEvent }) {
                 <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>
                   auto_awesome
                 </span>
-                <h4 className="font-headline font-bold text-on-surface">Insights de IA</h4>
+                <h4 className="font-headline font-bold text-on-surface">Resumen IA</h4>
               </div>
               <div className="space-y-4">
                 <div className="p-4 bg-surface-container-lowest rounded-xl">
@@ -219,7 +219,7 @@ export default function PlannerView({ onAddEvent }) {
             {/* Priority Tasks */}
             <div>
               <div className="flex justify-between items-center mb-4 px-2">
-                <h4 className="font-headline font-bold text-on-surface">Tareas de Alto Impacto</h4>
+                <h4 className="font-headline font-bold text-on-surface">Tareas</h4>
                 <button
                   onClick={() => {
                     const label = prompt('Nueva tarea:')
@@ -269,7 +269,7 @@ export default function PlannerView({ onAddEvent }) {
 
                 {/* Goal card */}
                 <div className="bg-primary p-6 rounded-[24px] text-white shadow-xl shadow-primary/20">
-                  <h5 className="text-lg font-bold mb-2">Objetivo de la Tarde</h5>
+                  <h5 className="text-lg font-bold mb-2">Mi Meta</h5>
                   <p className="text-primary-fixed text-sm mb-4 leading-relaxed opacity-90">
                     Terminar la documentación arquitectónica para la nueva capa de datos.
                   </p>

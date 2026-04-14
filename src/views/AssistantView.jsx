@@ -1,339 +1,310 @@
 import { useState, useEffect, useRef } from 'react'
+import { parseEvent } from '../utils/parseEvent'
 
-const AVATAR_URL =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuDc_HJr_2CTn2bH2wxJwN-84kHi9OHpnszK1Bsp89yK0Q9Yrw1wyUPskebHdZGSP_yIcd72iyGGt_n5982DlxLk6paq5dujnm_ExfkboSKpVYrlXG6Jfodq-YyTzs78HKo0F_eNeevX9hyoluaPJtqdgPnbzm8AxT5Hc99QRUXZVirEaCtku9NSaaqLv-oN1sHKBoE5wihpUXo9Aij5CQyf5CtVv8i_asslJ7yI9b9BJ46H4rtaUDIv38tWvCSk8jGbgjjQpR3OdJ5q'
+// ── Web Speech API setup ────────────────────────────────────────────────────
+const SpeechRecognition =
+  typeof window !== 'undefined' &&
+  (window.SpeechRecognition || window.webkitSpeechRecognition)
 
-// Demo phrases that appear as "transcription"
-const DEMO_PHRASES = [
-  'Organiza mi tarde para estudiar y hacer ejercicio...',
-  'Añade una reunión mañana a las 10 de la mañana...',
-  'Recuérdame revisar los correos antes de las 5...',
-  'Bloquea dos horas de trabajo profundo esta semana...',
+// ── Examples shown as placeholder cycling text ─────────────────────────────
+const EXAMPLES = [
+  'Ej: "futbol a las 5"',
+  'Ej: "reunión mañana a las 10"',
+  'Ej: "gym a las 6 de la tarde"',
+  'Ej: "almuerzo al mediodía"',
+  'Ej: "cena con mamá a las 8"',
 ]
 
-// Suggested events the AI "proposes"
-const SUGGESTION_SETS = [
-  [
-    {
-      id: 'sug-1a',
-      icon: 'menu_book',
-      iconColor: 'text-primary-fixed-dim',
-      bgColor: 'bg-primary/20',
-      title: 'Sesión de Estudio',
-      time: '16:00 — 18:00 · Modo Enfoque',
-      tags: ['Biología', 'Tranquilo'],
-      eventData: { title: 'Sesión de Estudio', time: '4:00 PM - 6:00 PM', section: 'evening', icon: 'menu_book', dotColor: 'bg-primary' },
-    },
-    {
-      id: 'sug-1b',
-      icon: 'fitness_center',
-      iconColor: 'text-secondary-fixed-dim',
-      bgColor: 'bg-secondary/20',
-      title: 'Entrenamiento Gym',
-      time: '18:30 — 19:45 · Core y Cardio',
-      tags: ['Intenso', 'Quema de Calorías'],
-      eventData: { title: 'Entrenamiento Gym', time: '6:30 PM - 7:45 PM', section: 'evening', icon: 'fitness_center', dotColor: 'bg-secondary-container' },
-    },
-  ],
-  [
-    {
-      id: 'sug-2a',
-      icon: 'groups',
-      iconColor: 'text-primary-fixed-dim',
-      bgColor: 'bg-primary/20',
-      title: 'Reunión de Equipo',
-      time: '10:00 — 11:00 · Sala Principal',
-      tags: ['Trabajo', 'Prioritario'],
-      eventData: { title: 'Reunión de Equipo', time: '10:00 AM - 11:00 AM', section: 'focus', icon: 'groups', dotColor: '' },
-    },
-    {
-      id: 'sug-2b',
-      icon: 'inbox',
-      iconColor: 'text-secondary-fixed-dim',
-      bgColor: 'bg-secondary/20',
-      title: 'Revisión de Correos',
-      time: '16:30 — 17:00 · Inbox Zero',
-      tags: ['Email', 'Rápido'],
-      eventData: { title: 'Revisión de Correos', time: '4:30 PM - 5:00 PM', section: 'evening', icon: 'inbox', dotColor: 'bg-secondary-container' },
-    },
-  ],
-]
-
-// ── States: idle | listening | processing | results ────────────────────────
 export default function AssistantView({ onClose, onAddEvent }) {
-  const [phase, setPhase] = useState('idle')          // 'idle' | 'listening' | 'processing' | 'results'
-  const [transcript, setTranscript] = useState('')
-  const [phraseIdx, setPhraseIdx] = useState(0)
-  const [suggestions, setSuggestions] = useState([])
-  const [accepted, setAccepted] = useState({})        // { [id]: true }
-  const [textMode, setTextMode] = useState(false)
-  const [textInput, setTextInput] = useState('')
+  const [input, setInput] = useState('')
+  const [parsed, setParsed] = useState(null)      // result from parseEvent()
+  const [listening, setListening] = useState(false)
+  const [interimText, setInterimText] = useState('') // real-time voice transcript
   const [toast, setToast] = useState('')
-  const timerRef = useRef(null)
+  const [placeholderIdx, setPlaceholderIdx] = useState(0)
+  const [added, setAdded] = useState(false)
 
-  // Clean up timers on unmount
-  useEffect(() => () => clearTimeout(timerRef.current), [])
+  const recognitionRef = useRef(null)
+  const inputRef = useRef(null)
 
-  // ── Show toast briefly ─────────────────────────────────────────────────────
-  function showToast(msg) {
-    setToast(msg)
-    setTimeout(() => setToast(''), 2500)
-  }
+  // Cycle placeholder examples every 3 seconds
+  useEffect(() => {
+    const id = setInterval(() => setPlaceholderIdx((i) => (i + 1) % EXAMPLES.length), 3000)
+    return () => clearInterval(id)
+  }, [])
 
-  // ── Start listening → processing → results ────────────────────────────────
-  function startListening(inputText = '') {
-    const phrase = inputText || DEMO_PHRASES[phraseIdx % DEMO_PHRASES.length]
-    setPhraseIdx((i) => i + 1)
-    const suggSet = SUGGESTION_SETS[phraseIdx % SUGGESTION_SETS.length]
+  // Init speech recognition once
+  useEffect(() => {
+    if (!SpeechRecognition) return
+    const r = new SpeechRecognition()
+    r.lang = 'es-ES'
+    r.continuous = false
+    r.interimResults = true
 
-    console.log(`[Sanctuary] 🎙️ Assistant listening. Phrase: "${phrase}"`)
-    setPhase('listening')
-    setTranscript('')
-    setAccepted({})
-    setTextMode(false)
-    setTextInput('')
+    r.onstart = () => {
+      console.log('[Sanctuary] 🎙️ Voice recognition started')
+      setListening(true)
+      setInterimText('')
+    }
 
-    // Simulate typing the phrase character by character
-    let i = 0
-    function typeNext() {
-      i++
-      setTranscript(phrase.slice(0, i))
-      if (i < phrase.length) {
-        timerRef.current = setTimeout(typeNext, 38)
-      } else {
-        // Done typing → processing
-        timerRef.current = setTimeout(() => {
-          console.log('[Sanctuary] ⚙️ Assistant processing...')
-          setPhase('processing')
-          timerRef.current = setTimeout(() => {
-            console.log('[Sanctuary] ✅ Assistant showing results.')
-            setSuggestions(suggSet)
-            setPhase('results')
-          }, 1400)
-        }, 600)
+    r.onresult = (e) => {
+      let interim = ''
+      let final = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          final += e.results[i][0].transcript
+        } else {
+          interim += e.results[i][0].transcript
+        }
+      }
+      setInterimText(interim || final)
+      if (final) {
+        console.log(`[Sanctuary] 🎙️ Final transcript: "${final}"`)
+        handleProcess(final.trim())
       }
     }
-    typeNext()
+
+    r.onerror = (e) => {
+      console.warn('[Sanctuary] ⚠️ Speech error:', e.error)
+      setListening(false)
+      setInterimText('')
+      if (e.error === 'not-allowed') {
+        showToast('Permiso de micrófono denegado. Usa el texto.')
+      }
+    }
+
+    r.onend = () => {
+      setListening(false)
+      setInterimText('')
+    }
+
+    recognitionRef.current = r
+    return () => { try { r.abort() } catch (_) {} }
+  }, [])
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 2800)
   }
 
-  function handleTextSubmit(e) {
+  // ── Process text (voice or typed) → NLP → show parsed card ────────────────
+  function handleProcess(text) {
+    if (!text.trim()) return
+    setListening(false)
+    setInterimText('')
+    const result = parseEvent(text)
+    setInput(text)
+    setParsed(result)
+    setAdded(false)
+  }
+
+  // ── Submit from text input ─────────────────────────────────────────────────
+  function handleSubmit(e) {
     e.preventDefault()
-    if (!textInput.trim()) return
-    startListening(textInput.trim())
+    handleProcess(input)
   }
 
-  function handleAccept(sug) {
-    if (accepted[sug.id]) return
-    console.log(`[Sanctuary] ✅ Accepting suggestion: "${sug.title}"`)
-    setAccepted((prev) => ({ ...prev, [sug.id]: true }))
-    if (onAddEvent) {
-      onAddEvent(sug.eventData)
-      showToast(`"${sug.title}" añadido al calendario`)
+  // ── Start / stop voice ─────────────────────────────────────────────────────
+  function toggleVoice() {
+    if (!SpeechRecognition) {
+      showToast('Tu navegador no soporta voz. Escribe el evento.')
+      inputRef.current?.focus()
+      return
+    }
+    if (listening) {
+      recognitionRef.current?.stop()
+    } else {
+      setParsed(null)
+      setAdded(false)
+      setInput('')
+      try {
+        recognitionRef.current?.start()
+      } catch (err) {
+        console.warn('[Sanctuary] Could not start recognition:', err)
+      }
     }
   }
 
-  function handleStop() {
-    clearTimeout(timerRef.current)
-    console.log('[Sanctuary] ⏹️ Assistant stopped.')
-    setPhase('idle')
-    setTranscript('')
+  // ── Add the parsed event to the calendar ──────────────────────────────────
+  function handleAdd() {
+    if (!parsed) return
+    console.log('[Sanctuary] ➕ Adding parsed event:', parsed)
+    onAddEvent?.({
+      title: parsed.title,
+      time: parsed.time,
+      description: parsed.date !== 'Hoy' ? parsed.date : '',
+      section: parsed.section,
+      icon: parsed.icon,
+      dotColor: parsed.dotColor,
+    })
+    setAdded(true)
+    showToast(`"${parsed.title}" añadido al calendario`)
+    setTimeout(() => {
+      setParsed(null)
+      setInput('')
+      setAdded(false)
+      inputRef.current?.focus()
+    }, 1400)
   }
 
-  const isActive = phase === 'listening' || phase === 'processing'
+  // ── Edit the parsed event inline ──────────────────────────────────────────
+  function handleEdit() {
+    setParsed(null)
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }
+
+  const voiceSupported = !!SpeechRecognition
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col backdrop-darken text-white overflow-hidden">
+    <div className="fixed inset-0 z-[60] flex flex-col backdrop-darken text-white">
 
-      {/* Toast notification */}
+      {/* Toast */}
       {toast && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[90] bg-white/20 backdrop-blur-xl px-5 py-3 rounded-2xl border border-white/20 text-sm font-semibold shadow-xl transition-all">
-          ✓ {toast}
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[90] bg-white/20 backdrop-blur-xl px-5 py-3 rounded-2xl border border-white/20 text-sm font-semibold shadow-xl">
+          {toast}
         </div>
       )}
 
       {/* Header */}
-      <header className="flex justify-between items-center w-full px-6 py-4 bg-transparent z-50">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onClose}
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md hover:bg-white/20 transition-all"
-          >
-            <span className="material-symbols-outlined text-white">close</span>
-          </button>
-          <span className="font-headline font-extrabold text-lg tracking-tight">Sanctuary</span>
-        </div>
-        <div className="h-10 w-10 rounded-full overflow-hidden ring-2 ring-primary/20">
-          <img alt="User profile avatar" className="w-full h-full object-cover" src={AVATAR_URL} />
-        </div>
+      <header className="flex justify-between items-center px-6 py-4 flex-shrink-0">
+        <button
+          onClick={onClose}
+          className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-all"
+        >
+          <span className="material-symbols-outlined text-white">arrow_back</span>
+        </button>
+        <span className="font-headline font-extrabold text-lg tracking-tight">Asistente</span>
+        <div className="w-10 h-10" /> {/* spacer */}
       </header>
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-8 relative">
+      {/* ── Center area ─────────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 gap-8 overflow-hidden">
 
-        {/* Orb */}
-        <div
-          className="relative flex items-center justify-center mb-10 cursor-pointer"
-          onClick={() => phase === 'idle' && startListening()}
-        >
-          <div className={`absolute w-[320px] h-[320px] ai-pulse-glow ${isActive ? 'animate-pulse' : 'opacity-30'} transition-opacity duration-500`} />
-          <div className={`relative z-10 w-32 h-32 rounded-full bg-gradient-to-br from-primary to-secondary-container flex items-center justify-center shadow-[0_0_60px_rgba(0,88,188,0.5)] transition-transform duration-300 ${isActive ? 'scale-110' : 'hover:scale-105'}`}>
-            {phase === 'idle' ? (
-              <span className="material-symbols-outlined text-4xl text-white">mic</span>
-            ) : (
-              <div className="flex items-end gap-1.5 h-12">
-                <div className="w-1.5 h-6 bg-white/90 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                <div className="w-1.5 h-12 bg-white rounded-full animate-bounce" />
-                <div className="w-1.5 h-8 bg-white/90 rounded-full animate-bounce [animation-delay:-0.5s]" />
-                <div className="w-1.5 h-10 bg-white rounded-full animate-bounce [animation-delay:-0.2s]" />
-                <div className="w-1.5 h-5 bg-white/80 rounded-full animate-bounce [animation-delay:-0.7s]" />
+        {/* Orb / mic button */}
+        <div className="relative flex items-center justify-center">
+          {listening && (
+            <div className="absolute w-48 h-48 ai-pulse-glow animate-ping opacity-30 rounded-full" />
+          )}
+          <button
+            onClick={toggleVoice}
+            title={voiceSupported ? (listening ? 'Detener' : 'Hablar') : 'Micrófono no disponible'}
+            className={`relative z-10 w-28 h-28 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 active:scale-95 ${
+              listening
+                ? 'bg-error scale-110 shadow-error/30'
+                : 'bg-gradient-to-br from-primary to-secondary-container shadow-primary/30 hover:scale-105'
+            } ${!voiceSupported ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            {listening ? (
+              <div className="flex items-end gap-1 h-8">
+                <div className="w-1 h-4 bg-white rounded-full animate-bounce [animation-delay:-0.3s]" />
+                <div className="w-1 h-8 bg-white rounded-full animate-bounce" />
+                <div className="w-1 h-5 bg-white rounded-full animate-bounce [animation-delay:-0.5s]" />
+                <div className="w-1 h-7 bg-white rounded-full animate-bounce [animation-delay:-0.2s]" />
+                <div className="w-1 h-3 bg-white rounded-full animate-bounce [animation-delay:-0.7s]" />
               </div>
+            ) : (
+              <span className="material-symbols-outlined text-4xl text-white">mic</span>
             )}
-          </div>
+          </button>
         </div>
 
-        {/* Transcription / status text */}
-        <div className="max-w-2xl text-center px-4">
-          {phase === 'idle' && !textMode && (
-            <>
-              <p className="font-headline text-2xl font-bold text-white/80 mb-3">
-                Toca para hablar
-              </p>
-              <p className="text-white/40 text-base">
-                Di qué quieres organizar y la IA lo añadirá al calendario.
-              </p>
-            </>
-          )}
+        {/* Voice interim transcript */}
+        {listening && (
+          <p className="text-white/80 text-lg font-medium text-center max-w-xs leading-snug min-h-[2rem]">
+            {interimText || <span className="text-white/40">Escuchando...</span>}
+          </p>
+        )}
 
-          {(phase === 'listening' || phase === 'processing') && (
-            <>
-              <h1 className="font-headline text-3xl font-bold tracking-tight mb-4 leading-tight">
-                <span className="text-white">{transcript}</span>
-                <span className="animate-pulse text-primary">|</span>
-              </h1>
-              <p className="text-white/60 text-lg font-medium tracking-wide">
-                {phase === 'listening' ? 'Escuchando...' : 'Procesando con IA...'}
-              </p>
-            </>
-          )}
-
-          {phase === 'results' && (
-            <p className="text-white/60 text-base font-medium mb-2">
-              Aquí tienes mis sugerencias — acepta las que quieras añadir al calendario.
+        {/* Idle instruction */}
+        {!listening && !parsed && (
+          <div className="text-center space-y-2">
+            <p className="text-white/70 text-base font-medium">
+              {voiceSupported ? 'Toca el micrófono o escribe abajo' : 'Escribe el evento abajo'}
             </p>
-          )}
+            <p className="text-white/30 text-sm">{EXAMPLES[placeholderIdx]}</p>
+          </div>
+        )}
 
-          {textMode && phase === 'idle' && (
-            <form onSubmit={handleTextSubmit} className="mt-4 flex gap-3 w-full max-w-md mx-auto">
-              <input
-                autoFocus
-                type="text"
-                value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
-                placeholder="Escribe tu instrucción..."
-                className="flex-1 bg-white/10 border border-white/20 rounded-2xl px-5 py-3 text-white placeholder:text-white/40 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
-              <button
-                type="submit"
-                className="px-5 py-3 bg-primary rounded-2xl text-white font-bold text-sm active:scale-95 transition-all"
-              >
-                Enviar
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
+        {/* ── Parsed event card ────────────────────────────────────────────── */}
+        {parsed && !listening && (
+          <div className={`w-full max-w-sm rounded-3xl border p-6 space-y-4 transition-all ${
+            added
+              ? 'bg-primary/20 border-primary/50'
+              : 'bg-white/10 border-white/20 backdrop-blur-xl'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-primary/30 flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-outlined text-primary-fixed-dim text-2xl">
+                  {parsed.icon}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-headline font-bold text-xl leading-tight truncate">
+                  {parsed.title}
+                </p>
+                <p className="text-white/60 text-sm mt-0.5">
+                  {[parsed.date, parsed.time].filter(Boolean).join(' · ') || 'Sin horario'}
+                </p>
+              </div>
+            </div>
 
-      {/* Suggestions (shown when results) */}
-      {phase === 'results' && (
-        <div className="w-full px-6 pb-36">
-          <div className="max-w-xl mx-auto space-y-3">
-            {suggestions.map((sug) => (
-              <div
-                key={sug.id}
-                className={`group bg-white/5 backdrop-blur-xl p-5 rounded-[24px] border flex items-start gap-4 transition-all ${
-                  accepted[sug.id]
-                    ? 'border-primary/50 bg-primary/10'
-                    : 'border-white/10 hover:bg-white/10 active:scale-[0.98]'
-                }`}
-              >
-                <div className={`w-12 h-12 rounded-xl ${sug.bgColor} flex items-center justify-center flex-shrink-0`}>
-                  <span className={`material-symbols-outlined ${sug.iconColor}`}>{sug.icon}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-headline text-base font-bold">{sug.title}</h3>
-                  <p className="text-sm text-white/60 mb-2">{sug.time}</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {sug.tags.map((tag) => (
-                      <span key={tag} className="px-3 py-0.5 bg-white/10 rounded-full text-xs font-semibold">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+            {added ? (
+              <div className="flex items-center justify-center gap-2 text-primary-fixed font-bold py-1">
+                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  check_circle
+                </span>
+                Añadido al calendario
+              </div>
+            ) : (
+              <div className="flex gap-3">
                 <button
-                  onClick={() => handleAccept(sug)}
-                  className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                    accepted[sug.id]
-                      ? 'bg-primary text-white'
-                      : 'bg-white/10 text-white/30 hover:bg-white/20 hover:text-white'
-                  }`}
+                  onClick={handleEdit}
+                  className="flex-1 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white/80 font-semibold text-sm transition-all"
                 >
-                  <span className="material-symbols-outlined text-[20px]"
-                    style={accepted[sug.id] ? { fontVariationSettings: "'FILL' 1" } : {}}>
-                    check_circle
-                  </span>
+                  Editar
+                </button>
+                <button
+                  onClick={handleAdd}
+                  className="flex-1 py-3 rounded-2xl bg-primary hover:bg-primary/80 text-white font-bold text-sm shadow-lg shadow-primary/30 active:scale-95 transition-all"
+                >
+                  Añadir al calendario
                 </button>
               </div>
-            ))}
-            <button
-              onClick={() => startListening()}
-              className="w-full py-3 mt-2 rounded-2xl border border-white/20 text-white/60 hover:text-white hover:border-white/40 text-sm font-semibold transition-all"
-            >
-              Intentar con otra instrucción
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Bottom control bar */}
-      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-[92%] max-w-lg z-[70]">
-        <div className="bg-white/10 backdrop-blur-3xl p-2 rounded-[32px] border border-white/10 flex items-center justify-between">
-
-          {/* Keyboard toggle */}
-          <button
-            onClick={() => {
-              if (phase !== 'idle') return
-              setTextMode((v) => !v)
-            }}
-            className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
-              textMode ? 'bg-primary/30 text-white' : 'bg-white/5 hover:bg-white/10 text-white'
-            }`}
-          >
-            <span className="material-symbols-outlined">{textMode ? 'mic' : 'keyboard'}</span>
-          </button>
-
-          {/* Status */}
-          <div className="flex items-center gap-4 px-4 overflow-hidden">
-            {isActive && (
-              <div className="h-1 w-16 bg-white/20 rounded-full overflow-hidden">
-                <div className="h-full bg-primary animate-pulse" style={{ width: phase === 'processing' ? '80%' : '40%' }} />
-              </div>
             )}
-            <span className="text-sm font-semibold tracking-wider text-white/80 uppercase">
-              {phase === 'idle' ? 'LISTO' : phase === 'listening' ? 'ESCUCHANDO' : phase === 'processing' ? 'PROCESANDO' : 'SUGERENCIAS'}
-            </span>
           </div>
+        )}
+      </div>
 
-          {/* Stop / Reset */}
+      {/* ── Text input bar (always visible at bottom) ─────────────────────── */}
+      <div className="flex-shrink-0 px-4 pb-8 pt-3">
+        <form
+          onSubmit={handleSubmit}
+          className="flex items-center gap-3 bg-white/10 border border-white/20 backdrop-blur-xl rounded-[28px] px-4 py-2"
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value)
+              if (parsed) setParsed(null) // clear card when user edits
+            }}
+            placeholder={EXAMPLES[placeholderIdx]}
+            className="flex-1 bg-transparent text-white placeholder:text-white/30 text-sm font-medium focus:outline-none min-w-0 py-2"
+          />
           <button
-            onClick={isActive ? handleStop : () => { setPhase('idle'); setTranscript('') }}
-            className="w-14 h-14 rounded-full bg-error/20 hover:bg-error/30 flex items-center justify-center transition-colors group"
+            type="submit"
+            disabled={!input.trim()}
+            className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full bg-primary disabled:opacity-30 hover:bg-primary/80 active:scale-90 transition-all"
           >
-            <span className="material-symbols-outlined text-error group-hover:scale-110 transition-transform">
-              {isActive ? 'stop' : 'restart_alt'}
-            </span>
+            <span className="material-symbols-outlined text-white text-[20px]">arrow_upward</span>
           </button>
-        </div>
+        </form>
+        {!voiceSupported && (
+          <p className="text-center text-white/25 text-xs mt-2">
+            Voz no disponible en este navegador
+          </p>
+        )}
       </div>
     </div>
   )
