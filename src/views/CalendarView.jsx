@@ -136,7 +136,7 @@ function EveningEventCard({ event, onDelete }) {
 export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask }) {
   const [showModal, setShowModal] = useState(false)
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
-  const [calView, setCalView] = useState('mes')           // 'mes' | 'semana'
+  const [calView, setCalView] = useState('semana')         // 'mes' | 'semana'
 
   const focusEvents = events.filter((e) => e.section === 'focus')
   const eveningEvents = events.filter((e) => e.section === 'evening')
