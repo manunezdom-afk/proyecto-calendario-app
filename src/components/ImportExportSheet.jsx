@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { downloadICS }  from '../utils/icsExport'
 import { parseICS }     from '../utils/icsImport'
 import { parseEvent }   from '../utils/parseEvent'
@@ -499,8 +499,11 @@ function PhotoTab({ onImport }) {
 }
 
 // ── Main sheet ────────────────────────────────────────────────────────────────
-export default function ImportExportSheet({ isOpen, onClose, events, onImportEvent }) {
-  const [activeTab, setActiveTab] = useState('export')
+export default function ImportExportSheet({ isOpen, onClose, events, onImportEvent, initialTab = 'export' }) {
+  const [activeTab, setActiveTab] = useState(initialTab)
+
+  // Reset to initialTab each time the sheet opens
+  useEffect(() => { if (isOpen) setActiveTab(initialTab) }, [isOpen, initialTab])
 
   if (!isOpen) return null
 

@@ -35,6 +35,7 @@ export default function App() {
   } = useNotifications({ events })
   const [notifPanelOpen, setNotifPanelOpen]       = useState(false)
   const [importExportOpen, setImportExportOpen]   = useState(false)
+  const [importExportInitialTab, setImportExportInitialTab] = useState('export')
 
   // ── Task detail ───────────────────────────────────────────────────────────
   const [selectedEvent, setSelectedEvent] = useState(null)
@@ -103,6 +104,7 @@ export default function App() {
           onDeleteEvent={deleteEvent}
           onEditEvent={editEvent}
           onOpenTask={(event) => openTaskDetail(event)}
+          onExportClick={() => { setImportExportInitialTab('export'); setImportExportOpen(true) }}
         />
       )}
 
@@ -145,6 +147,7 @@ export default function App() {
         onClose={() => setImportExportOpen(false)}
         events={events}
         onImportEvent={addEvent}
+        initialTab={importExportInitialTab}
       />
     </>
   )

@@ -132,7 +132,7 @@ function EveningEventCard({ event, onDelete }) {
 }
 
 // ─── Main view ────────────────────────────────────────────────────────────────
-export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask }) {
+export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask, onExportClick }) {
   const [showModal, setShowModal] = useState(false)
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('semana')         // 'mes' | 'semana'
@@ -164,20 +164,33 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                 Calendario
               </h1>
             </div>
-            <div className="bg-surface-container-low p-1 rounded-xl flex">
-              {['mes', 'semana'].map((v) => (
+            <div className="flex items-center gap-2">
+              {/* Export button */}
+              {onExportClick && (
                 <button
-                  key={v}
-                  onClick={() => setCalView(v)}
-                  className={`px-4 py-1.5 text-xs font-bold rounded-lg capitalize transition-all ${
-                    calView === v
-                      ? 'bg-surface-container-lowest shadow-sm text-on-surface'
-                      : 'text-outline'
-                  }`}
+                  onClick={onExportClick}
+                  title="Exportar calendario"
+                  className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-container-low text-outline hover:text-primary hover:bg-primary/10 transition-colors active:scale-90"
                 >
-                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                  <span className="material-symbols-outlined text-[20px]">ios_share</span>
                 </button>
-              ))}
+              )}
+              {/* View switcher */}
+              <div className="bg-surface-container-low p-1 rounded-xl flex">
+                {['mes', 'semana'].map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setCalView(v)}
+                    className={`px-4 py-1.5 text-xs font-bold rounded-lg capitalize transition-all ${
+                      calView === v
+                        ? 'bg-surface-container-lowest shadow-sm text-on-surface'
+                        : 'text-outline'
+                    }`}
+                  >
+                    {v.charAt(0).toUpperCase() + v.slice(1)}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </header>
