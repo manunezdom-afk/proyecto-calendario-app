@@ -1,0 +1,1060 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 codigos:\
+codigo calendario principal: <!DOCTYPE html>\
+\
+<html class="light" lang="en"><head>\
+<meta charset="utf-8"/>\
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>\
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>\
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>\
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>\
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>\
+<script id="tailwind-config">\
+        tailwind.config = \{\
+            darkMode: "class",\
+            theme: \{\
+                extend: \{\
+                    "colors": \{\
+                        "outline": "#717786",\
+                        "surface-container": "#f0edef",\
+                        "on-primary-container": "#fefcff",\
+                        "on-primary-fixed-variant": "#004493",\
+                        "surface-container-high": "#eae7ea",\
+                        "primary-fixed": "#d8e2ff",\
+                        "on-error-container": "#93000a",\
+                        "on-surface-variant": "#414755",\
+                        "surface-dim": "#dcd9dc",\
+                        "on-tertiary": "#ffffff",\
+                        "inverse-primary": "#adc6ff",\
+                        "on-secondary-fixed-variant": "#3631b4",\
+                        "secondary-fixed": "#e2dfff",\
+                        "surface-container-low": "#f6f3f5",\
+                        "on-secondary": "#ffffff",\
+                        "secondary-fixed-dim": "#c2c1ff",\
+                        "inverse-on-surface": "#f3f0f2",\
+                        "surface-bright": "#fcf8fb",\
+                        "on-tertiary-fixed-variant": "#7c2e00",\
+                        "on-primary-fixed": "#001a41",\
+                        "tertiary-fixed-dim": "#ffb595",\
+                        "error-container": "#ffdad6",\
+                        "outline-variant": "#c1c6d7",\
+                        "surface": "#fcf8fb",\
+                        "on-background": "#1b1b1d",\
+                        "primary-fixed-dim": "#adc6ff",\
+                        "on-primary": "#ffffff",\
+                        "on-secondary-fixed": "#0c006a",\
+                        "primary-container": "#0070eb",\
+                        "tertiary-container": "#c64f00",\
+                        "surface-tint": "#005bc1",\
+                        "tertiary-fixed": "#ffdbcc",\
+                        "error": "#ba1a1a",\
+                        "background": "#fcf8fb",\
+                        "secondary": "#4c4aca",\
+                        "surface-container-lowest": "#ffffff",\
+                        "surface-variant": "#e4e2e4",\
+                        "surface-container-highest": "#e4e2e4",\
+                        "primary": "#0058bc",\
+                        "on-tertiary-fixed": "#351000",\
+                        "on-error": "#ffffff",\
+                        "on-secondary-container": "#fffbff",\
+                        "tertiary": "#9e3d00",\
+                        "on-surface": "#1b1b1d",\
+                        "inverse-surface": "#303032",\
+                        "on-tertiary-container": "#fffbff",\
+                        "secondary-container": "#6664e4"\
+                    \},\
+                    "borderRadius": \{\
+                        "DEFAULT": "0.25rem",\
+                        "lg": "1rem",\
+                        "xl": "1.5rem",\
+                        "full": "9999px"\
+                    \},\
+                    "fontFamily": \{\
+                        "headline": ["Manrope"],\
+                        "body": ["Inter"],\
+                        "label": ["Inter"]\
+                    \}\
+                \},\
+            \},\
+        \}\
+    </script>\
+<style>\
+        .material-symbols-outlined \{\
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\
+        \}\
+        body \{ font-family: 'Inter', sans-serif; \}\
+        h1, h2, h3 \{ font-family: 'Manrope', sans-serif; \}\
+    </style>\
+<style>\
+    body \{\
+      min-height: max(884px, 100dvh);\
+    \}\
+  </style>\
+</head>\
+<body class="bg-surface text-on-surface min-h-screen pb-32">\
+<!-- Top Navigation Bar -->\
+<nav class="sticky top-0 z-50 bg-slate-50/70 backdrop-blur-lg flex justify-between items-center w-full px-6 py-4">\
+<div class="flex items-center gap-3">\
+<div class="w-10 h-10 rounded-full bg-surface-variant overflow-hidden">\
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="Professional headshot of a smiling man with clean lighting and a soft neutral studio background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUlymkNXhOUvo1PKHacfy4WjdjqZyhU-F--HCZ60_x6tzwkRFkOBrFiEee8AQSbtMtmF8qfqKc69ukd1toshdgeBFJQ6o1V6yQC9l8FQblJ3rUyjwuVlxVEewKyOC_EcuWJmDBOMDb-Nhq5a0yubluKIlyH72I-r0EXggRltWhqsihzb0k-xvvPQeIG45FeVcbqB7F5_OMyJRzBchYXKehkOgWjergpJci6LeONjSeMPv8McxS8uvm3qLPtdbilbsYWFh8LhbOhoH7"/>\
+</div>\
+<span class="text-lg font-extrabold text-slate-900 tracking-tight">Sanctuary</span>\
+</div>\
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:opacity-80 transition-opacity active:scale-90 duration-300">\
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>\
+</button>\
+</nav>\
+<main class="max-w-md mx-auto px-6 pt-4 space-y-8">\
+<!-- Header & View Switcher -->\
+<header class="flex flex-col gap-6">\
+<div class="flex justify-between items-end">\
+<div>\
+<p class="text-sm font-semibold text-primary uppercase tracking-wider mb-1">Septiembre 2024</p>\
+<h1 class="text-4xl font-extrabold text-on-surface tracking-tight">Calendario</h1>\
+</div>\
+<div class="bg-surface-container-low p-1 rounded-xl flex">\
+<button class="px-4 py-1.5 text-xs font-bold rounded-lg bg-surface-container-lowest shadow-sm text-on-surface">Mes</button>\
+<button class="px-4 py-1.5 text-xs font-bold rounded-lg text-outline">Semana</button>\
+</div>\
+</div>\
+<!-- Calendar Strip -->\
+<div class="grid grid-cols-7 gap-2">\
+<div class="flex flex-col items-center gap-2">\
+<span class="text-[10px] font-bold text-outline uppercase">LUN</span>\
+<div class="w-10 h-14 flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-semibold">16</div>\
+</div>\
+<div class="flex flex-col items-center gap-2">\
+<span class="text-[10px] font-bold text-outline uppercase">MAR</span>\
+<div class="w-10 h-14 flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-semibold">17</div>\
+</div>\
+<div class="flex flex-col items-center gap-2">\
+<span class="text-[10px] font-bold text-primary uppercase">MI\'c9</span>\
+<div class="w-10 h-14 flex flex-col items-center justify-center rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20">\
+<span>MI\'c9</span>\
+<div class="w-1 h-1 bg-white rounded-full mt-1"></div>\
+</div>\
+</div>\
+<div class="flex flex-col items-center gap-2">\
+<span class="text-[10px] font-bold text-outline uppercase">JUE</span>\
+<div class="w-10 h-14 flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-semibold">19</div>\
+</div>\
+<div class="flex flex-col items-center gap-2">\
+<span class="text-[10px] font-bold text-outline uppercase">VIE</span>\
+<div class="w-10 h-14 flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-semibold">20</div>\
+</div>\
+<div class="flex flex-col items-center gap-2">\
+<span class="text-[10px] font-bold text-outline uppercase">S\'c1B</span>\
+<div class="w-10 h-14 flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-semibold">21</div>\
+</div>\
+<div class="flex flex-col items-center gap-2">\
+<span class="text-[10px] font-bold text-outline uppercase">DOM</span>\
+<div class="w-10 h-14 flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-semibold">22</div>\
+</div>\
+</div>\
+</header>\
+<!-- Asymmetric Intelligence Feed -->\
+<section class="space-y-6">\
+<h2 class="text-xl font-bold tracking-tight text-on-surface">Enfoque de Hoy</h2>\
+<div class="grid grid-cols-2 gap-4">\
+<!-- Large Highlight Card -->\
+<div class="col-span-2 bg-surface-container-lowest p-6 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.04)] space-y-4">\
+<div class="flex justify-between items-start">\
+<div class="p-2 bg-primary-fixed-dim/30 rounded-lg text-primary">\
+<span class="material-symbols-outlined" data-icon="auto_awesome">auto_awesome</span>\
+</div>\
+<span class="text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">A Continuaci\'f3n</span>\
+</div>\
+<div>\
+<h3 class="text-lg font-bold text-on-surface">Sincro de Estrategia de Producto</h3>\
+<p class="text-sm text-outline mt-1 leading-relaxed">Preparar la visualizaci\'f3n del roadmap trimestral para la revisi\'f3n de la junta ejecutiva.</p>\
+</div>\
+<div class="flex items-center gap-4 pt-2">\
+<div class="flex items-center gap-1.5">\
+<span class="material-symbols-outlined text-[18px] text-outline" data-icon="schedule">schedule</span>\
+<span class="text-xs font-semibold text-on-surface">2:00 PM - 3:30 PM</span>\
+</div>\
+<div class="flex -space-x-2">\
+<img alt="Avatar" class="w-6 h-6 rounded-full border-2 border-surface-container-lowest object-cover" data-alt="Close up portrait of a woman with a professional expression in a brightly lit office" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDfqPz-Xtp1DOlxyZ6qdBoqCnCTvLoTN7uCnDpKv7pQispXp8jMGm8VmAnGlq6fGljfeaM_FGgWpLdB3Ig6ImleJTb6h-TmrJg7wLQJBUNd1LSQiUrTmFaLHcku_b2IBR1b9-gtC7bCqoZTvugBoGNiE9EjBbxP2zP0nkLkJF5KXZxYSvNqigG3jSpyBQawu9fkiHNp1vQfAtrXoJyYILEZm_q5bSNPNATYmsirJUZFcSzFA1bGsAuK0G16fJNQgGEjyI-ErT5OZNRs"/>\
+<img alt="Avatar" class="w-6 h-6 rounded-full border-2 border-surface-container-lowest object-cover" data-alt="Portrait of a creative professional man with glasses in a minimalist environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGg2kzu3h6K4U-DHUHwAcgSd0y0SQIx6Duljc3apyQXiGDGaDJCJvmLXpH77eOXyP37Jc5UNLSd9hKH2_0BJqXhvtFuctuO1RWkTcExCM32YxUKV29rG8VZAro5LQQwBA75PSIOuScBv5k-ndaqFgJQNTRZRbvVa2ZXHve9TGmRIQetPC53lRJACf2mkMMFoX7yAwVHQpsMXQh-0XpdV1WYDlQF6dKony_nEBC2Jfhnzj8ftnPxl5-e5v_Kgn6dm-qDn9tw02nNGYd"/>\
+</div>\
+</div>\
+</div>\
+<!-- Small Detail Cards -->\
+<div class="bg-surface-container-low p-5 rounded-xl space-y-3">\
+<span class="material-symbols-outlined text-secondary" data-icon="checklist">checklist</span>\
+<h3 class="text-sm font-bold text-on-surface">Revisar Borradores</h3>\
+<p class="text-[11px] text-outline font-medium">3 tareas pendientes en 'Trabajo'</p>\
+</div>\
+<div class="bg-surface-container-low p-5 rounded-xl space-y-3">\
+<span class="material-symbols-outlined text-tertiary" data-icon="park">park</span>\
+<h3 class="text-sm font-bold text-on-surface">Almuerzo</h3>\
+<p class="text-[11px] text-outline font-medium">12:30 PM - Parque Cercano</p>\
+</div>\
+</div>\
+</section>\
+<!-- Vertical Timeline List -->\
+<section class="space-y-4">\
+<h2 class="text-xl font-bold tracking-tight text-on-surface">Tarde/Noche</h2>\
+<div class="space-y-2">\
+<div class="flex gap-4 items-center group">\
+<div class="w-12 text-right">\
+<span class="text-xs font-bold text-outline">Pr\'e1ctica de Yoga</span>\
+</div>\
+<div class="flex-1 bg-surface-container-lowest hover:bg-surface-container-high transition-colors p-4 rounded-xl flex justify-between items-center cursor-pointer">\
+<div class="flex items-center gap-3">\
+<div class="w-1.5 h-1.5 rounded-full bg-secondary-container"></div>\
+<span class="font-bold text-sm text-on-surface">Pr\'e1ctica de Yoga</span>\
+</div>\
+<span class="material-symbols-outlined text-outline group-hover:text-on-surface transition-colors" data-icon="chevron_right">chevron_right</span>\
+</div>\
+</div>\
+<div class="flex gap-4 items-center group">\
+<div class="w-12 text-right">\
+<span class="text-xs font-bold text-outline">Cena con Sarah</span>\
+</div>\
+<div class="flex-1 bg-surface-container-lowest hover:bg-surface-container-high transition-colors p-4 rounded-xl flex justify-between items-center cursor-pointer">\
+<div class="flex items-center gap-3">\
+<div class="w-1.5 h-1.5 rounded-full bg-tertiary"></div>\
+<span class="font-bold text-sm text-on-surface">Cena con Sarah</span>\
+</div>\
+<span class="material-symbols-outlined text-outline group-hover:text-on-surface transition-colors" data-icon="chevron_right">chevron_right</span>\
+</div>\
+</div>\
+</div>\
+</section>\
+</main>\
+<!-- Floating Action Button (The Assistant Pulse) -->\
+<div class="fixed bottom-28 left-1/2 -translate-x-1/2 z-[60]">\
+<button class="w-16 h-16 rounded-full bg-gradient-to-tr from-primary to-primary-container text-white shadow-[0_16px_32px_rgba(0,88,188,0.3)] flex items-center justify-center active:scale-90 transition-transform duration-300">\
+<span class="material-symbols-outlined text-3xl" data-icon="mic">mic</span>\
+</button>\
+</div>\
+<!-- Bottom Navigation Bar -->\
+<nav class="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] rounded-[24px] z-50 flex justify-around items-center px-4 py-3 bg-slate-50/70 backdrop-blur-2xl shadow-[0_12px_32px_rgba(0,0,0,0.06)]">\
+<div class="flex flex-col items-center gap-1 text-slate-400 font-['Inter'] text-[11px] font-semibold tracking-wide hover:text-blue-500 transition-colors cursor-pointer active:scale-95 duration-300">\
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>\
+<span>Planificador</span>\
+</div>\
+<div class="text-blue-600 flex flex-col items-center gap-1 font-['Inter'] text-[11px] font-semibold tracking-wide cursor-pointer active:scale-95 duration-300">\
+<span class="material-symbols-outlined" data-icon="calendar_month">calendar_month</span>\
+<span>Calendario</span>\
+</div>\
+<div class="flex flex-col items-center gap-1 text-slate-400 font-['Inter'] text-[11px] font-semibold tracking-wide hover:text-blue-500 transition-colors cursor-pointer active:scale-95 duration-300">\
+<span class="material-symbols-outlined" data-icon="auto_awesome">auto_awesome</span>\
+<span>Asistente</span>\
+</div>\
+<div class="flex flex-col items-center gap-1 text-slate-400 font-['Inter'] text-[11px] font-semibold tracking-wide hover:text-blue-500 transition-colors cursor-pointer active:scale-95 duration-300">\
+<span class="material-symbols-outlined" data-icon="checklist">checklist</span>\
+<span>Tareas</span>\
+</div>\
+</nav>\
+</body></html>\
+\
+\
+\
+\
+\
+\
+codigo asistente ia <!DOCTYPE html>\
+\
+<html class="light" lang="en"><head>\
+<meta charset="utf-8"/>\
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>\
+<title>Sanctuary Assistant</title>\
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>\
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>\
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>\
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>\
+<script id="tailwind-config">\
+        tailwind.config = \{\
+            darkMode: "class",\
+            theme: \{\
+                extend: \{\
+                    "colors": \{\
+                        "outline": "#717786",\
+                        "surface-container": "#f0edef",\
+                        "on-primary-container": "#fefcff",\
+                        "on-primary-fixed-variant": "#004493",\
+                        "surface-container-high": "#eae7ea",\
+                        "primary-fixed": "#d8e2ff",\
+                        "on-error-container": "#93000a",\
+                        "on-surface-variant": "#414755",\
+                        "surface-dim": "#dcd9dc",\
+                        "on-tertiary": "#ffffff",\
+                        "inverse-primary": "#adc6ff",\
+                        "on-secondary-fixed-variant": "#3631b4",\
+                        "secondary-fixed": "#e2dfff",\
+                        "surface-container-low": "#f6f3f5",\
+                        "on-secondary": "#ffffff",\
+                        "secondary-fixed-dim": "#c2c1ff",\
+                        "inverse-on-surface": "#f3f0f2",\
+                        "surface-bright": "#fcf8fb",\
+                        "on-tertiary-fixed-variant": "#7c2e00",\
+                        "on-primary-fixed": "#001a41",\
+                        "tertiary-fixed-dim": "#ffb595",\
+                        "error-container": "#ffdad6",\
+                        "outline-variant": "#c1c6d7",\
+                        "surface": "#fcf8fb",\
+                        "on-background": "#1b1b1d",\
+                        "primary-fixed-dim": "#adc6ff",\
+                        "on-primary": "#ffffff",\
+                        "on-secondary-fixed": "#0c006a",\
+                        "primary-container": "#0070eb",\
+                        "tertiary-container": "#c64f00",\
+                        "surface-tint": "#005bc1",\
+                        "tertiary-fixed": "#ffdbcc",\
+                        "error": "#ba1a1a",\
+                        "background": "#fcf8fb",\
+                        "secondary": "#4c4aca",\
+                        "surface-container-lowest": "#ffffff",\
+                        "surface-variant": "#e4e2e4",\
+                        "surface-container-highest": "#e4e2e4",\
+                        "primary": "#0058bc",\
+                        "on-tertiary-fixed": "#351000",\
+                        "on-error": "#ffffff",\
+                        "on-secondary-container": "#fffbff",\
+                        "tertiary": "#9e3d00",\
+                        "on-surface": "#1b1b1d",\
+                        "inverse-surface": "#303032",\
+                        "on-tertiary-container": "#fffbff",\
+                        "secondary-container": "#6664e4"\
+                    \},\
+                    "borderRadius": \{\
+                        "DEFAULT": "0.25rem",\
+                        "lg": "0.5rem",\
+                        "xl": "0.75rem",\
+                        "full": "9999px"\
+                    \},\
+                    "fontFamily": \{\
+                        "headline": ["Manrope"],\
+                        "body": ["Inter"],\
+                        "label": ["Inter"]\
+                    \}\
+                \},\
+            \},\
+        \}\
+    </script>\
+<style>\
+        .material-symbols-outlined \{\
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\
+        \}\
+        .ai-pulse-glow \{\
+            background: radial-gradient(circle, rgba(0, 88, 188, 0.4) 0%, rgba(102, 100, 228, 0) 70%);\
+        \}\
+        .backdrop-darken \{\
+            background: linear-gradient(180deg, rgba(27, 27, 29, 0.95) 0%, rgba(27, 27, 29, 1) 100%);\
+        \}\
+    </style>\
+<style>\
+    body \{\
+      min-height: max(884px, 100dvh);\
+    \}\
+  </style>\
+</head>\
+<body class="bg-surface font-body text-on-surface antialiased overflow-hidden">\
+<!-- Assistant Overlay Canvas -->\
+<main class="fixed inset-0 z-[60] flex flex-col backdrop-darken text-white overflow-hidden">\
+<!-- Top Navigation (Shared Component Identity) -->\
+<header class="flex justify-between items-center w-full px-6 py-4 bg-transparent z-50">\
+<div class="flex items-center gap-4">\
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md hover:bg-white/20 transition-all">\
+<span class="material-symbols-outlined text-white">close</span>\
+</button>\
+<span class="font-headline font-extrabold text-lg tracking-tight">Sanctuary</span>\
+</div>\
+<div class="h-10 w-10 rounded-full overflow-hidden ring-2 ring-primary/20">\
+<img alt="User profile avatar" class="w-full h-full object-cover" data-alt="Close-up professional portrait of a woman with a serene expression, soft cinematic lighting, neutral background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDc_HJr_2CTn2bH2wxJwN-84kHi9OHpnszK1Bsp89yK0Q9Yrw1wyUPskebHdZGSP_yIcd72iyGGt_n5982DlxLk6paq5dujnm_ExfkboSKpVYrlXG6Jfodq-YyTzs78HKo0F_eNeevX9hyoluaPJtqdgPnbzm8AxT5Hc99QRUXZVirEaCtku9NSaaqLv-oN1sHKBoE5wihpUXo9Aij5CQyf5CtVv8i_asslJ7yI9b9BJ46H4rtaUDIv38tWvCSk8jGbgjjQpR3OdJ5q"/>\
+</div>\
+</header>\
+<!-- Main Conversational Interface -->\
+<div class="flex-1 flex flex-col items-center justify-center px-8 relative">\
+<!-- Visual Waveform / Orb Section -->\
+<div class="relative flex items-center justify-center mb-20">\
+<!-- Ambient Pulsing Glow -->\
+<div class="absolute w-[400px] h-[400px] ai-pulse-glow animate-pulse"></div>\
+<!-- Main Intelligence Orb -->\
+<div class="relative z-10 w-32 h-32 rounded-full bg-gradient-to-br from-primary to-secondary-container flex items-center justify-center shadow-[0_0_60px_rgba(0,88,188,0.5)]">\
+<div class="flex items-end gap-1.5 h-12">\
+<div class="w-1.5 h-6 bg-white/90 rounded-full animate-bounce [animation-delay:-0.3s]"></div>\
+<div class="w-1.5 h-12 bg-white rounded-full animate-bounce"></div>\
+<div class="w-1.5 h-8 bg-white/90 rounded-full animate-bounce [animation-delay:-0.5s]"></div>\
+<div class="w-1.5 h-10 bg-white rounded-full animate-bounce [animation-delay:-0.2s]"></div>\
+<div class="w-1.5 h-5 bg-white/80 rounded-full animate-bounce [animation-delay:-0.7s]"></div>\
+</div>\
+</div>\
+</div>\
+<!-- Real-time Transcription -->\
+<div class="max-w-2xl text-center">\
+<h1 class="font-headline text-3xl md:text-5xl font-bold tracking-tight mb-6 leading-tight">\
+<span class="text-white">Organiza mi tarde para </span>\
+<span class="text-white/40">estudiar y hacer ejercicio...</span>\
+</h1>\
+<p class="text-white/60 text-lg font-medium tracking-wide">Escuchando tu plan...</p>\
+</div>\
+</div>\
+<!-- Dynamic Insights / Contextual Actions -->\
+<div class="w-full px-6 pb-32">\
+<div class="max-w-4xl mx-auto">\
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">\
+<!-- Suggested Action Card 1 -->\
+<div class="group bg-white/5 backdrop-blur-xl p-5 rounded-[24px] border border-white/10 flex items-start gap-4 transition-all hover:bg-white/10 active:scale-[0.98]">\
+<div class="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">\
+<span class="material-symbols-outlined text-primary-fixed-dim">menu_book</span>\
+</div>\
+<div class="flex-1">\
+<h3 class="font-headline text-lg font-bold">Sesi\'f3n de Estudio</h3>\
+<p class="text-sm text-white/60 mb-3">16:00 \'97 18:00 \'95 Modo Enfoque</p>\
+<div class="flex gap-2">\
+<span class="px-3 py-1 bg-white/10 rounded-full text-xs font-semibold">Biolog\'eda</span>\
+<span class="px-3 py-1 bg-white/10 rounded-full text-xs font-semibold">Tranquilo</span>\
+</div>\
+</div>\
+<span class="material-symbols-outlined text-white/20 group-hover:text-white transition-colors">check_circle</span>\
+</div>\
+<!-- Suggested Action Card 2 -->\
+<div class="group bg-white/5 backdrop-blur-xl p-5 rounded-[24px] border border-white/10 flex items-start gap-4 transition-all hover:bg-white/10 active:scale-[0.98]">\
+<div class="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center">\
+<span class="material-symbols-outlined text-secondary-fixed-dim">fitness_center</span>\
+</div>\
+<div class="flex-1">\
+<h3 class="font-headline text-lg font-bold">Entrenamiento Gym</h3>\
+<p class="text-sm text-white/60 mb-3">18:30 \'97 19:45 \'95 Core y Cardio</p>\
+<div class="flex gap-2">\
+<span class="px-3 py-1 bg-white/10 rounded-full text-xs font-semibold">Intenso</span>\
+<span class="px-3 py-1 bg-white/10 rounded-full text-xs font-semibold">Quema de Calor\'edas</span>\
+</div>\
+</div>\
+<span class="material-symbols-outlined text-white/20 group-hover:text-white transition-colors">check_circle</span>\
+</div>\
+</div>\
+</div>\
+</div>\
+<!-- Assistant Bottom Control Bar -->\
+<div class="fixed bottom-10 left-1/2 -translate-x-1/2 w-[92%] max-w-lg z-[70]">\
+<div class="bg-white/10 backdrop-blur-3xl p-2 rounded-[32px] border border-white/10 flex items-center justify-between">\
+<button class="w-14 h-14 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors">\
+<span class="material-symbols-outlined text-white">keyboard</span>\
+</button>\
+<div class="flex items-center gap-4 px-4 overflow-hidden">\
+<div class="h-1 w-20 bg-white/20 rounded-full overflow-hidden">\
+<div class="h-full bg-primary w-1/2 animate-[pulse_2s_infinite]"></div>\
+</div>\
+<span class="text-sm font-semibold tracking-wider text-white/80 uppercase">PROCESANDO</span>\
+</div>\
+<button class="w-14 h-14 rounded-full bg-error/20 hover:bg-error/30 flex items-center justify-center transition-colors group">\
+<span class="material-symbols-outlined text-error group-hover:scale-110 transition-transform">stop</span>\
+</button>\
+</div>\
+</div>\
+</main>\
+<!-- Shared Bottom Navigation (Hidden in Overlay as per UX instructions) -->\
+<nav class="fixed bottom-6 left-0 right-0 z-50 flex justify-around items-center px-4 py-3 bg-slate-50/70 dark:bg-slate-950/70 backdrop-blur-2xl fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] rounded-[24px] shadow-[0_12px_32px_rgba(0,0,0,0.06)] hidden">\
+<div class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-blue-500 transition-colors">\
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>\
+<span class="font-['Inter'] text-[11px] font-semibold tracking-wide">Planner</span>\
+</div>\
+<div class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-blue-500 transition-colors">\
+<span class="material-symbols-outlined" data-icon="calendar_month">calendar_month</span>\
+<span class="font-['Inter'] text-[11px] font-semibold tracking-wide">Calendar</span>\
+</div>\
+<!-- Assistant is active -->\
+<div class="text-blue-600 dark:text-blue-400 flex flex-col items-center gap-1 cubic-bezier(0.2,0.8,0.2,1) active:scale-95 transition-all">\
+<span class="material-symbols-outlined" data-icon="auto_awesome" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>\
+<span class="font-['Inter'] text-[11px] font-semibold tracking-wide">Assistant</span>\
+</div>\
+<div class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-blue-500 transition-colors">\
+<span class="material-symbols-outlined" data-icon="checklist">checklist</span>\
+<span class="font-['Inter'] text-[11px] font-semibold tracking-wide">Tasks</span>\
+</div>\
+</nav>\
+<!-- Background Content Canvas (Glimpse of reality behind overlay) -->\
+<div class="fixed inset-0 pointer-events-none opacity-20 blur-xl">\
+<div class="p-12">\
+<div class="h-8 w-48 bg-slate-200 rounded-full mb-12"></div>\
+<div class="grid grid-cols-3 gap-8">\
+<div class="aspect-video bg-slate-200 rounded-[32px]"></div>\
+<div class="aspect-video bg-slate-200 rounded-[32px]"></div>\
+<div class="aspect-video bg-slate-200 rounded-[32px]"></div>\
+</div>\
+</div>\
+</div>\
+</body></html>\
+\
+\
+\
+codigo detalle de la tarea: <!DOCTYPE html>\
+\
+<html class="light" lang="en"><head>\
+<meta charset="utf-8"/>\
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>\
+<title>Task Intelligence Detail - Sanctuary</title>\
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>\
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>\
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>\
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>\
+<script id="tailwind-config">\
+      tailwind.config = \{\
+        darkMode: "class",\
+        theme: \{\
+          extend: \{\
+            "colors": \{\
+                    "outline": "#717786",\
+                    "surface-container": "#f0edef",\
+                    "on-primary-container": "#fefcff",\
+                    "on-primary-fixed-variant": "#004493",\
+                    "surface-container-high": "#eae7ea",\
+                    "primary-fixed": "#d8e2ff",\
+                    "on-error-container": "#93000a",\
+                    "on-surface-variant": "#414755",\
+                    "surface-dim": "#dcd9dc",\
+                    "on-tertiary": "#ffffff",\
+                    "inverse-primary": "#adc6ff",\
+                    "on-secondary-fixed-variant": "#3631b4",\
+                    "secondary-fixed": "#e2dfff",\
+                    "surface-container-low": "#f6f3f5",\
+                    "on-secondary": "#ffffff",\
+                    "secondary-fixed-dim": "#c2c1ff",\
+                    "inverse-on-surface": "#f3f0f2",\
+                    "surface-bright": "#fcf8fb",\
+                    "on-tertiary-fixed-variant": "#7c2e00",\
+                    "on-primary-fixed": "#001a41",\
+                    "tertiary-fixed-dim": "#ffb595",\
+                    "error-container": "#ffdad6",\
+                    "outline-variant": "#c1c6d7",\
+                    "surface": "#fcf8fb",\
+                    "on-background": "#1b1b1d",\
+                    "primary-fixed-dim": "#adc6ff",\
+                    "on-primary": "#ffffff",\
+                    "on-secondary-fixed": "#0c006a",\
+                    "primary-container": "#0070eb",\
+                    "tertiary-container": "#c64f00",\
+                    "surface-tint": "#005bc1",\
+                    "tertiary-fixed": "#ffdbcc",\
+                    "error": "#ba1a1a",\
+                    "background": "#fcf8fb",\
+                    "secondary": "#4c4aca",\
+                    "surface-container-lowest": "#ffffff",\
+                    "surface-variant": "#e4e2e4",\
+                    "surface-container-highest": "#e4e2e4",\
+                    "primary": "#0058bc",\
+                    "on-tertiary-fixed": "#351000",\
+                    "on-error": "#ffffff",\
+                    "on-secondary-container": "#fffbff",\
+                    "tertiary": "#9e3d00",\
+                    "on-surface": "#1b1b1d",\
+                    "inverse-surface": "#303032",\
+                    "on-tertiary-container": "#fffbff",\
+                    "secondary-container": "#6664e4"\
+            \},\
+            "borderRadius": \{\
+                    "DEFAULT": "0.25rem",\
+                    "lg": "16px",\
+                    "xl": "24px",\
+                    "full": "9999px"\
+            \},\
+            "fontFamily": \{\
+                    "headline": ["Manrope"],\
+                    "body": ["Inter"],\
+                    "label": ["Inter"]\
+            \}\
+          \},\
+        \},\
+      \}\
+    </script>\
+<style>\
+        .material-symbols-outlined \{\
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\
+        \}\
+        body \{ font-family: 'Inter', sans-serif; background-color: #fcf8fb; color: #1b1b1d; \}\
+        h1, h2, h3 \{ font-family: 'Manrope', sans-serif; \}\
+    </style>\
+<style>\
+    body \{\
+      min-height: max(884px, 100dvh);\
+    \}\
+  </style>\
+</head>\
+<body class="bg-surface selection:bg-primary-fixed">\
+<!-- TopAppBar -->\
+<header class="bg-slate-50/70 dark:bg-slate-950/70 backdrop-blur-lg docked full-width top-0 sticky z-50 no-border shadow-none bg-surface-container-low/40">\
+<div class="flex justify-between items-center w-full px-6 py-4">\
+<div class="flex items-center gap-4">\
+<button class="hover:opacity-80 transition-opacity scale-95 active:scale-90 transition-transform duration-300">\
+<span class="material-symbols-outlined text-on-surface">arrow_back</span>\
+</button>\
+<div class="h-10 w-10 rounded-full overflow-hidden">\
+<img alt="User profile avatar" data-alt="professional headshot of a smiling man in a clean studio setting with soft lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCutmQB87V-tqnXnJksSTuGYsyZEDIjAC9cFS7kIk52vji-J91AeDpY7CXJ7O3HfUHrjKeRuJEG0XPtqY_oBvnri9gTkQyas-_j60oaMEjlan1zcu4w8isfDxOV9hQMEsEsc0jVGSDU5jA7x0gE-z0xhod7uaslZIj2AYxIhz2JqSg-bJu25RJ_vfNXpZPKgQRdE2QDyDfVQLh0cadF0T5kEbiGUq47igzNUITcIlIJkg6xDcVOkJhioLz7QCvyEpagr1KKBNSzZ1Xr"/>\
+</div>\
+</div>\
+<h1 class="text-lg font-extrabold text-slate-900 dark:text-white font-['Manrope'] tracking-tight">Sanctuary</h1>\
+<button class="text-slate-400 dark:text-slate-500 hover:opacity-80 transition-opacity scale-95 active:scale-90 transition-transform duration-300">\
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>\
+</button>\
+</div>\
+</header>\
+<main class="max-w-4xl mx-auto px-6 pt-12 pb-32">\
+<!-- Header Section (Asymmetric) -->\
+<div class="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">\
+<div class="max-w-xl">\
+<div class="flex items-center gap-2 mb-4">\
+<span class="px-3 py-1 rounded-full bg-primary-fixed-dim/20 text-primary font-semibold text-xs tracking-wider uppercase">Proyecto Alpha</span>\
+<span class="px-3 py-1 rounded-full bg-secondary-fixed/30 text-secondary font-semibold text-xs tracking-wider uppercase">Prioridad Alta</span>\
+</div>\
+<h2 class="text-4xl md:text-5xl font-extrabold text-on-surface tracking-tight leading-tight">Sincronizaci\'f3n y Revisi\'f3n de Estrategia de Producto</h2>\
+<p class="mt-4 text-on-surface-variant text-lg leading-relaxed font-medium">Refinando el roadmap trimestral con los l\'edderes de dise\'f1o e ingenier\'eda.</p>\
+</div>\
+<div class="flex flex-col items-start md:items-end">\
+<span class="text-on-surface-variant text-sm font-semibold mb-1">Estado</span>\
+<div class="flex items-center gap-2 text-primary font-bold text-xl">\
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>\
+<span>Programado por IA</span>\
+</div>\
+</div>\
+</div>\
+<!-- Bento Grid Details -->\
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">\
+<!-- AI Summary Card (Spans 2 columns) -->\
+<div class="md:col-span-2 bg-surface-container-lowest p-8 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.06)] relative overflow-hidden">\
+<div class="absolute top-0 right-0 p-6 opacity-10">\
+<span class="material-symbols-outlined text-8xl">psychology</span>\
+</div>\
+<div class="relative z-10">\
+<div class="flex items-center gap-2 mb-6">\
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">smart_toy</span>\
+<h3 class="font-headline font-bold text-xl">Resumen de Inteligencia IA</h3>\
+</div>\
+<p class="text-on-surface-variant leading-loose mb-6 text-lg">Sanctuary program\'f3 esta tarea para las <span class="text-primary font-bold">14:00 hoy</span> bas\'e1ndose en tu ventana de m\'e1ximo rendimiento cognitivo. Detectamos dependencias con el "Project Alpha" que finaliz\'f3 hace 2 horas. Este espacio evita tu ca\'edda de energ\'eda de las 16:30 y asegura la finalizaci\'f3n antes de la fecha l\'edmite del viernes.</p>\
+<div class="flex flex-wrap gap-4">\
+<div class="flex items-center gap-2 bg-surface-container-low px-4 py-2 rounded-lg">\
+<span class="material-symbols-outlined text-secondary text-sm">bolt</span>\
+<span class="text-sm font-semibold">Ventana de Trabajo Profundo</span>\
+</div>\
+<div class="flex items-center gap-2 bg-surface-container-low px-4 py-2 rounded-lg">\
+<span class="material-symbols-outlined text-secondary text-sm">link</span>\
+<span class="text-sm font-semibold">2 Dependencias Cumplidas</span>\
+</div>\
+</div>\
+</div>\
+</div>\
+<!-- Meta Data Column -->\
+<div class="space-y-6">\
+<div class="bg-surface-container-low p-6 rounded-xl">\
+<span class="text-xs font-bold text-outline uppercase tracking-widest block mb-4">Ubicaci\'f3n y Log\'edstica</span>\
+<div class="space-y-4">\
+<div class="flex items-start gap-4">\
+<div class="p-2 bg-white rounded-lg">\
+<span class="material-symbols-outlined text-primary">location_on</span>\
+</div>\
+<div>\
+<p class="font-bold text-on-surface">Loft Modernista</p>\
+<p class="text-sm text-on-surface-variant">Calle 4, Distrito Creativo</p>\
+</div>\
+</div>\
+<div class="flex items-start gap-4">\
+<div class="p-2 bg-white rounded-lg">\
+<span class="material-symbols-outlined text-primary">schedule</span>\
+</div>\
+<div>\
+<p class="font-bold text-on-surface">60 Minutos</p>\
+<p class="text-sm text-on-surface-variant">Duraci\'f3n Estimada</p>\
+</div>\
+</div>\
+</div>\
+</div>\
+<!-- Map Miniature -->\
+<div class="h-32 w-full rounded-xl overflow-hidden grayscale contrast-125 opacity-80 hover:grayscale-0 transition-all duration-700">\
+<img class="w-full h-full object-cover" data-alt="minimalist clean map view showing city grid and park areas with muted colors" data-location="San Francisco" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDnMdZmXSTb0jbZIHNsec7M3li4X741nok3cjPlKbRbvQeqGwnxHjftvEjjyQy0kiCK4whoj71CKPPsJGTSKA62lB7axNvi7bDYU7iWfC4kkTJZxO9jYlQza6HS9EsJHg41-RTD_ASwcqx7m5wsBZyh-AC7H-PQsyG9ycCJVKQOIm0AMHBOOIGwVcRI-5SYWUZXd5ASam3QEchfV4i2GNS59exO003RAac4Cui_64uQFproH6MIkVhZTo9Yo5GuLV57DaD2ca6aIaeH"/>\
+</div>\
+</div>\
+</div>\
+<!-- Form/Editor Section -->\
+<div class="bg-surface-container-low p-1 rounded-xl">\
+<div class="bg-surface-container-lowest p-8 md:p-12 rounded-[22px]">\
+<h3 class="font-headline font-bold text-2xl mb-8">Refinar Detalles</h3>\
+<form class="space-y-8">\
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">\
+<!-- Task Name -->\
+<div class="flex flex-col gap-2">\
+<label class="text-sm font-bold text-on-surface-variant ml-1">Nombre del Evento</label>\
+<input class="bg-surface-container-low border-none rounded-lg p-4 font-semibold text-on-surface focus:ring-2 focus:ring-primary/20 transition-all" type="text" value="Sincronizaci\'f3n y Revisi\'f3n de Estrategia de Producto"/>\
+</div>\
+<!-- Date/Time -->\
+<div class="flex flex-col gap-2">\
+<label class="text-sm font-bold text-on-surface-variant ml-1">Horario</label>\
+<div class="relative">\
+<input class="w-full bg-surface-container-low border-none rounded-lg p-4 font-semibold text-on-surface focus:ring-2 focus:ring-primary/20 transition-all" type="text" value="Oct 24, 14:00 - 15:00"/>\
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline">calendar_today</span>\
+</div>\
+</div>\
+<!-- Tags/Categories -->\
+<div class="flex flex-col gap-2">\
+<label class="text-sm font-bold text-on-surface-variant ml-1">Etiquetas de Contexto</label>\
+<div class="flex flex-wrap gap-2 p-2 bg-surface-container-low rounded-lg min-h-[56px] items-center">\
+<span class="bg-white px-3 py-1 rounded-md text-xs font-bold text-on-surface flex items-center gap-1">Estrategia <span class="material-symbols-outlined text-[14px]">close</span></span>\
+<span class="bg-white px-3 py-1 rounded-md text-xs font-bold text-on-surface flex items-center gap-1">Planificaci\'f3n Q4 <span class="material-symbols-outlined text-[14px]">close</span></span>\
+<button class="p-1 text-primary hover:bg-primary/5 rounded">\
+<span class="material-symbols-outlined">add</span>\
+</button>\
+</div>\
+</div>\
+<!-- Priority Switch -->\
+<div class="flex flex-col gap-2">\
+<label class="text-sm font-bold text-on-surface-variant ml-1">Anular Prioridad</label>\
+<div class="flex p-1 bg-surface-container-low rounded-lg h-[56px]">\
+<button class="flex-1 rounded-md flex items-center justify-center text-sm font-bold text-outline" type="button">Baja</button>\
+<button class="flex-1 rounded-md flex items-center justify-center text-sm font-bold text-outline" type="button">Media</button>\
+<button class="flex-1 bg-primary text-white rounded-md flex items-center justify-center text-sm font-bold shadow-lg" type="button">Alta</button>\
+</div>\
+</div>\
+</div>\
+<!-- Description -->\
+<div class="flex flex-col gap-2">\
+<label class="text-sm font-bold text-on-surface-variant ml-1">Notas</label>\
+<textarea class="bg-surface-container-low border-none rounded-lg p-4 font-medium text-on-surface-variant focus:ring-2 focus:ring-primary/20 transition-all leading-relaxed" rows="4">Asegurarse de cubrir la asignaci\'f3n de recursos de ingenier\'eda para las primeras 4 semanas. Interesados clave: Mike (CTO), Sarah (Responsable de Producto). Reference the feedback from the board meeting held last Tuesday.</textarea>\
+</div>\
+<!-- Footer Actions -->\
+<div class="pt-8 flex flex-col md:flex-row items-center justify-between gap-6 border-t border-outline-variant/15">\
+<div class="flex items-center gap-3">\
+<div class="flex -space-x-3">\
+<img class="h-10 w-10 rounded-full border-4 border-surface-container-lowest object-cover" data-alt="portrait of a professional woman with a warm expression and soft lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_eBQne1aLkOHf2-xZ1394mUnZJqAfijOj-0ED2jP7jaU7acMrowHX40n4JlKijA61kh_7sW5nr0xGb7zNVM11ZOU81OKSfRgV_ayG1UXOrSuarNif_qfIo3m359mSZB-81xlgcL5jcInCNw4ExifQvJEKcg-aS2FF_qmtJdy1YfuYzldA-XgGG61fhtmg8riyQBM6X7qjaxniZUOsfNkY2UkbOOSM7MYhVy5MC5EFQhEnSF-a33a3UWlTYxEQgw-LhkpiGRId0ew7"/>\
+<img class="h-10 w-10 rounded-full border-4 border-surface-container-lowest object-cover" data-alt="portrait of a man with glasses smiling, studio environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA9syuW62HSuJNwX5c6fMMiJ5P-wwrw-PpjZB9msgbqT0iPE7-BMv6LkbCClFtJUHdOaIUBZmjIMHmq1HVvBJQBHD7jMWp3Tg8y6DUDIPAsGwfC73IuCBh0NB9qUA3YsPX1mZ6yg0vf5Lq9Cb6xHXGU_RcMVJMzlehKfhzD_y5oqGGpmqgnoxSKygCRo128IP-uBeI2j-0P9FvG74JDvyTieTafbUG0bY6koZ1zR-FxrTbChR4oUk9ZXJbCp4tdqoVPumrMYZogYcbw"/>\
+<div class="h-10 w-10 rounded-full border-4 border-surface-container-lowest bg-surface-container-high flex items-center justify-center text-xs font-bold text-on-surface-variant">+3</div>\
+</div>\
+<span class="text-sm font-semibold text-on-surface-variant">Interesados Invitados</span>\
+</div>\
+<div class="flex items-center gap-4 w-full md:w-auto">\
+<button class="flex-1 md:flex-none px-8 py-4 rounded-xl font-bold text-on-surface-variant hover:bg-surface-container-low transition-all">Cancelar</button>\
+<button class="flex-1 md:flex-none px-10 py-4 rounded-xl font-bold text-white bg-gradient-to-br from-primary to-primary-container shadow-xl shadow-primary/20 active:scale-95 transition-all">Guardar Inteligencia</button>\
+</div>\
+</div>\
+</form>\
+</div>\
+</div>\
+</main>\
+<!-- BottomNavBar -->\
+<nav class="fixed bottom-6 left-0 right-0 z-50 flex justify-around items-center px-4 py-3 bg-slate-50/70 dark:bg-slate-950/70 backdrop-blur-2xl fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] rounded-[24px] no-border shadow-[0_12px_32px_rgba(0,0,0,0.06)]">\
+<button class="text-slate-400 dark:text-slate-500 flex flex-col items-center gap-1 hover:text-blue-500 dark:hover:text-blue-300 transition-colors active:scale-95">\
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>\
+<span class="font-['Inter'] text-[11px] font-semibold tracking-wide">Planificador</span>\
+</button>\
+<button class="text-slate-400 dark:text-slate-500 flex flex-col items-center gap-1 hover:text-blue-500 dark:hover:text-blue-300 transition-colors active:scale-95">\
+<span class="material-symbols-outlined" data-icon="calendar_month">calendar_month</span>\
+<span class="font-['Inter'] text-[11px] font-semibold tracking-wide">Calendario</span>\
+</button>\
+<button class="text-blue-600 dark:text-blue-400 flex flex-col items-center gap-1 transition-all active:scale-95">\
+<span class="material-symbols-outlined" data-icon="auto_awesome" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>\
+<span class="font-['Inter'] text-[11px] font-semibold tracking-wide">Asistente</span>\
+</button>\
+<button class="text-slate-400 dark:text-slate-500 flex flex-col items-center gap-1 hover:text-blue-500 dark:hover:text-blue-300 transition-colors active:scale-95">\
+<span class="material-symbols-outlined" data-icon="checklist">checklist</span>\
+<span class="font-['Inter'] text-[11px] font-semibold tracking-wide">Tareas</span>\
+</button>\
+</nav>\
+</body></html>\
+\
+\
+codigo planificacion inteligente: <!DOCTYPE html>\
+\
+<html class="light" lang="en"><head>\
+<meta charset="utf-8"/>\
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>\
+<title>Sanctuary | Intelligent Daily Planner</title>\
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>\
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>\
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>\
+<script id="tailwind-config">\
+        tailwind.config = \{\
+            darkMode: "class",\
+            theme: \{\
+                extend: \{\
+                    "colors": \{\
+                        "outline": "#717786",\
+                        "surface-container": "#f0edef",\
+                        "on-primary-container": "#fefcff",\
+                        "on-primary-fixed-variant": "#004493",\
+                        "surface-container-high": "#eae7ea",\
+                        "primary-fixed": "#d8e2ff",\
+                        "on-error-container": "#93000a",\
+                        "on-surface-variant": "#414755",\
+                        "surface-dim": "#dcd9dc",\
+                        "on-tertiary": "#ffffff",\
+                        "inverse-primary": "#adc6ff",\
+                        "on-secondary-fixed-variant": "#3631b4",\
+                        "secondary-fixed": "#e2dfff",\
+                        "surface-container-low": "#f6f3f5",\
+                        "on-secondary": "#ffffff",\
+                        "secondary-fixed-dim": "#c2c1ff",\
+                        "inverse-on-surface": "#f3f0f2",\
+                        "surface-bright": "#fcf8fb",\
+                        "on-tertiary-fixed-variant": "#7c2e00",\
+                        "on-primary-fixed": "#001a41",\
+                        "tertiary-fixed-dim": "#ffb595",\
+                        "error-container": "#ffdad6",\
+                        "outline-variant": "#c1c6d7",\
+                        "surface": "#fcf8fb",\
+                        "on-background": "#1b1b1d",\
+                        "primary-fixed-dim": "#adc6ff",\
+                        "on-primary": "#ffffff",\
+                        "on-secondary-fixed": "#0c006a",\
+                        "primary-container": "#0070eb",\
+                        "tertiary-container": "#c64f00",\
+                        "surface-tint": "#005bc1",\
+                        "tertiary-fixed": "#ffdbcc",\
+                        "error": "#ba1a1a",\
+                        "background": "#fcf8fb",\
+                        "secondary": "#4c4aca",\
+                        "surface-container-lowest": "#ffffff",\
+                        "surface-variant": "#e4e2e4",\
+                        "surface-container-highest": "#e4e2e4",\
+                        "primary": "#0058bc",\
+                        "on-tertiary-fixed": "#351000",\
+                        "on-error": "#ffffff",\
+                        "on-secondary-container": "#fffbff",\
+                        "tertiary": "#9e3d00",\
+                        "on-surface": "#1b1b1d",\
+                        "inverse-surface": "#303032",\
+                        "on-tertiary-container": "#fffbff",\
+                        "secondary-container": "#6664e4"\
+                    \},\
+                    "borderRadius": \{\
+                        "DEFAULT": "0.25rem",\
+                        "lg": "0.5rem",\
+                        "xl": "0.75rem",\
+                        "full": "9999px"\
+                    \},\
+                    "fontFamily": \{\
+                        "headline": ["Manrope"],\
+                        "body": ["Inter"],\
+                        "label": ["Inter"]\
+                    \}\
+                \},\
+            \},\
+        \}\
+    </script>\
+<style>\
+        .material-symbols-outlined \{\
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\
+        \}\
+        .timeline-gradient \{\
+            background: linear-gradient(180deg, transparent 0%, rgba(0, 88, 188, 0.05) 100%);\
+        \}\
+        .hide-scrollbar::-webkit-scrollbar \{ display: none; \}\
+        .hide-scrollbar \{ -ms-overflow-style: none; scrollbar-width: none; \}\
+    </style>\
+<style>\
+    body \{\
+      min-height: max(884px, 100dvh);\
+    \}\
+  </style>\
+</head>\
+<body class="bg-surface font-body text-on-surface selection:bg-primary-fixed antialiased">\
+<!-- TopAppBar -->\
+<header class="bg-slate-50/70 backdrop-blur-lg docked full-width top-0 sticky z-50 no-border shadow-none bg-surface-container-low/40">\
+<div class="flex justify-between items-center w-full px-6 py-4">\
+<div class="flex items-center gap-3">\
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/10">\
+<img alt="User avatar" data-alt="professional headshot of a smiling man with a clean beard in a bright modern studio with soft lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDkr7AAWlxmigyQXoGl2yJy288PSaTgp3XsWBkQxxuc_G1QRmbr7UXtecXqIQ40iE3UoV3uzeK098cUwb3KcT1bcOHBK8-J4PBEbIGpSWmTc-KpPjkW7qO5XY8X4QBW9kmz9fUm67unt_Ywm2Cz-W8ZksMzGey4RHojgVv1Tln8Ps4H46_QIg2O9MiqK5NIXIMsbFbF7Z6QuDCI9fiuyDgwsFSCuK-1-fu4Enpkv4dajVnTYi4hkDqfARBAzDNGapFJ_KMUYQp4It-2"/>\
+</div>\
+<h1 class="text-lg font-extrabold text-slate-900 font-headline tracking-tight">Sanctuary</h1>\
+</div>\
+<div class="flex items-center gap-4">\
+<button class="material-symbols-outlined text-slate-400 hover:opacity-80 transition-opacity scale-95 active:scale-90 transition-transform duration-300">notifications</button>\
+</div>\
+</div>\
+</header>\
+<main class="max-w-7xl mx-auto px-6 pt-8 pb-32">\
+<div class="flex flex-col md:flex-row gap-12">\
+<!-- Left Column: Timeline -->\
+<div class="flex-1">\
+<header class="mb-10">\
+<p class="text-primary font-semibold tracking-wider text-xs uppercase mb-2">Martes, 24 de Oct</p>\
+<h2 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface">Flujo Diario</h2>\
+</header>\
+<!-- Timeline Container -->\
+<div class="relative space-y-2">\
+<!-- 09:00 Block -->\
+<div class="flex gap-6 group">\
+<div class="w-16 pt-2 text-right">\
+<span class="text-sm font-semibold text-outline tracking-tighter">09:00</span>\
+</div>\
+<div class="relative flex-1 pb-8">\
+<div class="absolute left-[-25px] top-4 w-2 h-2 rounded-full bg-primary ring-4 ring-surface"></div>\
+<div class="bg-surface-container-lowest p-5 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 border-primary">\
+<div class="flex justify-between items-start mb-1">\
+<h3 class="font-bold text-on-surface">Trabajo Profundo: Arquitectura del Sistema</h3>\
+<span class="text-[10px] font-bold bg-primary-fixed text-on-primary-fixed px-2 py-0.5 rounded-full">CONFIRMADO</span>\
+</div>\
+<p class="text-sm text-on-surface-variant leading-relaxed">Enfoque en el motor de navegaci\'f3n principal para el proyecto Sanctuary.</p>\
+</div>\
+</div>\
+</div>\
+<!-- 10:30 Gap with AI Suggestion -->\
+<div class="flex gap-6 group">\
+<div class="w-16 pt-2 text-right">\
+<span class="text-sm font-semibold text-outline/40 italic tracking-tighter">10:30</span>\
+</div>\
+<div class="relative flex-1 pb-8">\
+<div class="absolute left-[-25px] top-4 w-2 h-2 rounded-full bg-secondary ring-4 ring-surface"></div>\
+<div class="bg-surface-container-low/50 p-5 rounded-xl border border-dashed border-secondary/30 relative overflow-hidden">\
+<div class="absolute top-0 right-0 p-2">\
+<span class="material-symbols-outlined text-secondary opacity-40 text-sm">auto_awesome</span>\
+</div>\
+<div class="flex justify-between items-start mb-1">\
+<h3 class="font-semibold text-secondary">Descanso Inteligente: Meditaci\'f3n de 15 min</h3>\
+<button class="text-[10px] font-bold text-secondary border border-secondary/20 hover:bg-secondary/5 px-2 py-0.5 rounded-full transition-colors">ACEPTAR</button>\
+</div>\
+<p class="text-sm text-on-surface-variant/70 italic">Carga cognitiva alta detectada. Recarga para la sincro de las 11:00.</p>\
+</div>\
+</div>\
+</div>\
+<!-- 11:00 Block -->\
+<div class="flex gap-6 group">\
+<div class="w-16 pt-2 text-right">\
+<span class="text-sm font-semibold text-outline tracking-tighter">11:00</span>\
+</div>\
+<div class="relative flex-1 pb-8">\
+<div class="absolute left-[-25px] top-4 w-2 h-2 rounded-full bg-primary ring-4 ring-surface"></div>\
+<div class="bg-surface-container-lowest p-5 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 border-primary">\
+<div class="flex justify-between items-start mb-1">\
+<h3 class="font-bold text-on-surface">Trabajo Profundo: Arquitectura del Sistema</h3>\
+<span class="text-[10px] font-bold bg-primary-fixed text-on-primary-fixed px-2 py-0.5 rounded-full">CONFIRMADO</span>\
+</div>\
+<div class="flex items-center gap-2 mt-3">\
+<div class="flex -space-x-2">\
+<img alt="Team member" class="w-6 h-6 rounded-full border-2 border-surface" data-alt="close-up of a smiling young woman with dark hair in a bright office environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6uixvLBbbeTBU4o6ECI8czwv2rG4Ab9QRoZzG80VUdtQGrNTKfEN6uAsjVY_xDejxYU0ty7i-w-WkdOwFL75tUeP3QdhnoU-aXj6gBXa_rA-EF4EnS0xA9i3U1C5A2ptq4qNGoThpYsChziALLNaGKBd5tmrg4sTexQTMX_Q76n0RKR0a6HoVsDWd3rDMM5crCyQShmr0MknscIOQMi0WkXjd-nwAlIW_5Y3hCfVOk4gFFs573xU55aE4-nN1yrW3tey74rnRdTLX"/>\
+<img alt="Team member" class="w-6 h-6 rounded-full border-2 border-surface" data-alt="headshot of a middle aged man with glasses in a minimalist studio" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBuP-YYDCS8puBN4BdB0p1a4oljJzvzAN_GJ1lnTWJoxLpt9qIMsUE-4SWVCGzBa4bd7Z28lWv1H2krPfVj1H-oxbauQP2yyGkzV51kMnCXLIiWzp2kNCUGDr3vdI-ptHCUeYQZ4o2k5zO4JC_4Wpj-MXYYhIWpbeDm_C95308waqJo-iw_MmyWV-shmMwOE2beNt4wetEgc-JFNnb8FwwZiHB145oLw_PNHljogMsgzx3aoBguhA6Tlj-Lp4MXrM3p-ulqb2d5kwCn"/>\
+</div>\
+<span class="text-xs text-on-surface-variant">con el Equipo de Producto</span>\
+</div>\
+</div>\
+</div>\
+</div>\
+<!-- 12:30 Suggestion -->\
+<div class="flex gap-6 group">\
+<div class="w-16 pt-2 text-right">\
+<span class="text-sm font-semibold text-outline/40 italic tracking-tighter">12:30</span>\
+</div>\
+<div class="relative flex-1 pb-8">\
+<div class="absolute left-[-25px] top-4 w-2 h-2 rounded-full bg-secondary ring-4 ring-surface"></div>\
+<div class="bg-secondary/5 p-5 rounded-xl border border-dashed border-secondary/30">\
+<div class="flex justify-between items-start mb-1">\
+<h3 class="font-semibold text-secondary">Sugerido: Inbox Zero (20m)</h3>\
+<button class="text-[10px] font-bold text-secondary border border-secondary/20 hover:bg-secondary/10 px-2 py-0.5 rounded-full">ACEPTAR</button>\
+</div>\
+<p class="text-sm text-on-surface-variant/70 italic">Tienes 12 mensajes urgentes sin leer en Slack.</p>\
+</div>\
+</div>\
+</div>\
+</div>\
+</div>\
+<!-- Right Column: Insights & Tasks -->\
+<div class="w-full md:w-80 space-y-8">\
+<!-- Intelligence Card -->\
+<div class="bg-surface-container-high/40 p-6 rounded-[24px] backdrop-blur-sm">\
+<div class="flex items-center gap-2 mb-4">\
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>\
+<h4 class="font-headline font-bold text-on-surface">Insights de IA</h4>\
+</div>\
+<div class="space-y-4">\
+<div class="p-4 bg-surface-container-lowest rounded-xl">\
+<p class="text-xs font-bold text-primary mb-1 uppercase tracking-tight">M\'c1XIMA CONCENTRACI\'d3N</p>\
+<p class="text-sm text-on-surface-variant font-medium">Your energy peaks between 09:00 - 11:30. 2 Deep Work blocks optimized.</p>\
+</div>\
+<div class="p-4 bg-surface-container-lowest rounded-xl">\
+<p class="text-xs font-bold text-secondary mb-1 uppercase tracking-tight">AN\'c1LISIS DE HUECOS</p>\
+<p class="text-sm text-on-surface-variant font-medium">1.5 hours of unallocated time found. Suggestions provided.</p>\
+</div>\
+</div>\
+</div>\
+<!-- Priority Tasks (Masonry-lite) -->\
+<div>\
+<h4 class="font-headline font-bold text-on-surface mb-4 px-2">Tareas de Alto Impacto</h4>\
+<div class="grid grid-cols-1 gap-4">\
+<div class="bg-surface-container-lowest p-4 rounded-2xl shadow-sm border-l-4 border-secondary-container">\
+<div class="flex items-start justify-between">\
+<span class="text-sm font-semibold text-on-surface">Revisar Roadmap del Q4</span>\
+<span class="material-symbols-outlined text-outline-variant text-lg">check_circle</span>\
+</div>\
+</div>\
+<div class="bg-surface-container-lowest p-4 rounded-2xl shadow-sm border-l-4 border-outline-variant">\
+<div class="flex items-start justify-between">\
+<span class="text-sm font-semibold text-on-surface">Preparar diapositivas de presentaci\'f3n</span>\
+<span class="material-symbols-outlined text-outline-variant text-lg">radio_button_unchecked</span>\
+</div>\
+</div>\
+<div class="bg-primary p-6 rounded-[24px] text-white shadow-xl shadow-primary/20">\
+<h5 class="text-lg font-bold mb-2">Objetivo de la Tarde</h5>\
+<p class="text-primary-fixed text-sm mb-4 leading-relaxed opacity-90">Terminar la documentaci\'f3n arquitect\'f3nica para la nueva capa de datos.</p>\
+<div class="w-full bg-white/20 h-1 rounded-full overflow-hidden">\
+<div class="bg-white w-[65%] h-full"></div>\
+</div>\
+<p class="text-[10px] mt-2 font-bold uppercase tracking-widest opacity-70">65% COMPLETADO</p>\
+</div>\
+</div>\
+</div>\
+</div>\
+</div>\
+</main>\
+<!-- BottomNavBar -->\
+<nav class="fixed bottom-6 left-0 right-0 z-50 flex justify-around items-center px-4 py-3 bg-slate-50/70 backdrop-blur-2xl fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] rounded-[24px] no-border shadow-2xl shadow-black/5 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">\
+<a class="text-blue-600 dark:text-blue-400 flex flex-col items-center gap-1 cubic-bezier(0.2,0.8,0.2,1) active:scale-95 transition-all" href="#">\
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">calendar_today</span>\
+<span class="font-['Inter'] text-[11px] font-semibold tracking-wide">Planificador</span>\
+</a>\
+<a class="text-slate-400 dark:text-slate-500 flex flex-col items-center gap-1 hover:text-blue-500 dark:hover:text-blue-300 transition-colors cubic-bezier(0.2,0.8,0.2,1) active:scale-95 transition-all" href="#">\
+<span class="material-symbols-outlined">calendar_month</span>\
+<span class="font-['Inter'] text-[11px] font-semibold tracking-wide">Calendario</span>\
+</a>\
+<a class="text-slate-400 dark:text-slate-500 flex flex-col items-center gap-1 hover:text-blue-500 dark:hover:text-blue-300 transition-colors cubic-bezier(0.2,0.8,0.2,1) active:scale-95 transition-all" href="#">\
+<span class="material-symbols-outlined">auto_awesome</span>\
+<span class="font-['Inter'] text-[11px] font-semibold tracking-wide">Asistente</span>\
+</a>\
+<a class="text-slate-400 dark:text-slate-500 flex flex-col items-center gap-1 hover:text-blue-500 dark:hover:text-blue-300 transition-colors cubic-bezier(0.2,0.8,0.2,1) active:scale-95 transition-all" href="#">\
+<span class="material-symbols-outlined">checklist</span>\
+<span class="font-['Inter'] text-[11px] font-semibold tracking-wide">Tareas</span>\
+</a>\
+</nav>\
+<!-- Floating Action Button -->\
+<button class="fixed bottom-28 right-6 w-14 h-14 bg-primary text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-105 active:scale-90 transition-transform z-40">\
+<span class="material-symbols-outlined text-3xl">add</span>\
+</button>\
+</body></html>\
+\
+\
+\
+\
+especificaciones tecnicas de desarrollo: # Especificaciones T\'e9cnicas: App Sanctuary (Productividad con IA)\
+\
+Este documento resume los activos de dise\'f1o y la estructura para la implementaci\'f3n del desarrollo.\
+\
+## 1. Identidad Visual (Lumina Pro)\
+*   **Concepto:** El Santuario Digital (Limpio, profesional, tranquilo).\
+*   **Colores Principales:**\
+    *   Primario: `#007AFF` (Azul iOS cl\'e1sico).\
+    *   Fondo (Light): `#F8FAFC` (Slate 50).\
+    *   Fondo (Dark): `#020617` (Slate 950).\
+*   **Tipograf\'eda:** Manrope (Sans-serif moderna y legible).\
+*   **Bordes:** `rounded-lg` (8px) para tarjetas, `rounded-3xl` (24px) para elementos destacados.\
+\
+## 2. Componentes Compartidos (Estructura)\
+*   **TopAppBar:** Navegaci\'f3n superior con avatar de usuario y notificaciones. Efecto `backdrop-blur` para sensaci\'f3n premium.\
+*   **BottomNavBar:** Navegaci\'f3n flotante (92% de ancho) con 4 destinos principales: Planner, Calendar, Assistant, Tasks.\
+\
+## 3. Pantallas Dise\'f1adas\
+*   **Calendario Principal:** Vista semanal con enfoque en el evento actual.\
+*   **Asistente IA:** Interfaz de voz con visualizaci\'f3n de ondas y procesamiento de lenguaje natural.\
+*   **Planificador Inteligente:** L\'ednea de tiempo con bloques de "Deep Work" y sugerencias de IA.\
+*   **Detalle de Tarea:** Formulario detallado con insights de por qu\'e9 la IA program\'f3 la tarea.\
+\
+## 4. Instrucciones para Claude Code\
+Al pasar este c\'f3digo a Claude Code, puedes usar el siguiente prompt:\
+> "Claude, estoy trabajando con Stitch en una app de productividad. Adjunto el c\'f3digo HTML/CSS de las pantallas principales. Necesito que:\
+> 1. Conviertas este HTML est\'e1tico en componentes funcionales (ej. React + Tailwind).\
+> 2. Implementes la l\'f3gica de navegaci\'f3n entre pantallas.\
+> 3. Simules la respuesta del asistente de voz."}

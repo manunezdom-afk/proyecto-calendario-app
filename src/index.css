@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  min-height: max(884px, 100dvh);
+  background-color: #fcf8fb;
+  color: #1b1b1d;
+}
+
+h1, h2, h3 {
+  font-family: 'Manrope', sans-serif;
+}
+
+.ai-pulse-glow {
+  background: radial-gradient(circle, rgba(0, 88, 188, 0.4) 0%, rgba(102, 100, 228, 0) 70%);
+}
+
+.backdrop-darken {
+  background: linear-gradient(180deg, rgba(27, 27, 29, 0.95) 0%, rgba(27, 27, 29, 1) 100%);
+}
+
+.timeline-gradient {
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 88, 188, 0.05) 100%);
+}
+
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
