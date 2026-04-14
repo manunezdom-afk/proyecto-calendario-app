@@ -88,8 +88,16 @@ export function parseEvent(rawText) {
   }
 
   // ── 3. Clean filler words → title ─────────────────────────────────────────
-  const fillers = /^(añade?|pon(?:er)?|agrega[r]?|agenda[r]?|crea[r]?|quiero|necesito|recuérdame|recordarme|me\s+gustar[íi]a|tengo)\s+/i
-  text = text.replace(fillers, '').trim()
+  // Strip command/reminder phrases (may repeat, e.g. "recuérdame que tengo que")
+  const fillerLoop = /^(añade?|pon(?:er)?|agrega[r]?|agenda[r]?|crea[r]?|quiero|necesito|recu[eé]rdame(\s+de)?|recordarme(\s+de)?|me\s+gustar[íi]a|tengo\s+que|debo\s+de?|no\s+olvides(\s+de)?|av[íi]same(\s+de)?)\s+/i
+  // Apply up to 3 times in case of stacked phrases like "recuérdame que tengo que ir"
+  for (let i = 0; i < 3; i++) {
+    const before = text
+    text = text.replace(fillerLoop, '').trim()
+    // Also strip "que" left at the start by "recuérdame que X"
+    text = text.replace(/^que\s+/i, '').trim()
+    if (text === before) break
+  }
 
   // Remove leading article "un/una/el/la"
   text = text.replace(/^(un[ao]?|el|la)\s+/i, '').trim()

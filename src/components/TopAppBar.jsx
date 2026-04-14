@@ -21,9 +21,17 @@ export default function TopAppBar({ showBack = false, onBack }) {
             />
           </div>
         )}
-        <span className="text-lg font-extrabold text-slate-900 tracking-tight font-headline">
-          Sanctuary
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span
+            className="material-symbols-outlined text-primary text-[22px]"
+            style={{ fontVariationSettings: "'FILL' 1" }}
+          >
+            brightness_high
+          </span>
+          <span className="text-lg font-extrabold text-slate-900 tracking-tight font-headline">
+            Focus
+          </span>
+        </div>
       </div>
       <button className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:opacity-80 transition-opacity active:scale-90 duration-300">
         <span className="material-symbols-outlined">notifications</span>
