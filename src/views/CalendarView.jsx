@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import TopAppBar from '../components/TopAppBar'
 import QuickAddSheet from '../components/QuickAddSheet'
+import MonthCalendar from '../components/MonthCalendar'
 
 const AVATAR_1 =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuDfqPz-Xtp1DOlxyZ6qdBoqCnCTvLoTN7uCnDpKv7pQispXp8jMGm8VmAnGlq6fGljfeaM_FGgWpLdB3Ig6ImleJTb6h-TmrJg7wLQJBUNd1LSQiUrTmFaLHcku_b2IBR1b9-gtC7bCqoZTvugBoGNiE9EjBbxP2zP0nkLkJF5KXZxYSvNqigG3jSpyBQawu9fkiHNp1vQfAtrXoJyYILEZm_q5bSNPNATYmsirJUZFcSzFA1bGsAuK0G16fJNQgGEjyI-ErT5OZNRs'
@@ -143,13 +144,11 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
       <TopAppBar />
 
       <main className="max-w-md mx-auto px-6 pt-4 space-y-8">
-        {/* Header & View Switcher */}
-        <header className="flex flex-col gap-6">
+
+        {/* ── Header & View Switcher (always visible) ─────────────────── */}
+        <header>
           <div className="flex justify-between items-end">
             <div>
-              <p className="text-sm font-semibold text-primary uppercase tracking-wider mb-1">
-                Septiembre 2024
-              </p>
               <h1 className="text-4xl font-extrabold text-on-surface tracking-tight">
                 Calendario
               </h1>
@@ -170,125 +169,138 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
               ))}
             </div>
           </div>
-
-          {/* Calendar Strip */}
-          <div className="grid grid-cols-7 gap-2">
-            {CALENDAR_DAYS.map(({ day, num }) => {
-              const isActive = num === activeDay
-              return (
-                <button
-                  key={day}
-                  onClick={() => {
-                    setActiveDay(num)
-                    console.log(`[Sanctuary] 📅 Day selected: ${day} ${num}`)
-                  }}
-                  className="flex flex-col items-center gap-2 focus:outline-none"
-                >
-                  <span className={`text-[10px] font-bold uppercase ${isActive ? 'text-primary' : 'text-outline'}`}>
-                    {day}
-                  </span>
-                  {isActive ? (
-                    <div className="w-10 h-14 flex flex-col items-center justify-center rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20">
-                      <span>{num}</span>
-                      <div className="w-1 h-1 bg-white rounded-full mt-1" />
-                    </div>
-                  ) : (
-                    <div className="w-10 h-14 flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-semibold hover:bg-surface-container transition-colors">
-                      {num}
-                    </div>
-                  )}
-                </button>
-              )
-            })}
-          </div>
         </header>
 
-        {/* ── Enfoque de Hoy ─────────────────────────────────────────────── */}
-        <section className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold tracking-tight text-on-surface">Enfoque de Hoy</h2>
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
-            >
-              <span className="material-symbols-outlined text-[16px]">add</span>
-              Añadir
-            </button>
-          </div>
+        {/* ── VISTA MES ────────────────────────────────────────────────── */}
+        {calView === 'mes' && (
+          <MonthCalendar
+            events={events}
+            onAddEvent={onAddEvent}
+            onDeleteEvent={onDeleteEvent}
+          />
+        )}
 
-          {focusEvents.length === 0 ? (
-            <div className="col-span-2 bg-surface-container-low rounded-xl p-8 flex flex-col items-center gap-3 text-center">
-              <span className="material-symbols-outlined text-3xl text-outline">event_note</span>
-              <p className="text-sm font-semibold text-outline">
-                No hay eventos para hoy.<br />Pulsa "Añadir" para crear uno.
-              </p>
+        {/* ── VISTA SEMANA ─────────────────────────────────────────────── */}
+        {calView === 'semana' && (
+          <>
+            {/* Week strip */}
+            <div className="grid grid-cols-7 gap-2">
+              {CALENDAR_DAYS.map(({ day, num }) => {
+                const isActive = num === activeDay
+                return (
+                  <button
+                    key={day}
+                    onClick={() => {
+                      setActiveDay(num)
+                      console.log(`[Focus] 📅 Day selected: ${day} ${num}`)
+                    }}
+                    className="flex flex-col items-center gap-2 focus:outline-none"
+                  >
+                    <span className={`text-[10px] font-bold uppercase ${isActive ? 'text-primary' : 'text-outline'}`}>
+                      {day}
+                    </span>
+                    {isActive ? (
+                      <div className="w-10 h-14 flex flex-col items-center justify-center rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20">
+                        <span>{num}</span>
+                        <div className="w-1 h-1 bg-white rounded-full mt-1" />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-14 flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-semibold hover:bg-surface-container transition-colors">
+                        {num}
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
             </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4">
-              {/* Featured card */}
-              {featuredEvent && (
-                <FeaturedEventCard
-                  event={featuredEvent}
-                  onDelete={onDeleteEvent}
-                  onOpen={onOpenTask}
-                />
+
+            {/* Enfoque de Hoy */}
+            <section className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold tracking-tight text-on-surface">Enfoque de Hoy</h2>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[16px]">add</span>
+                  Añadir
+                </button>
+              </div>
+
+              {focusEvents.length === 0 ? (
+                <div className="col-span-2 bg-surface-container-low rounded-xl p-8 flex flex-col items-center gap-3 text-center">
+                  <span className="material-symbols-outlined text-3xl text-outline">event_note</span>
+                  <p className="text-sm font-semibold text-outline">
+                    No hay eventos para hoy.<br />Pulsa "Añadir" para crear uno.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  {featuredEvent && (
+                    <FeaturedEventCard
+                      event={featuredEvent}
+                      onDelete={onDeleteEvent}
+                      onOpen={onOpenTask}
+                    />
+                  )}
+                  {smallEvents.map((ev) => (
+                    <SmallEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} />
+                  ))}
+                </div>
               )}
-              {/* Remaining small cards */}
-              {smallEvents.map((ev) => (
-                <SmallEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} />
-              ))}
-            </div>
-          )}
-        </section>
+            </section>
 
-        {/* ── Tarde/Noche ────────────────────────────────────────────────── */}
-        <section className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold tracking-tight text-on-surface">Tarde/Noche</h2>
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
-            >
-              <span className="material-symbols-outlined text-[16px]">add</span>
-              Añadir
-            </button>
-          </div>
+            {/* Tarde/Noche */}
+            <section className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold tracking-tight text-on-surface">Tarde/Noche</h2>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[16px]">add</span>
+                  Añadir
+                </button>
+              </div>
 
-          {eveningEvents.length === 0 ? (
-            <div className="bg-surface-container-low rounded-xl p-8 flex flex-col items-center gap-3 text-center">
-              <span className="material-symbols-outlined text-3xl text-outline">nights_stay</span>
-              <p className="text-sm font-semibold text-outline">
-                Nada planeado para esta tarde.
-              </p>
+              {eveningEvents.length === 0 ? (
+                <div className="bg-surface-container-low rounded-xl p-8 flex flex-col items-center gap-3 text-center">
+                  <span className="material-symbols-outlined text-3xl text-outline">nights_stay</span>
+                  <p className="text-sm font-semibold text-outline">
+                    Nada planeado para esta tarde.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {eveningEvents.map((ev) => (
+                    <EveningEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* FAB */}
+            <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[60]">
+              <button
+                onClick={() => setShowModal(true)}
+                className="w-16 h-16 rounded-full bg-gradient-to-tr from-primary to-primary-container text-white shadow-[0_16px_32px_rgba(0,88,188,0.3)] flex items-center justify-center active:scale-90 transition-transform duration-300"
+                title="Añadir evento"
+              >
+                <span className="material-symbols-outlined text-3xl">add</span>
+              </button>
             </div>
-          ) : (
-            <div className="space-y-2">
-              {eveningEvents.map((ev) => (
-                <EveningEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} />
-              ))}
-            </div>
-          )}
-        </section>
+
+            {/* Quick Add Sheet (semana) */}
+            {showModal && (
+              <QuickAddSheet
+                onSave={handleSave}
+                onCancel={() => setShowModal(false)}
+              />
+            )}
+          </>
+        )}
+
       </main>
-
-      {/* FAB — open assistant / mic */}
-      <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[60]">
-        <button
-          onClick={() => setShowModal(true)}
-          className="w-16 h-16 rounded-full bg-gradient-to-tr from-primary to-primary-container text-white shadow-[0_16px_32px_rgba(0,88,188,0.3)] flex items-center justify-center active:scale-90 transition-transform duration-300"
-          title="Añadir evento"
-        >
-          <span className="material-symbols-outlined text-3xl">add</span>
-        </button>
-      </div>
-
-      {/* Quick Add Sheet */}
-      {showModal && (
-        <QuickAddSheet
-          onSave={handleSave}
-          onCancel={() => setShowModal(false)}
-        />
-      )}
     </div>
   )
 }

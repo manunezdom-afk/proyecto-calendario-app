@@ -9,7 +9,7 @@ const EXAMPLES = [
   '"cena con mamá a las 8"',
 ]
 
-export default function QuickAddSheet({ onSave, onCancel }) {
+export default function QuickAddSheet({ onSave, onCancel, targetDateLabel }) {
   const [input, setInput] = useState('')
   const [parsed, setParsed] = useState(null)
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
@@ -50,7 +50,6 @@ export default function QuickAddSheet({ onSave, onCancel }) {
   }
 
   return (
-    // Backdrop
     <div
       className="fixed inset-0 z-50 flex items-end justify-center"
       onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
@@ -64,12 +63,21 @@ export default function QuickAddSheet({ onSave, onCancel }) {
         {/* Handle bar */}
         <div className="w-10 h-1 bg-outline-variant rounded-full mx-auto mb-6" />
 
-        <h2 className="font-headline font-extrabold text-xl text-on-surface mb-1">
-          Añadir evento
-        </h2>
-        <p className="text-sm text-outline mb-5">
-          Escribe de forma natural, como le dirías a un amigo
-        </p>
+        <div className="mb-5">
+          <h2 className="font-headline font-extrabold text-xl text-on-surface">
+            Añadir evento
+          </h2>
+          {targetDateLabel ? (
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="material-symbols-outlined text-primary text-[14px]">calendar_today</span>
+              <p className="text-sm font-semibold text-primary capitalize">{targetDateLabel}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-outline mt-1">
+              Escribe de forma natural, como le dirías a un amigo
+            </p>
+          )}
+        </div>
 
         {/* Text input */}
         <div className="flex items-center gap-3 bg-surface-container-low rounded-2xl px-4 py-3 mb-5 border border-outline-variant/30 focus-within:border-primary transition-colors">
@@ -107,9 +115,9 @@ export default function QuickAddSheet({ onSave, onCancel }) {
             <div className="flex-1 min-w-0">
               <p className="font-bold text-on-surface truncate">{parsed.title}</p>
               <p className="text-sm text-outline mt-0.5">
-                {[parsed.date !== 'Hoy' ? parsed.date : '', parsed.time]
-                  .filter(Boolean)
-                  .join(' · ') || 'Sin horario definido'}
+                {targetDateLabel
+                  ? [targetDateLabel, parsed.time].filter(Boolean).join(' · ')
+                  : [parsed.date !== 'Hoy' ? parsed.date : '', parsed.time].filter(Boolean).join(' · ') || 'Sin horario definido'}
               </p>
             </div>
             <span className="material-symbols-outlined text-primary/60 text-xl flex-shrink-0">

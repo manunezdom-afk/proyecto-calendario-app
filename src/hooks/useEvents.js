@@ -86,7 +86,7 @@ export function useEvents() {
   }, [events])
 
   /** Add a new event. Returns the created event (with auto-generated id). */
-  function addEvent({ title, time, description = '', section = 'focus', icon = 'event', dotColor = 'bg-secondary-container' }) {
+  function addEvent({ title, time, description = '', section = 'focus', icon = 'event', dotColor = 'bg-secondary-container', date = null }) {
     const newEvent = {
       id: `evt-${Date.now()}`,
       title,
@@ -96,6 +96,7 @@ export function useEvents() {
       featured: false,
       icon,
       dotColor,
+      date, // YYYY-MM-DD or null (null = treat as today's event)
     }
     console.log(`[Sanctuary] ➕ addEvent — id: "${newEvent.id}" | title: "${newEvent.title}" | section: "${newEvent.section}"`)
     setEvents((prev) => [...prev, newEvent])
