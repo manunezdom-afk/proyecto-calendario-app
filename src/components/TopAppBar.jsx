@@ -5,6 +5,7 @@ export default function TopAppBar({
   unreadCount = 0,
   onToggleDark,
   isDark = false,
+  onShareClick,
 }) {
   return (
     <nav className="sticky top-0 z-50 bg-slate-50/70 dark:bg-slate-900/70 backdrop-blur-lg flex justify-between items-center w-full px-6 py-4">
@@ -31,8 +32,18 @@ export default function TopAppBar({
         </div>
       </div>
 
-      {/* Right: dark mode toggle + bell */}
+      {/* Right: share + dark mode toggle + bell */}
       <div className="flex items-center gap-1">
+        {onShareClick && (
+          <button
+            onClick={onShareClick}
+            aria-label="Importar / Exportar calendario"
+            className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 dark:text-slate-300 hover:opacity-80 transition-opacity active:scale-90 duration-300"
+          >
+            <span className="material-symbols-outlined text-[22px]">ios_share</span>
+          </button>
+        )}
+
         {onToggleDark && (
           <button
             onClick={onToggleDark}

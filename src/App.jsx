@@ -7,6 +7,7 @@ import TopAppBar                   from './components/TopAppBar'
 import BottomNavBar                from './components/BottomNavBar'
 import NotificationPanel           from './components/NotificationPanel'
 import NotificationPermissionCard  from './components/NotificationPermissionCard'
+import ImportExportSheet           from './components/ImportExportSheet'
 
 import CalendarView    from './views/CalendarView'
 import AssistantView   from './views/AssistantView'
@@ -32,7 +33,8 @@ export default function App() {
     requestPermission, dismissPermissionCard,
     markAllRead, dismiss: dismissNotif,
   } = useNotifications({ events })
-  const [notifPanelOpen, setNotifPanelOpen] = useState(false)
+  const [notifPanelOpen, setNotifPanelOpen]       = useState(false)
+  const [importExportOpen, setImportExportOpen]   = useState(false)
 
   // ── Task detail ───────────────────────────────────────────────────────────
   const [selectedEvent, setSelectedEvent] = useState(null)
@@ -77,6 +79,7 @@ export default function App() {
           unreadCount={unreadCount}
           onToggleDark={toggleDark}
           isDark={isDark}
+          onShareClick={() => setImportExportOpen(true)}
         />
       )}
 
@@ -134,6 +137,14 @@ export default function App() {
         notifLog={notifLog}
         onMarkAllRead={markAllRead}
         onDismiss={dismissNotif}
+      />
+
+      {/* ── Import / Export sheet ─────────────────────────────────────────── */}
+      <ImportExportSheet
+        isOpen={importExportOpen}
+        onClose={() => setImportExportOpen(false)}
+        events={events}
+        onImportEvent={addEvent}
       />
     </>
   )
