@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import TopAppBar from '../components/TopAppBar'
-import AddEventModal from '../components/AddEventModal'
+import QuickAddSheet from '../components/QuickAddSheet'
 
 const AVATAR_1 =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuDfqPz-Xtp1DOlxyZ6qdBoqCnCTvLoTN7uCnDpKv7pQispXp8jMGm8VmAnGlq6fGljfeaM_FGgWpLdB3Ig6ImleJTb6h-TmrJg7wLQJBUNd1LSQiUrTmFaLHcku_b2IBR1b9-gtC7bCqoZTvugBoGNiE9EjBbxP2zP0nkLkJF5KXZxYSvNqigG3jSpyBQawu9fkiHNp1vQfAtrXoJyYILEZm_q5bSNPNATYmsirJUZFcSzFA1bGsAuK0G16fJNQgGEjyI-ErT5OZNRs'
@@ -282,9 +282,9 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
         </button>
       </div>
 
-      {/* Modal */}
+      {/* Quick Add Sheet */}
       {showModal && (
-        <AddEventModal
+        <QuickAddSheet
           onSave={handleSave}
           onCancel={() => setShowModal(false)}
         />

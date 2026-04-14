@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import TopAppBar from '../components/TopAppBar'
-import AddEventModal from '../components/AddEventModal'
+import QuickAddSheet from '../components/QuickAddSheet'
 
 const AVATAR_1 =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuA6uixvLBbbeTBU4o6ECI8czwv2rG4Ab9QRoZzG80VUdtQGrNTKfEN6uAsjVY_xDejxYU0ty7i-w-WkdOwFL75tUeP3QdhnoU-aXj6gBXa_rA-EF4EnS0xA9i3U1C5A2ptq4qNGoThpYsChziALLNaGKBd5tmrg4sTexQTMX_Q76n0RKR0a6HoVsDWd3rDMM5crCyQShmr0MknscIOQMi0WkXjd-nwAlIW_5Y3hCfVOk4gFFs573xU55aE4-nN1yrW3tey74rnRdTLX'
@@ -301,7 +301,7 @@ export default function PlannerView({ onAddEvent }) {
       </button>
 
       {showModal && (
-        <AddEventModal onSave={handleModalSave} onCancel={() => setShowModal(false)} />
+        <QuickAddSheet onSave={handleModalSave} onCancel={() => setShowModal(false)} />
       )}
     </div>
   )
