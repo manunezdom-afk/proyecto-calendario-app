@@ -7,47 +7,55 @@ import TaskDetailView from './views/TaskDetailView'
 import PlannerView from './views/PlannerView'
 
 export default function App() {
-  // ── Navigation state ──────────────────────────────────────────────────────
-  // activeView: 'planner' | 'calendar' | 'assistant' | 'tasks' | 'task-detail'
+  // ── Navigation ────────────────────────────────────────────────────────────
   const [activeView, setActiveView] = useState('calendar')
   const [previousView, setPreviousView] = useState('calendar')
 
-  // ── Event state (shared across all views) ─────────────────────────────────
+  // ── Shared event state (persisted in localStorage) ────────────────────────
   const { events, addEvent, deleteEvent, editEvent } = useEvents()
+
+  // ── Selected event for TaskDetailView ────────────────────────────────────
+  const [selectedEvent, setSelectedEvent] = useState(null)
 
   // ── Navigation helpers ────────────────────────────────────────────────────
   function navigate(view) {
     setActiveView(view)
   }
 
-  function openTaskDetail() {
+  function openTaskDetail(event = null) {
+    setSelectedEvent(event)
     setPreviousView(activeView)
     setActiveView('task-detail')
   }
 
   function goBack() {
     setActiveView(previousView)
+    setSelectedEvent(null)
   }
 
-  // Resolve which nav tab is highlighted (task-detail is a sub-screen of calendar)
-  const navView = activeView === 'task-detail' ? previousView : activeView
+  function handleSaveTask(updates) {
+    if (selectedEvent?.id) {
+      editEvent(selectedEvent.id, updates)
+    }
+  }
 
+  const navView = activeView === 'task-detail' ? previousView : activeView
   const isAssistant = activeView === 'assistant'
-  const isTaskDetail = activeView === 'task-detail'
 
   return (
     <>
-      {/* ── Screen router ─────────────────────────────────────────────────── */}
+      {/* ── Calendar ─────────────────────────────────────────────────────── */}
       {activeView === 'calendar' && (
         <CalendarView
           events={events}
           onAddEvent={addEvent}
           onDeleteEvent={deleteEvent}
           onEditEvent={editEvent}
-          onOpenTask={openTaskDetail}
+          onOpenTask={(event) => openTaskDetail(event)}
         />
       )}
 
+      {/* ── Planner / Tasks ──────────────────────────────────────────────── */}
       {(activeView === 'planner' || activeView === 'tasks') && (
         <PlannerView
           events={events}
@@ -56,14 +64,24 @@ export default function App() {
         />
       )}
 
-      {isTaskDetail && <TaskDetailView onBack={goBack} />}
-
-      {/* Assistant fullscreen overlay */}
-      {isAssistant && (
-        <AssistantView onClose={() => navigate(previousView || 'calendar')} />
+      {/* ── Task Detail ───────────────────────────────────────────────────── */}
+      {activeView === 'task-detail' && (
+        <TaskDetailView
+          event={selectedEvent}
+          onBack={goBack}
+          onSave={handleSaveTask}
+        />
       )}
 
-      {/* ── Bottom navigation (hidden when assistant is active) ────────────── */}
+      {/* ── Assistant overlay ─────────────────────────────────────────────── */}
+      {isAssistant && (
+        <AssistantView
+          onClose={() => navigate(previousView || 'calendar')}
+          onAddEvent={addEvent}
+        />
+      )}
+
+      {/* ── Bottom nav (hidden in assistant fullscreen) ───────────────────── */}
       {!isAssistant && (
         <BottomNavBar
           activeView={navView}
