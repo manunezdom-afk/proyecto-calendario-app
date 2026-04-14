@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import QuickAddSheet from '../components/QuickAddSheet'
 import FocusTimerOverlay from '../components/FocusTimerOverlay'
+
+const STORAGE_KEY = 'focus_planner_blocks'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
@@ -59,9 +61,20 @@ function isInPeak() {
 
 // ── Component ─────────────────────────────────────────────────────────────
 export default function PlannerView({ onAddEvent }) {
-  const [blocks, setBlocks] = useState(SEED_BLOCKS)
+  const [blocks, setBlocks] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return SEED_BLOCKS
+  })
   const [showModal, setShowModal] = useState(false)
   const [activeTimerBlock, setActiveTimerBlock] = useState(null)
+
+  // Persist blocks to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(blocks))
+  }, [blocks])
 
   function acceptSuggestion(id) {
     console.log(`[Focus] ✅ Planner: accepting suggestion id="${id}"`)
