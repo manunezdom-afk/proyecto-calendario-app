@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm create:*)"
+      "Bash(npm create:*)",
+      "Bash(npm run:*)",
+      "Bash(git -C \"/Users/martinnunezdominguez/Documents/oraproyecto ahora si/\" log --oneline -10)",
+      "Bash(git -C \"/Users/martinnunezdominguez/Documents/oraproyecto ahora si/\" status)",
+      "Bash(git -C \"/Users/martinnunezdominguez/Documents/oraproyecto ahora si/\" diff --stat HEAD)"
     ]
   }
 }

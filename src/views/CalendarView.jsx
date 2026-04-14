@@ -8,15 +8,25 @@ const AVATAR_1 =
 const AVATAR_2 =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuAGg2kzu3h6K4U-DHUHwAcgSd0y0SQIx6Duljc3apyQXiGDGaDJCJvmLXpH77eOXyP37Jc5UNLSd9hKH2_0BJqXhvtFuctuO1RWkTcExCM32YxUKV29rG8VZAro5LQQwBA75PSIOuScBv5k-ndaqFgJQNTRZRbvVa2ZXHve9TGmRIQetPC53lRJACf2mkMMFoX7yAwVHQpsMXQh-0XpdV1WYDlQF6dKony_nEBC2Jfhnzj8ftnPxl5-e5v_Kgn6dm-qDn9tw02nNGYd'
 
-const CALENDAR_DAYS = [
-  { day: 'LUN', num: 16 },
-  { day: 'MAR', num: 17 },
-  { day: 'MIÉ', num: 18 },
-  { day: 'JUE', num: 19 },
-  { day: 'VIE', num: 20 },
-  { day: 'SÁB', num: 21 },
-  { day: 'DOM', num: 22 },
-]
+const DAY_ABBR_ES    = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const MONTH_NAMES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+
+// Build the current week (Mon → Sun) from today
+function getCurrentWeek() {
+  const today = new Date()
+  const dow    = today.getDay() // 0=Sun
+  const monday = new Date(today)
+  monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1))
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return { day: DAY_ABBR_ES[d.getDay()].toUpperCase(), num: d.getDate(), isToday: d.toDateString() === today.toDateString() }
+  })
+}
+
+const CALENDAR_DAYS = getCurrentWeek()
+const todayNum      = new Date().getDate()
+const currentMonthLabel = `${MONTH_NAMES_ES[new Date().getMonth()]} ${new Date().getFullYear()}`
 
 // ─── Small delete button ──────────────────────────────────────────────────────
 function DeleteButton({ onClick }) {
@@ -125,7 +135,7 @@ function EveningEventCard({ event, onDelete }) {
 // ─── Main view ────────────────────────────────────────────────────────────────
 export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask }) {
   const [showModal, setShowModal] = useState(false)
-  const [activeDay, setActiveDay] = useState(18)          // selected day number
+  const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('mes')           // 'mes' | 'semana'
 
   const focusEvents = events.filter((e) => e.section === 'focus')
@@ -149,6 +159,9 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
         <header>
           <div className="flex justify-between items-end">
             <div>
+              <p className="text-sm font-semibold text-primary uppercase tracking-wider mb-1">
+                {currentMonthLabel}
+              </p>
               <h1 className="text-4xl font-extrabold text-on-surface tracking-tight">
                 Calendario
               </h1>

@@ -2,20 +2,23 @@ import { useState } from 'react'
 import TopAppBar from '../components/TopAppBar'
 import QuickAddSheet from '../components/QuickAddSheet'
 
-const AVATAR_1 =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuA6uixvLBbbeTBU4o6ECI8czwv2rG4Ab9QRoZzG80VUdtQGrNTKfEN6uAsjVY_xDejxYU0ty7i-w-WkdOwFL75tUeP3QdhnoU-aXj6gBXa_rA-EF4EnS0xA9i3U1C5A2ptq4qNGoThpYsChziALLNaGKBd5tmrg4sTexQTMX_Q76n0RKR0a6HoVsDWd3rDMM5crCyQShmr0MknscIOQMi0WkXjd-nwAlIW_5Y3hCfVOk4gFFs573xU55aE4-nN1yrW3tey74rnRdTLX'
-const AVATAR_2 =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuBuP-YYDCS8puBN4BdB0p1a4oljJzvzAN_GJ1lnTWJoxLpt9qIMsUE-4SWVCGzBa4bd7Z28lWv1H2krPfVj1H-oxbauQP2yyGkzV51kMnCXLIiWzp2kNCUGDr3vdI-ptHCUeYQZ4o2k5zO4JC_4Wpj-MXYYhIWpbeDm_C95308waqJo-iw_MmyWV-shmMwOE2beNt4wetEgc-JFNnb8FwwZiHB145oLw_PNHljogMsgzx3aoBguhA6Tlj-Lp4MXrM3p-ulqb2d5kwCn'
+// ── Helpers ────────────────────────────────────────────────────────────────
+const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
+const MONTH_NAMES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 
-// Seed timeline blocks (suggestions start as type:'suggestion', confirmed stay as 'confirmed')
+function formatToday() {
+  const d = new Date()
+  return `${DAY_NAMES_ES[d.getDay()]}, ${d.getDate()} de ${MONTH_NAMES_ES[d.getMonth()]}`
+}
+
+// ── Seed timeline blocks ───────────────────────────────────────────────────
 const SEED_BLOCKS = [
   {
     id: 'blk-001',
     time: '09:00',
     type: 'confirmed',
     title: 'Trabajo Profundo: Arquitectura del Sistema',
-    description: 'Enfoque en el motor de navegación principal para el proyecto Sanctuary.',
-    showAvatars: false,
+    description: 'Bloque de máxima concentración. Sin interrupciones.',
   },
   {
     id: 'blk-002',
@@ -30,70 +33,62 @@ const SEED_BLOCKS = [
     type: 'confirmed',
     title: 'Sincro con el Equipo de Producto',
     description: null,
-    showAvatars: true,
   },
   {
     id: 'blk-004',
     time: '12:30',
     type: 'suggestion',
-    title: 'Sugerido: Inbox Zero (20m)',
-    description: 'Tienes 12 mensajes urgentes sin leer en Slack.',
+    title: 'Sugerido: Inbox Zero (20 min)',
+    description: 'Tienes mensajes urgentes sin leer.',
   },
 ]
 
-const SEED_TASKS = [
-  { id: 'tsk-001', label: 'Revisar Roadmap del Q4', done: false },
-  { id: 'tsk-002', label: 'Preparar diapositivas de presentación', done: false },
-]
+// Energy blocks by hour range (for the insight card)
+const ENERGY_PEAK_START = 9
+const ENERGY_PEAK_END   = 11.5
 
+function currentHour() {
+  const d = new Date()
+  return d.getHours() + d.getMinutes() / 60
+}
+
+function isInPeak() {
+  const h = currentHour()
+  return h >= ENERGY_PEAK_START && h < ENERGY_PEAK_END
+}
+
+// ── Component ─────────────────────────────────────────────────────────────
 export default function PlannerView({ onAddEvent }) {
   const [blocks, setBlocks] = useState(SEED_BLOCKS)
-  const [tasks, setTasks] = useState(SEED_TASKS)
   const [showModal, setShowModal] = useState(false)
 
-  // ── Accept a suggestion → promote to confirmed ─────────────────────────────
   function acceptSuggestion(id) {
-    console.log(`[Sanctuary] ✅ Planner: accepting suggestion block id="${id}"`)
-    setBlocks((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, type: 'confirmed' } : b)),
-    )
+    console.log(`[Focus] ✅ Planner: accepting suggestion id="${id}"`)
+    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, type: 'confirmed' } : b)))
   }
 
-  // ── Dismiss a confirmed block ──────────────────────────────────────────────
   function dismissBlock(id) {
-    console.log(`[Sanctuary] 🗑️ Planner: dismissing block id="${id}"`)
+    console.log(`[Focus] 🗑️ Planner: dismissing block id="${id}"`)
     setBlocks((prev) => prev.filter((b) => b.id !== id))
   }
 
-  // ── Toggle task checkbox ───────────────────────────────────────────────────
-  function toggleTask(id) {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id !== id) return t
-        const next = { ...t, done: !t.done }
-        console.log(`[Sanctuary] ☑️ Task "${t.label}" → ${next.done ? 'done' : 'pending'}`)
-        return next
-      }),
-    )
-  }
-
-  // ── Add event via modal ────────────────────────────────────────────────────
   function handleModalSave(formData) {
-    // Add to the global calendar via prop
     if (onAddEvent) onAddEvent(formData)
-    // Also add a confirmed block to the local timeline
     const newBlock = {
       id: `blk-${Date.now()}`,
       time: formData.time || '—',
       type: 'confirmed',
       title: formData.title,
       description: formData.description || null,
-      showAvatars: false,
     }
-    console.log(`[Sanctuary] ➕ Planner: adding new block "${newBlock.title}"`)
+    console.log(`[Focus] ➕ Planner: adding new block "${newBlock.title}"`)
     setBlocks((prev) => [...prev, newBlock])
     setShowModal(false)
   }
+
+  const confirmedCount  = blocks.filter((b) => b.type === 'confirmed').length
+  const suggestionCount = blocks.filter((b) => b.type === 'suggestion').length
+  const inPeak          = isInPeak()
 
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-32">
@@ -107,7 +102,7 @@ export default function PlannerView({ onAddEvent }) {
             <header className="mb-10 flex justify-between items-end">
               <div>
                 <p className="text-primary font-semibold tracking-wider text-xs uppercase mb-2">
-                  Martes, 24 de Oct
+                  {formatToday()}
                 </p>
                 <h2 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface">
                   Mi Día
@@ -123,7 +118,7 @@ export default function PlannerView({ onAddEvent }) {
             </header>
 
             <div className="relative space-y-2">
-              {blocks.map(({ id, time, type, title, description, showAvatars }) => {
+              {blocks.map(({ id, time, type, title, description }) => {
                 const isSuggestion = type === 'suggestion'
                 return (
                   <div key={id} className="flex gap-6 group">
@@ -153,9 +148,9 @@ export default function PlannerView({ onAddEvent }) {
                           ) : (
                             <button
                               onClick={() => dismissBlock(id)}
-                              className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed hover:bg-error/10 hover:text-error transition-colors flex-shrink-0"
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-error/10 hover:text-error transition-colors flex-shrink-0"
                             >
-                              CONFIRMAR ✓
+                              HECHO ✓
                             </button>
                           )}
                         </div>
@@ -163,15 +158,6 @@ export default function PlannerView({ onAddEvent }) {
                           <p className={`text-sm leading-relaxed ${isSuggestion ? 'italic text-on-surface-variant/70' : 'text-on-surface-variant'}`}>
                             {description}
                           </p>
-                        )}
-                        {showAvatars && (
-                          <div className="flex items-center gap-2 mt-3">
-                            <div className="flex -space-x-2">
-                              <img alt="Team member" className="w-6 h-6 rounded-full border-2 border-surface object-cover" src={AVATAR_1} />
-                              <img alt="Team member" className="w-6 h-6 rounded-full border-2 border-surface object-cover" src={AVATAR_2} />
-                            </div>
-                            <span className="text-xs text-on-surface-variant">con el Equipo de Producto</span>
-                          </div>
                         )}
                       </div>
                     </div>
@@ -190,8 +176,29 @@ export default function PlannerView({ onAddEvent }) {
             </div>
           </div>
 
-          {/* ── Right: Insights + Tasks ────────────────────────────────────── */}
-          <div className="w-full md:w-80 space-y-8">
+          {/* ── Right: Insights ───────────────────────────────────────────── */}
+          <div className="w-full md:w-80 space-y-6">
+
+            {/* Energy peak card */}
+            <div className={`p-6 rounded-[24px] ${inPeak ? 'bg-primary text-white' : 'bg-surface-container-high/40 backdrop-blur-sm'}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <span
+                  className={`material-symbols-outlined ${inPeak ? 'text-white' : 'text-amber-500'}`}
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  {inPeak ? 'bolt' : 'brightness_high'}
+                </span>
+                <h4 className={`font-headline font-bold ${inPeak ? 'text-white' : 'text-on-surface'}`}>
+                  {inPeak ? '¡Estás en tu pico!' : 'Pico de Energía'}
+                </h4>
+              </div>
+              <p className={`text-sm font-medium leading-relaxed ${inPeak ? 'text-white/80' : 'text-on-surface-variant'}`}>
+                {inPeak
+                  ? 'Ahora mismo es tu mejor ventana de concentración. Prioriza trabajo profundo sin interrupciones.'
+                  : `Tu ventana de máxima concentración es de ${ENERGY_PEAK_START}:00 a ${Math.floor(ENERGY_PEAK_END)}:${String(Math.round((ENERGY_PEAK_END % 1) * 60)).padStart(2, '0')}. Guarda las tareas difíciles para ese bloque.`}
+              </p>
+            </div>
+
             {/* Intelligence Card */}
             <div className="bg-surface-container-high/40 p-6 rounded-[24px] backdrop-blur-sm">
               <div className="flex items-center gap-2 mb-4">
@@ -200,93 +207,43 @@ export default function PlannerView({ onAddEvent }) {
                 </span>
                 <h4 className="font-headline font-bold text-on-surface">Resumen IA</h4>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="p-4 bg-surface-container-lowest rounded-xl">
-                  <p className="text-xs font-bold text-primary mb-1 uppercase tracking-tight">MÁXIMA CONCENTRACIÓN</p>
+                  <p className="text-xs font-bold text-primary mb-1 uppercase tracking-tight">BLOQUES ACTIVOS</p>
                   <p className="text-sm text-on-surface-variant font-medium">
-                    Tu energía alcanza su pico entre las 09:00 - 11:30. {blocks.filter((b) => b.type === 'confirmed').length} bloques confirmados.
+                    {confirmedCount} bloque{confirmedCount !== 1 ? 's' : ''} confirmado{confirmedCount !== 1 ? 's' : ''} en tu agenda de hoy.
                   </p>
                 </div>
                 <div className="p-4 bg-surface-container-lowest rounded-xl">
-                  <p className="text-xs font-bold text-secondary mb-1 uppercase tracking-tight">ANÁLISIS DE HUECOS</p>
+                  <p className="text-xs font-bold text-secondary mb-1 uppercase tracking-tight">SUGERENCIAS</p>
                   <p className="text-sm text-on-surface-variant font-medium">
-                    {blocks.filter((b) => b.type === 'suggestion').length} sugerencia(s) pendiente(s) de aceptar.
+                    {suggestionCount > 0
+                      ? `${suggestionCount} sugerencia${suggestionCount !== 1 ? 's' : ''} pendiente${suggestionCount !== 1 ? 's' : ''} de aceptar.`
+                      : 'Sin sugerencias pendientes.'}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Priority Tasks */}
-            <div>
-              <div className="flex justify-between items-center mb-4 px-2">
-                <h4 className="font-headline font-bold text-on-surface">Tareas</h4>
-                <button
-                  onClick={() => {
-                    const label = prompt('Nueva tarea:')
-                    if (!label?.trim()) return
-                    const newTask = { id: `tsk-${Date.now()}`, label: label.trim(), done: false }
-                    console.log(`[Sanctuary] ➕ Task added: "${newTask.label}"`)
-                    setTasks((prev) => [...prev, newTask])
-                  }}
-                  className="text-primary hover:bg-primary/10 rounded-full p-1 transition-colors"
-                  title="Añadir tarea"
+            {/* Focus mode tip */}
+            <div className="bg-gradient-to-br from-secondary/10 to-primary/5 p-5 rounded-[24px] border border-primary/10">
+              <div className="flex items-center gap-2 mb-2">
+                <span
+                  className="material-symbols-outlined text-primary text-[16px]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
                 >
-                  <span className="material-symbols-outlined text-[18px]">add</span>
-                </button>
+                  tips_and_updates
+                </span>
+                <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
+                  Patrón · Time Blocking
+                </span>
               </div>
-              <div className="grid grid-cols-1 gap-3">
-                {tasks.map(({ id, label, done }) => (
-                  <div
-                    key={id}
-                    className={`bg-surface-container-lowest p-4 rounded-2xl shadow-sm border-l-4 transition-all ${
-                      done ? 'border-outline-variant opacity-60' : 'border-secondary-container'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className={`text-sm font-semibold text-on-surface ${done ? 'line-through text-outline' : ''}`}>
-                        {label}
-                      </span>
-                      <button
-                        onClick={() => toggleTask(id)}
-                        className="flex-shrink-0 transition-all active:scale-90"
-                      >
-                        <span
-                          className={`material-symbols-outlined text-lg transition-colors ${done ? 'text-primary' : 'text-outline-variant hover:text-primary'}`}
-                          style={done ? { fontVariationSettings: "'FILL' 1" } : {}}
-                        >
-                          {done ? 'check_circle' : 'radio_button_unchecked'}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {tasks.length === 0 && (
-                  <div className="bg-surface-container-lowest p-4 rounded-2xl text-center text-outline text-sm font-semibold">
-                    Sin tareas. Pulsa + para añadir.
-                  </div>
-                )}
-
-                {/* Goal card */}
-                <div className="bg-primary p-6 rounded-[24px] text-white shadow-xl shadow-primary/20">
-                  <h5 className="text-lg font-bold mb-2">Mi Meta</h5>
-                  <p className="text-primary-fixed text-sm mb-4 leading-relaxed opacity-90">
-                    Terminar la documentación arquitectónica para la nueva capa de datos.
-                  </p>
-                  <div className="w-full bg-white/20 h-1 rounded-full overflow-hidden">
-                    <div
-                      className="bg-white h-full transition-all duration-500"
-                      style={{ width: `${tasks.length === 0 ? 100 : Math.round((tasks.filter((t) => t.done).length / tasks.length) * 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-[10px] mt-2 font-bold uppercase tracking-widest opacity-70">
-                    {tasks.length === 0
-                      ? '100% COMPLETADO'
-                      : `${Math.round((tasks.filter((t) => t.done).length / tasks.length) * 100)}% COMPLETADO`}
-                  </p>
-                </div>
-              </div>
+              <p className="text-xs text-on-surface-variant font-medium leading-relaxed">
+                Divide tu día en bloques dedicados. Los estudios muestran que el trabajo en bloques
+                aumenta la productividad hasta un <span className="text-on-surface font-bold">80%</span> frente a las listas de tareas convencionales.
+              </p>
             </div>
+
           </div>
         </div>
       </main>

@@ -1,9 +1,9 @@
 export default function BottomNavBar({ activeView, onNavigate }) {
   const navItems = [
-    { id: 'planner', icon: 'calendar_today', label: 'Planificador' },
-    { id: 'calendar', icon: 'calendar_month', label: 'Calendario' },
-    { id: 'assistant', icon: 'auto_awesome', label: 'Asistente' },
-    { id: 'tasks', icon: 'checklist', label: 'Tareas' },
+    { id: 'planner',   icon: 'view_day',       label: 'Mi Día'      },
+    { id: 'calendar',  icon: 'calendar_month',  label: 'Calendario'  },
+    { id: 'assistant', icon: 'auto_awesome',    label: 'Asistente'   },
+    { id: 'tasks',     icon: 'task_alt',        label: 'Tareas'      },
   ]
 
   return (

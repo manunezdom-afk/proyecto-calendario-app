@@ -5,11 +5,12 @@ import CalendarView from './views/CalendarView'
 import AssistantView from './views/AssistantView'
 import TaskDetailView from './views/TaskDetailView'
 import PlannerView from './views/PlannerView'
+import TasksView from './views/TasksView'
 
 export default function App() {
   // ── Navigation ────────────────────────────────────────────────────────────
-  const [activeView, setActiveView] = useState('calendar')
-  const [previousView, setPreviousView] = useState('calendar')
+  const [activeView, setActiveView]     = useState('planner')
+  const [previousView, setPreviousView] = useState('planner')
 
   // ── Shared event state (persisted in localStorage) ────────────────────────
   const { events, addEvent, deleteEvent, editEvent } = useEvents()
@@ -39,12 +40,21 @@ export default function App() {
     }
   }
 
-  const navView = activeView === 'task-detail' ? previousView : activeView
+  const navView    = activeView === 'task-detail' ? previousView : activeView
   const isAssistant = activeView === 'assistant'
 
   return (
     <>
-      {/* ── Calendar ─────────────────────────────────────────────────────── */}
+      {/* ── Mi Día / Planificador ─────────────────────────────────────────── */}
+      {activeView === 'planner' && (
+        <PlannerView
+          events={events}
+          onAddEvent={addEvent}
+          onDeleteEvent={deleteEvent}
+        />
+      )}
+
+      {/* ── Calendario ───────────────────────────────────────────────────── */}
       {activeView === 'calendar' && (
         <CalendarView
           events={events}
@@ -55,13 +65,9 @@ export default function App() {
         />
       )}
 
-      {/* ── Planner / Tasks ──────────────────────────────────────────────── */}
-      {(activeView === 'planner' || activeView === 'tasks') && (
-        <PlannerView
-          events={events}
-          onAddEvent={addEvent}
-          onDeleteEvent={deleteEvent}
-        />
+      {/* ── Tareas ───────────────────────────────────────────────────────── */}
+      {activeView === 'tasks' && (
+        <TasksView />
       )}
 
       {/* ── Task Detail ───────────────────────────────────────────────────── */}
@@ -76,7 +82,7 @@ export default function App() {
       {/* ── Assistant overlay ─────────────────────────────────────────────── */}
       {isAssistant && (
         <AssistantView
-          onClose={() => navigate(previousView || 'calendar')}
+          onClose={() => navigate(previousView || 'planner')}
           onAddEvent={addEvent}
         />
       )}
