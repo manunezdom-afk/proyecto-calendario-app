@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import TopAppBar from '../components/TopAppBar'
 import QuickAddSheet from '../components/QuickAddSheet'
 import MonthCalendar from '../components/MonthCalendar'
 
@@ -151,7 +150,6 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
 
   return (
     <div className="bg-surface text-on-surface min-h-screen pb-32">
-      <TopAppBar />
 
       <main className="max-w-md mx-auto px-6 pt-4 space-y-8">
 

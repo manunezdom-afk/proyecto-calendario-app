@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import TopAppBar from '../components/TopAppBar'
 import { useTasks } from '../hooks/useTasks'
+import WeeklyStatsCard from '../components/WeeklyStatsCard'
 
 const PRIORITY_CFG = {
   Alta:      { color: 'text-error',     bg: 'bg-error/10',     dot: 'bg-error',     ring: 'ring-error/30' },
@@ -43,14 +43,13 @@ export default function TasksView() {
   }
 
   return (
-    <div className="bg-surface font-body text-on-surface min-h-screen pb-32">
-      <TopAppBar />
+    <div className="bg-surface font-body text-on-surface min-h-screen pb-32 dark:bg-slate-900 dark:text-slate-100">
 
       <main className="max-w-md mx-auto px-6 pt-6 space-y-8">
 
         {/* ── Header + Progress ──────────────────────────────────────────── */}
         <header className="space-y-4">
-          <h1 className="text-4xl font-extrabold tracking-tight text-on-surface">Tareas</h1>
+          <h1 className="text-4xl font-extrabold tracking-tight text-on-surface dark:text-slate-100">Tareas</h1>
 
           <div className="bg-surface-container-lowest p-5 rounded-[24px] border border-outline-variant/20">
             <div className="flex justify-between items-center mb-3">
@@ -73,6 +72,9 @@ export default function TasksView() {
             )}
           </div>
         </header>
+
+        {/* ── Weekly Stats ──────────────────────────────────────────────── */}
+        <WeeklyStatsCard tasks={tasks} />
 
         {/* ── Las 3 Victorias (MIT method) ──────────────────────────────── */}
         {topThree.length > 0 && (

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import TopAppBar from '../components/TopAppBar'
 import QuickAddSheet from '../components/QuickAddSheet'
+import FocusTimerOverlay from '../components/FocusTimerOverlay'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
@@ -61,6 +61,7 @@ function isInPeak() {
 export default function PlannerView({ onAddEvent }) {
   const [blocks, setBlocks] = useState(SEED_BLOCKS)
   const [showModal, setShowModal] = useState(false)
+  const [activeTimerBlock, setActiveTimerBlock] = useState(null)
 
   function acceptSuggestion(id) {
     console.log(`[Focus] ✅ Planner: accepting suggestion id="${id}"`)
@@ -91,8 +92,7 @@ export default function PlannerView({ onAddEvent }) {
   const inPeak          = isInPeak()
 
   return (
-    <div className="bg-surface font-body text-on-surface min-h-screen pb-32">
-      <TopAppBar />
+    <div className="bg-surface font-body text-on-surface min-h-screen pb-32 dark:bg-slate-900 dark:text-slate-100">
 
       <main className="max-w-7xl mx-auto px-6 pt-8">
         <div className="flex flex-col md:flex-row gap-12">
@@ -129,25 +129,33 @@ export default function PlannerView({ onAddEvent }) {
                     </div>
                     <div className="relative flex-1 pb-8">
                       <div className={`absolute left-[-25px] top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : 'bg-primary'}`} />
-                      <div className={`p-5 rounded-xl ${
-                        isSuggestion
-                          ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
-                          : 'bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 border-primary'
-                      }`}>
+                      <div
+                        className={`p-5 rounded-xl ${
+                          isSuggestion
+                            ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
+                            : 'bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 border-primary cursor-pointer hover:shadow-md transition-shadow'
+                        }`}
+                        onClick={!isSuggestion ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
+                      >
                         <div className="flex justify-between items-start mb-1 gap-3">
-                          <h3 className={`font-bold flex-1 ${isSuggestion ? 'text-secondary' : 'text-on-surface'}`}>
-                            {title}
-                          </h3>
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <h3 className={`font-bold flex-1 ${isSuggestion ? 'text-secondary' : 'text-on-surface'}`}>
+                              {title}
+                            </h3>
+                            {!isSuggestion && (
+                              <span className="material-symbols-outlined text-outline/40 text-[16px] flex-shrink-0">timer</span>
+                            )}
+                          </div>
                           {isSuggestion ? (
                             <button
-                              onClick={() => acceptSuggestion(id)}
+                              onClick={(e) => { e.stopPropagation(); acceptSuggestion(id) }}
                               className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-secondary/20 hover:bg-secondary/10 text-secondary transition-colors flex-shrink-0"
                             >
                               ACEPTAR
                             </button>
                           ) : (
                             <button
-                              onClick={() => dismissBlock(id)}
+                              onClick={(e) => { e.stopPropagation(); dismissBlock(id) }}
                               className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-error/10 hover:text-error transition-colors flex-shrink-0"
                             >
                               HECHO ✓
@@ -259,6 +267,14 @@ export default function PlannerView({ onAddEvent }) {
 
       {showModal && (
         <QuickAddSheet onSave={handleModalSave} onCancel={() => setShowModal(false)} />
+      )}
+
+      {activeTimerBlock && (
+        <FocusTimerOverlay
+          block={activeTimerBlock}
+          onClose={() => setActiveTimerBlock(null)}
+          onComplete={() => { dismissBlock(activeTimerBlock.id); setActiveTimerBlock(null) }}
+        />
       )}
     </div>
   )

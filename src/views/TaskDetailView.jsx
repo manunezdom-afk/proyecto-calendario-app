@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import TopAppBar from '../components/TopAppBar'
 
 const MAP_IMG =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuDnMdZmXSTb0jbZIHNsec7M3li4X741nok3cjPlKbRbvQeqGwnxHjftvEjjyQy0kiCK4whoj71CKPPsJGTSKA62lB7axNvi7bDYU7iWfC4kkTJZxO9jYlQza6HS9EsJHg41-RTD_ASwcqx7m5wsBZyh-AC7H-PQsyG9ycCJVKQOIm0AMHBOOIGwVcRI-5SYWUZXd5ASam3QEchfV4i2GNS59exO003RAac4Cui_64uQFproH6MIkVhZTo9Yo5GuLV57DaD2ca6aIaeH'
@@ -62,7 +61,6 @@ export default function TaskDetailView({ event, onBack, onSave }) {
 
   return (
     <div className="bg-surface selection:bg-primary-fixed min-h-screen pb-32">
-      <TopAppBar showBack onBack={onBack} />
 
       <main className="max-w-4xl mx-auto px-6 pt-12">
         {/* Header */}

@@ -36,3 +36,14 @@ h1, h2, h3 {
   from { transform: translateY(100%); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
 }
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* Dark mode base overrides */
+.dark body {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}

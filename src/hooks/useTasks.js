@@ -36,7 +36,8 @@ export function useTasks() {
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id !== id) return t
-        const next = { ...t, done: !t.done }
+        const nowDone = !t.done
+        const next = { ...t, done: nowDone, doneAt: nowDone ? Date.now() : null }
         console.log(`[Focus] ☑️ Task "${t.label}" → ${next.done ? 'done' : 'pending'}`)
         return next
       }),
