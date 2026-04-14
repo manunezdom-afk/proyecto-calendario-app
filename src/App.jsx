@@ -94,7 +94,7 @@ export default function App() {
 
       {/* ── Views ─────────────────────────────────────────────────────────── */}
       {activeView === 'planner' && (
-        <PlannerView events={events} onAddEvent={addEvent} onDeleteEvent={deleteEvent} />
+        <PlannerView events={events} onAddEvent={addEvent} />
       )}
 
       {activeView === 'calendar' && (

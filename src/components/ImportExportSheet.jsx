@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { downloadICS }        from '../utils/icsExport'
-import { parseICS }           from '../utils/icsImport'
-import { parseEvent }         from '../utils/parseEvent'
-import { parseScheduleText }  from '../utils/parseScheduleText'
+import { downloadICS }  from '../utils/icsExport'
+import { parseICS }     from '../utils/icsImport'
+import { parseEvent }   from '../utils/parseEvent'
 
 const TABS = [
   { id: 'export', label: 'Exportar', icon: 'ios_share' },
@@ -352,22 +351,20 @@ function TextTab({ onImport }) {
 
 // ── Photo tab ─────────────────────────────────────────────────────────────────
 function PhotoTab({ onImport }) {
-  const [extracted, setExtracted] = useState('')
+  const [photos, setPhotos]       = useState([]) // [{ url, file }]
   const [preview, setPreview]     = useState([])
+  const [analyzing, setAnalyzing] = useState(false)
   const [imported, setImported]   = useState(false)
-  const [parseError, setParseError] = useState('')
+  const [error, setError]         = useState('')
   const fileRef = useRef(null)
-  // Multiple photos: array of { url, name }
-  const [photos, setPhotos] = useState([])
 
   function handlePhotos(e) {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
-    const newPhotos = files.map((f) => ({ url: URL.createObjectURL(f), name: f.name }))
-    setPhotos((prev) => [...prev, ...newPhotos])
+    setPhotos((prev) => [...prev, ...files.map((f) => ({ url: URL.createObjectURL(f), file: f }))])
     setPreview([])
     setImported(false)
-    // Reset input so re-selecting same file works
+    setError('')
     e.target.value = ''
   }
 
@@ -376,28 +373,101 @@ function PhotoTab({ onImport }) {
       URL.revokeObjectURL(prev[idx].url)
       return prev.filter((_, i) => i !== idx)
     })
+    setPreview([])
+    setError('')
   }
 
-  function handleParse() {
-    setParseError('')
-    const text = extracted.trim()
-    if (!text) return
+  /** Redimensiona a max 1120px y devuelve { base64, mediaType } */
+  function resizeToBase64(file, maxPx = 1120) {
+    return new Promise((resolve) => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        const ratio = Math.min(maxPx / img.width, maxPx / img.height, 1)
+        const canvas = document.createElement('canvas')
+        canvas.width  = Math.round(img.width  * ratio)
+        canvas.height = Math.round(img.height * ratio)
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+        URL.revokeObjectURL(url)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+        resolve({ base64: dataUrl.split(',')[1], mediaType: 'image/jpeg' })
+      }
+      img.src = url
+    })
+  }
+
+  /** Convierte un evento devuelto por la IA al formato de useEvents */
+  function aiToAppEvent({ title = 'Evento', date = null, time = null, endTime = null }) {
+    let displayTime = '', h24 = null
+    if (time) {
+      const [h, m] = time.split(':').map(Number)
+      h24 = h
+      const period = h >= 12 ? 'PM' : 'AM'
+      const h12 = h % 12 === 0 ? 12 : h % 12
+      displayTime = `${h12}:${String(m).padStart(2, '0')} ${period}`
+    }
+    const section = h24 !== null && h24 >= 14 ? 'evening' : 'focus'
+    const t = (title || '').toLowerCase()
+    let icon = 'event'
+    if (/futbol|gym|yoga|correr|nadar|pilates|deporte|ejercicio/.test(t)) icon = 'fitness_center'
+    else if (/reunion|meeting|llamada|call|sincro|junta/.test(t))         icon = 'groups'
+    else if (/almuerzo|comida|cena|desayuno|cafe|restaurante/.test(t))    icon = 'restaurant'
+    else if (/estudio|clase|tarea|examen|facultad|universidad/.test(t))   icon = 'menu_book'
+    else if (/trabajo|proyecto|presentacion|oficina/.test(t))             icon = 'work'
+    else if (/medico|doctor|cita|dentista|hospital/.test(t))              icon = 'local_hospital'
+    else if (/compras|supermercado|tienda/.test(t))                       icon = 'shopping_cart'
+    else if (/cumpleanos|fiesta|celebracion/.test(t))                     icon = 'cake'
+    else if (/viaje|vuelo|aeropuerto/.test(t))                            icon = 'flight'
+
+    return {
+      id:          `evt-ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      title:       title.trim(),
+      time:        displayTime,
+      date,
+      section,
+      featured:    false,
+      icon,
+      dotColor:    section === 'evening' ? 'bg-secondary-container' : '',
+      description: endTime ? `Hasta las ${endTime}` : '',
+    }
+  }
+
+  async function handleAnalyze() {
+    if (!photos.length) return
+    setAnalyzing(true)
+    setError('')
+    setPreview([])
 
     try {
-      // Use the dedicated schedule parser — handles 24h times, date headers,
-      // ranges, h-format, coloquial, etc.
-      const parsed = parseScheduleText(text)
+      const images = await Promise.all(photos.map((p) => resizeToBase64(p.file)))
 
-      if (parsed.length === 0) {
-        setParseError('No se reconocieron eventos. Asegúrate de que el texto incluya horas y nombres de actividad.')
-        setPreview([])
+      const res = await fetch('/.netlify/functions/analyze-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || data.error) {
+        if (data.error === 'no_api_key') {
+          setError('La IA no está configurada. Pide al administrador que agregue ANTHROPIC_API_KEY en Netlify → Environment variables.')
+        } else {
+          setError('Error al analizar las fotos. Intenta de nuevo.')
+        }
         return
       }
 
-      setPreview(parsed)
-      setImported(false)
-    } catch (err) {
-      setParseError('Error al analizar el texto. Intenta limpiar el formato.')
+      if (!data.events || data.events.length === 0) {
+        setError('No se detectaron eventos. Asegúrate de que las fotos muestren un calendario o agenda con fechas y horas visibles.')
+        return
+      }
+
+      setPreview(data.events.map(aiToAppEvent))
+    } catch {
+      setError('No se pudo conectar. Verifica tu conexión a internet.')
+    } finally {
+      setAnalyzing(false)
     }
   }
 
@@ -409,44 +479,35 @@ function PhotoTab({ onImport }) {
     preview.forEach((ev) => onImport(ev))
     setImported(true)
     setPreview([])
-    setExtracted('')
     setPhotos([])
   }
 
   return (
     <div className="space-y-5">
       <p className="text-sm text-on-surface-variant font-medium leading-relaxed">
-        Sube fotos de tu agenda, pizarra o calendario. Usa
-        <span className="font-bold text-on-surface"> Live Text (iPhone)</span> o
-        <span className="font-bold text-on-surface"> Google Lens (Android)</span> para
-        copiar el texto y pégalo abajo — la IA detecta horarios automáticamente.
+        Sube fotos de tu agenda, pizarra o calendario impreso —
+        <span className="font-bold text-on-surface"> la IA las lee directamente</span> y
+        detecta todos los eventos con sus fechas y horarios.
       </p>
 
-      {/* Steps */}
-      <div className="space-y-2">
-        {[
-          { n: '1', icon: 'add_photo_alternate', text: 'Adjunta una o más fotos de tu horario (referencia visual)' },
-          { n: '2', icon: 'text_fields',          text: 'En la foto, usa Live Text o Google Lens para seleccionar el texto' },
-          { n: '3', icon: 'content_paste',        text: 'Cópialo y pégalo en el campo de abajo' },
-          { n: '4', icon: 'auto_awesome',         text: 'Toca "Analizar" — la IA extrae todos los eventos con sus horarios' },
-        ].map(({ n, icon, text }) => (
-          <div key={n} className="flex items-center gap-3 p-3 bg-surface-container-low rounded-xl">
-            <span className="w-6 h-6 rounded-full bg-primary text-white text-[11px] font-black flex items-center justify-center flex-shrink-0">{n}</span>
-            <span className="material-symbols-outlined text-primary text-[18px] flex-shrink-0">{icon}</span>
-            <p className="text-xs font-medium text-on-surface-variant">{text}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Add photos button */}
+      {/* Upload zone */}
       <button
         onClick={() => fileRef.current?.click()}
-        className="w-full py-3.5 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 flex items-center justify-center gap-2 hover:bg-primary/8 active:scale-[0.98] transition-all"
+        disabled={analyzing}
+        className="w-full py-6 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 flex flex-col items-center gap-2 hover:bg-primary/8 active:scale-[0.98] transition-all disabled:opacity-40"
       >
-        <span className="material-symbols-outlined text-primary text-[22px]">add_photo_alternate</span>
-        <span className="font-bold text-primary text-sm">
-          {photos.length === 0 ? 'Adjuntar fotos' : `Añadir más fotos (${photos.length} adjunta${photos.length !== 1 ? 's' : ''})`}
+        <span
+          className="material-symbols-outlined text-primary text-5xl"
+          style={{ fontVariationSettings: "'FILL' 1" }}
+        >
+          add_photo_alternate
         </span>
+        <span className="font-bold text-primary">
+          {photos.length === 0
+            ? 'Seleccionar fotos'
+            : `Añadir más (${photos.length} seleccionada${photos.length !== 1 ? 's' : ''})`}
+        </span>
+        <span className="text-xs text-outline font-medium">JPG, PNG · Puedes subir varias a la vez</span>
       </button>
       <input
         ref={fileRef}
@@ -457,19 +518,16 @@ function PhotoTab({ onImport }) {
         className="hidden"
       />
 
-      {/* Photo thumbnails grid */}
+      {/* Thumbnails */}
       {photos.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
-          {photos.map(({ url, name }, idx) => (
+          {photos.map(({ url }, idx) => (
             <div key={idx} className="relative aspect-square rounded-xl overflow-hidden bg-surface-container-low">
-              <img
-                src={url}
-                alt={name}
-                className="w-full h-full object-cover"
-              />
+              <img src={url} alt="" className="w-full h-full object-cover" />
               <button
                 onClick={() => removePhoto(idx)}
-                className="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center"
+                disabled={analyzing}
+                className="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center disabled:opacity-0"
               >
                 <span className="material-symbols-outlined text-[13px]">close</span>
               </button>
@@ -478,51 +536,44 @@ function PhotoTab({ onImport }) {
         </div>
       )}
 
-      {/* Tips for what kinds of text the parser handles */}
-      {!extracted && (
-        <div className="bg-surface-container-low rounded-xl p-3 space-y-1">
-          <p className="text-[10px] font-bold text-outline uppercase tracking-wider mb-2">Formatos que reconoce</p>
-          {[
-            '9:00 Gym  /  14:30 Dentista',
-            '09:00 - 10:00 Trabajo profundo',
-            'Lunes 14 de abril',
-            '9h30 Yoga  /  9 AM Meeting',
-            'Dentista a las 3 de la tarde',
-          ].map((ex) => (
-            <p key={ex} className="text-xs font-mono text-outline/70">{ex}</p>
-          ))}
+      {/* Error */}
+      {error && (
+        <div className="p-4 bg-error/10 rounded-xl border border-error/20">
+          <p className="text-sm text-error font-semibold">{error}</p>
         </div>
       )}
 
-      {/* Textarea */}
-      <textarea
-        value={extracted}
-        onChange={(e) => { setExtracted(e.target.value); setPreview([]); setImported(false); setParseError('') }}
-        placeholder={'Pega aquí el texto de tu horario...\n\nEj:\nLunes 14 de abril\n9:00 Gym\n11:00 - 12:00 Reunión de trabajo\n14:30 Dentista\n\nMartes 15 de abril\n7:30 Yoga\n10:00 Clase de inglés'}
-        rows={6}
-        className="w-full bg-surface-container-low rounded-xl p-4 text-sm font-medium text-on-surface placeholder:text-outline/40 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
-      />
+      {/* Analyze button */}
+      {photos.length > 0 && !analyzing && preview.length === 0 && !imported && (
+        <button
+          onClick={handleAnalyze}
+          className="w-full py-4 rounded-2xl bg-primary text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
+        >
+          <span className="material-symbols-outlined text-[22px]">auto_awesome</span>
+          Analizar {photos.length} foto{photos.length !== 1 ? 's' : ''} con IA
+        </button>
+      )}
 
-      {/* Parse error */}
-      {parseError && (
-        <div className="p-3 bg-error/10 rounded-xl border border-error/20">
-          <p className="text-sm text-error font-semibold">{parseError}</p>
+      {/* Loading */}
+      {analyzing && (
+        <div className="py-10 flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+          <div className="text-center">
+            <p className="text-sm font-bold text-on-surface">Analizando fotos...</p>
+            <p className="text-xs text-outline font-medium mt-1">La IA está leyendo tu horario</p>
+          </div>
         </div>
       )}
 
-      <button
-        onClick={handleParse}
-        disabled={!extracted.trim()}
-        className="w-full py-4 rounded-2xl bg-primary text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-30 active:scale-[0.98] transition-all"
-      >
-        <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
-        Analizar y detectar eventos
-      </button>
-
-      {/* Success */}
+      {/* Success banner */}
       {imported && (
         <div className="p-4 bg-primary/10 rounded-xl border border-primary/20 flex items-center gap-3">
-          <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+          <span
+            className="material-symbols-outlined text-primary text-2xl"
+            style={{ fontVariationSettings: "'FILL' 1" }}
+          >
+            check_circle
+          </span>
           <p className="text-sm font-bold text-primary">Eventos añadidos al calendario</p>
         </div>
       )}

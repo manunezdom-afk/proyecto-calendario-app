@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import QuickAddSheet from '../components/QuickAddSheet'
+import QuickAddSheet    from '../components/QuickAddSheet'
 import FocusTimerOverlay from '../components/FocusTimerOverlay'
-
-const STORAGE_KEY = 'focus_planner_blocks'
+import ProfileSetupCard from '../components/ProfileSetupCard'
+import { useUserProfile } from '../hooks/useUserProfile'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
@@ -13,54 +13,133 @@ function formatToday() {
   return `${DAY_NAMES_ES[d.getDay()]}, ${d.getDate()} de ${MONTH_NAMES_ES[d.getMonth()]}`
 }
 
-// ── Seed timeline blocks ───────────────────────────────────────────────────
-const SEED_BLOCKS = [
-  {
-    id: 'blk-001',
-    time: '09:00',
-    type: 'confirmed',
-    title: 'Trabajo Profundo: Arquitectura del Sistema',
-    description: 'Bloque de máxima concentración. Sin interrupciones.',
-  },
-  {
-    id: 'blk-002',
-    time: '10:30',
-    type: 'suggestion',
-    title: 'Descanso Inteligente: Meditación de 15 min',
-    description: 'Carga cognitiva alta detectada. Recarga para la sincro de las 11:00.',
-  },
-  {
-    id: 'blk-003',
-    time: '11:00',
-    type: 'confirmed',
-    title: 'Sincro con el Equipo de Producto',
-    description: null,
-  },
-  {
-    id: 'blk-004',
-    time: '12:30',
-    type: 'suggestion',
-    title: 'Sugerido: Inbox Zero (20 min)',
-    description: 'Tienes mensajes urgentes sin leer.',
-  },
-]
-
-// Energy blocks by hour range (for the insight card)
-const ENERGY_PEAK_START = 9
-const ENERGY_PEAK_END   = 11.5
-
 function currentHour() {
   const d = new Date()
   return d.getHours() + d.getMinutes() / 60
 }
 
-function isInPeak() {
+// ── Seed timeline blocks ───────────────────────────────────────────────────
+const SEED_BLOCKS = [
+  { id: 'blk-001', time: '09:00', type: 'confirmed', title: 'Trabajo Profundo: Arquitectura del Sistema',   description: 'Bloque de máxima concentración. Sin interrupciones.' },
+  { id: 'blk-002', time: '10:30', type: 'suggestion', title: 'Descanso Inteligente: Meditación de 15 min', description: 'Carga cognitiva alta detectada. Recarga para la sincro de las 11:00.' },
+  { id: 'blk-003', time: '11:00', type: 'confirmed', title: 'Sincro con el Equipo de Producto',             description: null },
+  { id: 'blk-004', time: '12:30', type: 'suggestion', title: 'Sugerido: Inbox Zero (20 min)',               description: 'Tienes mensajes urgentes sin leer.' },
+]
+
+const STORAGE_KEY = 'focus_planner_blocks'
+
+// ── Lógica de insights personalizados ─────────────────────────────────────
+function buildInsights(events, profile) {
+  const todayISO = (() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  })()
+
+  const todayEvents = events.filter((e) => !e.date || e.date === todayISO)
+  const eveningCount = todayEvents.filter((e) => e.section === 'evening').length
+  const meetingCount = todayEvents.filter((e) =>
+    /reuni[oó]n|meeting|llamada|call|sincro|junta/i.test(e.title)
+  ).length
   const h = currentHour()
-  return h >= ENERGY_PEAK_START && h < ENERGY_PEAK_END
+
+  const { role, chronotype, peakStart } = profile
+  const roleLabel = { student: 'estudiar', worker: 'trabajar', freelance: 'producir', other: 'concentrarte' }[role] ?? 'concentrarte'
+
+  const insights = []
+
+  // Insight 1: basado en cantidad de reuniones
+  if (meetingCount >= 3) {
+    insights.push({
+      color: 'text-amber-600',
+      bg: 'bg-amber-50 dark:bg-amber-900/20',
+      icon: 'groups',
+      label: 'REUNIONES',
+      text: `${meetingCount} reuniones hoy. Bloquea al menos 30 min de recuperación entre ellas para mantener el foco.`,
+    })
+  } else if (meetingCount > 0) {
+    insights.push({
+      color: 'text-primary',
+      bg: 'bg-primary/5',
+      icon: 'groups',
+      label: 'AGENDA',
+      text: `${meetingCount} reunión${meetingCount > 1 ? 'es' : ''} programada${meetingCount > 1 ? 's' : ''}. Prepara los puntos clave antes de entrar.`,
+    })
+  }
+
+  // Insight 2: carga de tarde
+  if (eveningCount >= 2) {
+    insights.push({
+      color: 'text-secondary',
+      bg: 'bg-secondary/5',
+      icon: 'nights_stay',
+      label: 'TARDE OCUPADA',
+      text: 'Tu tarde está cargada. Resuelve lo urgente antes del mediodía para llegar sin presión.',
+    })
+  }
+
+  // Insight 3: agenda vacía
+  if (todayEvents.length === 0) {
+    insights.push({
+      color: 'text-primary',
+      bg: 'bg-primary/5',
+      icon: 'spa',
+      label: 'ESPACIO LIBRE',
+      text: `Sin eventos agendados. Día ideal para ${roleLabel} profundo sin interrupciones. Usa Time Blocking.`,
+    })
+  } else if (todayEvents.length <= 2) {
+    insights.push({
+      color: 'text-primary',
+      bg: 'bg-primary/5',
+      icon: 'self_improvement',
+      label: 'AGENDA LIGERA',
+      text: `Pocos eventos hoy. Aprovecha los bloques libres para ${roleLabel} con máxima concentración.`,
+    })
+  }
+
+  // Insight 4: cronobio + hora actual
+  if (chronotype === 'night' && h < 13) {
+    insights.push({
+      color: 'text-outline',
+      bg: 'bg-surface-container-low',
+      icon: 'bedtime',
+      label: 'TU MOMENTO',
+      text: 'Aún no es tu pico de energía. Haz tareas rutinarias ahora y guarda lo difícil para la noche.',
+    })
+  } else if (chronotype === 'morning' && h > 14) {
+    insights.push({
+      color: 'text-outline',
+      bg: 'bg-surface-container-low',
+      icon: 'wb_twilight',
+      label: 'TU MOMENTO',
+      text: 'Tu pico de mañana ya pasó. Es buen momento para reuniones, correos y tareas más ligeras.',
+    })
+  }
+
+  // Insight 5: tip según rol
+  if (role === 'student') {
+    insights.push({
+      color: 'text-secondary',
+      bg: 'bg-secondary/5',
+      icon: 'timer',
+      label: 'TÉCNICA',
+      text: 'Pomodoro activo: 25 min de estudio sin distracciones → 5 min de descanso. La ciencia lo respalda.',
+    })
+  } else {
+    insights.push({
+      color: 'text-primary',
+      bg: 'bg-primary/5',
+      icon: 'tips_and_updates',
+      label: 'TIME BLOCKING',
+      text: 'Divide tu día en bloques dedicados. Los estudios muestran hasta un 80% más de productividad frente a listas de tareas.',
+    })
+  }
+
+  // Devolver los 2 más relevantes (los primeros que se acumularon)
+  return insights.slice(0, 2)
 }
 
-// ── Component ─────────────────────────────────────────────────────────────
-export default function PlannerView({ onAddEvent }) {
+// ── Componente ─────────────────────────────────────────────────────────────
+export default function PlannerView({ onAddEvent, events = [] }) {
   const [blocks, setBlocks] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -68,44 +147,62 @@ export default function PlannerView({ onAddEvent }) {
     } catch {}
     return SEED_BLOCKS
   })
-  const [showModal, setShowModal] = useState(false)
+  const [showModal, setShowModal]         = useState(false)
   const [activeTimerBlock, setActiveTimerBlock] = useState(null)
 
-  // Persist blocks to localStorage whenever they change
+  const { profile, saveProfile, snoozeSetup, showSetup } = useUserProfile()
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(blocks))
   }, [blocks])
 
   function acceptSuggestion(id) {
-    console.log(`[Focus] ✅ Planner: accepting suggestion id="${id}"`)
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, type: 'confirmed' } : b)))
   }
 
   function dismissBlock(id) {
-    console.log(`[Focus] 🗑️ Planner: dismissing block id="${id}"`)
     setBlocks((prev) => prev.filter((b) => b.id !== id))
   }
 
   function handleModalSave(formData) {
     if (onAddEvent) onAddEvent(formData)
-    const newBlock = {
+    setBlocks((prev) => [...prev, {
       id: `blk-${Date.now()}`,
       time: formData.time || '—',
       type: 'confirmed',
       title: formData.title,
       description: formData.description || null,
-    }
-    console.log(`[Focus] ➕ Planner: adding new block "${newBlock.title}"`)
-    setBlocks((prev) => [...prev, newBlock])
+    }])
     setShowModal(false)
   }
 
+  // ── Datos personalizados ─────────────────────────────────────────────────
+  const peakStart = profile.peakStart ?? 9
+  const peakEnd   = profile.peakEnd   ?? 11.5
+  const inPeak    = currentHour() >= peakStart && currentHour() < peakEnd
+
   const confirmedCount  = blocks.filter((b) => b.type === 'confirmed').length
   const suggestionCount = blocks.filter((b) => b.type === 'suggestion').length
-  const inPeak          = isInPeak()
+
+  const insights = buildInsights(events, profile)
+
+  const peakLabel = (() => {
+    const startH = Math.floor(peakStart)
+    const startM = Math.round((peakStart % 1) * 60)
+    const endH   = Math.floor(peakEnd)
+    const endM   = Math.round((peakEnd % 1) * 60)
+    return `${startH}:${String(startM).padStart(2,'0')} – ${endH}:${String(endM).padStart(2,'0')}`
+  })()
+
+  const chronoLabel = { morning: 'mañanero', afternoon: 'vespertino', night: 'nocturno' }[profile.chronotype] ?? ''
 
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-32 dark:bg-slate-900 dark:text-slate-100">
+
+      {/* Setup card */}
+      {showSetup && (
+        <ProfileSetupCard onSave={saveProfile} onSnooze={snoozeSetup} />
+      )}
 
       <main className="max-w-7xl mx-auto px-6 pt-8">
         <div className="flex flex-col md:flex-row gap-12">
@@ -197,10 +294,10 @@ export default function PlannerView({ onAddEvent }) {
             </div>
           </div>
 
-          {/* ── Right: Insights ───────────────────────────────────────────── */}
-          <div className="w-full md:w-80 space-y-6">
+          {/* ── Right: Insights personalizados ────────────────────────────── */}
+          <div className="w-full md:w-80 space-y-5">
 
-            {/* Energy peak card */}
+            {/* Energy peak card — personalizado */}
             <div className={`p-6 rounded-[24px] ${inPeak ? 'bg-primary text-white' : 'bg-surface-container-high/40 backdrop-blur-sm'}`}>
               <div className="flex items-center gap-2 mb-3">
                 <span
@@ -212,57 +309,57 @@ export default function PlannerView({ onAddEvent }) {
                 <h4 className={`font-headline font-bold ${inPeak ? 'text-white' : 'text-on-surface'}`}>
                   {inPeak ? '¡Estás en tu pico!' : 'Pico de Energía'}
                 </h4>
+                {chronoLabel && !inPeak && (
+                  <span className="ml-auto text-[10px] font-bold text-outline uppercase tracking-wider">{chronoLabel}</span>
+                )}
               </div>
               <p className={`text-sm font-medium leading-relaxed ${inPeak ? 'text-white/80' : 'text-on-surface-variant'}`}>
                 {inPeak
-                  ? 'Ahora mismo es tu mejor ventana de concentración. Prioriza trabajo profundo sin interrupciones.'
-                  : `Tu ventana de máxima concentración es de ${ENERGY_PEAK_START}:00 a ${Math.floor(ENERGY_PEAK_END)}:${String(Math.round((ENERGY_PEAK_END % 1) * 60)).padStart(2, '0')}. Guarda las tareas difíciles para ese bloque.`}
+                  ? `Ahora mismo es tu mejor ventana${chronoLabel ? ` (perfil ${chronoLabel})` : ''}. Prioriza trabajo profundo sin interrupciones.`
+                  : `Tu ventana de máxima concentración es de ${peakLabel}.${profile.setupDone ? '' : ' Personalízala respondiendo las 2 preguntas de arriba.'}`}
               </p>
             </div>
 
-            {/* Intelligence Card */}
-            <div className="bg-surface-container-high/40 p-6 rounded-[24px] backdrop-blur-sm">
+            {/* AI Insights — dinámicos y personalizados */}
+            <div className="bg-surface-container-high/40 p-5 rounded-[24px] backdrop-blur-sm">
               <div className="flex items-center gap-2 mb-4">
-                <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  auto_awesome
-                </span>
-                <h4 className="font-headline font-bold text-on-surface">Resumen IA</h4>
-              </div>
-              <div className="space-y-3">
-                <div className="p-4 bg-surface-container-lowest rounded-xl">
-                  <p className="text-xs font-bold text-primary mb-1 uppercase tracking-tight">BLOQUES ACTIVOS</p>
-                  <p className="text-sm text-on-surface-variant font-medium">
-                    {confirmedCount} bloque{confirmedCount !== 1 ? 's' : ''} confirmado{confirmedCount !== 1 ? 's' : ''} en tu agenda de hoy.
-                  </p>
-                </div>
-                <div className="p-4 bg-surface-container-lowest rounded-xl">
-                  <p className="text-xs font-bold text-secondary mb-1 uppercase tracking-tight">SUGERENCIAS</p>
-                  <p className="text-sm text-on-surface-variant font-medium">
-                    {suggestionCount > 0
-                      ? `${suggestionCount} sugerencia${suggestionCount !== 1 ? 's' : ''} pendiente${suggestionCount !== 1 ? 's' : ''} de aceptar.`
-                      : 'Sin sugerencias pendientes.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Focus mode tip */}
-            <div className="bg-gradient-to-br from-secondary/10 to-primary/5 p-5 rounded-[24px] border border-primary/10">
-              <div className="flex items-center gap-2 mb-2">
                 <span
-                  className="material-symbols-outlined text-primary text-[16px]"
+                  className="material-symbols-outlined text-secondary text-[20px]"
                   style={{ fontVariationSettings: "'FILL' 1" }}
                 >
-                  tips_and_updates
+                  auto_awesome
                 </span>
-                <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
-                  Patrón · Time Blocking
-                </span>
+                <h4 className="font-headline font-bold text-on-surface">
+                  {profile.setupDone ? 'Tu resumen' : 'Resumen IA'}
+                </h4>
               </div>
-              <p className="text-xs text-on-surface-variant font-medium leading-relaxed">
-                Divide tu día en bloques dedicados. Los estudios muestran que el trabajo en bloques
-                aumenta la productividad hasta un <span className="text-on-surface font-bold">80%</span> frente a las listas de tareas convencionales.
-              </p>
+
+              <div className="space-y-2.5">
+                {/* Conteo de bloques */}
+                <div className="p-3.5 bg-surface-container-lowest rounded-xl">
+                  <p className="text-[10px] font-bold text-primary mb-1 uppercase tracking-tight">HOY</p>
+                  <p className="text-sm text-on-surface-variant font-medium">
+                    {confirmedCount} bloque{confirmedCount !== 1 ? 's' : ''} confirmado{confirmedCount !== 1 ? 's' : ''}
+                    {suggestionCount > 0 ? ` · ${suggestionCount} sugerencia${suggestionCount !== 1 ? 's' : ''} pendiente${suggestionCount !== 1 ? 's' : ''}` : ''}
+                  </p>
+                </div>
+
+                {/* Insights personalizados */}
+                {insights.map((ins, i) => (
+                  <div key={i} className={`p-3.5 ${ins.bg} rounded-xl`}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span
+                        className={`material-symbols-outlined ${ins.color} text-[14px]`}
+                        style={{ fontVariationSettings: "'FILL' 1" }}
+                      >
+                        {ins.icon}
+                      </span>
+                      <p className={`text-[10px] font-bold ${ins.color} uppercase tracking-tight`}>{ins.label}</p>
+                    </div>
+                    <p className="text-sm text-on-surface-variant font-medium leading-snug">{ins.text}</p>
+                  </div>
+                ))}
+              </div>
             </div>
 
           </div>
