@@ -1,21 +1,141 @@
+import { useState } from 'react'
 import TopAppBar from '../components/TopAppBar'
+import AddEventModal from '../components/AddEventModal'
 
 const AVATAR_1 =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuDfqPz-Xtp1DOlxyZ6qdBoqCnCTvLoTN7uCnDpKv7pQispXp8jMGm8VmAnGlq6fGljfeaM_FGgWpLdB3Ig6ImleJTb6h-TmrJg7wLQJBUNd1LSQiUrTmFaLHcku_b2IBR1b9-gtC7bCqoZTvugBoGNiE9EjBbxP2zP0nkLkJF5KXZxYSvNqigG3jSpyBQawu9fkiHNp1vQfAtrXoJyYILEZm_q5bSNPNATYmsirJUZFcSzFA1bGsAuK0G16fJNQgGEjyI-ErT5OZNRs'
 const AVATAR_2 =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuAGg2kzu3h6K4U-DHUHwAcgSd0y0SQIx6Duljc3apyQXiGDGaDJCJvmLXpH77eOXyP37Jc5UNLSd9hKH2_0BJqXhvtFuctuO1RWkTcExCM32YxUKV29rG8VZAro5LQQwBA75PSIOuScBv5k-ndaqFgJQNTRZRbvVa2ZXHve9TGmRIQetPC53lRJACf2mkMMFoX7yAwVHQpsMXQh-0XpdV1WYDlQF6dKony_nEBC2Jfhnzj8ftnPxl5-e5v_Kgn6dm-qDn9tw02nNGYd'
 
-const calendarDays = [
-  { day: 'LUN', num: 16, active: false },
-  { day: 'MAR', num: 17, active: false },
+const CALENDAR_DAYS = [
+  { day: 'LUN', num: 16 },
+  { day: 'MAR', num: 17 },
   { day: 'MIÉ', num: 18, active: true },
-  { day: 'JUE', num: 19, active: false },
-  { day: 'VIE', num: 20, active: false },
-  { day: 'SÁB', num: 21, active: false },
-  { day: 'DOM', num: 22, active: false },
+  { day: 'JUE', num: 19 },
+  { day: 'VIE', num: 20 },
+  { day: 'SÁB', num: 21 },
+  { day: 'DOM', num: 22 },
 ]
 
-export default function CalendarView({ onOpenTask }) {
+// ─── Small delete button ──────────────────────────────────────────────────────
+function DeleteButton({ onClick }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation() // don't bubble to card's onClick
+        onClick()
+      }}
+      title="Eliminar evento"
+      className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-outline hover:bg-error/10 hover:text-error transition-all active:scale-90"
+    >
+      <span className="material-symbols-outlined text-[17px]">delete</span>
+    </button>
+  )
+}
+
+// ─── Featured card (large, first in "Enfoque de Hoy") ────────────────────────
+function FeaturedEventCard({ event, onDelete, onOpen }) {
+  return (
+    <div
+      className="col-span-2 bg-surface-container-lowest p-6 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.04)] space-y-4 cursor-pointer hover:shadow-md transition-shadow"
+      onClick={onOpen}
+    >
+      <div className="flex justify-between items-start">
+        <div className="p-2 bg-primary-fixed-dim/30 rounded-lg text-primary">
+          <span className="material-symbols-outlined">{event.icon || 'auto_awesome'}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
+            A Continuación
+          </span>
+          <DeleteButton onClick={() => onDelete(event.id)} />
+        </div>
+      </div>
+      <div>
+        <h3 className="text-lg font-bold text-on-surface">{event.title}</h3>
+        {event.description && (
+          <p className="text-sm text-outline mt-1 leading-relaxed">{event.description}</p>
+        )}
+      </div>
+      {event.time && (
+        <div className="flex items-center gap-4 pt-2">
+          <div className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[18px] text-outline">schedule</span>
+            <span className="text-xs font-semibold text-on-surface">{event.time}</span>
+          </div>
+          <div className="flex -space-x-2">
+            <img
+              alt="Avatar"
+              className="w-6 h-6 rounded-full border-2 border-surface-container-lowest object-cover"
+              src={AVATAR_1}
+            />
+            <img
+              alt="Avatar"
+              className="w-6 h-6 rounded-full border-2 border-surface-container-lowest object-cover"
+              src={AVATAR_2}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Small card (secondary items in "Enfoque de Hoy") ────────────────────────
+function SmallEventCard({ event, onDelete }) {
+  return (
+    <div className="bg-surface-container-low p-5 rounded-xl space-y-2 relative group">
+      <div className="flex justify-between items-start">
+        <span className="material-symbols-outlined text-secondary">
+          {event.icon || 'event'}
+        </span>
+        <DeleteButton onClick={() => onDelete(event.id)} />
+      </div>
+      <h3 className="text-sm font-bold text-on-surface">{event.title}</h3>
+      {(event.time || event.description) && (
+        <p className="text-[11px] text-outline font-medium">
+          {event.time || event.description}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Evening row card ─────────────────────────────────────────────────────────
+function EveningEventCard({ event, onDelete }) {
+  return (
+    <div className="flex gap-4 items-center group">
+      {event.time && (
+        <div className="w-16 text-right flex-shrink-0">
+          <span className="text-xs font-bold text-outline">{event.time}</span>
+        </div>
+      )}
+      <div className="flex-1 bg-surface-container-lowest hover:bg-surface-container-high transition-colors p-4 rounded-xl flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${event.dotColor || 'bg-outline'}`} />
+          <span className="font-bold text-sm text-on-surface">{event.title}</span>
+        </div>
+        <DeleteButton onClick={() => onDelete(event.id)} />
+      </div>
+    </div>
+  )
+}
+
+// ─── Main view ────────────────────────────────────────────────────────────────
+export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask }) {
+  const [showModal, setShowModal] = useState(false)
+
+  const focusEvents = events.filter((e) => e.section === 'focus')
+  const eveningEvents = events.filter((e) => e.section === 'evening')
+
+  // First focus event becomes the featured card (if any)
+  const [featuredEvent, ...smallEvents] = focusEvents
+
+  function handleSave(formData) {
+    onAddEvent(formData)
+    setShowModal(false)
+  }
+
   return (
     <div className="bg-surface text-on-surface min-h-screen pb-32">
       <TopAppBar />
@@ -44,19 +164,15 @@ export default function CalendarView({ onOpenTask }) {
 
           {/* Calendar Strip */}
           <div className="grid grid-cols-7 gap-2">
-            {calendarDays.map(({ day, num, active }) => (
+            {CALENDAR_DAYS.map(({ day, num, active }) => (
               <div key={day} className="flex flex-col items-center gap-2">
-                <span
-                  className={`text-[10px] font-bold uppercase ${
-                    active ? 'text-primary' : 'text-outline'
-                  }`}
-                >
+                <span className={`text-[10px] font-bold uppercase ${active ? 'text-primary' : 'text-outline'}`}>
                   {day}
                 </span>
                 {active ? (
                   <div className="w-10 h-14 flex flex-col items-center justify-center rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20">
                     <span>{num}</span>
-                    <div className="w-1 h-1 bg-white rounded-full mt-1"></div>
+                    <div className="w-1 h-1 bg-white rounded-full mt-1" />
                   </div>
                 ) : (
                   <div className="w-10 h-14 flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-semibold">
@@ -68,103 +184,92 @@ export default function CalendarView({ onOpenTask }) {
           </div>
         </header>
 
-        {/* Asymmetric Intelligence Feed */}
-        <section className="space-y-6">
-          <h2 className="text-xl font-bold tracking-tight text-on-surface">Enfoque de Hoy</h2>
-          <div className="grid grid-cols-2 gap-4">
-            {/* Large Highlight Card */}
-            <div
-              className="col-span-2 bg-surface-container-lowest p-6 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.04)] space-y-4 cursor-pointer hover:shadow-md transition-shadow"
-              onClick={onOpenTask}
+        {/* ── Enfoque de Hoy ─────────────────────────────────────────────── */}
+        <section className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold tracking-tight text-on-surface">Enfoque de Hoy</h2>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
             >
-              <div className="flex justify-between items-start">
-                <div className="p-2 bg-primary-fixed-dim/30 rounded-lg text-primary">
-                  <span className="material-symbols-outlined">auto_awesome</span>
-                </div>
-                <span className="text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
-                  A Continuación
-                </span>
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-on-surface">
-                  Sincro de Estrategia de Producto
-                </h3>
-                <p className="text-sm text-outline mt-1 leading-relaxed">
-                  Preparar la visualización del roadmap trimestral para la revisión de la junta
-                  ejecutiva.
-                </p>
-              </div>
-              <div className="flex items-center gap-4 pt-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[18px] text-outline">
-                    schedule
-                  </span>
-                  <span className="text-xs font-semibold text-on-surface">2:00 PM - 3:30 PM</span>
-                </div>
-                <div className="flex -space-x-2">
-                  <img
-                    alt="Avatar"
-                    className="w-6 h-6 rounded-full border-2 border-surface-container-lowest object-cover"
-                    src={AVATAR_1}
-                  />
-                  <img
-                    alt="Avatar"
-                    className="w-6 h-6 rounded-full border-2 border-surface-container-lowest object-cover"
-                    src={AVATAR_2}
-                  />
-                </div>
-              </div>
-            </div>
+              <span className="material-symbols-outlined text-[16px]">add</span>
+              Añadir
+            </button>
+          </div>
 
-            {/* Small Detail Cards */}
-            <div className="bg-surface-container-low p-5 rounded-xl space-y-3">
-              <span className="material-symbols-outlined text-secondary">checklist</span>
-              <h3 className="text-sm font-bold text-on-surface">Revisar Borradores</h3>
-              <p className="text-[11px] text-outline font-medium">
-                3 tareas pendientes en 'Trabajo'
+          {focusEvents.length === 0 ? (
+            <div className="col-span-2 bg-surface-container-low rounded-xl p-8 flex flex-col items-center gap-3 text-center">
+              <span className="material-symbols-outlined text-3xl text-outline">event_note</span>
+              <p className="text-sm font-semibold text-outline">
+                No hay eventos para hoy.<br />Pulsa "Añadir" para crear uno.
               </p>
             </div>
-            <div className="bg-surface-container-low p-5 rounded-xl space-y-3">
-              <span className="material-symbols-outlined text-tertiary">park</span>
-              <h3 className="text-sm font-bold text-on-surface">Almuerzo</h3>
-              <p className="text-[11px] text-outline font-medium">12:30 PM - Parque Cercano</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              {/* Featured card */}
+              {featuredEvent && (
+                <FeaturedEventCard
+                  event={featuredEvent}
+                  onDelete={onDeleteEvent}
+                  onOpen={onOpenTask}
+                />
+              )}
+              {/* Remaining small cards */}
+              {smallEvents.map((ev) => (
+                <SmallEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} />
+              ))}
             </div>
-          </div>
+          )}
         </section>
 
-        {/* Vertical Timeline List */}
+        {/* ── Tarde/Noche ────────────────────────────────────────────────── */}
         <section className="space-y-4">
-          <h2 className="text-xl font-bold tracking-tight text-on-surface">Tarde/Noche</h2>
-          <div className="space-y-2">
-            {[
-              { label: 'Práctica de Yoga', dot: 'bg-secondary-container' },
-              { label: 'Cena con Sarah', dot: 'bg-tertiary' },
-            ].map(({ label, dot }) => (
-              <div key={label} className="flex gap-4 items-center group">
-                <div className="w-12 text-right">
-                  <span className="text-xs font-bold text-outline">{label}</span>
-                </div>
-                <div className="flex-1 bg-surface-container-lowest hover:bg-surface-container-high transition-colors p-4 rounded-xl flex justify-between items-center cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-1.5 h-1.5 rounded-full ${dot}`}></div>
-                    <span className="font-bold text-sm text-on-surface">{label}</span>
-                  </div>
-                  <span className="material-symbols-outlined text-outline group-hover:text-on-surface transition-colors">
-                    chevron_right
-                  </span>
-                </div>
-              </div>
-            ))}
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold tracking-tight text-on-surface">Tarde/Noche</h2>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
+            >
+              <span className="material-symbols-outlined text-[16px]">add</span>
+              Añadir
+            </button>
           </div>
+
+          {eveningEvents.length === 0 ? (
+            <div className="bg-surface-container-low rounded-xl p-8 flex flex-col items-center gap-3 text-center">
+              <span className="material-symbols-outlined text-3xl text-outline">nights_stay</span>
+              <p className="text-sm font-semibold text-outline">
+                Nada planeado para esta tarde.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {eveningEvents.map((ev) => (
+                <EveningEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} />
+              ))}
+            </div>
+          )}
         </section>
       </main>
 
-      {/* Floating Action Button */}
+      {/* FAB — open assistant / mic */}
       <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[60]">
-        <button className="w-16 h-16 rounded-full bg-gradient-to-tr from-primary to-primary-container text-white shadow-[0_16px_32px_rgba(0,88,188,0.3)] flex items-center justify-center active:scale-90 transition-transform duration-300">
-          <span className="material-symbols-outlined text-3xl">mic</span>
+        <button
+          onClick={() => setShowModal(true)}
+          className="w-16 h-16 rounded-full bg-gradient-to-tr from-primary to-primary-container text-white shadow-[0_16px_32px_rgba(0,88,188,0.3)] flex items-center justify-center active:scale-90 transition-transform duration-300"
+          title="Añadir evento"
+        >
+          <span className="material-symbols-outlined text-3xl">add</span>
         </button>
       </div>
+
+      {/* Modal */}
+      {showModal && (
+        <AddEventModal
+          onSave={handleSave}
+          onCancel={() => setShowModal(false)}
+        />
+      )}
     </div>
   )
 }
