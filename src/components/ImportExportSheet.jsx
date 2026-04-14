@@ -441,19 +441,37 @@ function PhotoTab({ onImport }) {
     try {
       const images = await Promise.all(photos.map((p) => resizeToBase64(p.file)))
 
-      const res = await fetch('/.netlify/functions/analyze-photo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images }),
-      })
+      let res
+      try {
+        res = await fetch('/.netlify/functions/analyze-photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ images }),
+        })
+      } catch {
+        // Error de red real (sin conexión, CORS, etc.)
+        setError('Sin conexión a internet. Conéctate y vuelve a intentarlo.')
+        return
+      }
 
-      const data = await res.json()
+      // Si la función no existe (404) o Netlify devuelve HTML, json() va a fallar
+      let data
+      try {
+        data = await res.json()
+      } catch {
+        if (res.status === 404) {
+          setError('La función de análisis no está desplegada. Asegúrate de que el deploy de Netlify incluyó la carpeta netlify/functions.')
+        } else {
+          setError(`Error del servidor (${res.status}). El deploy puede estar en curso — espera un minuto y reintenta.`)
+        }
+        return
+      }
 
       if (!res.ok || data.error) {
         if (data.error === 'no_api_key') {
-          setError('La IA no está configurada. Pide al administrador que agregue ANTHROPIC_API_KEY en Netlify → Environment variables.')
+          setError('Falta la API key de IA. En Netlify → Site configuration → Environment variables → agrega ANTHROPIC_API_KEY con tu clave de Anthropic. Luego redeploya.')
         } else {
-          setError('Error al analizar las fotos. Intenta de nuevo.')
+          setError(`Error al analizar (${data.error ?? res.status}). Intenta de nuevo.`)
         }
         return
       }
@@ -464,8 +482,8 @@ function PhotoTab({ onImport }) {
       }
 
       setPreview(data.events.map(aiToAppEvent))
-    } catch {
-      setError('No se pudo conectar. Verifica tu conexión a internet.')
+    } catch (err) {
+      setError(`Error inesperado: ${err?.message ?? 'desconocido'}`)
     } finally {
       setAnalyzing(false)
     }
