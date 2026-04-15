@@ -197,7 +197,7 @@ export default function PlannerView({ onAddEvent, events = [] }) {
   const chronoLabel = { morning: 'mañanero', afternoon: 'vespertino', night: 'nocturno' }[profile.chronotype] ?? ''
 
   return (
-    <div className="bg-surface font-body text-on-surface min-h-screen pb-32 dark:bg-slate-900 dark:text-slate-100">
+    <div className="bg-surface font-body text-on-surface min-h-screen pb-52 dark:bg-slate-900 dark:text-slate-100">
 
       {/* Setup card */}
       {showSetup && (
