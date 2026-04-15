@@ -486,7 +486,9 @@ function PhotoTab({ onImport }) {
       }
 
       if (!res.ok || data.error) {
-        setError(`Error al analizar: ${data.error ?? res.status}. Intenta de nuevo.`)
+        const detail = data.detail ? ` (${data.detail})` : ''
+        const status = data.status ? ` [${data.status}]` : ''
+        setError(`Error al analizar: ${data.error ?? res.status}${status}${detail}. Intenta de nuevo.`)
         return
       }
 

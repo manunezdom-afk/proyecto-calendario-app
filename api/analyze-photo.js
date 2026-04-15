@@ -88,7 +88,9 @@ Si no hay eventos claros: []`,
         return res.status(401).json({ error: 'invalid_api_key' })
       }
       console.error('[analyze-photo] Anthropic error:', anthropicRes.status, txt)
-      return res.status(502).json({ error: 'api_error', status: anthropicRes.status })
+      let detail = txt
+      try { detail = JSON.parse(txt)?.error?.message ?? txt } catch {}
+      return res.status(502).json({ error: 'api_error', status: anthropicRes.status, detail })
     }
 
     const data    = await anthropicRes.json()
