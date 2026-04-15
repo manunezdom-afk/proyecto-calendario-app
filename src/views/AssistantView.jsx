@@ -30,6 +30,12 @@ export default function AssistantView({ onClose, onAddEvent }) {
   const [isThinking, setIsThinking] = useState(false)
 
   const recognitionRef = useRef(null)
+  const silenceTimeoutRef = useRef(null)
+  const transcriptRef = useRef('')
+  const shouldProcessVoiceRef = useRef(false)
+  const listeningRef = useRef(false)
+  const inputValueRef = useRef('')
+  const interimTextRef = useRef('')
 
   useEffect(() => {
     const id = setInterval(() => setPlaceholderIdx((i) => (i + 1) % EXAMPLES.length), 3000)
@@ -37,30 +43,173 @@ export default function AssistantView({ onClose, onAddEvent }) {
   }, [])
 
   useEffect(() => {
-    if (!SpeechRecognition) return
-    const r = new SpeechRecognition()
-    r.lang = 'es-ES'; r.continuous = false; r.interimResults = true
-    r.onstart = () => { setListening(true); setInterimText('') }
-    r.onresult = (e) => {
-      let interim = ''; let final = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript
-        else interim += e.results[i][0].transcript
-      }
-      setInterimText(interim || final)
-      if (final) handleProcess(final.trim())
+    listeningRef.current = listening
+  }, [listening])
+
+  useEffect(() => {
+    inputValueRef.current = input
+  }, [input])
+
+  useEffect(() => {
+    interimTextRef.current = interimText
+  }, [interimText])
+
+  function clearSilenceTimeout() {
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current)
+      silenceTimeoutRef.current = null
     }
-    r.onend = () => { setListening(false); setInterimText('') }
-    recognitionRef.current = r
-  }, [])
+  }
+
+  function scheduleSilenceTimeout() {
+    clearSilenceTimeout()
+    silenceTimeoutRef.current = setTimeout(() => {
+      if (recognitionRef.current && listeningRef.current) {
+        stopListening(true)
+      }
+    }, 2000)
+  }
+
+  function normalizeTranscript(text) {
+    return text.replace(/\s+/g, ' ').trim()
+  }
 
   function handleProcess(text) {
-    if (!text.trim()) return
-    setIsThinking(true); setParsed(null)
+    const normalizedText = normalizeTranscript(text)
+    if (!normalizedText) {
+      setIsThinking(false)
+      return
+    }
+
+    setIsThinking(true)
+    setParsed(null)
+    setInput(normalizedText)
+    setInterimText('')
+
     setTimeout(() => {
-      setParsed(parseEvent(text)); setIsThinking(false); setInput(text)
+      setParsed(parseEvent(normalizedText))
+      setIsThinking(false)
     }, 600)
   }
+
+  function stopListening(processImmediately = false) {
+    const recognition = recognitionRef.current
+    if (!recognition) return
+
+    clearSilenceTimeout()
+    setListening(false)
+    shouldProcessVoiceRef.current = processImmediately
+
+    if (processImmediately) {
+      const transcript = normalizeTranscript(transcriptRef.current || interimTextRef.current || inputValueRef.current)
+      if (transcript) {
+        transcriptRef.current = transcript
+        setInterimText(transcript)
+        setIsThinking(true)
+      } else {
+        shouldProcessVoiceRef.current = false
+      }
+    }
+
+    try {
+      recognition.stop()
+    } catch {
+      if (processImmediately && transcriptRef.current) handleProcess(transcriptRef.current)
+    }
+  }
+
+  function toggleListening() {
+    if (!recognitionRef.current || isThinking) return
+
+    if (listening) {
+      stopListening(true)
+      return
+    }
+
+    transcriptRef.current = ''
+    shouldProcessVoiceRef.current = false
+    clearSilenceTimeout()
+    setParsed(null)
+    setInterimText('')
+
+    try {
+      recognitionRef.current.start()
+    } catch {
+      setListening(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!SpeechRecognition) return
+
+    const r = new SpeechRecognition()
+    r.lang = 'es-ES'
+    r.continuous = false
+    r.interimResults = false
+
+    r.onstart = () => {
+      setListening(true)
+      setIsThinking(false)
+      setInterimText('')
+    }
+
+    r.onspeechstart = () => {
+      clearSilenceTimeout()
+    }
+
+    r.onspeechend = () => {
+      scheduleSilenceTimeout()
+    }
+
+    r.onresult = (e) => {
+      let final = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        final += e.results[i][0].transcript
+      }
+
+      const nextTranscript = normalizeTranscript([transcriptRef.current, final].filter(Boolean).join(' '))
+      transcriptRef.current = nextTranscript
+      shouldProcessVoiceRef.current = Boolean(nextTranscript)
+      setInterimText(nextTranscript)
+      scheduleSilenceTimeout()
+    }
+
+    r.onerror = () => {
+      clearSilenceTimeout()
+      setListening(false)
+      setIsThinking(false)
+    }
+
+    r.onend = () => {
+      clearSilenceTimeout()
+      setListening(false)
+
+      const finalTranscript = normalizeTranscript(transcriptRef.current)
+      const shouldProcess = shouldProcessVoiceRef.current && finalTranscript
+
+      shouldProcessVoiceRef.current = false
+      transcriptRef.current = ''
+
+      if (shouldProcess) {
+        handleProcess(finalTranscript)
+        return
+      }
+
+      setIsThinking(false)
+      setInterimText('')
+    }
+
+    recognitionRef.current = r
+
+    return () => {
+      clearSilenceTimeout()
+      try {
+        r.stop()
+      } catch {
+        // noop
+      }
+    }
+  }, [])
 
   return (
     <motion.div
@@ -102,17 +251,25 @@ export default function AssistantView({ onClose, onAddEvent }) {
             <div className="space-y-2">
               <p className="text-3xl font-semibold tracking-tight">Agenda algo en lenguaje natural</p>
               <p className="text-sm font-light text-neutral-400">
-                {listening ? interimText || 'Te estoy escuchando...' : EXAMPLES[placeholderIdx]}
+                {isThinking
+                  ? 'Procesando tu evento...'
+                  : listening
+                    ? interimText || 'Te estoy escuchando...'
+                    : EXAMPLES[placeholderIdx]}
               </p>
             </div>
 
             <motion.button
-              onClick={() => !listening && recognitionRef.current?.start()}
+              onClick={toggleListening}
               animate={listening ? { scale: 1.12, boxShadow: '0 0 0 14px rgba(59,130,246,0.14)' } : { scale: 1, boxShadow: '0 0 0 0 rgba(59,130,246,0)' }}
               transition={{ type: 'spring', stiffness: 220, damping: 18 }}
-              className={`flex h-24 w-24 items-center justify-center rounded-full shadow-2xl transition-colors ${listening ? 'bg-red-500' : 'bg-blue-600'}`}
+              className={`flex h-24 w-24 items-center justify-center rounded-full shadow-2xl transition-colors ${
+                listening ? 'bg-red-500' : isThinking ? 'bg-white/10 text-white/80' : 'bg-blue-600'
+              }`}
             >
-              <span className="material-symbols-outlined text-4xl">{listening ? 'graphic_eq' : 'mic'}</span>
+              <span className="material-symbols-outlined text-4xl">
+                {listening ? 'graphic_eq' : isThinking ? 'hourglass_top' : 'mic'}
+              </span>
             </motion.button>
 
             <AnimatePresence mode="wait">
