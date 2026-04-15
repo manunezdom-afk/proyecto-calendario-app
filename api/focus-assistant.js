@@ -22,8 +22,9 @@ export default async function handler(req, res) {
     process.env.ANTHROPIC_API_KEY ||
     req.headers['x-user-api-key'] ||
     req.headers['X-User-Api-Key']
+  const normalizedApiKey = apiKey?.trim()
 
-  if (!apiKey) {
+  if (!normalizedApiKey) {
     return res.status(503).json({ error: 'no_api_key' })
   }
 
@@ -124,11 +125,11 @@ Instrucciones adicionales:
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
+        'x-api-key': normalizedApiKey,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: "claude-3-5-sonnet-20240620",
+        model: "claude-3-haiku-20240307",
         max_tokens: 1024,
         system: systemPrompt,
         messages,
