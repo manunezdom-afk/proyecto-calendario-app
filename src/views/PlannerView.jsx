@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import QuickAddSheet    from '../components/QuickAddSheet'
+import QuickAddSheet     from '../components/QuickAddSheet'
 import FocusTimerOverlay from '../components/FocusTimerOverlay'
-import ProfileSetupCard from '../components/ProfileSetupCard'
+import ProfileSetupCard  from '../components/ProfileSetupCard'
+import FocusBar          from '../components/FocusBar'
 import { useUserProfile } from '../hooks/useUserProfile'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -260,6 +261,8 @@ export default function PlannerView({ onAddEvent, events = [] }) {
                 Añadir bloque
               </button>
             </header>
+
+            <FocusBar onAddEvent={onAddEvent} inline />
 
             <div className="relative space-y-2">
               {blocks.map(({ id, time, type, title, description }) => {

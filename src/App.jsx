@@ -9,7 +9,6 @@ import BottomNavBar                from './components/BottomNavBar'
 import NotificationPanel           from './components/NotificationPanel'
 import NotificationPermissionCard  from './components/NotificationPermissionCard'
 import ImportExportSheet           from './components/ImportExportSheet'
-import FocusBar                    from './components/FocusBar'
 
 import CalendarView    from './views/CalendarView'
 import AssistantView   from './views/AssistantView'
@@ -134,18 +133,6 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      <AnimatePresence>
-        {!isAssistant && activeView === 'planner' && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
-          >
-            <FocusBar onAddEvent={addEvent} />
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {!isAssistant && (

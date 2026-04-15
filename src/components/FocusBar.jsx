@@ -17,7 +17,7 @@ function cleanIntent(raw) {
   return t || raw
 }
 
-export default function FocusBar({ onAddEvent }) {
+export default function FocusBar({ onAddEvent, inline = false }) {
   const [text, setText] = useState('')
   const [isListening, setIsListening] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -82,12 +82,123 @@ export default function FocusBar({ onAddEvent }) {
   const isActive = isFocused || !!text || isListening
   const hasText = text.trim().length > 0
 
+  // ── Inline mode (dentro del planner, tema claro) ─────────────────────────
+  if (inline) {
+    return (
+      <div className="mb-8 space-y-2">
+        {/* Result card */}
+        <AnimatePresence>
+          {(isProcessing || parsed) && (
+            <motion.div
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="overflow-hidden rounded-2xl border border-outline/10 bg-surface-container-lowest shadow-sm"
+            >
+              {isProcessing ? (
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <motion.span
+                    className="material-symbols-outlined text-[1rem] text-primary"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                  >progress_activity</motion.span>
+                  <p className="text-sm text-on-surface-variant">Procesando...</p>
+                </div>
+              ) : parsed && (
+                <div className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <span className="material-symbols-outlined text-[1.05rem]">{parsed.icon || 'event'}</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[14px] font-semibold text-on-surface">{parsed.title}</p>
+                      <p className="mt-0.5 text-xs text-outline">
+                        {[parsed.time, parsed.date].filter(Boolean).join(' · ') || 'Sin hora definida'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={confirm}
+                      className="flex-1 rounded-xl bg-primary py-2 text-[13px] font-semibold text-white transition-opacity active:opacity-80"
+                    >Agregar</button>
+                    <button
+                      onClick={dismiss}
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-outline/15 bg-surface-container text-outline transition-colors hover:bg-surface-container-high"
+                    >
+                      <span className="material-symbols-outlined text-[1rem]">close</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Input bar */}
+        <div className={`flex items-center gap-2 rounded-2xl border bg-surface-container-lowest px-2 py-2 transition-all duration-200 ${
+          isListening
+            ? 'border-primary/40 shadow-[0_0_0_3px_rgba(0,88,188,0.08)]'
+            : isFocused
+            ? 'border-outline/30 shadow-sm'
+            : 'border-outline/15'
+        }`}>
+          <motion.button
+            onClick={toggleMic}
+            animate={isListening ? { scale: [1, 1.1, 1] } : { scale: 1 }}
+            transition={{ duration: 0.7, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
+            className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
+              isListening
+                ? 'bg-primary/10 text-primary'
+                : 'bg-surface-container text-outline hover:bg-surface-container-high hover:text-on-surface'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[1.05rem]">
+              {isListening ? 'graphic_eq' : 'mic'}
+            </span>
+          </motion.button>
+
+          <input
+            ref={inputRef}
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            onKeyDown={e => e.key === 'Enter' && hasText && process(text)}
+            placeholder="Dile algo a Focus..."
+            className="flex-1 bg-transparent text-[14px] text-on-surface outline-none placeholder:text-outline/50"
+          />
+
+          <AnimatePresence>
+            {isActive && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                transition={{ duration: 0.15 }}
+                onClick={() => hasText && process(text)}
+                className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
+                  hasText
+                    ? 'bg-primary text-white'
+                    : 'bg-surface-container text-outline/40'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[1.05rem]">arrow_upward</span>
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Floating mode (por si se usa en otro contexto) ────────────────────────
   return (
     <div
       className="fixed bottom-24 left-0 right-0 z-30 flex flex-col items-center gap-3 px-5"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      {/* ── Result card ── */}
       <AnimatePresence>
         {(isProcessing || parsed) && (
           <motion.div
@@ -99,18 +210,14 @@ export default function FocusBar({ onAddEvent }) {
           >
             {isProcessing ? (
               <div className="flex items-center gap-3 px-4 py-3.5">
-                <motion.span
-                  className="material-symbols-outlined text-[1.1rem] text-indigo-400"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                >
+                <motion.span className="material-symbols-outlined text-[1.1rem] text-indigo-400"
+                  animate={{ rotate: 360 }} transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}>
                   progress_activity
                 </motion.span>
                 <p className="text-sm text-white/50">Procesando...</p>
               </div>
             ) : parsed && (
               <div className="p-4">
-                {/* Event info */}
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300">
                     <span className="material-symbols-outlined text-[1.15rem]">{parsed.icon || 'event'}</span>
@@ -122,18 +229,13 @@ export default function FocusBar({ onAddEvent }) {
                     </p>
                   </div>
                 </div>
-                {/* Actions */}
                 <div className="mt-3.5 flex gap-2">
-                  <button
-                    onClick={confirm}
-                    className="flex-1 rounded-xl bg-indigo-500 py-2.5 text-[13px] font-semibold text-white transition-opacity active:opacity-80"
-                  >
+                  <button onClick={confirm}
+                    className="flex-1 rounded-xl bg-indigo-500 py-2.5 text-[13px] font-semibold text-white transition-opacity active:opacity-80">
                     Agregar
                   </button>
-                  <button
-                    onClick={dismiss}
-                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/35 transition-colors active:bg-white/10"
-                  >
+                  <button onClick={dismiss}
+                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/35 transition-colors active:bg-white/10">
                     <span className="material-symbols-outlined text-[1rem]">close</span>
                   </button>
                 </div>
@@ -142,8 +244,6 @@ export default function FocusBar({ onAddEvent }) {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* ── Input pill ── */}
       <div className="w-full max-w-sm">
         <motion.div
           animate={
@@ -156,49 +256,29 @@ export default function FocusBar({ onAddEvent }) {
           transition={{ duration: 0.2 }}
           className="flex items-center gap-2 rounded-2xl border border-white/[0.09] bg-slate-800/80 px-2 py-2 backdrop-blur-2xl"
         >
-          {/* Mic button */}
-          <motion.button
-            onClick={toggleMic}
+          <motion.button onClick={toggleMic}
             animate={isListening ? { scale: [1, 1.1, 1] } : { scale: 1 }}
             transition={{ duration: 0.7, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
             className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
-              isListening
-                ? 'bg-indigo-500/25 text-indigo-300'
-                : 'bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white/60'
-            }`}
-          >
+              isListening ? 'bg-indigo-500/25 text-indigo-300' : 'bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white/60'
+            }`}>
             <span className="material-symbols-outlined text-[1.05rem]">
               {isListening ? 'graphic_eq' : 'mic'}
             </span>
           </motion.button>
-
-          {/* Text input */}
-          <input
-            ref={inputRef}
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
+          <input ref={inputRef} value={text} onChange={e => setText(e.target.value)}
+            onFocus={() => setIsFocused(true)} onBlur={() => setIsFocused(false)}
             onKeyDown={e => e.key === 'Enter' && hasText && process(text)}
             placeholder="Dile algo a Focus..."
-            className="flex-1 bg-transparent text-[14px] text-white outline-none placeholder:text-white/25"
-          />
-
-          {/* Send button */}
+            className="flex-1 bg-transparent text-[14px] text-white outline-none placeholder:text-white/25" />
           <AnimatePresence>
             {isActive && (
-              <motion.button
-                initial={{ opacity: 0, scale: 0.7 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.7 }}
-                transition={{ duration: 0.15 }}
+              <motion.button initial={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }} transition={{ duration: 0.15 }}
                 onClick={() => hasText && process(text)}
                 className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
-                  hasText
-                    ? 'bg-indigo-500 text-white'
-                    : 'bg-white/[0.06] text-white/20'
-                }`}
-              >
+                  hasText ? 'bg-indigo-500 text-white' : 'bg-white/[0.06] text-white/20'
+                }`}>
                 <span className="material-symbols-outlined text-[1.05rem]">arrow_upward</span>
               </motion.button>
             )}
