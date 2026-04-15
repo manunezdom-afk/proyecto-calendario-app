@@ -1,0 +1,23 @@
+{
+  "name": "Focus",
+  "short_name": "Focus",
+  "description": "Tu asistente de productividad personal",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#fcf8fb",
+  "theme_color": "#0058bc",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
