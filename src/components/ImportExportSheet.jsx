@@ -349,14 +349,40 @@ function TextTab({ onImport }) {
   )
 }
 
+const API_KEY_STORAGE = 'focus_anthropic_key'
+
 // ── Photo tab ─────────────────────────────────────────────────────────────────
 function PhotoTab({ onImport }) {
-  const [photos, setPhotos]       = useState([]) // [{ url, file }]
-  const [preview, setPreview]     = useState([])
-  const [analyzing, setAnalyzing] = useState(false)
-  const [imported, setImported]   = useState(false)
-  const [error, setError]         = useState('')
+  // API key guardada en localStorage
+  const [apiKey, setApiKey]         = useState(() => localStorage.getItem(API_KEY_STORAGE) || '')
+  const [keyInput, setKeyInput]     = useState('')
+  const [showKeyForm, setShowKeyForm] = useState(false)
+
+  const [photos, setPhotos]         = useState([])
+  const [preview, setPreview]       = useState([])
+  const [analyzing, setAnalyzing]   = useState(false)
+  const [imported, setImported]     = useState(false)
+  const [error, setError]           = useState('')
   const fileRef = useRef(null)
+
+  const hasKey = apiKey.trim().length > 10
+
+  function saveKey() {
+    const k = keyInput.trim()
+    if (!k) return
+    localStorage.setItem(API_KEY_STORAGE, k)
+    setApiKey(k)
+    setKeyInput('')
+    setShowKeyForm(false)
+    setError('')
+  }
+
+  function clearKey() {
+    localStorage.removeItem(API_KEY_STORAGE)
+    setApiKey('')
+    setKeyInput('')
+    setShowKeyForm(true)
+  }
 
   function handlePhotos(e) {
     const files = Array.from(e.target.files || [])
@@ -369,15 +395,11 @@ function PhotoTab({ onImport }) {
   }
 
   function removePhoto(idx) {
-    setPhotos((prev) => {
-      URL.revokeObjectURL(prev[idx].url)
-      return prev.filter((_, i) => i !== idx)
-    })
+    setPhotos((prev) => { URL.revokeObjectURL(prev[idx].url); return prev.filter((_, i) => i !== idx) })
     setPreview([])
     setError('')
   }
 
-  /** Redimensiona a max 1120px y devuelve { base64, mediaType } */
   function resizeToBase64(file, maxPx = 1120) {
     return new Promise((resolve) => {
       const img = new Image()
@@ -396,7 +418,6 @@ function PhotoTab({ onImport }) {
     })
   }
 
-  /** Convierte un evento devuelto por la IA al formato de useEvents */
   function aiToAppEvent({ title = 'Evento', date = null, time = null, endTime = null }) {
     let displayTime = '', h24 = null
     if (time) {
@@ -418,22 +439,16 @@ function PhotoTab({ onImport }) {
     else if (/compras|supermercado|tienda/.test(t))                       icon = 'shopping_cart'
     else if (/cumpleanos|fiesta|celebracion/.test(t))                     icon = 'cake'
     else if (/viaje|vuelo|aeropuerto/.test(t))                            icon = 'flight'
-
     return {
-      id:          `evt-ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      title:       title.trim(),
-      time:        displayTime,
-      date,
-      section,
-      featured:    false,
-      icon,
-      dotColor:    section === 'evening' ? 'bg-secondary-container' : '',
+      id: `evt-ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      title: title.trim(), time: displayTime, date, section, featured: false, icon,
+      dotColor: section === 'evening' ? 'bg-secondary-container' : '',
       description: endTime ? `Hasta las ${endTime}` : '',
     }
   }
 
   async function handleAnalyze() {
-    if (!photos.length) return
+    if (!photos.length || !hasKey) return
     setAnalyzing(true)
     setError('')
     setPreview([])
@@ -443,41 +458,40 @@ function PhotoTab({ onImport }) {
 
       let res
       try {
-        res = await fetch('/.netlify/functions/analyze-photo', {
+        res = await fetch('/api/analyze-photo', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-api-key': apiKey.trim(),
+          },
           body: JSON.stringify({ images }),
         })
       } catch {
-        // Error de red real (sin conexión, CORS, etc.)
-        setError('Sin conexión a internet. Conéctate y vuelve a intentarlo.')
+        setError('No se pudo conectar con el servidor. Verifica tu conexión a internet.')
         return
       }
 
-      // Si la función no existe (404) o Netlify devuelve HTML, json() va a fallar
       let data
       try {
         data = await res.json()
       } catch {
-        if (res.status === 404) {
-          setError('La función de análisis no está desplegada. Asegúrate de que el deploy de Netlify incluyó la carpeta netlify/functions.')
-        } else {
-          setError(`Error del servidor (${res.status}). El deploy puede estar en curso — espera un minuto y reintenta.`)
-        }
+        setError(`Error del servidor (${res.status}). El deploy puede estar en curso — espera un minuto y reintenta.`)
+        return
+      }
+
+      if (res.status === 401 || data.error === 'invalid_api_key') {
+        setError('La API key es inválida. Revísala y vuelve a ingresarla.')
+        clearKey()
         return
       }
 
       if (!res.ok || data.error) {
-        if (data.error === 'no_api_key') {
-          setError('Falta la API key de IA. En Netlify → Site configuration → Environment variables → agrega ANTHROPIC_API_KEY con tu clave de Anthropic. Luego redeploya.')
-        } else {
-          setError(`Error al analizar (${data.error ?? res.status}). Intenta de nuevo.`)
-        }
+        setError(`Error al analizar: ${data.error ?? res.status}. Intenta de nuevo.`)
         return
       }
 
       if (!data.events || data.events.length === 0) {
-        setError('No se detectaron eventos. Asegúrate de que las fotos muestren un calendario o agenda con fechas y horas visibles.')
+        setError('No se detectaron eventos. Asegúrate de que las fotos muestren horarios o fechas visibles.')
         return
       }
 
@@ -500,13 +514,77 @@ function PhotoTab({ onImport }) {
     setPhotos([])
   }
 
+  // ── Pantalla de configuración de API key ───────────────────────────────────
+  if (!hasKey || showKeyForm) {
+    return (
+      <div className="space-y-5">
+        <div className="p-5 rounded-2xl bg-primary/5 border border-primary/15 space-y-3">
+          <div className="flex items-center gap-2.5">
+            <span className="material-symbols-outlined text-primary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>key</span>
+            <div>
+              <p className="font-bold text-on-surface text-sm">Conectar con la IA</p>
+              <p className="text-xs text-outline font-medium">Solo la primera vez — se guarda en tu dispositivo</p>
+            </div>
+          </div>
+          <p className="text-xs text-on-surface-variant font-medium leading-relaxed">
+            Para leer fotos automáticamente necesitas una API key de Anthropic (gratis para empezar).
+          </p>
+          <div className="space-y-2 text-xs text-outline bg-surface-container-low rounded-xl p-3">
+            <p className="font-bold text-on-surface">Cómo obtenerla (gratis):</p>
+            <p>1. Entrá a <span className="font-bold text-primary">console.anthropic.com</span></p>
+            <p>2. Creá una cuenta → API Keys → Create Key</p>
+            <p>3. Copiá la clave y pegála abajo</p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <input
+            type="password"
+            value={keyInput}
+            onChange={(e) => setKeyInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && saveKey()}
+            placeholder="sk-ant-api03-..."
+            className="w-full bg-surface-container-low rounded-xl px-4 py-3.5 text-sm font-mono text-on-surface placeholder:text-outline/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <button
+            onClick={saveKey}
+            disabled={keyInput.trim().length < 10}
+            className="w-full py-3.5 rounded-2xl bg-primary text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-30 active:scale-[0.98] transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">check</span>
+            Guardar y continuar
+          </button>
+          {showKeyForm && (
+            <button
+              onClick={() => setShowKeyForm(false)}
+              className="w-full py-2.5 text-sm font-semibold text-outline hover:text-on-surface transition-colors"
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Pantalla principal: subir fotos + analizar ─────────────────────────────
   return (
     <div className="space-y-5">
-      <p className="text-sm text-on-surface-variant font-medium leading-relaxed">
-        Sube fotos de tu agenda, pizarra o calendario impreso —
-        <span className="font-bold text-on-surface"> la IA las lee directamente</span> y
-        detecta todos los eventos con sus fechas y horarios.
-      </p>
+
+      {/* Header con estado de key */}
+      <div className="flex items-center justify-between px-1">
+        <p className="text-sm text-on-surface-variant font-medium">
+          Sube fotos — la IA las lee y extrae todos los eventos.
+        </p>
+        <button
+          onClick={clearKey}
+          className="flex items-center gap-1 text-[11px] font-semibold text-outline hover:text-primary transition-colors flex-shrink-0 ml-3"
+          title="Cambiar API key"
+        >
+          <span className="material-symbols-outlined text-[14px]">key</span>
+          Cambiar key
+        </button>
+      </div>
 
       {/* Upload zone */}
       <button
@@ -514,27 +592,15 @@ function PhotoTab({ onImport }) {
         disabled={analyzing}
         className="w-full py-6 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 flex flex-col items-center gap-2 hover:bg-primary/8 active:scale-[0.98] transition-all disabled:opacity-40"
       >
-        <span
-          className="material-symbols-outlined text-primary text-5xl"
-          style={{ fontVariationSettings: "'FILL' 1" }}
-        >
+        <span className="material-symbols-outlined text-primary text-5xl" style={{ fontVariationSettings: "'FILL' 1" }}>
           add_photo_alternate
         </span>
         <span className="font-bold text-primary">
-          {photos.length === 0
-            ? 'Seleccionar fotos'
-            : `Añadir más (${photos.length} seleccionada${photos.length !== 1 ? 's' : ''})`}
+          {photos.length === 0 ? 'Seleccionar fotos' : `Añadir más (${photos.length} seleccionada${photos.length !== 1 ? 's' : ''})`}
         </span>
-        <span className="text-xs text-outline font-medium">JPG, PNG · Puedes subir varias a la vez</span>
+        <span className="text-xs text-outline font-medium">JPG, PNG · Varias a la vez</span>
       </button>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        multiple
-        onChange={handlePhotos}
-        className="hidden"
-      />
+      <input ref={fileRef} type="file" accept="image/*" multiple onChange={handlePhotos} className="hidden" />
 
       {/* Thumbnails */}
       {photos.length > 0 && (
@@ -583,15 +649,10 @@ function PhotoTab({ onImport }) {
         </div>
       )}
 
-      {/* Success banner */}
+      {/* Success */}
       {imported && (
         <div className="p-4 bg-primary/10 rounded-xl border border-primary/20 flex items-center gap-3">
-          <span
-            className="material-symbols-outlined text-primary text-2xl"
-            style={{ fontVariationSettings: "'FILL' 1" }}
-          >
-            check_circle
-          </span>
+          <span className="material-symbols-outlined text-primary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
           <p className="text-sm font-bold text-primary">Eventos añadidos al calendario</p>
         </div>
       )}
