@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion' // Importamos la magia
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion' // Importamos la magia
 import { useEvents }        from './hooks/useEvents'
 import { useNotifications } from './hooks/useNotifications'
 import { useDarkMode }      from './hooks/useDarkMode'
@@ -69,6 +69,7 @@ export default function App() {
     (activeView === 'planner' || activeView === 'tasks' || activeView === 'calendar')
 
   return (
+    <LayoutGroup>
     <div className={`min-h-screen ${isDark ? 'dark bg-slate-950' : 'bg-slate-50'} overflow-hidden`}>
       {/* ── TopAppBar Animado ── */}
       <AnimatePresence mode="wait">
@@ -142,23 +143,26 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      {/* ── Bottom Nav con entrada sutil ── */}
-      {!isAssistant && (
-        <motion.div 
-          initial={{ y: 100 }} 
-          animate={{ y: 0 }} 
-          transition={{ duration: 0.6, type: "spring", damping: 20 }}
-          className="fixed bottom-0 left-0 right-0 z-40"
-        >
-          <BottomNavBar
-            activeView={navView}
-            onNavigate={(view) => {
-              if (view === 'assistant') setPreviousView(navView)
-              navigate(view)
-            }}
-          />
-        </motion.div>
-      )}
+      {/* ── Bottom Nav con entrada/salida animada ── */}
+      <AnimatePresence>
+        {!isAssistant && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 30, opacity: 0, transition: { duration: 0.2, ease: 'easeIn' } }}
+            transition={{ duration: 0.6, type: 'spring', damping: 20 }}
+            className="fixed bottom-0 left-0 right-0 z-40"
+          >
+            <BottomNavBar
+              activeView={navView}
+              onNavigate={(view) => {
+                if (view === 'assistant') setPreviousView(navView)
+                navigate(view)
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Paneles laterales */}
       <NotificationPanel
@@ -177,5 +181,6 @@ export default function App() {
         initialTab={importExportInitialTab}
       />
     </div>
+    </LayoutGroup>
   )
 }
