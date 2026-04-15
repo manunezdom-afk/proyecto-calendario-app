@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { motion, AnimatePresence, LayoutGroup } from 'framer-motion' // Importamos la magia
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { useEvents }        from './hooks/useEvents'
 import { useNotifications } from './hooks/useNotifications'
 import { useDarkMode }      from './hooks/useDarkMode'
@@ -16,7 +16,6 @@ import TaskDetailView  from './views/TaskDetailView'
 import PlannerView     from './views/PlannerView'
 import TasksView       from './views/TasksView'
 
-// Configuración de la animación futurista
 const pageVariants = {
   initial: { opacity: 0, y: 10, scale: 0.99 },
   animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.4, ease: "easeOut" } },
@@ -71,7 +70,6 @@ export default function App() {
   return (
     <LayoutGroup>
     <div className={`min-h-screen ${isDark ? 'dark bg-slate-950' : 'bg-slate-50'} overflow-hidden`}>
-      {/* ── TopAppBar Animado ── */}
       <AnimatePresence mode="wait">
         {!isAssistant && (
           <motion.div
@@ -102,21 +100,20 @@ export default function App() {
           </motion.div>
         )}
 
-        {/* ── Transiciones entre Vistas ── */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={activeView}
+            key={isAssistant ? previousView : activeView}
             variants={pageVariants}
             initial="initial"
             animate="animate"
             exit="exit"
             className="w-full"
           >
-            {activeView === 'planner' && (
+            {(activeView === 'planner' || (isAssistant && previousView === 'planner')) && (
               <PlannerView events={events} onAddEvent={addEvent} />
             )}
 
-            {activeView === 'calendar' && (
+            {(activeView === 'calendar' || (isAssistant && previousView === 'calendar')) && (
               <CalendarView
                 events={events}
                 onAddEvent={addEvent}
@@ -127,23 +124,15 @@ export default function App() {
               />
             )}
 
-            {activeView === 'tasks' && <TasksView />}
+            {(activeView === 'tasks' || (isAssistant && previousView === 'tasks')) && <TasksView />}
 
             {activeView === 'task-detail' && (
               <TaskDetailView event={selectedEvent} onBack={goBack} onSave={handleSaveTask} />
-            )}
-
-            {isAssistant && (
-              <AssistantView
-                onClose={() => navigate(previousView || 'planner')}
-                onAddEvent={addEvent}
-              />
             )}
           </motion.div>
         </AnimatePresence>
       </main>
 
-      {/* ── Bottom Nav con entrada/salida animada ── */}
       <AnimatePresence>
         {!isAssistant && (
           <motion.div
@@ -164,7 +153,15 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Paneles laterales */}
+      <AnimatePresence>
+        {isAssistant && (
+          <AssistantView
+            onClose={() => navigate(previousView || 'planner')}
+            onAddEvent={addEvent}
+          />
+        )}
+      </AnimatePresence>
+
       <NotificationPanel
         isOpen={notifPanelOpen}
         onClose={() => setNotifPanelOpen(false)}

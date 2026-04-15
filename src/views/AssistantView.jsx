@@ -26,9 +26,7 @@ export default function AssistantView({ onClose, onAddEvent }) {
   const [parsed, setParsed] = useState(null)
   const [listening, setListening] = useState(false)
   const [interimText, setInterimText] = useState('')
-  const [toast, setToast] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
-  const [added, setAdded] = useState(false)
   const [isThinking, setIsThinking] = useState(false)
 
   const recognitionRef = useRef(null)
@@ -37,6 +35,10 @@ export default function AssistantView({ onClose, onAddEvent }) {
   useEffect(() => {
     const id = setInterval(() => setPlaceholderIdx((i) => (i + 1) % EXAMPLES.length), 3000)
     return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    inputRef.current?.focus()
   }, [])
 
   useEffect(() => {
@@ -66,60 +68,109 @@ export default function AssistantView({ onClose, onAddEvent }) {
   }
 
   return (
-    <motion.div 
-      initial={{ y: "100%" }}
-      animate={{ y: 0 }}
-      exit={{ y: "100%" }}
-      transition={{ type: "spring", damping: 25, stiffness: 200 }}
-      className="fixed inset-0 z-[100] flex flex-col bg-slate-950/80 backdrop-blur-xl"
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/45 p-3 sm:p-6"
     >
-      {/* Header con Blur */}
-      <header className="flex justify-between items-center px-6 py-4">
-        <motion.button onClick={onClose} whileTap={{ scale: 0.9 }} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10">
-          <span className="material-symbols-outlined">close</span>
-        </motion.button>
-        <span className="font-bold text-lg tracking-tight">Asistente Focus</span>
-        <div className="w-10" />
-      </header>
+      <motion.button
+        type="button"
+        aria-label="Cerrar asistente"
+        onClick={onClose}
+        className="absolute inset-0 backdrop-blur-xl"
+      />
 
-      {/* Área Central */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
-        <motion.button
-          onClick={() => !listening && recognitionRef.current?.start()}
-          animate={listening ? { scale: 1.2 } : { scale: 1 }}
-          className={`w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-colors ${listening ? 'bg-red-500' : 'bg-blue-600'}`}
-        >
-          <span className="material-symbols-outlined text-4xl">{listening ? 'graphic_eq' : 'mic'}</span>
-        </motion.button>
+      <motion.section
+        initial={{ y: '100%', opacity: 0.9 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: '100%', opacity: 0.9 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 240 }}
+        className="relative z-10 flex h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-white/20 bg-slate-950/75 text-white shadow-2xl backdrop-blur-xl"
+      >
+        <header className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.28em] text-white/45">Asistente</p>
+            <h2 className="text-lg font-semibold tracking-tight">Asistente Focus</h2>
+          </div>
+          <motion.button
+            onClick={onClose}
+            whileTap={{ scale: 0.94 }}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/80 transition-colors hover:bg-white/15"
+          >
+            <span className="material-symbols-outlined">close</span>
+          </motion.button>
+        </header>
 
-        <AnimatePresence mode="wait">
-          {isThinking ? <TypingIndicator key="thinking" /> : 
-           parsed ? (
-            <motion.div key="card" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white/10 p-6 rounded-3xl border border-white/20 w-full max-w-xs text-center">
-              <p className="text-2xl font-bold mb-2">{parsed.title}</p>
-              <p className="text-white/60 mb-4">{parsed.time}</p>
-              <button onClick={() => { onAddEvent(parsed); onClose(); }} className="bg-blue-500 w-full py-3 rounded-xl font-bold">Confirmar</button>
-            </motion.div>
-           ) : (
-            <p className="text-white/40">{listening ? interimText : "Dime qué quieres agendar..."}</p>
-           )}
-        </AnimatePresence>
-      </div>
+        <div className="flex-1 overflow-y-auto px-5 py-6 sm:px-6">
+          <div className="flex min-h-full flex-col items-center justify-center gap-8 text-center">
+            <div className="space-y-2">
+              <p className="text-3xl font-semibold tracking-tight">Agenda algo en lenguaje natural</p>
+              <p className="text-sm text-white/50">
+                {listening ? interimText || 'Te estoy escuchando...' : EXAMPLES[placeholderIdx]}
+              </p>
+            </div>
 
-      {/* Input Inferior */}
-      <div className="p-6">
-        <div className="bg-white/10 p-2 rounded-2xl flex border border-white/10">
-          <input 
-            value={input} onChange={(e) => setInput(e.target.value)}
-            placeholder="Escribe aquí..." 
-            className="bg-transparent flex-1 px-4 outline-none"
-            onKeyDown={(e) => e.key === 'Enter' && handleProcess(input)}
-          />
-          <button onClick={() => handleProcess(input)} className="bg-blue-500 p-2 rounded-xl">
-            <span className="material-symbols-outlined">arrow_upward</span>
-          </button>
+            <motion.button
+              onClick={() => !listening && recognitionRef.current?.start()}
+              animate={listening ? { scale: 1.12, boxShadow: '0 0 0 14px rgba(59,130,246,0.14)' } : { scale: 1, boxShadow: '0 0 0 0 rgba(59,130,246,0)' }}
+              transition={{ type: 'spring', stiffness: 220, damping: 18 }}
+              className={`flex h-24 w-24 items-center justify-center rounded-full shadow-2xl transition-colors ${listening ? 'bg-red-500' : 'bg-blue-600'}`}
+            >
+              <span className="material-symbols-outlined text-4xl">{listening ? 'graphic_eq' : 'mic'}</span>
+            </motion.button>
+
+            <AnimatePresence mode="wait">
+              {isThinking ? (
+                <TypingIndicator key="thinking" />
+              ) : parsed ? (
+                <motion.div
+                  key="card"
+                  initial={{ opacity: 0, y: 18, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                  className="w-full max-w-sm rounded-[1.75rem] border border-white/15 bg-white/10 p-6 text-center shadow-xl backdrop-blur-xl"
+                >
+                  <p className="mb-2 text-2xl font-bold">{parsed.title}</p>
+                  <p className="mb-5 text-white/60">{parsed.time}</p>
+                  <button
+                    onClick={() => { onAddEvent(parsed); onClose() }}
+                    className="w-full rounded-xl bg-blue-500 py-3 font-bold transition-colors hover:bg-blue-400"
+                  >
+                    Confirmar
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="empty"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="max-w-sm rounded-[1.5rem] border border-dashed border-white/15 bg-white/5 px-5 py-4 text-sm text-white/45 backdrop-blur-xl"
+                >
+                  Dime qué quieres agendar y te propongo el evento antes de confirmarlo.
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
-      </div>
+
+        <div className="border-t border-white/10 p-4 sm:p-5">
+          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 p-2 backdrop-blur-xl">
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={EXAMPLES[placeholderIdx]}
+              className="flex-1 bg-transparent px-4 py-2 outline-none placeholder:text-white/35"
+              onKeyDown={(e) => e.key === 'Enter' && handleProcess(input)}
+            />
+            <button onClick={() => handleProcess(input)} className="rounded-xl bg-blue-500 p-2.5 transition-colors hover:bg-blue-400">
+              <span className="material-symbols-outlined">arrow_upward</span>
+            </button>
+          </div>
+        </div>
+      </motion.section>
     </motion.div>
   )
 }
