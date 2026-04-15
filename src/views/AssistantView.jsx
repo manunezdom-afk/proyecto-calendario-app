@@ -106,42 +106,46 @@ export default function AssistantView({ onClose, onAddEvent }) {
 
         {/* ── BIG MIC BUTTON ── */}
         <div className="relative flex items-center justify-center">
-          {/* Outer glow rings when listening */}
-          {isListening && (
-            <>
-              <motion.span aria-hidden="true"
-                className="absolute rounded-full border border-blue-400/20 bg-blue-400/[0.06]"
-                style={{ width: 220, height: 220 }}
-                animate={{ scale: [1, 1.12, 1], opacity: [0.5, 0.15, 0.5] }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-              />
-              <motion.span aria-hidden="true"
-                className="absolute rounded-full border border-blue-400/15 bg-blue-400/[0.04]"
-                style={{ width: 180, height: 180 }}
-                animate={{ scale: [1, 1.08, 1], opacity: [0.6, 0.2, 0.6] }}
-                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut', delay: 0.2 }}
-              />
-            </>
-          )}
+          {/* Pulse rings — solo al escuchar */}
+          {isListening && [0, 1].map(i => (
+            <motion.span key={i} aria-hidden="true"
+              className="absolute rounded-full border border-blue-400/20"
+              style={{ width: 180 + i * 50, height: 180 + i * 50 }}
+              animate={{ scale: [1, 1.08 + i * 0.04, 1], opacity: [0.55, 0.08, 0.55] }}
+              transition={{ duration: 1.8 + i * 0.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.35 }}
+            />
+          ))}
+
+          {/* Gradient border ring */}
+          <motion.span aria-hidden="true"
+            className="absolute rounded-full"
+            style={{ width: 164, height: 164, padding: 1.5,
+              background: isListening
+                ? 'conic-gradient(from 0deg, rgba(59,130,246,0.9), rgba(147,197,253,0.5), rgba(59,130,246,0.9))'
+                : 'conic-gradient(from 0deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04), rgba(255,255,255,0.12))'
+            }}
+            animate={isListening ? { rotate: 360 } : { rotate: 0 }}
+            transition={{ duration: 3, repeat: isListening ? Infinity : 0, ease: 'linear' }}
+          />
 
           <motion.button
             onClick={toggleListening}
+            whileTap={{ scale: 0.94 }}
             animate={isListening
-              ? { scale: [1, 1.04, 1], boxShadow: ['0 0 40px 0px rgba(37,99,235,0.5)', '0 0 80px 8px rgba(37,99,235,0.7)', '0 0 40px 0px rgba(37,99,235,0.5)'] }
-              : { scale: 1, boxShadow: '0 0 40px 0px rgba(37,99,235,0.4)' }}
-            transition={{ duration: 1.1, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
-            className="relative flex h-40 w-40 items-center justify-center rounded-full border border-white/10 bg-[#0b1628]"
+              ? { boxShadow: ['0 0 0 0 rgba(59,130,246,0.3)', '0 0 55px 12px rgba(59,130,246,0.45)', '0 0 0 0 rgba(59,130,246,0.3)'] }
+              : { boxShadow: '0 0 35px 0px rgba(59,130,246,0.18)' }}
+            transition={{ duration: 1.4, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
+            className="relative z-10 flex h-40 w-40 items-center justify-center rounded-full bg-[#08101f] backdrop-blur-sm"
           >
-            {/* Inner sphere */}
             <motion.span
-              className={`absolute inset-[18px] rounded-full bg-[radial-gradient(circle_at_30%_28%,rgba(96,165,250,0.95),rgba(37,99,235,0.95)_50%,rgba(15,25,50,1))] shadow-[inset_0_2px_12px_rgba(255,255,255,0.18)] ${isProcessing ? 'opacity-60' : ''}`}
-              animate={isListening ? { scale: [1, 1.025, 1] } : { scale: 1 }}
-              transition={{ duration: 1.1, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
-            />
-            {/* Icon */}
-            <span className="material-symbols-outlined relative z-10 text-5xl text-white drop-shadow-lg">
+              className={`material-symbols-outlined text-5xl transition-colors duration-300 ${
+                isListening ? 'text-blue-300' : isProcessing ? 'text-white/40' : 'text-white/85'
+              }`}
+              animate={isListening ? { scale: [1, 1.08, 1] } : { scale: 1 }}
+              transition={{ duration: 0.7, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
+            >
               {isListening ? 'graphic_eq' : isProcessing ? 'hourglass_top' : 'mic'}
-            </span>
+            </motion.span>
           </motion.button>
         </div>
 
