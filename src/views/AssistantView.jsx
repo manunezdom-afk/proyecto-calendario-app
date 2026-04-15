@@ -15,15 +15,39 @@ async function callFocusAssistant({ message, events, history, apiKey }) {
   const headers = { 'Content-Type': 'application/json' }
   if (apiKey) headers['x-user-api-key'] = apiKey
 
-  const res = await fetch('/.netlify/functions/focus-assistant', {
+  const res = await fetch('/api/focus-assistant', {
     method: 'POST',
     headers,
     body: JSON.stringify({ message, events, history }),
   })
 
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
-    throw Object.assign(new Error(data.error || 'error'), { status: res.status, code: data.error })
+    const rawBody = await res.text().catch(() => '')
+    let data = {}
+
+    try {
+      data = rawBody ? JSON.parse(rawBody) : {}
+    } catch {
+      data = {}
+    }
+
+    const error = Object.assign(
+      new Error(data.message || data.error || rawBody || 'error'),
+      {
+        status: res.status,
+        code: data.error,
+        details: rawBody,
+      },
+    )
+
+    console.error('[AssistantView] focus-assistant fetch failed', {
+      status: res.status,
+      code: data.error,
+      message: data.message,
+      details: rawBody,
+    })
+
+    throw error
   }
   return res.json()
 }
@@ -165,6 +189,13 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
 
       setMessages((prev) => [...prev, { role: 'assistant', content: reply, actions }])
     } catch (err) {
+      console.error('[AssistantView] Error exacto al conectar con /api/focus-assistant:', {
+        message: err?.message,
+        code: err?.code,
+        status: err?.status,
+        details: err?.details,
+      })
+
       const errMsg =
         err.code === 'no_api_key'
           ? 'Configura tu API key en Importar/Exportar → Foto para usar la IA.'

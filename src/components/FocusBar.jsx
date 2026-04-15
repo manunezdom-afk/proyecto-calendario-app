@@ -14,7 +14,7 @@ async function callFocusAssistant({ message, events, apiKey }) {
   const headers = { 'Content-Type': 'application/json' }
   if (apiKey) headers['x-user-api-key'] = apiKey
 
-  const res = await fetch('/.netlify/functions/focus-assistant', {
+  const res = await fetch('/api/focus-assistant', {
     method: 'POST',
     headers,
     body: JSON.stringify({ message, events, history: [] }),
