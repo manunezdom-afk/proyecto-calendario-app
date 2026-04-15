@@ -10,7 +10,7 @@ function getApiKey() {
   return localStorage.getItem(API_KEY_STORAGE) || ''
 }
 
-/** Llama a la función Netlify de Focus */
+/** Llama a la función Vercel de Focus */
 async function callFocusAssistant({ message, events, history, apiKey }) {
   const headers = { 'Content-Type': 'application/json' }
   if (apiKey) headers['x-user-api-key'] = apiKey
@@ -144,18 +144,6 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
     historyRef.current = [...historyRef.current, { role: 'user', content: msg }]
 
     const apiKey = getApiKey()
-    if (!apiKey && !import.meta.env.VITE_HAS_SERVER_KEY) {
-      setNoKey(true)
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: 'Necesito una API key para funcionar como IA. Ve a Importar/Exportar → Foto para configurarla.',
-          actions: [],
-        },
-      ])
-      return
-    }
 
     setIsThinking(true)
     setNoKey(false)
