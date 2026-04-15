@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import QuickAddSheet from './QuickAddSheet'
+import { resolveEventDate } from '../utils/resolveEventDate'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -49,9 +50,9 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
     else setViewMonth((m) => m + 1)
   }
 
-  // Events for a given ISO date — events without date fall back to today
+  // Events for a given ISO date — resuelve "Hoy", "Mañana", null, etc.
   function eventsForDate(iso) {
-    return events.filter((e) => (e.date ? e.date === iso : iso === todayISO))
+    return events.filter((e) => resolveEventDate(e) === iso)
   }
 
   const selectedEvents = selectedDate ? eventsForDate(selectedDate) : []

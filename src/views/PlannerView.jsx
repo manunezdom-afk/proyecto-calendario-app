@@ -155,7 +155,7 @@ function buildInsights(events, profile) {
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────
-export default function PlannerView({ onAddEvent, events = [] }) {
+export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, events = [] }) {
   const [blocks, setBlocks] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -262,7 +262,13 @@ export default function PlannerView({ onAddEvent, events = [] }) {
               </button>
             </header>
 
-            <FocusBar onAddEvent={onAddEvent} inline />
+            <FocusBar
+              onAddEvent={onAddEvent}
+              onEditEvent={onEditEvent}
+              onDeleteEvent={onDeleteEvent}
+              events={events}
+              inline
+            />
 
             <div className="relative space-y-2">
               {blocks.map(({ id, time, type, title, description }) => {

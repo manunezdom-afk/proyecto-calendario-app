@@ -1,4 +1,5 @@
 import { parseEventTime } from './parseEventTime'
+import { resolveEventDate } from './resolveEventDate'
 
 // Format a Date as ICS local datetime: YYYYMMDDTHHMMSS
 function fmtDT(date) {
@@ -25,12 +26,6 @@ function escapeICS(str) {
     .replace(/\n/g, '\\n')
 }
 
-// Today's date as YYYY-MM-DD
-function todayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 /**
  * Convert the events array from useEvents into an ICS calendar string.
  * @param {Array} events
@@ -48,7 +43,8 @@ export function eventsToICS(events) {
   ]
 
   events.forEach((ev) => {
-    const dateStr = ev.date ?? todayISO()
+    // Resolvemos la fecha correctamente para cualquier formato guardado
+    const dateStr = resolveEventDate(ev)
     const start   = parseEventTime(ev.time, dateStr)
     const allDay  = !start
 
@@ -56,14 +52,13 @@ export function eventsToICS(events) {
     lines.push(`UID:${ev.id}@focus-app`)
 
     if (allDay) {
-      // All-day event
       const [y, m, d] = dateStr.split('-').map(Number)
       const base = new Date(y, m - 1, d)
       const next = new Date(y, m - 1, d + 1)
       lines.push(`DTSTART;VALUE=DATE:${fmtDate(base)}`)
       lines.push(`DTEND;VALUE=DATE:${fmtDate(next)}`)
     } else {
-      // Timed event — assume 1 hour duration
+      // Timed event — 1 hour duration
       const end = new Date(start.getTime() + 60 * 60 * 1000)
       lines.push(`DTSTART:${fmtDT(start)}`)
       lines.push(`DTEND:${fmtDT(end)}`)

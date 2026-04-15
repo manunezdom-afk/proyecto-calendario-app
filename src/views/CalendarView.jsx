@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import QuickAddSheet from '../components/QuickAddSheet'
 import MonthCalendar from '../components/MonthCalendar'
+import { resolveEventDate } from '../utils/resolveEventDate'
 
 const AVATAR_1 =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuDfqPz-Xtp1DOlxyZ6qdBoqCnCTvLoTN7uCnDpKv7pQispXp8jMGm8VmAnGlq6fGljfeaM_FGgWpLdB3Ig6ImleJTb6h-TmrJg7wLQJBUNd1LSQiUrTmFaLHcku_b2IBR1b9-gtC7bCqoZTvugBoGNiE9EjBbxP2zP0nkLkJF5KXZxYSvNqigG3jSpyBQawu9fkiHNp1vQfAtrXoJyYILEZm_q5bSNPNATYmsirJUZFcSzFA1bGsAuK0G16fJNQgGEjyI-ErT5OZNRs'
@@ -10,7 +11,7 @@ const AVATAR_2 =
 const DAY_ABBR_ES    = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const MONTH_NAMES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
-// Build the current week (Mon → Sun) from today
+// Build the current week (Mon → Sun) from today — incluye ISO date para filtrar eventos
 function getCurrentWeek() {
   const today = new Date()
   const dow    = today.getDay() // 0=Sun
@@ -19,12 +20,20 @@ function getCurrentWeek() {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    return { day: DAY_ABBR_ES[d.getDay()].toUpperCase(), num: d.getDate(), isToday: d.toDateString() === today.toDateString() }
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return {
+      day: DAY_ABBR_ES[d.getDay()].toUpperCase(),
+      num: d.getDate(),
+      iso,
+      isToday: d.toDateString() === today.toDateString(),
+    }
   })
 }
 
-const CALENDAR_DAYS = getCurrentWeek()
-const todayNum      = new Date().getDate()
+const CALENDAR_DAYS     = getCurrentWeek()
+const todayNum          = new Date().getDate()
+const todayEntry        = CALENDAR_DAYS.find((d) => d.isToday)
+const todayISOStr       = todayEntry?.iso ?? CALENDAR_DAYS[0].iso
 const currentMonthLabel = `${MONTH_NAMES_ES[new Date().getMonth()]} ${new Date().getFullYear()}`
 
 // ─── Small delete button ──────────────────────────────────────────────────────
@@ -137,14 +146,20 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('semana')         // 'mes' | 'semana'
 
-  const focusEvents = events.filter((e) => e.section === 'focus')
-  const eveningEvents = events.filter((e) => e.section === 'evening')
+  // ISO del día seleccionado en la vista semana
+  const activeDayISO = CALENDAR_DAYS.find((d) => d.num === activeDay)?.iso ?? todayISOStr
+
+  // Filtramos eventos por día seleccionado (resolviendo cualquier formato de fecha)
+  const dayEvents = events.filter((e) => resolveEventDate(e) === activeDayISO)
+  const focusEvents   = dayEvents.filter((e) => e.section === 'focus')
+  const eveningEvents = dayEvents.filter((e) => e.section === 'evening')
 
   // First focus event becomes the featured card (if any)
   const [featuredEvent, ...smallEvents] = focusEvents
 
   function handleSave(formData) {
-    onAddEvent(formData)
+    // Guardar el evento con la fecha del día seleccionado
+    onAddEvent({ ...formData, date: activeDayISO })
     setShowModal(false)
   }
 
@@ -238,10 +253,12 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
               })}
             </div>
 
-            {/* Enfoque de Hoy */}
+            {/* Enfoque del día seleccionado */}
             <section className="space-y-4">
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold tracking-tight text-on-surface">Enfoque de Hoy</h2>
+                <h2 className="text-xl font-bold tracking-tight text-on-surface">
+                  {activeDayISO === todayISOStr ? 'Enfoque de Hoy' : `Enfoque del ${activeDay}`}
+                </h2>
                 <button
                   onClick={() => setShowModal(true)}
                   className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"

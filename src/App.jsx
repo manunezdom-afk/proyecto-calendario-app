@@ -110,7 +110,12 @@ export default function App() {
             className="w-full"
           >
             {(activeView === 'planner' || (isAssistant && previousView === 'planner')) && (
-              <PlannerView events={events} onAddEvent={addEvent} />
+              <PlannerView
+                events={events}
+                onAddEvent={addEvent}
+                onEditEvent={editEvent}
+                onDeleteEvent={deleteEvent}
+              />
             )}
 
             {(activeView === 'calendar' || (isAssistant && previousView === 'calendar')) && (
@@ -159,6 +164,9 @@ export default function App() {
           <AssistantView
             onClose={() => navigate(previousView || 'planner')}
             onAddEvent={addEvent}
+            onEditEvent={editEvent}
+            onDeleteEvent={deleteEvent}
+            events={events}
           />
         )}
       </AnimatePresence>

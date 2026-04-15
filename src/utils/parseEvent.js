@@ -211,15 +211,22 @@ function resolveHour(h, min, isMorning) {
 
 // ── Date extraction ───────────────────────────────────────────────────────────
 
+function isoDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function extractDate(text) {
-  let date = 'Hoy'
+  const today = new Date()
+  let date = isoDate(today)   // siempre YYYY-MM-DD — nunca "Hoy" ni "Mañana"
   let cleaned = text
 
   if (/pasado\s+ma[ñn]ana/i.test(cleaned)) {
-    date = 'Pasado mañana'
+    const d = new Date(today); d.setDate(today.getDate() + 2)
+    date = isoDate(d)
     cleaned = cleaned.replace(/pasado\s+ma[ñn]ana/i, '')
   } else if (/ma[ñn]ana/i.test(cleaned)) {
-    date = 'Mañana'
+    const d = new Date(today); d.setDate(today.getDate() + 1)
+    date = isoDate(d)
     cleaned = cleaned.replace(/ma[ñn]ana/i, '')
   } else if (/hoy/i.test(cleaned)) {
     cleaned = cleaned.replace(/hoy/i, '')
