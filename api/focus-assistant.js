@@ -1,3 +1,5 @@
+import Anthropic from '@anthropic-ai/sdk';
+
 /**
  * Vercel Serverless Function: focus-assistant
  *
@@ -6,8 +8,6 @@
  *
  * API key: variable de entorno ANTHROPIC_API_KEY o header x-user-api-key
  */
-
-const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages'
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -27,6 +27,8 @@ export default async function handler(req, res) {
   if (!normalizedApiKey) {
     return res.status(503).json({ error: 'no_api_key' })
   }
+
+  const anthropic = new Anthropic({ apiKey: normalizedApiKey })
 
   const { message, events = [], history = [] } = req.body || {}
 
@@ -121,31 +123,12 @@ Instrucciones adicionales:
   ]
 
   try {
-    const anthropicRes = await fetch(ANTHROPIC_API, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': normalizedApiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: "claude-3-haiku-20240307",
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages,
-      }),
+    const data = await anthropic.messages.create({
+      model: "claude-3-5-sonnet-20240620",
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages,
     })
-
-    if (!anthropicRes.ok) {
-      const txt = await anthropicRes.text()
-      if (anthropicRes.status === 401) {
-        return res.status(401).json({ error: 'invalid_api_key' })
-      }
-      console.error('[focus-assistant] Anthropic error:', anthropicRes.status, txt)
-      return res.status(502).json({ error: 'api_error', status: anthropicRes.status })
-    }
-
-    const data = await anthropicRes.json()
     const rawText = (data.content?.[0]?.text ?? '').trim()
 
     let parsed = { reply: rawText, actions: [] }
@@ -162,6 +145,9 @@ Instrucciones adicionales:
 
     return res.status(200).json(parsed)
   } catch (err) {
+    if (err?.status === 401) {
+      return res.status(401).json({ error: 'invalid_api_key' })
+    }
     console.error('[focus-assistant] Error:', err)
     return res.status(500).json({ error: 'internal_error', message: err.message })
   }
