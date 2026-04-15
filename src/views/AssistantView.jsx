@@ -4,11 +4,12 @@ import { parseEvent } from '../utils/parseEvent'
 
 const SR = typeof window !== 'undefined' && (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
 
-const INTENT_RE = /^(?:acu[eé]rdame(?:\s+de)?|recu[eé]rdame(?:\s+de)?|anota|quiero|tengo\s+que)\s+/i
-const CONNECTOR_RE = /^(?:que|por\s+favor)\s+/i
+// Mirrors the COMMAND_PREFIXES in parseEvent.js — kept in sync
+const INTENT_RE = /^(?:acu[eé]rdame(?:\s+de)?|recu[eé]rdame(?:\s+de)?|me\s+recuerd[ae]s?(?:\s+de)?|no\s+me\s+dejes\s+olvidar(?:\s+de)?|anota(?:me)?|me\s+anot[aá]s?|ag[eé]ndame|agr[eé]game|pon(?:me)?|met[eé]me|quiero|necesito|tengo(?:\s+que)?|voy\s+a(?:\s+tener)?|program[aá]me|cre[aá]me)\s+/i
+const CONNECTOR_RE = /^(?:que|por\s+favor|para\s+que|un[ao]?\s+evento\s+de)\s+/i
 function cleanIntent(raw) {
   let t = raw.trim()
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     const prev = t
     t = t.replace(INTENT_RE, '').replace(CONNECTOR_RE, '').trim()
     if (t === prev) break

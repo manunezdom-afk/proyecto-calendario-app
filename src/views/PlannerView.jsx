@@ -18,6 +18,21 @@ function currentHour() {
   return d.getHours() + d.getMinutes() / 60
 }
 
+function parseTimeToDecimal(timeStr) {
+  if (!timeStr || timeStr === '—') return null
+  const [h, m] = timeStr.split(':').map(Number)
+  if (isNaN(h)) return null
+  return h + m / 60
+}
+
+function formatMinutes(totalMinutes) {
+  if (totalMinutes < 1) return 'ahora'
+  if (totalMinutes < 60) return `${Math.round(totalMinutes)} min`
+  const h = Math.floor(totalMinutes / 60)
+  const m = Math.round(totalMinutes % 60)
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
 // ── Seed timeline blocks ───────────────────────────────────────────────────
 const SEED_BLOCKS = [
   { id: 'blk-001', time: '09:00', type: 'confirmed', title: 'Trabajo Profundo: Arquitectura del Sistema',   description: 'Bloque de máxima concentración. Sin interrupciones.' },
@@ -149,6 +164,12 @@ export default function PlannerView({ onAddEvent, events = [] }) {
   })
   const [showModal, setShowModal]         = useState(false)
   const [activeTimerBlock, setActiveTimerBlock] = useState(null)
+  const [, setTick] = useState(0)
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   const { profile, saveProfile, snoozeSetup, showSetup } = useUserProfile()
 
@@ -177,24 +198,37 @@ export default function PlannerView({ onAddEvent, events = [] }) {
   }
 
   // ── Datos personalizados ─────────────────────────────────────────────────
-  const peakStart = profile.peakStart ?? 9
-  const peakEnd   = profile.peakEnd   ?? 11.5
-  const inPeak    = currentHour() >= peakStart && currentHour() < peakEnd
-
   const confirmedCount  = blocks.filter((b) => b.type === 'confirmed').length
   const suggestionCount = blocks.filter((b) => b.type === 'suggestion').length
+  const completedCount  = blocks.filter((b) => b.type === 'done').length
+  const totalBlocks     = blocks.length
+  const blockProgress   = totalBlocks > 0 ? completedCount / totalBlocks : 0
 
-  const insights = buildInsights(events, profile)
+  const topInsight = buildInsights(events, profile)[0] ?? null
 
-  const peakLabel = (() => {
-    const startH = Math.floor(peakStart)
-    const startM = Math.round((peakStart % 1) * 60)
-    const endH   = Math.floor(peakEnd)
-    const endM   = Math.round((peakEnd % 1) * 60)
-    return `${startH}:${String(startM).padStart(2,'0')} – ${endH}:${String(endM).padStart(2,'0')}`
+  // ── Card 1: Próximo Bloque ────────────────────────────────────────────────
+  const DAY_START_H = 8
+  const DAY_END_H   = 22
+  const now = currentHour()
+
+  const blocksWithDecimal = blocks
+    .map((b) => ({ ...b, _h: parseTimeToDecimal(b.time) }))
+    .filter((b) => b._h !== null)
+    .sort((a, b) => a._h - b._h)
+
+  const activeBlock = (() => {
+    for (let i = 0; i < blocksWithDecimal.length; i++) {
+      const b = blocksWithDecimal[i]
+      const nextH = blocksWithDecimal[i + 1]?._h ?? (b._h + 1)
+      if (now >= b._h && now < nextH) return b
+    }
+    return null
   })()
 
-  const chronoLabel = { morning: 'mañanero', afternoon: 'vespertino', night: 'nocturno' }[profile.chronotype] ?? ''
+  const nextBlock   = blocksWithDecimal.find((b) => b._h > now) ?? null
+  const minsToNext  = nextBlock   ? (nextBlock._h   - now) * 60 : null
+  const minsElapsed = activeBlock ? (now - activeBlock._h) * 60 : null
+  const dayProgress = Math.min(1, Math.max(0, (now - DAY_START_H) / (DAY_END_H - DAY_START_H)))
 
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-52 dark:bg-slate-900 dark:text-slate-100">
@@ -297,69 +331,128 @@ export default function PlannerView({ onAddEvent, events = [] }) {
           {/* ── Right: Insights personalizados ────────────────────────────── */}
           <div className="w-full md:w-80 space-y-5">
 
-            {/* Energy peak card — personalizado */}
-            <div className={`p-6 rounded-[24px] ${inPeak ? 'bg-primary text-white' : 'bg-surface-container-high/40 backdrop-blur-sm'}`}>
-              <div className="flex items-center gap-2 mb-3">
-                <span
-                  className={`material-symbols-outlined ${inPeak ? 'text-white' : 'text-amber-500'}`}
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  {inPeak ? 'bolt' : 'brightness_high'}
-                </span>
-                <h4 className={`font-headline font-bold ${inPeak ? 'text-white' : 'text-on-surface'}`}>
-                  {inPeak ? '¡Estás en tu pico!' : 'Pico de Energía'}
-                </h4>
-                {chronoLabel && !inPeak && (
-                  <span className="ml-auto text-[10px] font-bold text-outline uppercase tracking-wider">{chronoLabel}</span>
+            {/* ── Card 1: Próximo Bloque ────────────────────────────────── */}
+            <div className="bg-surface-container-high/40 backdrop-blur-sm rounded-[24px] p-6 space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="material-symbols-outlined text-primary text-[20px]"
+                    style={{ fontVariationSettings: "'FILL' 1" }}
+                  >
+                    {activeBlock ? 'play_circle' : 'schedule'}
+                  </span>
+                  <h4 className="font-headline font-bold text-on-surface">
+                    {activeBlock ? 'En Curso' : 'Próximo Bloque'}
+                  </h4>
+                </div>
+                {activeBlock && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary uppercase tracking-wider">
+                    ACTIVO
+                  </span>
                 )}
               </div>
-              <p className={`text-sm font-medium leading-relaxed ${inPeak ? 'text-white/80' : 'text-on-surface-variant'}`}>
-                {inPeak
-                  ? `Ahora mismo es tu mejor ventana${chronoLabel ? ` (perfil ${chronoLabel})` : ''}. Prioriza trabajo profundo sin interrupciones.`
-                  : `Tu ventana de máxima concentración es de ${peakLabel}.${profile.setupDone ? '' : ' Personalízala respondiendo las 2 preguntas de arriba.'}`}
-              </p>
+
+              {/* Contenido dinámico */}
+              {activeBlock ? (
+                <div>
+                  <p className="text-xs font-semibold text-outline uppercase tracking-wider mb-1">{activeBlock.time}</p>
+                  <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{activeBlock.title}</p>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{Math.round(minsElapsed)}</span>
+                    <span className="text-sm font-semibold text-outline">min transcurridos</span>
+                  </div>
+                </div>
+              ) : nextBlock ? (
+                <div>
+                  <p className="text-xs font-semibold text-outline uppercase tracking-wider mb-1">{nextBlock.time}</p>
+                  <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{nextBlock.title}</p>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{formatMinutes(minsToNext)}</span>
+                    {minsToNext >= 1 && <span className="text-sm font-semibold text-outline">para empezar</span>}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-2">
+                  <span
+                    className="material-symbols-outlined text-outline/40 text-[36px] block mb-2"
+                    style={{ fontVariationSettings: "'FILL' 0" }}
+                  >check_circle</span>
+                  <p className="text-sm font-semibold text-outline">Sin bloques pendientes.</p>
+                  <p className="text-xs text-outline/60 mt-0.5">Añade uno para comenzar el día.</p>
+                </div>
+              )}
+
+              {/* Barra de progreso del día */}
+              <div>
+                <div className="flex justify-between mb-1.5">
+                  <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Progreso del día</span>
+                  <span className="text-[10px] font-bold text-outline tabular-nums">{Math.round(dayProgress * 100)}%</span>
+                </div>
+                <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-full transition-all duration-700"
+                    style={{ width: `${dayProgress * 100}%` }}
+                  />
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span className="text-[10px] text-outline/50">8:00</span>
+                  <span className="text-[10px] text-outline/50">22:00</span>
+                </div>
+              </div>
             </div>
 
-            {/* AI Insights — dinámicos y personalizados */}
-            <div className="bg-surface-container-high/40 p-5 rounded-[24px] backdrop-blur-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <span
-                  className="material-symbols-outlined text-secondary text-[20px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  auto_awesome
-                </span>
-                <h4 className="font-headline font-bold text-on-surface">
-                  {profile.setupDone ? 'Tu resumen' : 'Resumen IA'}
-                </h4>
+            {/* ── Card 2: Tu Día ────────────────────────────────────────── */}
+            <div className="bg-surface-container-high/40 backdrop-blur-sm rounded-[24px] p-5 space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <h4 className="font-headline font-bold text-on-surface">Tu Día</h4>
+                <span className="text-[10px] font-bold text-outline uppercase tracking-wider">HOY</span>
               </div>
 
-              <div className="space-y-2.5">
-                {/* Conteo de bloques */}
-                <div className="p-3.5 bg-surface-container-lowest rounded-xl">
-                  <p className="text-[10px] font-bold text-primary mb-1 uppercase tracking-tight">HOY</p>
-                  <p className="text-sm text-on-surface-variant font-medium">
-                    {confirmedCount} bloque{confirmedCount !== 1 ? 's' : ''} confirmado{confirmedCount !== 1 ? 's' : ''}
-                    {suggestionCount > 0 ? ` · ${suggestionCount} sugerencia${suggestionCount !== 1 ? 's' : ''} pendiente${suggestionCount !== 1 ? 's' : ''}` : ''}
-                  </p>
+              {/* 3 métricas en grid */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-surface-container-lowest rounded-2xl p-3 text-center">
+                  <p className="text-2xl font-extrabold font-headline text-primary tabular-nums">{confirmedCount}</p>
+                  <p className="text-[10px] font-semibold text-outline mt-0.5 leading-tight">Confirmados</p>
                 </div>
-
-                {/* Insights personalizados */}
-                {insights.map((ins, i) => (
-                  <div key={i} className={`p-3.5 ${ins.bg} rounded-xl`}>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span
-                        className={`material-symbols-outlined ${ins.color} text-[14px]`}
-                        style={{ fontVariationSettings: "'FILL' 1" }}
-                      >
-                        {ins.icon}
-                      </span>
-                      <p className={`text-[10px] font-bold ${ins.color} uppercase tracking-tight`}>{ins.label}</p>
-                    </div>
-                    <p className="text-sm text-on-surface-variant font-medium leading-snug">{ins.text}</p>
-                  </div>
-                ))}
+                <div className="bg-surface-container-lowest rounded-2xl p-3 text-center">
+                  <p className="text-2xl font-extrabold font-headline text-secondary tabular-nums">{suggestionCount}</p>
+                  <p className="text-[10px] font-semibold text-outline mt-0.5 leading-tight">Pendientes</p>
+                </div>
+                <div className="bg-surface-container-lowest rounded-2xl p-3 text-center">
+                  <p className="text-2xl font-extrabold font-headline text-on-surface-variant tabular-nums">{completedCount}</p>
+                  <p className="text-[10px] font-semibold text-outline mt-0.5 leading-tight">Completados</p>
+                </div>
               </div>
+
+              {/* Barra de bloques completados */}
+              <div>
+                <div className="flex justify-between mb-1.5">
+                  <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Bloques completados</span>
+                  <span className="text-[10px] font-bold text-outline tabular-nums">{completedCount}/{totalBlocks}</span>
+                </div>
+                <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-secondary rounded-full transition-all duration-500"
+                    style={{ width: `${blockProgress * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* 1 insight prominente */}
+              {topInsight && (
+                <div className={`p-4 ${topInsight.bg} rounded-2xl`}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span
+                      className={`material-symbols-outlined ${topInsight.color} text-[18px]`}
+                      style={{ fontVariationSettings: "'FILL' 1" }}
+                    >{topInsight.icon}</span>
+                    <p className={`text-[10px] font-bold ${topInsight.color} uppercase tracking-widest`}>{topInsight.label}</p>
+                  </div>
+                  <p className="text-sm text-on-surface-variant font-medium leading-snug">{topInsight.text}</p>
+                </div>
+              )}
             </div>
 
           </div>
