@@ -23,6 +23,47 @@ function guessIcon(text) {
   return 'event'
 }
 
+const COMMAND_PREFIXES = [
+  'acu[eé]rdame(?:\\s+de)?',
+  'recu[eé]rdame(?:\\s+de)?',
+  'anota',
+  'pon\\s+un\\s+evento\\s+de',
+  'quiero',
+  'tengo\\s+que',
+]
+
+const COMMAND_PREFIX_REGEX = new RegExp(`^(?:${COMMAND_PREFIXES.join('|')})\\s+`, 'i')
+const LEADING_CONNECTOR_REGEX = /^(?:que|por\s+favor)\s+/i
+const SIMPLE_TIME_REGEX = /a\s+las?\s+\d{1,2}(?::\d{2})?(?:\s+de\s+la\s+(?:ma[ñn]ana|tarde|noche|madrugada))?/i
+
+function normalizeWhitespace(text) {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+function capitalizeFirst(text) {
+  if (!text) return text
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+function stripIntentPrefixes(text) {
+  let cleaned = normalizeWhitespace(text)
+
+  for (let i = 0; i < 4; i++) {
+    const before = cleaned
+    cleaned = cleaned.replace(COMMAND_PREFIX_REGEX, '').trim()
+    cleaned = cleaned.replace(LEADING_CONNECTOR_REGEX, '').trim()
+    if (cleaned === before) break
+  }
+
+  return normalizeWhitespace(cleaned)
+}
+
+export function prepareEventTranscript(rawText) {
+  const normalized = normalizeWhitespace(rawText || '')
+  const withoutIntent = stripIntentPrefixes(normalized)
+  return capitalizeFirst(withoutIntent || normalized)
+}
+
 // Convert 24h hour to display string "3:00 PM"
 function formatHour(h24, min = 0) {
   const period = h24 >= 12 ? 'PM' : 'AM'
@@ -31,7 +72,8 @@ function formatHour(h24, min = 0) {
 }
 
 export function parseEvent(rawText) {
-  let text = rawText.trim()
+  const preparedText = prepareEventTranscript(rawText)
+  let text = preparedText
   let h24 = null
   let min = 0
   let date = 'Hoy'
@@ -76,6 +118,8 @@ export function parseEvent(rawText) {
     }
   }
 
+  const simpleTimeMatch = preparedText.match(SIMPLE_TIME_REGEX)
+
   // ── 2. Extract date keywords ───────────────────────────────────────────────
   if (/pasado\s+ma[ñn]ana/i.test(text)) {
     date = 'Pasado mañana'
@@ -88,27 +132,14 @@ export function parseEvent(rawText) {
   }
 
   // ── 3. Clean filler words → title ─────────────────────────────────────────
-  // Strip command/reminder phrases (may repeat, e.g. "recuérdame que tengo que")
-  const fillerLoop = /^(añade?|pon(?:er)?|agrega[r]?|agenda[r]?|crea[r]?|quiero|necesito|recu[eé]rdame(\s+de)?|recordarme(\s+de)?|me\s+gustar[íi]a|tengo\s+que|debo\s+de?|no\s+olvides(\s+de)?|av[íi]same(\s+de)?)\s+/i
-  // Apply up to 3 times in case of stacked phrases like "recuérdame que tengo que ir"
-  for (let i = 0; i < 3; i++) {
-    const before = text
-    text = text.replace(fillerLoop, '').trim()
-    // Also strip "que" left at the start by "recuérdame que X"
-    text = text.replace(/^que\s+/i, '').trim()
-    if (text === before) break
-  }
-
-  // Remove leading article "un/una/el/la"
   text = text.replace(/^(un[ao]?|el|la)\s+/i, '').trim()
-
-  // Remove leftover connectors: "con", "para", "de"
   text = text.replace(/\s+(con|para|de)\s*$/, '').trim()
+  text = normalizeWhitespace(text)
 
   // Capitalize
   const title = text
-    ? text.charAt(0).toUpperCase() + text.slice(1)
-    : rawText.charAt(0).toUpperCase() + rawText.slice(1)
+    ? capitalizeFirst(text)
+    : capitalizeFirst(preparedText || rawText)
 
   // ── 4. Build result ────────────────────────────────────────────────────────
   const displayTime = h24 !== null ? formatHour(h24, min) : ''
@@ -116,7 +147,15 @@ export function parseEvent(rawText) {
   const icon = guessIcon(title)
   const dotColor = section === 'evening' ? 'bg-secondary-container' : ''
 
-  console.log(`[Sanctuary] 🧠 parseEvent("${rawText}") →`, { title, displayTime, date, section, icon })
+  console.log(`[Sanctuary] 🧠 parseEvent("${rawText}") →`, {
+    title,
+    displayTime,
+    date,
+    section,
+    icon,
+    extractedTime: simpleTimeMatch?.[0] || '',
+    preparedText,
+  })
 
   return { title, time: displayTime, date, section, icon, dotColor }
 }

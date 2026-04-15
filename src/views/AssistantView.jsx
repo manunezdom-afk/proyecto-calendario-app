@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { parseEvent } from '../utils/parseEvent'
+import { parseEvent, prepareEventTranscript } from '../utils/parseEvent'
 
 const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
 const EXAMPLES = ['Ej: "futbol a las 5"', 'Ej: "reunión mañana a las 10"', 'Ej: "gym a las 6"', 'Ej: "cena a las 8"']
@@ -31,8 +31,10 @@ export default function AssistantView({ onClose, onAddEvent }) {
 
   const recognitionRef = useRef(null)
   const silenceTimeoutRef = useRef(null)
+  const stopFallbackTimeoutRef = useRef(null)
   const transcriptRef = useRef('')
   const shouldProcessVoiceRef = useRef(false)
+  const stopRequestedRef = useRef(false)
   const listeningRef = useRef(false)
   const inputValueRef = useRef('')
   const interimTextRef = useRef('')
@@ -61,6 +63,13 @@ export default function AssistantView({ onClose, onAddEvent }) {
     }
   }
 
+  function clearStopFallbackTimeout() {
+    if (stopFallbackTimeoutRef.current) {
+      clearTimeout(stopFallbackTimeoutRef.current)
+      stopFallbackTimeoutRef.current = null
+    }
+  }
+
   function scheduleSilenceTimeout() {
     clearSilenceTimeout()
     silenceTimeoutRef.current = setTimeout(() => {
@@ -76,18 +85,20 @@ export default function AssistantView({ onClose, onAddEvent }) {
 
   function handleProcess(text) {
     const normalizedText = normalizeTranscript(text)
-    if (!normalizedText) {
+    const preparedTranscript = prepareEventTranscript(normalizedText)
+
+    if (!preparedTranscript) {
       setIsThinking(false)
       return
     }
 
     setIsThinking(true)
     setParsed(null)
-    setInput(normalizedText)
+    setInput(preparedTranscript)
     setInterimText('')
 
     setTimeout(() => {
-      setParsed(parseEvent(normalizedText))
+      setParsed(parseEvent(preparedTranscript))
       setIsThinking(false)
     }, 600)
   }
@@ -97,8 +108,13 @@ export default function AssistantView({ onClose, onAddEvent }) {
     if (!recognition) return
 
     clearSilenceTimeout()
+    clearStopFallbackTimeout()
+
+    if (processImmediately) shouldProcessVoiceRef.current = true
+    if (stopRequestedRef.current) return
+
+    stopRequestedRef.current = true
     setListening(false)
-    shouldProcessVoiceRef.current = processImmediately
 
     if (processImmediately) {
       const transcript = normalizeTranscript(transcriptRef.current || interimTextRef.current || inputValueRef.current)
@@ -113,7 +129,17 @@ export default function AssistantView({ onClose, onAddEvent }) {
 
     try {
       recognition.stop()
+      stopFallbackTimeoutRef.current = setTimeout(() => {
+        if (listeningRef.current) {
+          try {
+            recognition.abort()
+          } catch {
+            // noop
+          }
+        }
+      }, 1200)
     } catch {
+      stopRequestedRef.current = false
       if (processImmediately && transcriptRef.current) handleProcess(transcriptRef.current)
     }
   }
@@ -128,7 +154,9 @@ export default function AssistantView({ onClose, onAddEvent }) {
 
     transcriptRef.current = ''
     shouldProcessVoiceRef.current = false
+    stopRequestedRef.current = false
     clearSilenceTimeout()
+    clearStopFallbackTimeout()
     setParsed(null)
     setInterimText('')
 
@@ -148,9 +176,11 @@ export default function AssistantView({ onClose, onAddEvent }) {
     r.interimResults = false
 
     r.onstart = () => {
+      stopRequestedRef.current = false
       setListening(true)
       setIsThinking(false)
       setInterimText('')
+      scheduleSilenceTimeout()
     }
 
     r.onspeechstart = () => {
@@ -163,25 +193,37 @@ export default function AssistantView({ onClose, onAddEvent }) {
 
     r.onresult = (e) => {
       let final = ''
+      let hasFinalResult = false
       for (let i = e.resultIndex; i < e.results.length; i++) {
         final += e.results[i][0].transcript
+        hasFinalResult = hasFinalResult || e.results[i].isFinal
       }
 
       const nextTranscript = normalizeTranscript([transcriptRef.current, final].filter(Boolean).join(' '))
       transcriptRef.current = nextTranscript
       shouldProcessVoiceRef.current = Boolean(nextTranscript)
       setInterimText(nextTranscript)
+
+      if (hasFinalResult || !r.interimResults) {
+        stopListening(true)
+        return
+      }
+
       scheduleSilenceTimeout()
     }
 
     r.onerror = () => {
       clearSilenceTimeout()
+      clearStopFallbackTimeout()
+      stopRequestedRef.current = false
       setListening(false)
       setIsThinking(false)
     }
 
     r.onend = () => {
       clearSilenceTimeout()
+      clearStopFallbackTimeout()
+      stopRequestedRef.current = false
       setListening(false)
 
       const finalTranscript = normalizeTranscript(transcriptRef.current)
@@ -203,8 +245,9 @@ export default function AssistantView({ onClose, onAddEvent }) {
 
     return () => {
       clearSilenceTimeout()
+      clearStopFallbackTimeout()
       try {
-        r.stop()
+        r.abort()
       } catch {
         // noop
       }
