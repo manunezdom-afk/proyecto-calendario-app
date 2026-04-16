@@ -9,8 +9,21 @@ const CONTACTS_SUPPORTED =
 
 const API_KEY_STORAGE    = 'focus_anthropic_key'
 const OPENAI_KEY_STORAGE = 'focus_openai_key'
+const VOICE_STORAGE      = 'focus_tts_voice'
+
 function getApiKey()    { return localStorage.getItem(API_KEY_STORAGE) || '' }
 function getOpenAIKey() { return localStorage.getItem(OPENAI_KEY_STORAGE) || '' }
+function getVoice()     { return localStorage.getItem(VOICE_STORAGE) || 'nova' }
+function saveVoice(v)   { localStorage.setItem(VOICE_STORAGE, v) }
+
+// Voces disponibles de OpenAI TTS
+const TTS_VOICES = [
+  { id: 'nova',    label: 'Nova',    desc: 'Femenina, cálida' },
+  { id: 'shimmer', label: 'Shimmer', desc: 'Femenina, suave' },
+  { id: 'alloy',   label: 'Alloy',   desc: 'Neutral' },
+  { id: 'echo',    label: 'Echo',    desc: 'Masculina, clara' },
+  { id: 'onyx',    label: 'Onyx',    desc: 'Masculina, grave' },
+]
 
 async function reverseGeocode(lat, lon) {
   try {
@@ -93,21 +106,26 @@ function speakWebSpeech(text) {
 
 /**
  * TTS principal:
- * 1. Intenta /api/tts (OpenAI "nova" — misma voz que ChatGPT)
+ * 1. Intenta /api/tts (OpenAI TTS — voz seleccionada por el usuario)
  * 2. Si no hay key o falla → Web Speech API con mejor voz disponible
  */
-async function speak(text) {
+async function speak(text, voice) {
+  const selectedVoice = voice || getVoice()
   try {
     const openaiKey = getOpenAIKey()
     const headers = { 'Content-Type': 'application/json' }
     if (openaiKey) headers['x-openai-key'] = openaiKey
 
+    // Timeout compatible con iOS Safari (sin AbortSignal.timeout)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 9000)
+
     const res = await fetch('/api/tts', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ text, voice: 'nova' }),
-      signal: AbortSignal.timeout(9000),
-    })
+      body: JSON.stringify({ text, voice: selectedVoice }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer))
 
     if (res.ok) {
       const blob = await res.blob()
@@ -115,12 +133,12 @@ async function speak(text) {
       return new Promise((resolve) => {
         const audio = new Audio(url)
         _currentAudio = audio
-        audio.onended  = () => { URL.revokeObjectURL(url); _currentAudio = null; resolve() }
-        audio.onerror  = () => { URL.revokeObjectURL(url); _currentAudio = null; speakWebSpeech(text).then(resolve) }
-        audio.play().catch(() => speakWebSpeech(text).then(resolve))
+        audio.onended = () => { URL.revokeObjectURL(url); _currentAudio = null; resolve() }
+        audio.onerror = () => { URL.revokeObjectURL(url); _currentAudio = null; speakWebSpeech(text).then(resolve) }
+        audio.play().catch(() => { URL.revokeObjectURL(url); speakWebSpeech(text).then(resolve) })
       })
     }
-  } catch { /* sin key o error de red → fallback */ }
+  } catch { /* sin key, timeout, o error de red → fallback */ }
   return speakWebSpeech(text)
 }
 
@@ -261,10 +279,12 @@ function Orb({ status, onPress }) {
 
 // ─── Componente principal ────────────────────────────────────────────────────
 export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDeleteEvent, events = [] }) {
-  const [status, setStatus]       = useState('idle')
-  const [lastReply, setLastReply] = useState('')
-  const [location, setLocation]   = useState(null)
-  const [contacts, setContacts]   = useState([])
+  const [status, setStatus]         = useState('idle')
+  const [lastReply, setLastReply]   = useState('')
+  const [location, setLocation]     = useState(null)
+  const [contacts, setContacts]     = useState([])
+  const [voice, setVoice]           = useState(getVoice)
+  const [showVoices, setShowVoices] = useState(false)
 
   const statusRef  = useRef('idle')
   const historyRef = useRef([])
@@ -319,7 +339,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
       historyRef.current = [...historyRef.current, { role: 'assistant', content: reply }]
       setLastReply(reply)
       updateStatus('speaking')
-      await speak(reply)
+      await speak(reply, voice)
       updateStatus('idle')
     } catch (err) {
       const msg =
@@ -328,7 +348,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
                                          'No pude conectarme. Intenta de nuevo.'
       setLastReply(msg)
       updateStatus('speaking')
-      await speak(msg)
+      await speak(msg, voice)
       updateStatus('idle')
     }
   }
@@ -393,6 +413,48 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
 
         {/* Acciones */}
         <div className="flex items-center gap-2">
+          {/* Selector de voz */}
+          <div className="relative">
+            <motion.button
+              onClick={() => setShowVoices((v) => !v)}
+              whileTap={{ scale: 0.88 }}
+              className="flex h-8 items-center gap-1 rounded-full border border-white/10 bg-white/[0.05] px-2.5 text-white/30 hover:text-white/50 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[0.85rem]">record_voice_over</span>
+              <span className="text-[10px] font-medium capitalize">{voice}</span>
+            </motion.button>
+
+            <AnimatePresence>
+              {showVoices && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-10 z-50 w-44 overflow-hidden rounded-xl border border-white/10 bg-[#0e1117] shadow-xl"
+                >
+                  {TTS_VOICES.map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => { saveVoice(v.id); setVoice(v.id); setShowVoices(false) }}
+                      className={`flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:bg-white/[0.06] ${
+                        voice === v.id ? 'text-blue-300' : 'text-white/50'
+                      }`}
+                    >
+                      <div>
+                        <p className="text-[12px] font-medium">{v.label}</p>
+                        <p className="text-[10px] text-white/25">{v.desc}</p>
+                      </div>
+                      {voice === v.id && (
+                        <span className="material-symbols-outlined text-[0.85rem] text-blue-400">check</span>
+                      )}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           {CONTACTS_SUPPORTED && (
             <motion.button
               onClick={handleShareContacts}
