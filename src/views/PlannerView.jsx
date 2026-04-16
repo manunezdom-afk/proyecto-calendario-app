@@ -63,6 +63,79 @@ function eventTimeToBlockTime(timeStr) {
   return '—'
 }
 
+function normalizeTitleKey(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function extractReminderMeta(title) {
+  const t = String(title || '').trim()
+  // Common patterns:
+  // - "Recordatorio: Clases de Historia"
+  // - "Clases de Historia — recordatorio"
+  // - "Clases de Historia (recordatorio 10 min)"
+  // - "Clases de Historia en 10 minutos"
+  const m1 = t.match(/^recordatorio:\s*(.+)$/i)
+  if (m1) return { isReminder: true, parentTitle: m1[1].trim(), label: 'Recordatorio' }
+
+  const m2 = t.match(/^(.+?)\s*(?:—|-)\s*recordatorio\b.*$/i)
+  if (m2) return { isReminder: true, parentTitle: m2[1].trim(), label: 'Recordatorio' }
+
+  const m3 = t.match(/^(.+?)\s*\((?:.*\brecordatorio\b.*)\)\s*$/i)
+  if (m3) {
+    const inside = t.replace(m3[1], '').trim().replace(/^\(|\)$/g, '').trim()
+    return { isReminder: true, parentTitle: m3[1].trim(), label: inside || 'Recordatorio' }
+  }
+
+  const m4 = t.match(/^(.+?)\s+en\s+(?:10|30|60)\s+minutos\b/i)
+  if (m4) return { isReminder: true, parentTitle: m4[1].trim(), label: t.slice(m4[1].length).trim() }
+
+  if (/\b(recordatorio|reminder)\b/i.test(t)) {
+    // Fallback: try stripping the keyword and using the rest
+    const guessParent = t
+      .replace(/\b(recordatorio|reminder)\b/ig, '')
+      .replace(/[()—-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    return { isReminder: true, parentTitle: guessParent || t, label: 'Recordatorio' }
+  }
+
+  return { isReminder: false, parentTitle: '', label: '' }
+}
+
+function titleTokenSet(title) {
+  const cleaned = normalizeTitleKey(title)
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const tokens = cleaned.split(' ').filter(Boolean)
+  // remove very common stop-words to improve similarity signal
+  const STOP = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'y', 'a', 'en', 'para', 'por', 'con', 'un', 'una'])
+  return new Set(tokens.filter((t) => t.length > 2 && !STOP.has(t)))
+}
+
+function jaccard(a, b) {
+  if (!a?.size || !b?.size) return 0
+  let inter = 0
+  for (const x of a) if (b.has(x)) inter++
+  const union = a.size + b.size - inter
+  return union === 0 ? 0 : inter / union
+}
+
+function looksLikeReminderTitle(title) {
+  const t = normalizeTitleKey(title)
+  // Imperative / checklist-like reminders often created as short standalone events.
+  // Examples: "Recordar enviar mail", "Check presentación", "Revisar notas", etc.
+  if (/^(recordar|recuerda|remember|check|revisar|enviar|llamar|pagar|comprar|hacer|preparar|confirmar|agendar)\b/.test(t)) return true
+  if (/\b(recordatorio|reminder)\b/.test(t)) return true
+  if (/^todo\b/.test(t)) return true
+  return false
+}
+
 const STORAGE_KEY = 'focus_planner_blocks'
 
 // ── Lógica de insights personalizados ─────────────────────────────────────
@@ -279,6 +352,107 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
   const minsElapsed = activeBlock ? (now - activeBlock._h) * 60 : null
   const dayProgress = Math.min(1, Math.max(0, (now - DAY_START_H) / (DAY_END_H - DAY_START_H)))
 
+  // Heurística "Google Calendar": recordatorios como eventos cortos anidados (UI-only)
+  const displayBlocks = (() => {
+    const arrRaw = Array.isArray(blocks) ? blocks : []
+    const arr = arrRaw.map((b, originalIndex) => ({ ...b, _orig: originalIndex, _h: parseTimeToDecimal(b?.time) }))
+      .sort((a, b) => {
+        const ah = a._h ?? Number.POSITIVE_INFINITY
+        const bh = b._h ?? Number.POSITIVE_INFINITY
+        if (ah !== bh) return ah - bh
+        return (a._orig ?? 0) - (b._orig ?? 0)
+      })
+
+    const order = []
+    const byTitle = new Map()
+    const byComposite = new Map()
+    const pendingReminders = [] // reminders seen before their parent is created
+
+    const pushUniqueSubtask = (parent, sub) => {
+      if (!parent) return
+      if (!Array.isArray(parent.subtasks)) parent.subtasks = []
+      const key = normalizeTitleKey(`${sub.label} ${sub.text}`)
+      if (parent.subtasks.some((s) => normalizeTitleKey(`${s.label} ${s.text}`) === key)) return
+      parent.subtasks.push(sub)
+    }
+
+    // 1) Build main blocks, unify duplicates
+    for (const b of arr) {
+      const meta = extractReminderMeta(b?.title)
+      const isReminder = meta.isReminder || looksLikeReminderTitle(b?.title)
+      if (isReminder) {
+        pendingReminders.push({ b, meta })
+        continue
+      }
+
+      const titleKey = normalizeTitleKey(b?.title || b?.id)
+      const compositeKey = `${titleKey}|${String(b?.time || '—').trim()}`
+
+      if (byComposite.has(compositeKey)) {
+        const existing = byComposite.get(compositeKey)
+        // unify description when missing
+        if (!existing.description && b?.description) existing.description = b.description
+        continue
+      }
+
+      const entry = { ...b, subtasks: [], _asReminderOnly: false }
+      byTitle.set(titleKey, entry)
+      byComposite.set(compositeKey, entry)
+      order.push(entry)
+    }
+
+    // Helper: find next plausible parent by time proximity and similarity
+    const findNextParent = (reminderBlock) => {
+      const rh = reminderBlock?._h
+      if (rh === null || rh === undefined) return null
+      const rTokens = titleTokenSet(reminderBlock?.title)
+      for (const candidate of order) {
+        const ch = parseTimeToDecimal(candidate?.time)
+        if (ch === null || ch === undefined) continue
+        const deltaMin = (ch - rh) * 60
+        if (deltaMin < 0) continue
+        if (deltaMin > 60) break
+        const sim = jaccard(rTokens, titleTokenSet(candidate?.title))
+        if (sim >= 0.55) return candidate
+      }
+      return null
+    }
+
+    // 2) Attach reminders (explicit "Recordatorio: X" or heuristics)
+    for (const { b, meta } of pendingReminders) {
+      const explicit = meta?.isReminder
+      let parent = null
+
+      if (explicit && meta.parentTitle) {
+        parent = byTitle.get(normalizeTitleKey(meta.parentTitle)) || null
+      }
+
+      if (!parent) {
+        // Heuristic: attach to the next similar event within 60 minutes
+        parent = findNextParent(b)
+      }
+
+      const label =
+        explicit ? (meta.label || 'Recordatorio')
+        : (looksLikeReminderTitle(b?.title) ? 'Subtarea' : 'Recordatorio')
+
+      const sub = {
+        id: b?.id || `sub-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        label,
+        text: (b?.description || '').trim() || String(b?.title || '').trim(),
+      }
+
+      if (parent) {
+        pushUniqueSubtask(parent, sub)
+      } else {
+        // No parent found: render as small reminder-only card (still not a big block)
+        order.push({ ...b, _asReminderOnly: true, subtasks: [sub] })
+      }
+    }
+
+    return order
+  })()
+
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-52 dark:bg-slate-900 dark:text-slate-100">
 
@@ -319,7 +493,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
             />
 
             <div className="relative space-y-2">
-              {blocks.map(({ id, time, type, title, description }) => {
+              {displayBlocks.map(({ id, time, type, title, description, subtasks = [], _asReminderOnly }) => {
                 const isSuggestion = type === 'suggestion'
                 return (
                   <div key={id} className="flex gap-6 group">
@@ -336,14 +510,14 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                             ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
                             : 'bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 border-primary cursor-pointer hover:shadow-md transition-shadow'
                         }`}
-                        onClick={!isSuggestion ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
+                        onClick={!isSuggestion && !_asReminderOnly ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
                       >
                         <div className="flex justify-between items-start mb-1 gap-3">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
                             <h3 className={`font-bold flex-1 ${isSuggestion ? 'text-secondary' : 'text-on-surface'}`}>
                               {title}
                             </h3>
-                            {!isSuggestion && (
+                            {!isSuggestion && !_asReminderOnly && (
                               <span className="material-symbols-outlined text-outline/40 text-[16px] flex-shrink-0">timer</span>
                             )}
                           </div>
@@ -354,7 +528,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                             >
                               ACEPTAR
                             </button>
-                          ) : (
+                          ) : _asReminderOnly ? null : (
                             <button
                               onClick={(e) => { e.stopPropagation(); dismissBlock(id) }}
                               className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-error/10 hover:text-error transition-colors flex-shrink-0"
@@ -363,6 +537,25 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                             </button>
                           )}
                         </div>
+
+                        {subtasks.length > 0 && (
+                          <div className="mt-2 space-y-1.5">
+                            {subtasks.map((s) => (
+                              <div
+                                key={s.id}
+                                className="rounded-lg bg-surface-container-low px-3 py-2"
+                              >
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-outline/60 mb-0.5">
+                                  {s.label}
+                                </p>
+                                <p className="text-[12px] leading-snug text-on-surface-variant">
+                                  {s.text}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         {description && (
                           <p className={`text-sm leading-relaxed ${isSuggestion ? 'italic text-on-surface-variant/70' : 'text-on-surface-variant'}`}>
                             {description}
