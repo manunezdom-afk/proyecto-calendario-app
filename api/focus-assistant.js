@@ -63,6 +63,11 @@ export default async function handler(req, res) {
   const tomorrow = new Date(today.getTime() + 86400000).toISOString().slice(0, 10)
   const dayAfter  = new Date(today.getTime() + 2 * 86400000).toISOString().slice(0, 10)
 
+  const hh = String(today.getHours()).padStart(2, '0')
+  const mm = String(today.getMinutes()).padStart(2, '0')
+  const currentTime24 = `${hh}:${mm}`
+  const currentTime12 = today.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })
+
   const DAY_NAMES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
   const todayStr = today.toLocaleDateString('es-ES', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -152,8 +157,10 @@ Reglas de formato:
 - section: "evening" si hora ≥ 14:00, sino "focus"
 - icon: fitness_center | groups | restaurant | menu_book | work | local_hospital | shopping_cart | cake | flight | account_balance | alarm | event
 
-Fechas relativas (HOY ES ${todayStr}):
-- "hoy" = ${todayISO}
+Fecha y hora actual del sistema:
+- HOY: ${todayStr}
+- Fecha ISO: ${todayISO}
+- Hora actual: ${currentTime24} (${currentTime12})
 - "mañana" = ${tomorrow}
 - "pasado mañana" = ${dayAfter}
 - días de la semana: ${JSON.stringify(weekDates)}
@@ -188,6 +195,15 @@ Instrucciones adicionales:
 - Cuando agregues o muevas un evento, el reply debe confirmar dos cosas: (1) que quedó agregado/actualizado en el calendario y (2) que ya es visible en "Mi Día" para la fecha correspondiente.
 - No pidas confirmación salvo que falten datos críticos (por ejemplo: fecha imposible o evento ambiguo entre dos ids). Si faltan detalles no críticos (por ejemplo: hora), crea el evento sin hora y menciónalo en el reply.
 - Si no hay suficiente información (ej. no se menciona hora), agrega el evento sin hora y menciona que lo puede editar después
+
+Eliminación y búsqueda por hora actual (CRÍTICO):
+- Cuando el usuario diga "el de ahora", "el que tengo ahora", "el actual", "en este momento", "el que empieza ahora" o expresiones similares, identifica el evento cuya hora de inicio esté dentro de un rango de ±30 minutos respecto a la hora actual del sistema (${currentTime24}).
+- Para comparar: convierte los tiempos de los eventos (formato "H:MM AM/PM") a 24h y calcula la diferencia en minutos con ${currentTime24}. Si la diferencia absoluta es ≤ 30 minutos, ese evento es el candidato.
+- Si hay exactamente un candidato en ese rango, selecciónalo y ejecuta la acción (delete_event / edit_event) directamente sin pedir confirmación ni nombre.
+- Solo pide clarificación si hay dos o más eventos dentro del rango de ±30 minutos al mismo tiempo.
+- Al comparar por nombre, ignora prefijos como "Recordatorio:", "Recuerda:", "Reminder:" — tratalos como parte del mismo evento. "clase de historia" hace match con "Recordatorio: Clase de Historia".
+- Al confirmar la eliminación, incluye el título exacto del evento eliminado en el reply.
+
 - IMPORTANTE — esta es una interfaz de VOZ. Responde siempre en español neutro, con trato impecable (perfil estudiante‑ejecutivo de la Universidad de los Andes). Máximo 2 oraciones claras y directas. No uses modismos chilenos ni jerga informal. Sin negritas, sin asteriscos, sin guiones, sin listas, sin símbolos ni formato. Solo texto plano, apto para ser leído en voz alta.`
 
   const messages = [
