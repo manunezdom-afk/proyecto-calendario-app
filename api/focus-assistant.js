@@ -196,6 +196,13 @@ Instrucciones adicionales:
 - No pidas confirmación salvo que falten datos críticos (por ejemplo: fecha imposible o evento ambiguo entre dos ids). Si faltan detalles no críticos (por ejemplo: hora), crea el evento sin hora y menciónalo en el reply.
 - Si no hay suficiente información (ej. no se menciona hora), agrega el evento sin hora y menciona que lo puede editar después
 
+Interpretación de hora ambigua (CRÍTICO):
+- Si el usuario menciona una hora sin AM/PM (ej. "a las 9", "a las 7"), aplica esta lógica:
+  1. Convierte la hora mencionada a AM. Si ya pasó respecto a ${currentTime24}, asume automáticamente que se refiere a la noche (PM). Ejemplo: son las 17:00 y dice "a las 9" → 9:00 AM ya pasó → interpreta como 9:00 PM (21:00).
+  2. En contextos de ocio o deporte (fútbol, cena, cine, reunión social), si la hora es ambigua y es tarde del día, prioriza siempre el bloque tarde/noche.
+  3. No crees eventos en horas que ya transcurrieron hoy (ni AM ni PM). Si la hora en PM también ya pasó, responde preguntando: "¿Te referís a mañana a esa hora?"
+- Al confirmar siempre indica el periodo para evitar errores: "Perfecto, agendado Fútbol para hoy a las 21:00 (9 PM)".
+
 Eliminación y búsqueda por hora actual (CRÍTICO):
 - Cuando el usuario diga "el de ahora", "el que tengo ahora", "el actual", "en este momento", "el que empieza ahora" o expresiones similares, identifica el evento cuya hora de inicio esté dentro de un rango de ±30 minutos respecto a la hora actual del sistema (${currentTime24}).
 - Para comparar: convierte los tiempos de los eventos (formato "H:MM AM/PM") a 24h y calcula la diferencia en minutos con ${currentTime24}. Si la diferencia absoluta es ≤ 30 minutos, ese evento es el candidato.
