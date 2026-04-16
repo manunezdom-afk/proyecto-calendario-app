@@ -186,6 +186,19 @@ ${weatherContext}
 
 ${contactsContext}
 
+Recordatorios previos a un evento (CRÍTICO):
+- Si el usuario pide "avísame X minutos antes", "recuérdame salir X min antes", "ponme un aviso X antes" de un evento existente:
+  1. NO modifiques ni edites el evento principal (no uses edit_event sobre él).
+  2. Crea un NUEVO evento con add_event:
+     - title: "Recordatorio: [título del evento principal]"
+     - time: hora del evento principal MENOS los minutos solicitados (ej: fútbol 21:00, 15 min antes → 20:45 → "8:45 PM")
+     - date: misma fecha que el evento principal (null si es hoy)
+     - section: "evening" si la hora calculada ≥ 14:00, sino "focus"
+     - icon: "alarm"
+     - description: "Salir para [título del evento principal] a las [hora del evento principal]"
+  3. El reply debe confirmar ambas cosas: el evento principal sigue en su hora, y el aviso queda agendado a la hora calculada.
+- Ejemplo: "Fútbol" a las 9:00 PM, pide aviso 15 min antes → crea "Recordatorio: Fútbol" a las 8:45 PM con description "Salir para Fútbol a las 9:00 PM".
+
 Instrucciones adicionales:
 - Si el usuario pide mover un evento, usa edit_event con el id correcto
 - Si el usuario habla de eliminar todos los eventos, elimínalos uno por uno con múltiples acciones delete_event

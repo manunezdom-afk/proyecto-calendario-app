@@ -73,7 +73,9 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
       <div>
         <h3 className="text-lg font-bold text-on-surface">{event.title}</h3>
         {event.description && (
-          <p className="text-sm text-outline mt-1 leading-relaxed">{event.description}</p>
+          <div style={{ marginTop: '6px', padding: '5px 10px', background: '#f1f5f9', borderRadius: '6px', borderLeft: '2px solid #cbd5e1' }}>
+            <p style={{ fontSize: '11px', color: '#64748b', lineHeight: '1.4' }}>{event.description}</p>
+          </div>
         )}
       </div>
       {event.time && (
@@ -111,10 +113,13 @@ function SmallEventCard({ event, onDelete }) {
         <DeleteButton onClick={() => onDelete(event.id)} />
       </div>
       <h3 className="text-sm font-bold text-on-surface">{event.title}</h3>
-      {(event.time || event.description) && (
-        <p className="text-[11px] text-outline font-medium">
-          {event.time || event.description}
-        </p>
+      {event.time && (
+        <p className="text-[11px] text-outline font-medium">{event.time}</p>
+      )}
+      {event.description && (
+        <div style={{ marginTop: '4px', padding: '4px 8px', background: '#f1f5f9', borderRadius: '5px', borderLeft: '2px solid #cbd5e1' }}>
+          <p style={{ fontSize: '10px', color: '#64748b', lineHeight: '1.4' }}>{event.description}</p>
+        </div>
       )}
     </div>
   )
@@ -129,10 +134,17 @@ function EveningEventCard({ event, onDelete }) {
           <span className="text-xs font-bold text-outline">{event.time}</span>
         </div>
       )}
-      <div className="flex-1 bg-surface-container-lowest hover:bg-surface-container-high transition-colors p-4 rounded-xl flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${event.dotColor || 'bg-outline'}`} />
-          <span className="font-bold text-sm text-on-surface">{event.title}</span>
+      <div className="flex-1 bg-surface-container-lowest hover:bg-surface-container-high transition-colors p-4 rounded-xl flex justify-between items-start">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${event.dotColor || 'bg-outline'}`} />
+          <div className="flex-1 min-w-0">
+            <span className="font-bold text-sm text-on-surface">{event.title}</span>
+            {event.description && (
+              <div style={{ marginTop: '4px', padding: '4px 8px', background: '#f1f5f9', borderRadius: '5px', borderLeft: '2px solid #cbd5e1' }}>
+                <p style={{ fontSize: '10px', color: '#64748b', lineHeight: '1.4' }}>{event.description}</p>
+              </div>
+            )}
+          </div>
         </div>
         <DeleteButton onClick={() => onDelete(event.id)} />
       </div>
