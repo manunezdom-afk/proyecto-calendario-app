@@ -461,7 +461,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
         <ProfileSetupCard onSave={saveProfile} onSnooze={snoozeSetup} />
       )}
 
-      <main className="max-w-7xl mx-auto px-6 pt-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8">
         <div className="flex flex-col md:flex-row gap-12">
 
           {/* ── Left: Timeline ────────────────────────────────────────────── */}
@@ -496,25 +496,25 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
               {displayBlocks.map(({ id, time, type, title, description, subtasks = [], _asReminderOnly }) => {
                 const isSuggestion = type === 'suggestion'
                 return (
-                  <div key={id} className="flex gap-6 group">
-                    <div className="w-16 pt-2 text-right flex-shrink-0">
-                      <span className={`text-sm font-semibold tracking-tighter ${isSuggestion ? 'text-outline/40 italic' : 'text-outline'}`}>
+                  <div key={id} className="flex gap-3 group">
+                    <div className="w-[52px] pt-2 text-right flex-shrink-0">
+                      <span className={`text-[13px] font-semibold tabular-nums ${isSuggestion ? 'text-outline/40 italic' : 'text-outline'}`}>
                         {time}
                       </span>
                     </div>
-                    <div className="relative flex-1 pb-8">
-                      <div className={`absolute left-[-25px] top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : 'bg-primary'}`} />
+                    <div className="relative flex-1 pb-8 min-w-0">
+                      <div className={`absolute left-[-17px] top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : 'bg-primary'}`} />
                       <div
-                        className={`p-5 rounded-xl ${
+                        className={`p-4 rounded-xl ${
                           isSuggestion
                             ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
                             : 'bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 border-primary cursor-pointer hover:shadow-md transition-shadow'
                         }`}
                         onClick={!isSuggestion && !_asReminderOnly ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
                       >
-                        <div className="flex justify-between items-start mb-1 gap-3">
+                        <div className="flex justify-between items-start mb-1 gap-2">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <h3 className={`font-bold flex-1 ${isSuggestion ? 'text-secondary' : 'text-on-surface'}`}>
+                            <h3 className={`font-bold flex-1 min-w-0 truncate ${isSuggestion ? 'text-secondary' : 'text-on-surface'}`}>
                               {title}
                             </h3>
                             {!isSuggestion && !_asReminderOnly && (
@@ -539,16 +539,16 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                         </div>
 
                         {subtasks.length > 0 && (
-                          <div className="mt-2 space-y-1.5">
+                          <div className="mt-3 space-y-1.5 pl-1">
                             {subtasks.map((s) => (
                               <div
                                 key={s.id}
-                                className="rounded-lg bg-surface-container-low px-3 py-2"
+                                className="rounded-md bg-surface-container-low/60 border border-outline/10 px-2.5 py-1.5"
                               >
-                                <p className="text-[10px] font-semibold uppercase tracking-wider text-outline/60 mb-0.5">
+                                <p className="text-[9px] font-bold uppercase tracking-wider text-outline/50 mb-0.5">
                                   {s.label}
                                 </p>
-                                <p className="text-[12px] leading-snug text-on-surface-variant">
+                                <p className="text-[11px] leading-snug text-on-surface-variant/80">
                                   {s.text}
                                 </p>
                               </div>
