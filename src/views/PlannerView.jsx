@@ -63,14 +63,6 @@ function eventTimeToBlockTime(timeStr) {
   return '—'
 }
 
-// ── Seed timeline blocks ───────────────────────────────────────────────────
-const SEED_BLOCKS = [
-  { id: 'blk-001', time: '09:00', type: 'confirmed', title: 'Trabajo Profundo: Arquitectura del Sistema',   description: 'Bloque de máxima concentración. Sin interrupciones.' },
-  { id: 'blk-002', time: '10:30', type: 'suggestion', title: 'Descanso Inteligente: Meditación de 15 min', description: 'Carga cognitiva alta detectada. Recarga para la sincro de las 11:00.' },
-  { id: 'blk-003', time: '11:00', type: 'confirmed', title: 'Sincro con el Equipo de Producto',             description: null },
-  { id: 'blk-004', time: '12:30', type: 'suggestion', title: 'Sugerido: Inbox Zero (20 min)',               description: 'Tienes mensajes urgentes sin leer.' },
-]
-
 const STORAGE_KEY = 'focus_planner_blocks'
 
 // ── Lógica de insights personalizados ─────────────────────────────────────
@@ -190,7 +182,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) return JSON.parse(saved)
     } catch {}
-    return SEED_BLOCKS
+    return []
   })
   const [showModal, setShowModal]         = useState(false)
   const [activeTimerBlock, setActiveTimerBlock] = useState(null)
@@ -386,7 +378,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                 <div className="flex gap-6">
                   <div className="w-16" />
                   <div className="flex-1 bg-surface-container-low rounded-xl p-8 text-center">
-                    <p className="text-outline text-sm font-semibold">Todos los bloques completados. Añade uno nuevo.</p>
+                    <p className="text-outline text-sm font-semibold">No hay tareas para hoy.</p>
                   </div>
                 </div>
               )}

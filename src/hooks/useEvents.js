@@ -2,60 +2,6 @@ import { useState, useEffect } from 'react'
 
 const STORAGE_KEY = 'sanctuary_events'
 
-// Default seed data — used only when localStorage is empty
-const DEFAULT_EVENTS = [
-  {
-    id: 'evt-default-001',
-    title: 'Sincro de Estrategia de Producto',
-    time: '2:00 PM - 3:30 PM',
-    description: 'Preparar la visualización del roadmap trimestral para la revisión de la junta ejecutiva.',
-    section: 'focus',
-    featured: true,
-    icon: 'auto_awesome',
-    dotColor: '',
-  },
-  {
-    id: 'evt-default-002',
-    title: 'Revisar Borradores',
-    time: '',
-    description: "3 tareas pendientes en 'Trabajo'",
-    section: 'focus',
-    featured: false,
-    icon: 'checklist',
-    dotColor: '',
-  },
-  {
-    id: 'evt-default-003',
-    title: 'Almuerzo',
-    time: '12:30 PM - Parque Cercano',
-    description: '12:30 PM - Parque Cercano',
-    section: 'focus',
-    featured: false,
-    icon: 'park',
-    dotColor: '',
-  },
-  {
-    id: 'evt-default-004',
-    title: 'Práctica de Yoga',
-    time: '6:00 PM',
-    description: '',
-    section: 'evening',
-    featured: false,
-    icon: '',
-    dotColor: 'bg-secondary-container',
-  },
-  {
-    id: 'evt-default-005',
-    title: 'Cena con Sarah',
-    time: '8:00 PM',
-    description: '',
-    section: 'evening',
-    featured: false,
-    icon: '',
-    dotColor: 'bg-tertiary',
-  },
-]
-
 export function useEvents() {
   const [events, setEvents] = useState(() => {
     try {
@@ -69,10 +15,10 @@ export function useEvents() {
         return parsed
       }
     } catch (err) {
-      console.warn('[Sanctuary] ⚠️ Could not parse localStorage — using default events.', err)
+      console.warn('[Sanctuary] ⚠️ Could not parse localStorage — starting with empty events.', err)
     }
-    console.log('[Sanctuary] 📋 No saved events found. Loading defaults:', DEFAULT_EVENTS)
-    return DEFAULT_EVENTS
+    console.log('[Sanctuary] 📋 No saved events found. Starting with empty events.')
+    return []
   })
 
   // Persist every change to localStorage
