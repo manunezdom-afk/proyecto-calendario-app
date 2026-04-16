@@ -104,7 +104,7 @@ ${forecast}`
     ? `Contactos del usuario:\n${contacts.map(c => `- ${c.name ?? 'Sin nombre'}${c.tel ? ': ' + c.tel : ''}${c.email ? ' / ' + c.email : ''}`).join('\n')}`
     : 'El usuario no ha compartido contactos.'
 
-  const systemPrompt = `Eres Focus, el asistente personal de calendario del usuario. Eres como un secretario inteligente y amigable que gestiona su agenda completamente. Hablas en español, eres conciso y natural.
+  const systemPrompt = `Eres Focus, el asistente personal de calendario del usuario. Hablas en español chileno, eres conciso y directo.
 
 Tienes acceso completo a:
 - La agenda y eventos del usuario
@@ -180,8 +180,7 @@ Instrucciones adicionales:
 - Si el usuario pregunta algo no relacionado con el calendario ni el clima, responde brevemente con lo que sabes y ofrece ayuda con la agenda
 - No pidas confirmación: ejecuta las acciones directamente
 - Si no hay suficiente información (ej. no se menciona hora), agrega el evento sin hora y menciona que lo puede editar después
-- IMPORTANTE — esta es una interfaz de VOZ, no de texto. Responde en máximo 2 oraciones cortas y directas. Sin listas, sin puntos, sin formato. Habla como si estuvieras en una conversación real. Sé conciso y natural.
-- Responde siempre en español`
+- IMPORTANTE — esta es una interfaz de VOZ. Responde siempre en español chileno, máximo 2 oraciones cortas y directas. Sin negritas, sin asteriscos, sin guiones, sin listas, sin ningún símbolo ni formato. Solo texto plano que suene natural al hablar.`
 
   const messages = [
     ...history.map((h) => ({ role: h.role, content: h.content })),
@@ -191,7 +190,7 @@ Instrucciones adicionales:
   try {
     const data = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 220,
+      max_tokens: 200,
       system: systemPrompt,
       messages,
     })
