@@ -22,6 +22,7 @@ const TTS_VOICES = [
   { id: 'shimmer', label: 'Shimmer', desc: 'Femenina, suave' },
   { id: 'alloy',   label: 'Alloy',   desc: 'Neutral' },
   { id: 'echo',    label: 'Echo',    desc: 'Masculina, clara' },
+  { id: 'fable',   label: 'Fable',   desc: 'Narrativa' },
   { id: 'onyx',    label: 'Onyx',    desc: 'Masculina, grave' },
 ]
 
@@ -56,15 +57,6 @@ async function callFocusAssistant({ message, events, history, apiKey, location, 
     })
   }
   return res.json()
-}
-
-/** Referencia al Audio element activo para poder cancelarlo */
-let _currentAudio = null
-
-/** Cancela la reproducción en curso (OpenAI audio o Web Speech) */
-function stopAudio() {
-  if (_currentAudio) { _currentAudio.pause(); _currentAudio = null }
-  if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
 }
 
 /** Elige la mejor voz española disponible en Web Speech API */
@@ -117,8 +109,9 @@ function speakWebSpeech(text) {
  * 1. Intenta /api/tts (OpenAI TTS — voz seleccionada por el usuario)
  * 2. Si no hay key o falla → Web Speech API con mejor voz disponible
  */
-async function speak(text, voice) {
-  const selectedVoice = voice || getVoice()
+async function speak({ text, voice, stopAudio, audioElRef, audioUrlRef }) {
+  stopAudio?.()
+  const selectedVoice = String(voice || getVoice() || 'nova').toLowerCase()
   try {
     const openaiKey = getOpenAIKey()
     const headers = { 'Content-Type': 'application/json' }
@@ -127,6 +120,9 @@ async function speak(text, voice) {
     // Timeout compatible con iOS Safari (sin AbortSignal.timeout)
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 9000)
+
+    // Debug/tracking
+    console.log('Voz actual enviada:', selectedVoice)
 
     const res = await fetch('/api/tts', {
       method: 'POST',
@@ -139,13 +135,29 @@ async function speak(text, voice) {
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       return new Promise((resolve) => {
-        const audio = new Audio(url)
-        _currentAudio = audio
+        const audio = audioElRef?.current
+        if (!audio) {
+          URL.revokeObjectURL(url)
+          speakWebSpeech(text).then(resolve)
+          return
+        }
+
         let settled = false
-        const cleanup = () => { URL.revokeObjectURL(url); _currentAudio = null }
+        const cleanup = () => {
+          try { URL.revokeObjectURL(url) } catch {}
+          if (audioUrlRef) audioUrlRef.current = null
+          try { audio.pause() } catch {}
+          try { audio.removeAttribute('src') } catch {}
+          try { audio.load?.() } catch {}
+        }
         const fallback = () => { if (settled) return; settled = true; cleanup(); speakWebSpeech(text).then(resolve) }
         audio.onended = () => { if (settled) return; settled = true; cleanup(); resolve() }
         audio.onerror = fallback
+
+        console.log('-> Enviando a OpenAI la voz:', selectedVoice)
+
+        if (audioUrlRef) audioUrlRef.current = url
+        audio.src = url
         audio.play().catch(fallback)
       })
     }
@@ -294,7 +306,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
   const [lastReply, setLastReply]   = useState('')
   const [location, setLocation]     = useState(null)
   const [contacts, setContacts]     = useState([])
-  const [voice, setVoice]           = useState(getVoice)
+  const [selectedVoice, setSelectedVoice] = useState(() => (getVoice() || 'nova').toLowerCase())
   const [showVoices, setShowVoices] = useState(false)
 
   const statusRef       = useRef('idle')
@@ -303,8 +315,47 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
   const silenceRef      = useRef(null)
   const doneRef         = useRef(false)
   const voiceInputRef   = useRef(null)
+  const voiceRef        = useRef('nova')
+  const audioElRef      = useRef(null)
+  const audioUrlRef     = useRef(null)
+  const audioCtxRef     = useRef(null)
+  const audioUnlockedRef = useRef(false)
 
   function updateStatus(s) { statusRef.current = s; setStatus(s) }
+
+  useEffect(() => { voiceRef.current = (selectedVoice || 'nova').toLowerCase() }, [selectedVoice])
+
+  async function unlockAudio() {
+    if (audioUnlockedRef.current) return
+    const AC = /** @type {any} */ (window).AudioContext || /** @type {any} */ (window).webkitAudioContext
+    if (!AC) { audioUnlockedRef.current = true; return }
+    try {
+      if (!audioCtxRef.current) audioCtxRef.current = new AC()
+      const ctx = audioCtxRef.current
+      if (ctx?.state === 'suspended') await ctx.resume()
+      const src = ctx.createBufferSource()
+      src.buffer = ctx.createBuffer(1, 1, 22050)
+      src.connect(ctx.destination)
+      src.start(0)
+      src.stop(0)
+      audioUnlockedRef.current = true
+    } catch {}
+  }
+
+  function stopAudioRef() {
+    const audio = audioElRef.current
+    if (audio) {
+      try { audio.pause() } catch {}
+      try { audio.currentTime = 0 } catch {}
+      try { audio.removeAttribute('src') } catch {}
+      try { audio.load?.() } catch {}
+    }
+    if (audioUrlRef.current) {
+      try { URL.revokeObjectURL(audioUrlRef.current) } catch {}
+      audioUrlRef.current = null
+    }
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
+  }
 
   useEffect(() => {
     if (!navigator.geolocation) return
@@ -329,7 +380,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
     r.onerror  = () => { clearTimeout(silenceRef.current); updateStatus('idle') }
     r.onend    = () => { clearTimeout(silenceRef.current); if (statusRef.current === 'listening') updateStatus('idle') }
     srRef.current = r
-    return () => { clearTimeout(silenceRef.current); try { r.abort() } catch {}; stopAudio() }
+    return () => { clearTimeout(silenceRef.current); try { r.abort() } catch {}; stopAudioRef() }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleVoiceInput(text) {
@@ -351,7 +402,13 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
       historyRef.current = [...historyRef.current, { role: 'assistant', content: reply }]
       setLastReply(reply)
       updateStatus('speaking')
-      await speak(reply, getVoice())
+      await speak({
+        text: reply,
+        voice: voiceRef.current,
+        stopAudio: stopAudioRef,
+        audioElRef,
+        audioUrlRef,
+      })
       updateStatus('idle')
     } catch (err) {
       const msg =
@@ -360,7 +417,13 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
                                          'No pude conectarme. Intenta de nuevo.'
       setLastReply(msg)
       updateStatus('speaking')
-      await speak(msg, getVoice())
+      await speak({
+        text: msg,
+        voice: voiceRef.current,
+        stopAudio: stopAudioRef,
+        audioElRef,
+        audioUrlRef,
+      })
       updateStatus('idle')
     }
   }
@@ -369,9 +432,10 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
   voiceInputRef.current = handleVoiceInput
 
   function handleOrbPress() {
+    unlockAudio()
     const s = statusRef.current
     if (s === 'thinking') return
-    if (s === 'speaking') { stopAudio(); updateStatus('idle'); return }
+    if (s === 'speaking') { stopAudioRef(); updateStatus('idle'); return }
     if (s === 'listening') { clearTimeout(silenceRef.current); srRef.current?.stop(); return }
     doneRef.current = false
     try { srRef.current?.start() } catch {}
@@ -415,6 +479,9 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
         className="relative z-10 flex items-center justify-between px-6"
         style={{ paddingTop: 'max(env(safe-area-inset-top), 1.1rem)', paddingBottom: '0.75rem' }}
       >
+        {/* Audio player controlado por React (remonta al cambiar la voz) */}
+        <audio key={selectedVoice} ref={audioElRef} preload="auto" playsInline className="hidden" />
+
         {/* Marca + ubicación */}
         <div className="flex items-center gap-2">
           <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-white/20">Focus</p>
@@ -436,7 +503,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
               className="flex h-8 items-center gap-1 rounded-full border border-white/10 bg-white/[0.05] px-2.5 text-white/30 hover:text-white/50 transition-colors"
             >
               <span className="material-symbols-outlined text-[0.85rem]">record_voice_over</span>
-              <span className="text-[10px] font-medium capitalize">{voice}</span>
+              <span className="text-[10px] font-medium capitalize">{selectedVoice}</span>
             </motion.button>
 
             <AnimatePresence>
@@ -451,16 +518,23 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
                   {TTS_VOICES.map((v) => (
                     <button
                       key={v.id}
-                      onClick={() => { saveVoice(v.id); setVoice(v.id); setShowVoices(false) }}
+                      onClick={() => {
+                        const next = String(v.id || 'nova').toLowerCase()
+                        saveVoice(next)
+                        setSelectedVoice(next)
+                        voiceRef.current = next
+                        stopAudioRef()
+                        setShowVoices(false)
+                      }}
                       className={`flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:bg-white/[0.06] ${
-                        voice === v.id ? 'text-blue-300' : 'text-white/50'
+                        selectedVoice === v.id ? 'text-blue-300' : 'text-white/50'
                       }`}
                     >
                       <div>
                         <p className="text-[12px] font-medium">{v.label}</p>
                         <p className="text-[10px] text-white/25">{v.desc}</p>
                       </div>
-                      {voice === v.id && (
+                      {selectedVoice === v.id && (
                         <span className="material-symbols-outlined text-[0.85rem] text-blue-400">check</span>
                       )}
                     </button>
