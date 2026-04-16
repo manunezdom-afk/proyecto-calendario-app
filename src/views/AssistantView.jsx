@@ -94,13 +94,21 @@ function speakWebSpeech(text) {
       utter.onerror = resolve
       window.speechSynthesis.speak(utter)
     }
-    window.speechSynthesis.getVoices().length > 0
-      ? doSpeak()
-      : (() => {
-          const h = () => { window.speechSynthesis.removeEventListener('voiceschanged', h); doSpeak() }
-          window.speechSynthesis.addEventListener('voiceschanged', h)
-          setTimeout(doSpeak, 800)
-        })()
+    if (window.speechSynthesis.getVoices().length > 0) {
+      doSpeak()
+    } else {
+      let timer
+      const h = () => {
+        window.speechSynthesis.removeEventListener('voiceschanged', h)
+        clearTimeout(timer)
+        doSpeak()
+      }
+      window.speechSynthesis.addEventListener('voiceschanged', h)
+      timer = setTimeout(() => {
+        window.speechSynthesis.removeEventListener('voiceschanged', h)
+        doSpeak()
+      }, 800)
+    }
   })
 }
 
@@ -289,11 +297,12 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
   const [voice, setVoice]           = useState(getVoice)
   const [showVoices, setShowVoices] = useState(false)
 
-  const statusRef  = useRef('idle')
-  const historyRef = useRef([])
-  const srRef      = useRef(null)
-  const silenceRef = useRef(null)
-  const doneRef    = useRef(false)
+  const statusRef       = useRef('idle')
+  const historyRef      = useRef([])
+  const srRef           = useRef(null)
+  const silenceRef      = useRef(null)
+  const doneRef         = useRef(false)
+  const voiceInputRef   = useRef(null)
 
   function updateStatus(s) { statusRef.current = s; setStatus(s) }
 
@@ -315,7 +324,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
     r.onresult = (e) => {
       clearTimeout(silenceRef.current)
       const text = Array.from(e.results).map((res) => res[0].transcript).join(' ').trim()
-      if (text && !doneRef.current) { doneRef.current = true; handleVoiceInput(text) }
+      if (text && !doneRef.current) { doneRef.current = true; voiceInputRef.current?.(text) }
     }
     r.onerror  = () => { clearTimeout(silenceRef.current); updateStatus('idle') }
     r.onend    = () => { clearTimeout(silenceRef.current); if (statusRef.current === 'listening') updateStatus('idle') }
@@ -355,6 +364,9 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
       updateStatus('idle')
     }
   }
+
+  // Actualizar ref en cada render para que onresult siempre llame la versión fresca
+  voiceInputRef.current = handleVoiceInput
 
   function handleOrbPress() {
     const s = statusRef.current
