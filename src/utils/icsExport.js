@@ -1,18 +1,19 @@
 import { parseEventTime } from './parseEventTime'
 import { resolveEventDate } from './resolveEventDate'
 
-// Format a Date as ICS local datetime: YYYYMMDDTHHMMSS
-function fmtDT(date) {
-  const pad = (n) => String(n).padStart(2, '0')
+const pad = (n) => String(n).padStart(2, '0')
+
+// Format a Date as UTC ICS datetime: YYYYMMDDTHHMMSSZ
+// Using UTC avoids timezone ambiguity in Google Calendar, Apple Calendar, Outlook.
+function fmtDTZ(date) {
   return (
-    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
-    `T${pad(date.getHours())}${pad(date.getMinutes())}00`
+    `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}` +
+    `T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}00Z`
   )
 }
 
 // Format a Date as ICS all-day date: YYYYMMDD
 function fmtDate(date) {
-  const pad = (n) => String(n).padStart(2, '0')
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`
 }
 
@@ -58,10 +59,10 @@ export function eventsToICS(events) {
       lines.push(`DTSTART;VALUE=DATE:${fmtDate(base)}`)
       lines.push(`DTEND;VALUE=DATE:${fmtDate(next)}`)
     } else {
-      // Timed event — 1 hour duration
+      // Timed event — 1 hour duration, exported as UTC so every calendar app shows the right local time
       const end = new Date(start.getTime() + 60 * 60 * 1000)
-      lines.push(`DTSTART:${fmtDT(start)}`)
-      lines.push(`DTEND:${fmtDT(end)}`)
+      lines.push(`DTSTART:${fmtDTZ(start)}`)
+      lines.push(`DTEND:${fmtDTZ(end)}`)
     }
 
     lines.push(`SUMMARY:${escapeICS(ev.title)}`)
