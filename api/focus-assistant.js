@@ -122,6 +122,12 @@ Puedes:
 - Responder preguntas generales de forma breve y útil
 
 REGLA ABSOLUTA: Responde SOLO con un objeto JSON válido. Sin markdown, sin bloques de código, sin texto fuera del JSON.
+FORMATO ESTRICTO (CRÍTICO):
+- Tu respuesta DEBE ser un único objeto JSON.
+- Debes cerrar siempre todas las llaves } y corchetes ].
+- No incluyas comas finales.
+- No incluyas saltos de contexto, disculpas, ni texto antes/después del JSON.
+- Si el contenido excede el límite, acorta el texto de "reply" (nunca rompas el JSON).
 
 Formato de respuesta:
 {
@@ -189,28 +195,55 @@ Instrucciones adicionales:
     { role: 'user', content: message },
   ]
 
-  try {
-    const data = await anthropic.messages.create({
+  function safeParseAssistantJSON(rawText) {
+    const txt = String(rawText || '').trim()
+    const m = txt.match(/\{[\s\S]*\}/)
+    if (!m) throw new Error('no_json_object_found')
+    const candidate = JSON.parse(m[0])
+    if (!candidate || typeof candidate !== 'object') throw new Error('invalid_json_shape')
+    if (typeof candidate.reply !== 'string') throw new Error('missing_reply')
+    if (!Array.isArray(candidate.actions)) candidate.actions = []
+    return candidate
+  }
+
+  async function runClaude({ extraUserInstruction = '' } = {}) {
+    const extra = extraUserInstruction
+      ? [{ role: 'user', content: extraUserInstruction }]
+      : []
+    return anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 200,
+      // 200 tokens puede truncar JSON; subir para respuestas + acciones.
+      max_tokens: 700,
       system: systemPrompt,
-      messages,
+      messages: [...messages, ...extra],
     })
-    const rawText = (data.content?.[0]?.text ?? '').trim()
+  }
 
-    let parsed = { reply: rawText, actions: [] }
+  try {
+    const data1 = await runClaude()
+    const raw1 = (data1.content?.[0]?.text ?? '').trim()
+
     try {
-      const m = rawText.match(/\{[\s\S]*\}/)
-      if (m) {
-        const candidate = JSON.parse(m[0])
-        if (candidate.reply) parsed = candidate
+      const parsed1 = safeParseAssistantJSON(raw1)
+      return res.status(200).json(parsed1)
+    } catch (e1) {
+      // Reintento: pedir al modelo que regenere SOLO JSON válido.
+      const data2 = await runClaude({
+        extraUserInstruction:
+          'Tu respuesta anterior tuvo JSON inválido o incompleto. Reintenta ahora. Responde SOLO con un objeto JSON válido siguiendo exactamente el formato indicado. Cierra todas las llaves y corchetes.',
+      })
+      const raw2 = (data2.content?.[0]?.text ?? '').trim()
+      try {
+        const parsed2 = safeParseAssistantJSON(raw2)
+        return res.status(200).json(parsed2)
+      } catch (e2) {
+        console.error('[focus-assistant] JSON parse failed after retry:', { e1: String(e1), e2: String(e2), raw1, raw2 })
+        return res.status(200).json({
+          reply: 'No pude generar una respuesta estructurada en este momento. Por favor, repite tu solicitud.',
+          actions: [],
+        })
       }
-      if (!Array.isArray(parsed.actions)) parsed.actions = []
-    } catch {
-      parsed = { reply: rawText, actions: [] }
     }
-
-    return res.status(200).json(parsed)
   } catch (err) {
     if (err?.status === 401) {
       return res.status(401).json({ error: 'invalid_api_key' })

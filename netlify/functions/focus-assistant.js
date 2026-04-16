@@ -130,6 +130,12 @@ Puedes:
 - Responder preguntas generales de forma breve y útil
 
 REGLA ABSOLUTA: Responde SOLO con un objeto JSON válido. Sin markdown, sin bloques de código, sin texto fuera del JSON.
+FORMATO ESTRICTO (CRÍTICO):
+- Tu respuesta DEBE ser un único objeto JSON.
+- Debes cerrar siempre todas las llaves } y corchetes ].
+- No incluyas comas finales.
+- No incluyas texto antes/después del JSON.
+- Si el contenido excede el límite, acorta el texto de "reply" (nunca rompas el JSON).
 
 Formato de respuesta:
 {
@@ -197,8 +203,22 @@ Instrucciones adicionales:
     { role: 'user', content: message },
   ]
 
-  try {
-    const res = await fetch(ANTHROPIC_API, {
+  function safeParseAssistantJSON(rawText) {
+    const txt = String(rawText || '').trim()
+    const m = txt.match(/\{[\s\S]*\}/)
+    if (!m) throw new Error('no_json_object_found')
+    const candidate = JSON.parse(m[0])
+    if (!candidate || typeof candidate !== 'object') throw new Error('invalid_json_shape')
+    if (typeof candidate.reply !== 'string') throw new Error('missing_reply')
+    if (!Array.isArray(candidate.actions)) candidate.actions = []
+    return candidate
+  }
+
+  async function runClaude(extraUserInstruction = '') {
+    const merged = extraUserInstruction
+      ? [...messages, { role: 'user', content: extraUserInstruction }]
+      : messages
+    return fetch(ANTHROPIC_API, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -207,11 +227,15 @@ Instrucciones adicionales:
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
+        max_tokens: 900,
         system: systemPrompt,
-        messages,
+        messages: merged,
       }),
     })
+  }
+
+  try {
+    const res = await runClaude()
 
     if (!res.ok) {
       const txt = await res.text()
@@ -222,22 +246,28 @@ Instrucciones adicionales:
       return { statusCode: 502, headers, body: JSON.stringify({ error: 'api_error', status: res.status }) }
     }
 
-    const data = await res.json()
-    const rawText = (data.content?.[0]?.text ?? '').trim()
-
-    let parsed = { reply: rawText, actions: [] }
+    const data1 = await res.json()
+    const raw1 = (data1.content?.[0]?.text ?? '').trim()
     try {
-      const m = rawText.match(/\{[\s\S]*\}/)
-      if (m) {
-        const candidate = JSON.parse(m[0])
-        if (candidate.reply) parsed = candidate
+      const parsed1 = safeParseAssistantJSON(raw1)
+      return { statusCode: 200, headers, body: JSON.stringify(parsed1) }
+    } catch (e1) {
+      const res2 = await runClaude(
+        'Tu respuesta anterior tuvo JSON inválido o incompleto. Reintenta ahora. Responde SOLO con un objeto JSON válido siguiendo exactamente el formato indicado. Cierra todas las llaves y corchetes.',
+      )
+      if (!res2.ok) {
+        return { statusCode: 200, headers, body: JSON.stringify({ reply: 'No pude generar una respuesta estructurada en este momento. Por favor, repite tu solicitud.', actions: [] }) }
       }
-      if (!Array.isArray(parsed.actions)) parsed.actions = []
-    } catch {
-      parsed = { reply: rawText, actions: [] }
+      const data2 = await res2.json()
+      const raw2 = (data2.content?.[0]?.text ?? '').trim()
+      try {
+        const parsed2 = safeParseAssistantJSON(raw2)
+        return { statusCode: 200, headers, body: JSON.stringify(parsed2) }
+      } catch (e2) {
+        console.error('[focus-assistant] JSON parse failed after retry:', { e1: String(e1), e2: String(e2), raw1, raw2 })
+        return { statusCode: 200, headers, body: JSON.stringify({ reply: 'No pude generar una respuesta estructurada en este momento. Por favor, repite tu solicitud.', actions: [] }) }
+      }
     }
-
-    return { statusCode: 200, headers, body: JSON.stringify(parsed) }
   } catch (err) {
     console.error('[focus-assistant] Error:', err)
     return {
