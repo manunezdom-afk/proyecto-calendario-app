@@ -496,42 +496,53 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
               {displayBlocks.map(({ id, time, type, title, description, subtasks = [], _asReminderOnly }) => {
                 const isSuggestion = type === 'suggestion'
                 return (
-                  <div key={id} className="flex gap-3 group">
-                    <div className="w-[52px] pt-2 text-right flex-shrink-0">
-                      <span className={`text-[13px] font-semibold tabular-nums ${isSuggestion ? 'text-outline/40 italic' : 'text-outline'}`}>
+                  <div key={id} style={{ display: 'flex', gap: '24px', overflow: 'visible' }} className="group">
+                    {/* Columna de hora — nunca se comprime */}
+                    <div style={{ flexShrink: 0, width: '52px', paddingTop: '8px', textAlign: 'right', overflow: 'visible' }}>
+                      <span
+                        style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
+                        className={`text-[13px] font-semibold ${isSuggestion ? 'text-outline/40 italic' : 'text-outline'}`}
+                      >
                         {time}
                       </span>
                     </div>
-                    <div className="relative flex-1 pb-8 min-w-0">
-                      <div className={`absolute left-[-17px] top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : 'bg-primary'}`} />
+
+                    {/* Columna de tarjeta */}
+                    <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingBottom: '32px' }}>
+                      <div className={`absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : 'bg-primary'}`}
+                        style={{ left: '-21px' }} />
                       <div
-                        className={`p-4 rounded-xl ${
+                        className={`rounded-xl ${
                           isSuggestion
                             ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
                             : 'bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 border-primary cursor-pointer hover:shadow-md transition-shadow'
                         }`}
+                        style={{ padding: '14px 16px 14px 14px', overflow: 'visible' }}
                         onClick={!isSuggestion && !_asReminderOnly ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
                       >
-                        <div className="flex justify-between items-start mb-1 gap-2">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <h3 className={`font-bold flex-1 min-w-0 truncate ${isSuggestion ? 'text-secondary' : 'text-on-surface'}`}>
+                        <div className="flex justify-between items-start gap-2" style={{ marginBottom: '2px' }}>
+                          <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0 }}>
+                            <h3 className={`font-bold ${isSuggestion ? 'text-secondary' : 'text-on-surface'}`}
+                              style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {title}
                             </h3>
                             {!isSuggestion && !_asReminderOnly && (
-                              <span className="material-symbols-outlined text-outline/40 text-[16px] flex-shrink-0">timer</span>
+                              <span className="material-symbols-outlined text-outline/40 text-[16px]" style={{ flexShrink: 0 }}>timer</span>
                             )}
                           </div>
                           {isSuggestion ? (
                             <button
                               onClick={(e) => { e.stopPropagation(); acceptSuggestion(id) }}
-                              className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-secondary/20 hover:bg-secondary/10 text-secondary transition-colors flex-shrink-0"
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-secondary/20 hover:bg-secondary/10 text-secondary transition-colors"
+                              style={{ flexShrink: 0 }}
                             >
                               ACEPTAR
                             </button>
                           ) : _asReminderOnly ? null : (
                             <button
                               onClick={(e) => { e.stopPropagation(); dismissBlock(id) }}
-                              className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-error/10 hover:text-error transition-colors flex-shrink-0"
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-error/10 hover:text-error transition-colors"
+                              style={{ flexShrink: 0 }}
                             >
                               HECHO ✓
                             </button>
@@ -539,16 +550,25 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                         </div>
 
                         {subtasks.length > 0 && (
-                          <div className="mt-3 space-y-1.5 pl-1">
+                          <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             {subtasks.map((s) => (
                               <div
                                 key={s.id}
-                                className="rounded-md bg-surface-container-low/60 border border-outline/10 px-2.5 py-1.5"
+                                style={{
+                                  marginTop: '0px',
+                                  paddingLeft: '12px',
+                                  paddingRight: '10px',
+                                  paddingTop: '5px',
+                                  paddingBottom: '5px',
+                                  background: '#f8fafc',
+                                  borderRadius: '6px',
+                                  borderLeft: '2px solid #e2e8f0',
+                                }}
                               >
-                                <p className="text-[9px] font-bold uppercase tracking-wider text-outline/50 mb-0.5">
+                                <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', marginBottom: '1px' }}>
                                   {s.label}
                                 </p>
-                                <p className="text-[11px] leading-snug text-on-surface-variant/80">
+                                <p style={{ fontSize: '11px', lineHeight: '1.4', color: '#64748b' }}>
                                   {s.text}
                                 </p>
                               </div>
