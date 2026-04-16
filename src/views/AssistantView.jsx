@@ -133,9 +133,12 @@ async function speak(text, voice) {
       return new Promise((resolve) => {
         const audio = new Audio(url)
         _currentAudio = audio
-        audio.onended = () => { URL.revokeObjectURL(url); _currentAudio = null; resolve() }
-        audio.onerror = () => { URL.revokeObjectURL(url); _currentAudio = null; speakWebSpeech(text).then(resolve) }
-        audio.play().catch(() => { URL.revokeObjectURL(url); speakWebSpeech(text).then(resolve) })
+        let settled = false
+        const cleanup = () => { URL.revokeObjectURL(url); _currentAudio = null }
+        const fallback = () => { if (settled) return; settled = true; cleanup(); speakWebSpeech(text).then(resolve) }
+        audio.onended = () => { if (settled) return; settled = true; cleanup(); resolve() }
+        audio.onerror = fallback
+        audio.play().catch(fallback)
       })
     }
   } catch { /* sin key, timeout, o error de red → fallback */ }
@@ -339,7 +342,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
       historyRef.current = [...historyRef.current, { role: 'assistant', content: reply }]
       setLastReply(reply)
       updateStatus('speaking')
-      await speak(reply, voice)
+      await speak(reply, getVoice())
       updateStatus('idle')
     } catch (err) {
       const msg =
@@ -348,7 +351,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
                                          'No pude conectarme. Intenta de nuevo.'
       setLastReply(msg)
       updateStatus('speaking')
-      await speak(msg, voice)
+      await speak(msg, getVoice())
       updateStatus('idle')
     }
   }

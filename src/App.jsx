@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { useEvents }        from './hooks/useEvents'
 import { useNotifications } from './hooks/useNotifications'
-import { useDarkMode }      from './hooks/useDarkMode'
 
 import TopAppBar                   from './components/TopAppBar'
 import BottomNavBar                from './components/BottomNavBar'
@@ -26,7 +25,6 @@ export default function App() {
   const [activeView, setActiveView]     = useState('planner')
   const [previousView, setPreviousView] = useState('planner')
   const { events, addEvent, deleteEvent, editEvent } = useEvents()
-  const { isDark, toggle: toggleDark } = useDarkMode()
 
   const {
     notifLog, unreadCount,
@@ -69,7 +67,7 @@ export default function App() {
 
   return (
     <LayoutGroup>
-    <div className={`min-h-screen ${isDark ? 'dark bg-slate-950' : 'bg-slate-50'} overflow-hidden`}>
+    <div className="min-h-screen bg-slate-50 overflow-hidden">
       <AnimatePresence mode="wait">
         {!isAssistant && (
           <motion.div
@@ -82,8 +80,6 @@ export default function App() {
               onBack={isDetail ? goBack : undefined}
               onBellClick={() => setNotifPanelOpen(true)}
               unreadCount={unreadCount}
-              onToggleDark={toggleDark}
-              isDark={isDark}
               onShareClick={() => setImportExportOpen(true)}
             />
           </motion.div>

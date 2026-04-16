@@ -3,8 +3,6 @@ export default function TopAppBar({
   onBack,
   onBellClick,
   unreadCount = 0,
-  onToggleDark,
-  isDark = false,
   onShareClick,
 }) {
   return (
@@ -44,19 +42,7 @@ export default function TopAppBar({
           </button>
         )}
 
-        {onToggleDark && (
-          <button
-            onClick={onToggleDark}
-            aria-label={isDark ? 'Activar modo claro' : 'Activar modo oscuro'}
-            className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 dark:text-slate-300 hover:opacity-80 transition-opacity active:scale-90 duration-300"
-          >
-            <span className="material-symbols-outlined text-[22px]">
-              {isDark ? 'light_mode' : 'dark_mode'}
-            </span>
-          </button>
-        )}
-
-        <button
+<button
           onClick={onBellClick}
           className="relative w-10 h-10 flex items-center justify-center rounded-full text-slate-400 dark:text-slate-300 hover:opacity-80 transition-opacity active:scale-90 duration-300"
           aria-label="Notificaciones"
