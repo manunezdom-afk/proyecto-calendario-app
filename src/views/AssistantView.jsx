@@ -7,8 +7,10 @@ const SR = typeof window !== 'undefined' &&
 const CONTACTS_SUPPORTED =
   typeof navigator !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window
 
-const API_KEY_STORAGE = 'focus_anthropic_key'
-function getApiKey() { return localStorage.getItem(API_KEY_STORAGE) || '' }
+const API_KEY_STORAGE    = 'focus_anthropic_key'
+const OPENAI_KEY_STORAGE = 'focus_openai_key'
+function getApiKey()    { return localStorage.getItem(API_KEY_STORAGE) || '' }
+function getOpenAIKey() { return localStorage.getItem(OPENAI_KEY_STORAGE) || '' }
 
 async function reverseGeocode(lat, lon) {
   try {
@@ -43,30 +45,83 @@ async function callFocusAssistant({ message, events, history, apiKey, location, 
   return res.json()
 }
 
-function speak(text) {
+/** Referencia al Audio element activo para poder cancelarlo */
+let _currentAudio = null
+
+/** Cancela la reproducción en curso (OpenAI audio o Web Speech) */
+function stopAudio() {
+  if (_currentAudio) { _currentAudio.pause(); _currentAudio = null }
+  if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
+}
+
+/** Elige la mejor voz española disponible en Web Speech API */
+function getBestVoice() {
+  const voices = window.speechSynthesis?.getVoices() ?? []
+  const es = voices.filter((v) => v.lang.startsWith('es'))
+  for (const name of ['Paulina', 'Monica', 'Raquel', 'Sabina', 'Laura', 'Helena', 'Valeria', 'Jorge']) {
+    const v = es.find((v) => v.name.includes(name))
+    if (v) return v
+  }
+  return es.find((v) => !v.localService) ?? es[0] ?? null
+}
+
+/** Fallback: Web Speech API con la mejor voz disponible */
+function speakWebSpeech(text) {
   return new Promise((resolve) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) { resolve(); return }
+    if (!window.speechSynthesis) { resolve(); return }
     window.speechSynthesis.cancel()
     const doSpeak = () => {
       const utter = new SpeechSynthesisUtterance(text)
       utter.lang = 'es-ES'
-      utter.rate = 1.0
+      utter.rate = 1.05
       utter.pitch = 1.0
-      const voices = window.speechSynthesis.getVoices()
-      const esVoice = voices.find((v) => v.lang.startsWith('es'))
-      if (esVoice) utter.voice = esVoice
+      const voice = getBestVoice()
+      if (voice) utter.voice = voice
       utter.onend = resolve
       utter.onerror = resolve
       window.speechSynthesis.speak(utter)
     }
-    if (window.speechSynthesis.getVoices().length > 0) {
-      doSpeak()
-    } else {
-      const h = () => { window.speechSynthesis.removeEventListener('voiceschanged', h); doSpeak() }
-      window.speechSynthesis.addEventListener('voiceschanged', h)
-      setTimeout(doSpeak, 800)
-    }
+    window.speechSynthesis.getVoices().length > 0
+      ? doSpeak()
+      : (() => {
+          const h = () => { window.speechSynthesis.removeEventListener('voiceschanged', h); doSpeak() }
+          window.speechSynthesis.addEventListener('voiceschanged', h)
+          setTimeout(doSpeak, 800)
+        })()
   })
+}
+
+/**
+ * TTS principal:
+ * 1. Intenta /api/tts (OpenAI "nova" — misma voz que ChatGPT)
+ * 2. Si no hay key o falla → Web Speech API con mejor voz disponible
+ */
+async function speak(text) {
+  try {
+    const openaiKey = getOpenAIKey()
+    const headers = { 'Content-Type': 'application/json' }
+    if (openaiKey) headers['x-openai-key'] = openaiKey
+
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ text, voice: 'nova' }),
+      signal: AbortSignal.timeout(9000),
+    })
+
+    if (res.ok) {
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      return new Promise((resolve) => {
+        const audio = new Audio(url)
+        _currentAudio = audio
+        audio.onended  = () => { URL.revokeObjectURL(url); _currentAudio = null; resolve() }
+        audio.onerror  = () => { URL.revokeObjectURL(url); _currentAudio = null; speakWebSpeech(text).then(resolve) }
+        audio.play().catch(() => speakWebSpeech(text).then(resolve))
+      })
+    }
+  } catch { /* sin key o error de red → fallback */ }
+  return speakWebSpeech(text)
 }
 
 // ─── Orb central ────────────────────────────────────────────────────────────
@@ -242,7 +297,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
     r.onerror  = () => { clearTimeout(silenceRef.current); updateStatus('idle') }
     r.onend    = () => { clearTimeout(silenceRef.current); if (statusRef.current === 'listening') updateStatus('idle') }
     srRef.current = r
-    return () => { clearTimeout(silenceRef.current); try { r.abort() } catch {}; window.speechSynthesis?.cancel() }
+    return () => { clearTimeout(silenceRef.current); try { r.abort() } catch {}; stopAudio() }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleVoiceInput(text) {
@@ -281,7 +336,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
   function handleOrbPress() {
     const s = statusRef.current
     if (s === 'thinking') return
-    if (s === 'speaking') { window.speechSynthesis?.cancel(); updateStatus('idle'); return }
+    if (s === 'speaking') { stopAudio(); updateStatus('idle'); return }
     if (s === 'listening') { clearTimeout(silenceRef.current); srRef.current?.stop(); return }
     doneRef.current = false
     try { srRef.current?.start() } catch {}

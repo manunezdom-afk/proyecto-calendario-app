@@ -180,7 +180,8 @@ Instrucciones adicionales:
 - Si el usuario pregunta algo no relacionado con el calendario ni el clima, responde brevemente con lo que sabes y ofrece ayuda con la agenda
 - No pidas confirmación: ejecuta las acciones directamente
 - Si no hay suficiente información (ej. no se menciona hora), agrega el evento sin hora y menciona que lo puede editar después
-- Responde siempre en español, de forma natural y cálida`
+- IMPORTANTE — esta es una interfaz de VOZ, no de texto. Responde en máximo 2 oraciones cortas y directas. Sin listas, sin puntos, sin formato. Habla como si estuvieras en una conversación real. Sé conciso y natural.
+- Responde siempre en español`
 
   const messages = [
     ...history.map((h) => ({ role: h.role, content: h.content })),
@@ -190,7 +191,7 @@ Instrucciones adicionales:
   try {
     const data = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
+      max_tokens: 220,
       system: systemPrompt,
       messages,
     })
