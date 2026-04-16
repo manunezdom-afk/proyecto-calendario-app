@@ -34,6 +34,35 @@ function formatMinutes(totalMinutes) {
   return m > 0 ? `${h}h ${m}m` : `${h}h`
 }
 
+function todayISODate() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function eventTimeToBlockTime(timeStr) {
+  // Accepts: "3:00 PM", "2:00 PM - 3:30 PM", "15:00", "09:00"
+  if (!timeStr) return '—'
+  const first = String(timeStr).split('-')[0].trim()
+  // 24h "HH:mm"
+  const m24 = first.match(/^(\d{1,2}):(\d{2})$/)
+  if (m24) {
+    const hh = Math.max(0, Math.min(23, Number(m24[1])))
+    const mm = Math.max(0, Math.min(59, Number(m24[2])))
+    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+  }
+  // 12h "h:mm AM/PM"
+  const m12 = first.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i)
+  if (m12) {
+    let hh = Number(m12[1])
+    const mm = Number(m12[2] ?? '00')
+    const ap = m12[3].toUpperCase()
+    if (hh === 12) hh = 0
+    if (ap === 'PM') hh += 12
+    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+  }
+  return '—'
+}
+
 // ── Seed timeline blocks ───────────────────────────────────────────────────
 const SEED_BLOCKS = [
   { id: 'blk-001', time: '09:00', type: 'confirmed', title: 'Trabajo Profundo: Arquitectura del Sistema',   description: 'Bloque de máxima concentración. Sin interrupciones.' },
@@ -177,6 +206,33 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(blocks))
   }, [blocks])
+
+  // Sincroniza "Mi Día" (timeline) con eventos de HOY para reflejar cambios inmediatos
+  useEffect(() => {
+    const todayISO = todayISODate()
+    const todayEvents = (events || []).filter((e) => !e.date || e.date === todayISO)
+    setBlocks((prev) => {
+      const prevArr = Array.isArray(prev) ? prev : []
+      const hasEvent = new Set(prevArr.map((b) => b?.eventId).filter(Boolean))
+      const nextBlocksToAdd = []
+
+      for (const ev of todayEvents) {
+        if (!ev?.id) continue
+        if (hasEvent.has(ev.id)) continue
+        nextBlocksToAdd.push({
+          id: `blk-ev-${ev.id}`,
+          eventId: ev.id,
+          time: eventTimeToBlockTime(ev.time),
+          type: 'confirmed',
+          title: ev.title,
+          description: ev.description || null,
+        })
+      }
+
+      if (nextBlocksToAdd.length === 0) return prevArr
+      return [...prevArr, ...nextBlocksToAdd]
+    })
+  }, [events])
 
   function acceptSuggestion(id) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, type: 'confirmed' } : b)))
