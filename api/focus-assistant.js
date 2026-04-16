@@ -5,9 +5,31 @@ import Anthropic from '@anthropic-ai/sdk';
  *
  * Focus como secretario IA — entiende lenguaje natural en español
  * y puede agregar, editar, mover o eliminar eventos del calendario.
+ * Tiene acceso a ubicación, clima en tiempo real y contactos del usuario.
  *
  * API key: variable de entorno ANTHROPIC_API_KEY o header x-user-api-key
  */
+
+function describeWeatherCode(code) {
+  if (code === 0) return 'Despejado'
+  if (code <= 3) return 'Parcialmente nublado'
+  if (code <= 48) return 'Niebla'
+  if (code <= 55) return 'Llovizna'
+  if (code <= 65) return 'Lluvia'
+  if (code <= 75) return 'Nieve'
+  if (code === 77) return 'Granizo'
+  if (code <= 82) return 'Chubascos'
+  if (code <= 86) return 'Nieve'
+  if (code <= 99) return 'Tormenta eléctrica'
+  return 'Desconocido'
+}
+
+async function fetchWeather(lat, lon) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max&timezone=auto&forecast_days=3`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('weather fetch failed')
+  return res.json()
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -30,7 +52,7 @@ export default async function handler(req, res) {
 
   const anthropic = new Anthropic({ apiKey: normalizedApiKey })
 
-  const { message, events = [], history = [] } = req.body || {}
+  const { message, events = [], history = [], location = null, contacts = [] } = req.body || {}
 
   if (!message?.trim()) {
     return res.status(400).json({ error: 'no_message' })
@@ -52,14 +74,52 @@ export default async function handler(req, res) {
     weekDates[DAY_NAMES[d.getDay()]] = d.toISOString().slice(0, 10)
   }
 
+  // Clima en tiempo real
+  let weatherContext = 'Ubicación no disponible — no puedes dar información del clima.'
+  if (location?.lat && location?.lon) {
+    try {
+      const wData = await fetchWeather(location.lat, location.lon)
+      const cur = wData.current
+      const daily = wData.daily
+      const cityLabel = location.city ? `${location.city}${location.country ? ', ' + location.country : ''}` : `${location.lat.toFixed(2)}, ${location.lon.toFixed(2)}`
+
+      const forecast = daily.time.map((date, i) => {
+        const label = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : date
+        return `  ${label}: ${describeWeatherCode(daily.weather_code[i])}, ${daily.temperature_2m_min[i]}°C–${daily.temperature_2m_max[i]}°C, lluvia ${daily.precipitation_probability_max[i]}%`
+      }).join('\n')
+
+      weatherContext = `Ubicación del usuario: ${cityLabel}
+Clima actual: ${describeWeatherCode(cur.weather_code)}, ${cur.temperature_2m}°C, humedad ${cur.relative_humidity_2m}%, viento ${cur.wind_speed_10m} km/h
+Pronóstico próximos 3 días:
+${forecast}`
+    } catch {
+      weatherContext = location.city
+        ? `Ubicación: ${location.city}${location.country ? ', ' + location.country : ''}. Clima no disponible en este momento.`
+        : 'Clima no disponible en este momento.'
+    }
+  }
+
+  // Contactos del usuario
+  const contactsContext = contacts.length > 0
+    ? `Contactos del usuario:\n${contacts.map(c => `- ${c.name ?? 'Sin nombre'}${c.tel ? ': ' + c.tel : ''}${c.email ? ' / ' + c.email : ''}`).join('\n')}`
+    : 'El usuario no ha compartido contactos.'
+
   const systemPrompt = `Eres Focus, el asistente personal de calendario del usuario. Eres como un secretario inteligente y amigable que gestiona su agenda completamente. Hablas en español, eres conciso y natural.
+
+Tienes acceso completo a:
+- La agenda y eventos del usuario
+- Su ubicación y clima en tiempo real
+- Sus contactos
+- La fecha y hora actual
 
 Puedes:
 - Agregar eventos nuevos
 - Mover o editar eventos existentes (cambiar hora, fecha, título)
 - Eliminar eventos
 - Responder preguntas sobre la agenda
-- Conversar naturalmente
+- Informar sobre el clima actual y pronóstico
+- Usar los contactos del usuario para personalizar eventos
+- Conversar naturalmente sobre cualquier tema
 
 REGLA ABSOLUTA: Responde SOLO con un objeto JSON válido. Sin markdown, sin bloques de código, sin texto fuera del JSON.
 
@@ -109,10 +169,15 @@ ${
     : 'Sin eventos aún.'
 }
 
+${weatherContext}
+
+${contactsContext}
+
 Instrucciones adicionales:
 - Si el usuario pide mover un evento, usa edit_event con el id correcto
 - Si el usuario habla de eliminar todos los eventos, elimínalos uno por uno con múltiples acciones delete_event
-- Si el usuario pregunta algo no relacionado con el calendario, responde brevemente y ofrece ayuda con la agenda
+- Si el usuario pregunta por el clima, responde con los datos reales que tienes en el contexto
+- Si el usuario pregunta algo no relacionado con el calendario ni el clima, responde brevemente con lo que sabes y ofrece ayuda con la agenda
 - No pidas confirmación: ejecuta las acciones directamente
 - Si no hay suficiente información (ej. no se menciona hora), agrega el evento sin hora y menciona que lo puede editar después
 - Responde siempre en español, de forma natural y cálida`

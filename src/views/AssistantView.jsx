@@ -4,378 +4,466 @@ import { motion, AnimatePresence } from 'framer-motion'
 const SR = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
 
-const API_KEY_STORAGE = 'focus_anthropic_key'
+const CONTACTS_SUPPORTED =
+  typeof navigator !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window
 
-function getApiKey() {
-  return localStorage.getItem(API_KEY_STORAGE) || ''
+const API_KEY_STORAGE = 'focus_anthropic_key'
+function getApiKey() { return localStorage.getItem(API_KEY_STORAGE) || '' }
+
+async function reverseGeocode(lat, lon) {
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
+      { headers: { 'Accept-Language': 'es' } },
+    )
+    const data = await r.json()
+    const city = data.address?.city || data.address?.town || data.address?.village || ''
+    const country = data.address?.country || ''
+    return { city, country }
+  } catch {
+    return { city: '', country: '' }
+  }
 }
 
-/** Llama a la función Vercel de Focus */
-async function callFocusAssistant({ message, events, history, apiKey }) {
+async function callFocusAssistant({ message, events, history, apiKey, location, contacts }) {
   const headers = { 'Content-Type': 'application/json' }
   if (apiKey) headers['x-user-api-key'] = apiKey
-
   const res = await fetch('/api/focus-assistant', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ message, events, history }),
+    body: JSON.stringify({ message, events, history, location, contacts }),
   })
-
   if (!res.ok) {
     const rawBody = await res.text().catch(() => '')
     let data = {}
-
-    try {
-      data = rawBody ? JSON.parse(rawBody) : {}
-    } catch {
-      data = {}
-    }
-
-    const error = Object.assign(
-      new Error(data.message || data.error || rawBody || 'error'),
-      {
-        status: res.status,
-        code: data.error,
-        details: rawBody,
-      },
-    )
-
-    console.error('[AssistantView] focus-assistant fetch failed', {
+    try { data = rawBody ? JSON.parse(rawBody) : {} } catch {}
+    throw Object.assign(new Error(data.message || data.error || 'error'), {
       status: res.status,
       code: data.error,
-      message: data.message,
-      details: rawBody,
     })
-
-    throw error
   }
   return res.json()
 }
 
-/** Muestra chips de acciones ejecutadas */
-function ActionChips({ actions }) {
-  if (!actions?.length) return null
-  const labels = {
-    add_event: (a) => `Evento agregado: ${a.event?.title ?? ''}`,
-    edit_event: () => `Evento actualizado`,
-    delete_event: () => `Evento eliminado`,
-  }
+/** Text-to-speech con voz española si está disponible */
+function speak(text) {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) { resolve(); return }
+    window.speechSynthesis.cancel()
+
+    const doSpeak = () => {
+      const utter = new SpeechSynthesisUtterance(text)
+      utter.lang = 'es-ES'
+      utter.rate = 1.0
+      utter.pitch = 1.0
+      const voices = window.speechSynthesis.getVoices()
+      const esVoice = voices.find((v) => v.lang.startsWith('es'))
+      if (esVoice) utter.voice = esVoice
+      utter.onend = resolve
+      utter.onerror = resolve
+      window.speechSynthesis.speak(utter)
+    }
+
+    if (window.speechSynthesis.getVoices().length > 0) {
+      doSpeak()
+    } else {
+      const handler = () => {
+        window.speechSynthesis.removeEventListener('voiceschanged', handler)
+        doSpeak()
+      }
+      window.speechSynthesis.addEventListener('voiceschanged', handler)
+      setTimeout(doSpeak, 800) // fallback si voiceschanged no dispara
+    }
+  })
+}
+
+/** Barras de forma de onda */
+function WaveformBars({ active }) {
+  const heights = [0.35, 0.65, 0.9, 0.75, 1.0, 0.8, 0.55, 0.7, 0.4]
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {actions.map((a, i) => (
-        <span
+    <div className="flex items-center justify-center gap-[3px]" style={{ height: 32 }}>
+      {heights.map((h, i) => (
+        <motion.div
           key={i}
-          className="flex items-center gap-1 rounded-full bg-blue-500/15 px-2.5 py-0.5 text-[11px] font-medium text-blue-300"
-        >
-          <span className="material-symbols-outlined text-[13px]">check_circle</span>
-          {labels[a.type]?.(a) ?? a.type}
-        </span>
+          className="w-[3px] rounded-full bg-blue-400/60"
+          animate={active
+            ? { scaleY: [h * 0.25, h, h * 0.45, h * 0.8, h * 0.25] }
+            : { scaleY: 0.12 }}
+          transition={{
+            duration: 0.85,
+            repeat: active ? Infinity : 0,
+            delay: i * 0.07,
+            ease: 'easeInOut',
+          }}
+          style={{ height: 32, transformOrigin: 'center' }}
+        />
       ))}
     </div>
   )
 }
 
+/** Anillos que se expanden cuando está escuchando */
+function PulsingRings({ active }) {
+  return (
+    <>
+      {[200, 164, 132].map((size, i) => (
+        <motion.div
+          key={size}
+          className="absolute rounded-full border border-blue-500/20"
+          style={{ width: size, height: size }}
+          animate={active
+            ? { scale: [1, 1.28], opacity: [0.55, 0] }
+            : { scale: 1, opacity: 0 }}
+          transition={active
+            ? { duration: 1.8, repeat: Infinity, delay: i * 0.45, ease: 'easeOut' }
+            : { duration: 0.35 }}
+        />
+      ))}
+    </>
+  )
+}
+
+// ─── Configuración visual por estado ────────────────────────────────────────
+const STATE_CFG = {
+  idle: {
+    label: 'Toca para hablar',
+    border: 'rgba(255,255,255,0.08)',
+    bg: 'rgba(255,255,255,0.04)',
+    icon: 'mic',
+    iconColor: 'rgba(255,255,255,0.28)',
+  },
+  listening: {
+    label: 'Escuchando...',
+    border: 'rgba(59,130,246,0.55)',
+    bg: 'rgba(59,130,246,0.12)',
+    icon: 'graphic_eq',
+    iconColor: 'rgb(147,197,253)',
+  },
+  thinking: {
+    label: 'Pensando...',
+    border: 'rgba(99,102,241,0.45)',
+    bg: 'rgba(99,102,241,0.08)',
+    icon: 'auto_awesome',
+    iconColor: 'rgb(165,180,252)',
+  },
+  speaking: {
+    label: 'Focus',
+    border: 'rgba(59,130,246,0.30)',
+    bg: 'rgba(59,130,246,0.07)',
+    icon: 'volume_up',
+    iconColor: 'rgb(147,197,253)',
+  },
+}
+
+// ─── Componente principal ────────────────────────────────────────────────────
 export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDeleteEvent, events = [] }) {
-  const [messages, setMessages] = useState([
-    { role: 'assistant', content: '¡Hola! Soy Focus, tu asistente personal. ¿En qué te puedo ayudar hoy?', actions: [] }
-  ])
-  const [input, setInput]           = useState('')
-  const [isListening, setIsListening] = useState(false)
-  const [isThinking, setIsThinking]   = useState(false)
-  const [noKey, setNoKey]             = useState(false)
+  const [status, setStatus]     = useState('idle')
+  const [lastReply, setLastReply] = useState('')
+  const [location, setLocation] = useState(null)
+  const [contacts, setContacts] = useState([])
 
-  const srRef       = useRef(null)
-  const silenceRef  = useRef(null)
-  const doneRef     = useRef(false)
-  const scrollRef   = useRef(null)
-  const inputRef    = useRef(null)
+  // Ref para leer el status actual dentro de los callbacks de SR
+  const statusRef  = useRef('idle')
+  const historyRef = useRef([])
+  const srRef      = useRef(null)
+  const silenceRef = useRef(null)
+  const doneRef    = useRef(false)
 
-  // Historial para el contexto del modelo (solo role + content)
-  const historyRef = useRef([
-    { role: 'assistant', content: '¡Hola! Soy Focus, tu asistente personal. ¿En qué te puedo ayudar hoy?' }
-  ])
+  function updateStatus(s) {
+    statusRef.current = s
+    setStatus(s)
+  }
 
-  // Speech recognition
+  // Geolocalización al montar
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords: { latitude: lat, longitude: lon } }) => {
+        const { city, country } = await reverseGeocode(lat, lon)
+        setLocation({ lat, lon, city, country })
+      },
+      () => {},
+    )
+  }, [])
+
+  // Configurar Speech Recognition
   useEffect(() => {
     if (!SR) return
     const r = new SR()
     r.lang = 'es-ES'
     r.continuous = false
     r.interimResults = false
-    r.onstart = () => { doneRef.current = false; setIsListening(true) }
+    r.onstart  = () => { doneRef.current = false; updateStatus('listening') }
     r.onresult = (e) => {
       clearTimeout(silenceRef.current)
       const text = Array.from(e.results).map((res) => res[0].transcript).join(' ').trim()
-      if (text && !doneRef.current) { doneRef.current = true; handleSend(text) }
+      if (text && !doneRef.current) { doneRef.current = true; handleVoiceInput(text) }
     }
-    r.onerror = () => { clearTimeout(silenceRef.current); setIsListening(false) }
-    r.onend   = () => { clearTimeout(silenceRef.current); setIsListening(false) }
+    r.onerror  = () => { clearTimeout(silenceRef.current); updateStatus('idle') }
+    r.onend    = () => {
+      clearTimeout(silenceRef.current)
+      if (statusRef.current === 'listening') updateStatus('idle')
+    }
     srRef.current = r
-    return () => { clearTimeout(silenceRef.current); try { r.abort() } catch {} }
-  }, [])
-
-  // Scroll al último mensaje
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    return () => {
+      clearTimeout(silenceRef.current)
+      try { r.abort() } catch {}
+      window.speechSynthesis?.cancel()
     }
-  }, [messages, isThinking])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function toggleMic() {
-    if (isThinking) return
-    if (isListening) { clearTimeout(silenceRef.current); srRef.current?.stop(); return }
-    doneRef.current = false
-    setInput('')
-    try { srRef.current?.start() } catch {}
-    silenceRef.current = setTimeout(() => srRef.current?.stop(), 10000)
-  }
-
-  async function handleSend(text) {
-    const msg = (text ?? input).trim()
-    if (!msg || isThinking) return
-
-    setInput('')
-    setIsListening(false)
-    clearTimeout(silenceRef.current)
-    try { srRef.current?.stop() } catch {}
-
-    // Agregar mensaje del usuario
-    setMessages((prev) => [...prev, { role: 'user', content: msg }])
-    historyRef.current = [...historyRef.current, { role: 'user', content: msg }]
-
-    const apiKey = getApiKey()
-
-    setIsThinking(true)
-    setNoKey(false)
+  async function handleVoiceInput(text) {
+    updateStatus('thinking')
+    setLastReply('')
+    historyRef.current = [...historyRef.current, { role: 'user', content: text }]
 
     try {
-      // Enviar solo el historial anterior (sin el mensaje actual que ya va en "message")
-      const historyToSend = historyRef.current.slice(0, -1) // quitar el último (user msg actual)
-
       const result = await callFocusAssistant({
-        message: msg,
+        message: text,
         events,
-        history: historyToSend.slice(-10), // máx 10 mensajes de contexto
-        apiKey,
+        history: historyRef.current.slice(0, -1).slice(-10),
+        apiKey: getApiKey(),
+        location,
+        contacts,
       })
 
       const { reply, actions = [] } = result
 
-      // Ejecutar acciones en el calendario
       for (const action of actions) {
-        if (action.type === 'add_event' && action.event) {
-          onAddEvent?.(action.event)
-        } else if (action.type === 'edit_event' && action.id) {
-          onEditEvent?.(action.id, action.updates ?? {})
-        } else if (action.type === 'delete_event' && action.id) {
-          onDeleteEvent?.(action.id)
-        }
+        if (action.type === 'add_event' && action.event)       onAddEvent?.(action.event)
+        else if (action.type === 'edit_event' && action.id)    onEditEvent?.(action.id, action.updates ?? {})
+        else if (action.type === 'delete_event' && action.id)  onDeleteEvent?.(action.id)
       }
 
-      // Guardar respuesta en historial
       historyRef.current = [...historyRef.current, { role: 'assistant', content: reply }]
-
-      setMessages((prev) => [...prev, { role: 'assistant', content: reply, actions }])
+      setLastReply(reply)
+      updateStatus('speaking')
+      await speak(reply)
+      updateStatus('idle')
     } catch (err) {
-      console.error('[AssistantView] Error exacto al conectar con /api/focus-assistant:', {
-        message: err?.message,
-        code: err?.code,
-        status: err?.status,
-        details: err?.details,
-      })
-
       const errMsg =
-        err.code === 'no_api_key'
-          ? 'Configura tu API key en Importar/Exportar → Foto para usar la IA.'
-          : err.code === 'invalid_api_key'
-          ? 'La API key no es válida. Revísala en Importar/Exportar → Foto.'
-          : 'Ocurrió un error al conectar con la IA. Intenta de nuevo.'
-
-      setMessages((prev) => [...prev, { role: 'assistant', content: errMsg, actions: [] }])
-    } finally {
-      setIsThinking(false)
+        err.code === 'no_api_key'      ? 'Configura tu API key para usar Focus.' :
+        err.code === 'invalid_api_key' ? 'La API key no es válida. Revísala.' :
+                                         'No pude conectarme. Intenta de nuevo.'
+      setLastReply(errMsg)
+      updateStatus('speaking')
+      await speak(errMsg)
+      updateStatus('idle')
     }
   }
 
+  function handleMicPress() {
+    const s = statusRef.current
+    if (s === 'thinking') return
+    if (s === 'speaking') {
+      window.speechSynthesis?.cancel()
+      updateStatus('idle')
+      return
+    }
+    if (s === 'listening') {
+      clearTimeout(silenceRef.current)
+      srRef.current?.stop()
+      return
+    }
+    // idle → empezar a escuchar
+    doneRef.current = false
+    try { srRef.current?.start() } catch {}
+    silenceRef.current = setTimeout(() => srRef.current?.stop(), 10000)
+  }
+
+  async function handleShareContacts() {
+    if (!CONTACTS_SUPPORTED) return
+    try {
+      const selected = await /** @type {any} */ (navigator).contacts.select(
+        ['name', 'tel', 'email'],
+        { multiple: true },
+      )
+      setContacts(selected.map((c) => ({
+        name:  c.name?.[0]  ?? '',
+        tel:   c.tel?.[0]   ?? '',
+        email: c.email?.[0] ?? '',
+      })))
+    } catch {}
+  }
+
+  const cfg         = STATE_CFG[status]
+  const isListening = status === 'listening'
+  const isThinking  = status === 'thinking'
+  const isSpeaking  = status === 'speaking'
+
   return (
     <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
-      className="fixed inset-0 z-[100] flex flex-col overflow-hidden bg-[#05070b] text-white"
+      className="fixed inset-0 z-[100] flex flex-col bg-[#05070b] text-white"
     >
-      {/* Fondo decorativo */}
+      {/* Fondo — puntos */}
       <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-30"
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.18]"
         style={{
-          backgroundImage: 'radial-gradient(circle at center,rgba(255,255,255,0.12) 1px,transparent 1px)',
-          backgroundSize: '14px 14px',
+          backgroundImage: 'radial-gradient(circle at center,rgba(255,255,255,0.18) 1px,transparent 1px)',
+          backgroundSize: '18px 18px',
         }}
       />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(59,130,246,0.12),transparent_55%)]" />
+      {/* Gradiente azul superior */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(59,130,246,0.09),transparent_58%)]" />
 
       {/* ── Header ── */}
       <div
-        className="relative z-10 flex items-center justify-between px-5 pb-3 pt-safe"
+        className="relative z-10 flex items-center justify-between px-5 pb-3"
         style={{ paddingTop: 'max(env(safe-area-inset-top), 1rem)' }}
       >
-        <div className="flex items-center gap-3">
-          {/* Mic indicator */}
-          <motion.div
-            animate={isListening
-              ? { boxShadow: ['0 0 0 0 rgba(59,130,246,0.5)', '0 0 0 8px rgba(59,130,246,0)', '0 0 0 0 rgba(59,130,246,0.5)'] }
-              : {}}
-            transition={{ duration: 1.4, repeat: isListening ? Infinity : 0 }}
-            className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
-              isListening ? 'bg-blue-500/20 text-blue-300' : 'bg-white/[0.06] text-white/40'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[1.1rem]">
-              {isListening ? 'graphic_eq' : 'auto_awesome'}
-            </span>
-          </motion.div>
-          <div>
-            <p className="text-[9px] font-semibold uppercase tracking-[0.4em] text-white/30">Asistente</p>
-            <h1 className="text-base font-bold leading-tight tracking-tight text-white">Focus</h1>
+        {/* Logo + ubicación */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06]">
+            <span className="material-symbols-outlined text-[0.9rem] text-white/35">auto_awesome</span>
           </div>
+          <div>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.4em] text-white/25">Asistente</p>
+            <h1 className="text-sm font-bold leading-tight tracking-tight text-white">Focus</h1>
+          </div>
+          {location?.city && (
+            <span className="flex items-center gap-1 rounded-full bg-white/[0.05] px-2 py-0.5 text-[10px] text-white/28">
+              <span className="material-symbols-outlined text-[10px]">location_on</span>
+              {location.city}
+            </span>
+          )}
         </div>
 
-        <motion.button
-          onClick={onClose}
-          whileTap={{ scale: 0.9 }}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/50 hover:bg-white/10"
-        >
-          <span className="material-symbols-outlined text-[1.1rem]">close</span>
-        </motion.button>
-      </div>
-
-      {/* ── Mensajes ── */}
-      <div
-        ref={scrollRef}
-        className="relative z-10 flex-1 overflow-y-auto px-4 py-2 space-y-3"
-      >
-        {messages.map((msg, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            {msg.role === 'assistant' && (
-              <div className="mr-2 mt-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-300">
-                <span className="material-symbols-outlined text-[0.85rem]">auto_awesome</span>
-              </div>
-            )}
-            <div
-              className={`max-w-[78%] rounded-2xl px-4 py-2.5 ${
-                msg.role === 'user'
-                  ? 'rounded-tr-sm bg-blue-500 text-white'
-                  : 'rounded-tl-sm bg-white/[0.07] text-white/90'
+        {/* Acciones */}
+        <div className="flex items-center gap-2">
+          {CONTACTS_SUPPORTED && (
+            <motion.button
+              onClick={handleShareContacts}
+              whileTap={{ scale: 0.88 }}
+              title={contacts.length > 0 ? `${contacts.length} contacto(s)` : 'Compartir contactos'}
+              className={`flex h-8 w-8 items-center justify-center rounded-full border border-white/10 transition-colors ${
+                contacts.length > 0
+                  ? 'bg-blue-500/20 text-blue-300'
+                  : 'bg-white/[0.05] text-white/30 hover:bg-white/10'
               }`}
             >
-              <p className="text-sm leading-relaxed">{msg.content}</p>
-              {msg.role === 'assistant' && <ActionChips actions={msg.actions} />}
-            </div>
-          </motion.div>
-        ))}
-
-        {/* Thinking indicator */}
-        <AnimatePresence>
-          {isThinking && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-              className="flex justify-start"
-            >
-              <div className="mr-2 mt-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-300">
-                <span className="material-symbols-outlined text-[0.85rem]">auto_awesome</span>
-              </div>
-              <div className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm bg-white/[0.07] px-4 py-3">
-                {[0, 1, 2].map((i) => (
-                  <motion.div
-                    key={i} className="h-1.5 w-1.5 rounded-full bg-blue-400"
-                    animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
-                    transition={{ duration: 0.55, repeat: Infinity, delay: i * 0.12 }}
-                  />
-                ))}
-              </div>
-            </motion.div>
+              <span className="material-symbols-outlined text-[0.9rem]">contacts</span>
+            </motion.button>
           )}
-        </AnimatePresence>
-      </div>
-
-      {/* ── Input ── */}
-      <div
-        className="relative z-10 px-4 pb-safe"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
-      >
-        {/* Alerta sin API key */}
-        <AnimatePresence>
-          {noKey && (
-            <motion.p
-              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-              className="mb-2 text-center text-[11px] text-amber-400/80"
-            >
-              Configura tu API key en Importar/Exportar → Foto para usar la IA
-            </motion.p>
-          )}
-        </AnimatePresence>
-
-        <div className={`flex items-center gap-2 rounded-2xl border px-2 py-2 backdrop-blur-xl transition-all duration-200 ${
-          isListening
-            ? 'border-blue-500/40 bg-blue-500/[0.07] shadow-[0_0_0_3px_rgba(59,130,246,0.1)]'
-            : 'border-white/[0.08] bg-white/[0.05]'
-        }`}>
-          {/* Mic */}
           <motion.button
-            onClick={toggleMic}
-            disabled={isThinking}
-            animate={isListening ? { scale: [1, 1.12, 1] } : { scale: 1 }}
-            transition={{ duration: 0.7, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
-            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
-              isListening
-                ? 'bg-blue-500/20 text-blue-300'
-                : isThinking
-                ? 'bg-white/[0.04] text-white/20'
-                : 'bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white/60'
-            }`}
+            onClick={onClose}
+            whileTap={{ scale: 0.88 }}
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-white/35 hover:bg-white/10"
           >
-            <span className="material-symbols-outlined text-[1.1rem]">
-              {isListening ? 'graphic_eq' : 'mic'}
-            </span>
+            <span className="material-symbols-outlined text-[0.9rem]">close</span>
           </motion.button>
-
-          {/* Input */}
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder={isListening ? 'Escuchando...' : 'Escríbele a Focus...'}
-            disabled={isThinking}
-            className="flex-1 bg-transparent text-[14px] text-white outline-none placeholder:text-white/25 disabled:opacity-50"
-          />
-
-          {/* Send */}
-          <AnimatePresence>
-            {(input.trim() || !isListening) && (
-              <motion.button
-                initial={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.7 }} transition={{ duration: 0.15 }}
-                onClick={() => handleSend()}
-                disabled={isThinking || !input.trim()}
-                className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
-                  input.trim() && !isThinking
-                    ? 'bg-blue-500 text-white hover:bg-blue-400'
-                    : 'bg-white/[0.05] text-white/20'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[1.05rem]">arrow_upward</span>
-              </motion.button>
-            )}
-          </AnimatePresence>
         </div>
       </div>
+
+      {/* ── Área central ── */}
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-8">
+
+        {/* Círculo principal con anillos */}
+        <div className="relative flex h-56 w-56 items-center justify-center">
+
+          {/* Anillos pulsantes (escuchando) */}
+          <PulsingRings active={isListening} />
+
+          {/* Spinner de "pensando" */}
+          <motion.div
+            className="absolute rounded-full"
+            style={{
+              width: 116,
+              height: 116,
+              background: 'conic-gradient(from 0deg, rgba(99,102,241,0.55), transparent 60%)',
+              borderRadius: '50%',
+            }}
+            animate={isThinking ? { rotate: 360 } : { rotate: 0, opacity: 0 }}
+            transition={isThinking
+              ? { duration: 1.1, repeat: Infinity, ease: 'linear' }
+              : { duration: 0.25 }}
+          />
+
+          {/* Botón principal */}
+          <motion.button
+            onClick={handleMicPress}
+            disabled={isThinking}
+            whileTap={!isThinking ? { scale: 0.9 } : {}}
+            animate={{
+              scale: isListening ? [1, 1.05, 1] : 1,
+              boxShadow: isListening
+                ? [
+                    '0 0 0px 0px rgba(59,130,246,0)',
+                    '0 0 32px 10px rgba(59,130,246,0.22)',
+                    '0 0 0px 0px rgba(59,130,246,0)',
+                  ]
+                : isSpeaking
+                ? '0 0 22px 6px rgba(59,130,246,0.12)'
+                : '0 0 0px 0px rgba(0,0,0,0)',
+            }}
+            transition={isListening
+              ? { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
+              : { duration: 0.3 }}
+            className="relative flex h-[108px] w-[108px] items-center justify-center rounded-full transition-colors duration-300"
+            style={{
+              border: `1.5px solid ${cfg.border}`,
+              background: cfg.bg,
+            }}
+          >
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={cfg.icon}
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                transition={{ duration: 0.18 }}
+                className="material-symbols-outlined text-[2.1rem]"
+                style={{ color: cfg.iconColor }}
+              >
+                {cfg.icon}
+              </motion.span>
+            </AnimatePresence>
+          </motion.button>
+        </div>
+
+        {/* Forma de onda (hablando) */}
+        <WaveformBars active={isSpeaking} />
+
+        {/* Etiqueta de estado */}
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={status}
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.18 }}
+            className="text-[13px] font-medium tracking-widest text-white/35 uppercase"
+          >
+            {cfg.label}
+          </motion.p>
+        </AnimatePresence>
+
+        {/* Última respuesta (subtítulo sutil) */}
+        <AnimatePresence>
+          {lastReply ? (
+            <motion.p
+              key="reply"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="mx-10 max-w-xs text-center text-[12px] leading-relaxed text-white/18"
+            >
+              {lastReply}
+            </motion.p>
+          ) : (
+            // Espacio reservado para no desplazar el layout
+            <div className="h-[36px]" />
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Safe area inferior */}
+      <div style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.25rem)' }} />
     </motion.div>
   )
 }
