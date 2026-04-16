@@ -476,7 +476,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
 
       {/* ── Header minimalista ── */}
       <div
-        className="relative z-10 flex items-center justify-between px-6"
+        className="relative z-50 flex items-center justify-between px-6"
         style={{ paddingTop: 'max(env(safe-area-inset-top), 1.1rem)', paddingBottom: '0.75rem' }}
       >
         {/* Audio player controlado por React (remonta al cambiar la voz) */}
