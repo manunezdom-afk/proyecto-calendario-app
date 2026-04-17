@@ -2,6 +2,8 @@ import { useState } from 'react'
 import QuickAddSheet from '../components/QuickAddSheet'
 import MonthCalendar from '../components/MonthCalendar'
 import { resolveEventDate } from '../utils/resolveEventDate'
+import { useUserProfile } from '../hooks/useUserProfile'
+import { peakRangeLabel } from '../utils/peakZone'
 
 const AVATAR_1 =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuDfqPz-Xtp1DOlxyZ6qdBoqCnCTvLoTN7uCnDpKv7pQispXp8jMGm8VmAnGlq6fGljfeaM_FGgWpLdB3Ig6ImleJTb6h-TmrJg7wLQJBUNd1LSQiUrTmFaLHcku_b2IBR1b9-gtC7bCqoZTvugBoGNiE9EjBbxP2zP0nkLkJF5KXZxYSvNqigG3jSpyBQawu9fkiHNp1vQfAtrXoJyYILEZm_q5bSNPNATYmsirJUZFcSzFA1bGsAuK0G16fJNQgGEjyI-ErT5OZNRs'
@@ -154,6 +156,7 @@ function EveningEventCard({ event, onDelete }) {
 
 // ─── Main view ────────────────────────────────────────────────────────────────
 export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask, onExportClick }) {
+  const { profile } = useUserProfile()
   const [showModal, setShowModal] = useState(false)
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('semana')         // 'mes' | 'semana'
@@ -228,6 +231,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
             events={events}
             onAddEvent={onAddEvent}
             onDeleteEvent={onDeleteEvent}
+            profile={profile}
           />
         )}
 
@@ -275,6 +279,22 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                 )
               })}
             </div>
+
+            {/* ── Banda zona de rendimiento ──────────────────────────── */}
+            {profile.peakStart != null && (
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl">
+                <span
+                  className="material-symbols-outlined text-emerald-600 text-[17px]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >bolt</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-emerald-800">
+                    Zona de rendimiento · {peakRangeLabel(profile.peakStart, profile.peakEnd)}
+                  </p>
+                  <p className="text-[10px] text-emerald-600 leading-tight">Reserva este horario para trabajo profundo</p>
+                </div>
+              </div>
+            )}
 
             {/* Enfoque del día seleccionado */}
             <section className="space-y-4">

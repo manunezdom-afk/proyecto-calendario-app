@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useUserProfile } from '../hooks/useUserProfile'
 
 const SR = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
@@ -38,12 +39,12 @@ async function reverseGeocode(lat, lon) {
   } catch { return { city: '', country: '' } }
 }
 
-async function callFocusAssistant({ message, events, history, location, contacts }) {
+async function callFocusAssistant({ message, events, history, location, contacts, profile }) {
   const res = await fetch('/api/focus-assistant', {
     method: 'POST',
     headers,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, events, history, location, contacts }),
+    body: JSON.stringify({ message, events, history, location, contacts, profile }),
   })
   if (!res.ok) {
     const rawBody = await res.text().catch(() => '')
@@ -299,6 +300,7 @@ function Orb({ status, onPress }) {
 
 // ─── Componente principal ────────────────────────────────────────────────────
 export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDeleteEvent, events = [] }) {
+  const { profile } = useUserProfile()
   const [status, setStatus]         = useState('idle')
   const [lastReply, setLastReply]   = useState('')
   const [location, setLocation]     = useState(null)
@@ -389,7 +391,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
       const result = await callFocusAssistant({
         message: text, events,
         history: historyRef.current.slice(0, -1).slice(-10),
-        location, contacts,
+        location, contacts, profile,
       })
       const { reply, actions = [] } = result
       for (const action of actions) {

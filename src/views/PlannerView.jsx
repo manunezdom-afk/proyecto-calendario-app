@@ -5,6 +5,7 @@ import ProfileSetupCard  from '../components/ProfileSetupCard'
 import FocusBar          from '../components/FocusBar'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useTasks }       from '../hooks/useTasks'
+import { isInPeak, parseEventHour, peakRangeLabel } from '../utils/peakZone'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
@@ -487,9 +488,48 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
               inline
             />
 
+            {/* ── Shield: eventos que interrumpen la zona de rendimiento ─── */}
+            {(() => {
+              if (!profile.peakStart) return null
+              const intruders = displayBlocks.filter(b => {
+                if (b.type === 'suggestion' || b._asReminderOnly) return false
+                const h = parseEventHour(b.time)
+                if (h === null) return false
+                if (h < profile.peakStart || h >= profile.peakEnd) return false
+                return /reuni[oó]n|meeting|llamada|call|sincro|junta|clase|lecture|training/i.test(b.title)
+              })
+              if (intruders.length === 0) return null
+              return (
+                <div className="mb-5 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-amber-600 text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
+                    <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Zona de Rendimiento en riesgo</p>
+                  </div>
+                  <p className="text-sm text-amber-800 leading-snug mb-2">
+                    {intruders.length === 1
+                      ? <><strong>"{intruders[0].title}"</strong> está en tu zona de rendimiento ({peakRangeLabel(profile.peakStart, profile.peakEnd)}). Considera moverlo fuera de ese horario.</>
+                      : <><strong>{intruders.length} eventos</strong> interrumpen tu zona de rendimiento ({peakRangeLabel(profile.peakStart, profile.peakEnd)}). Protege ese tiempo para trabajo profundo.</>
+                    }
+                  </p>
+                  {onOpenAssistant && (
+                    <button
+                      onClick={onOpenAssistant}
+                      className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-2 py-1 rounded-full transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">auto_awesome</span>
+                      Pedirle a Nova que proponga un horario
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
+
             <div className="relative space-y-2">
               {displayBlocks.map(({ id, time, type, title, description, subtasks = [], _asReminderOnly }) => {
                 const isSuggestion = type === 'suggestion'
+                const inPeak = !isSuggestion && profile.peakStart != null
+                  ? isInPeak(time, profile.peakStart, profile.peakEnd)
+                  : null
                 return (
                   <div key={id} style={{ display: 'flex', gap: '24px', overflow: 'visible' }} className="group">
                     {/* Columna de hora — nunca se comprime */}
@@ -543,6 +583,22 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                             </button>
                           )}
                         </div>
+
+                        {/* Badge zona de rendimiento */}
+                        {inPeak !== null && (
+                          <div style={{ marginTop: '6px', marginBottom: '2px' }}>
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              fontSize: '9px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px',
+                              ...(inPeak
+                                ? { background: '#d1fae5', color: '#065f46' }
+                                : { background: '#fef9c3', color: '#92400e' })
+                            }}>
+                              {inPeak ? '🟢' : '🟡'}
+                              {inPeak ? 'En tu zona de rendimiento' : 'Fuera de tu zona de rendimiento'}
+                            </span>
+                          </div>
+                        )}
 
                         {subtasks.length > 0 && (
                           <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>

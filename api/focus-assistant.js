@@ -53,7 +53,7 @@ export default async function handler(req, res) {
 
   const anthropic = new Anthropic({ apiKey: normalizedApiKey })
 
-  const { message, events = [], history = [], location = null, contacts = [] } = req.body || {}
+  const { message, events = [], history = [], location = null, contacts = [], profile = null } = req.body || {}
 
   if (!message?.trim()) {
     return res.status(400).json({ error: 'no_message' })
@@ -110,6 +110,26 @@ ${forecast}`
     ? `Contactos del usuario:\n${contacts.map(c => `- ${c.name ?? 'Sin nombre'}${c.tel ? ': ' + c.tel : ''}${c.email ? ' / ' + c.email : ''}`).join('\n')}`
     : 'El usuario no ha compartido contactos.'
 
+  // Perfil cronobiológico del usuario
+  function fmtHour(dec) {
+    if (dec == null) return ''
+    const h = Math.floor(dec), m = Math.round((dec - h) * 60)
+    return m > 0 ? `${h}:${String(m).padStart(2,'0')}` : `${h}:00`
+  }
+  const chronoLabels = { morning: 'matutino', afternoon: 'vespertino', night: 'nocturno' }
+  const roleLabels   = { student: 'estudiante', worker: 'trabajador', freelance: 'freelancer', other: 'otro' }
+  const profileContext = profile
+    ? `Perfil de productividad del usuario:
+- Cronotipo: ${chronoLabels[profile.chronotype] ?? profile.chronotype ?? 'no definido'} (${roleLabels[profile.role] ?? profile.role ?? 'rol no definido'})
+- Zona de rendimiento (máxima energía cognitiva): ${fmtHour(profile.peakStart)}–${fmtHour(profile.peakEnd)}
+
+INSTRUCCIÓN CRÍTICA sobre la zona de rendimiento:
+- Cuando el usuario pida agendar trabajo profundo, deep work, estudio, foco o concentración: SIEMPRE propón un horario dentro de ${fmtHour(profile.peakStart)}–${fmtHour(profile.peakEnd)} si ese bloque está libre.
+- Si el usuario no especifica hora para este tipo de actividades, sugiere automáticamente ese rango.
+- Si hay eventos que interrumpen la zona de rendimiento (reuniones, llamadas, clases), menciona el conflicto y ofrece moverlos.
+- Cuando propongas mover un evento fuera de la zona de rendimiento, da una hora concreta alternativa.`
+    : ''
+
   const systemPrompt = `Eres Focus, un Asistente Ejecutivo de Productividad y Calendario. Hablas en español neutro, con tono formal, profesional y eficiente.
 
 Tienes acceso completo a:
@@ -117,6 +137,7 @@ Tienes acceso completo a:
 - Su ubicación y clima en tiempo real
 - Sus contactos
 - La fecha y hora actual
+- Su perfil cronobiológico y zona de rendimiento
 
 Puedes:
 - Agregar eventos nuevos
@@ -186,6 +207,7 @@ ${
 ${weatherContext}
 
 ${contactsContext}
+${profileContext ? '\n' + profileContext : ''}
 
 Recordatorios previos a un evento (CRÍTICO):
 - Si el usuario pide "avísame X minutos antes", "recuérdame salir X min antes", "ponme un aviso X antes" de un evento existente:
