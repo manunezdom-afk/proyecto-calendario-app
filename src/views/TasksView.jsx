@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useTasks } from '../hooks/useTasks'
 import WeeklyStatsCard from '../components/WeeklyStatsCard'
 
 const PRIORITY_CFG = {
@@ -12,8 +11,7 @@ const CATEGORIES = ['hoy', 'semana', 'algún día']
 const CAT_LABELS = { hoy: 'Hoy', semana: 'Esta semana', 'algún día': 'Algún día' }
 const CAT_ICONS  = { hoy: 'today', semana: 'date_range', 'algún día': 'inbox' }
 
-export default function TasksView() {
-  const { tasks, addTask, toggleTask, deleteTask } = useTasks()
+export default function TasksView({ tasks = [], addTask = () => {}, toggleTask = () => {}, deleteTask = () => {} }) {
   const [showInput, setShowInput]     = useState(false)
   const [addCategory, setAddCategory] = useState('hoy')
   const [newLabel, setNewLabel]       = useState('')
