@@ -33,6 +33,19 @@ function getCurrentWeek() {
   })
 }
 
+// ─── Categoría de evento → color de dot ──────────────────────────────────────
+const CATEGORY_DOT_COLOR = {
+  foco:     'bg-emerald-500',
+  reunion:  'bg-blue-500',
+  personal: 'bg-purple-500',
+}
+function categorizeEvent(ev) {
+  const title = (ev?.title ?? '').toLowerCase()
+  if (/reuni[oó]n|meeting|llamada|call|junta|sync|1:1|standup|sincro/.test(title)) return 'reunion'
+  if (/foco|focus|deep|profund|trabajo/.test(title) || ev?.section === 'focus') return 'foco'
+  return 'personal'
+}
+
 const CALENDAR_DAYS     = getCurrentWeek()
 const todayNum          = new Date().getDate()
 const todayEntry        = CALENDAR_DAYS.find((d) => d.isToday)
@@ -246,10 +259,17 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                 const dayEvts   = events.filter((e) => resolveEventDate(e) === iso)
                 const hasEvts   = dayEvts.length > 0
                 const highLoad  = dayEvts.length >= 3
+                const categorized = dayEvts.map(categorizeEvent)
+                const counts = { foco: 0, reunion: 0, personal: 0 }
+                categorized.forEach((c) => { counts[c] = (counts[c] || 0) + 1 })
+                const tooltip = hasEvts
+                  ? `${dayEvts.length} evento${dayEvts.length !== 1 ? 's' : ''}${counts.foco ? ` · foco ${counts.foco}` : ''}${counts.reunion ? ` · reunión ${counts.reunion}` : ''}${counts.personal ? ` · personal ${counts.personal}` : ''}`
+                  : undefined
                 return (
                   <button
                     key={day}
                     onClick={() => { setActiveDay(num); console.log(`[Focus] 📅 Day selected: ${day} ${num}`) }}
+                    title={tooltip}
                     className="flex flex-col items-center gap-2 focus:outline-none"
                   >
                     <span className={`text-[10px] font-bold uppercase ${isActive ? 'text-primary' : 'text-outline'}`}>
@@ -258,7 +278,16 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                     {isActive ? (
                       <div className="w-10 h-14 flex flex-col items-center justify-center rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20">
                         <span>{num}</span>
-                        {hasEvts && <div className="w-1 h-1 bg-white/70 rounded-full mt-1" />}
+                        {hasEvts && (
+                          <div className="flex gap-[3px] mt-1">
+                            {dayEvts.slice(0, 3).map((_, i) => (
+                              <div key={i} className="w-1 h-1 bg-white/80 rounded-full" />
+                            ))}
+                            {dayEvts.length > 3 && (
+                              <span className="text-[8px] font-bold text-white/80 leading-none ml-0.5">+{dayEvts.length - 3}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className={`w-10 h-14 flex flex-col items-center justify-center rounded-2xl font-semibold transition-colors ${
@@ -268,10 +297,13 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                       }`}>
                         <span>{num}</span>
                         {hasEvts && (
-                          <div className="flex gap-[3px] mt-1">
-                            {dayEvts.slice(0, 3).map((ev, i) => (
-                              <div key={i} className={`w-1 h-1 rounded-full ${ev.section === 'evening' ? 'bg-secondary' : 'bg-primary'}`} />
+                          <div className="flex items-center gap-[3px] mt-1">
+                            {categorized.slice(0, 3).map((cat, i) => (
+                              <div key={i} className={`w-1.5 h-1.5 rounded-full ${CATEGORY_DOT_COLOR[cat]}`} />
                             ))}
+                            {dayEvts.length > 3 && (
+                              <span className="text-[8px] font-bold text-outline leading-none">+{dayEvts.length - 3}</span>
+                            )}
                           </div>
                         )}
                       </div>
