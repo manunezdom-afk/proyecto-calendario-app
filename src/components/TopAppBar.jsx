@@ -35,12 +35,12 @@ export default function TopAppBar({
       </div>
 
       {/* Right: account + share + bell */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 lg:gap-2">
         <button
           onClick={() => setAuthModal(true)}
           aria-label="Cuenta"
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:opacity-80 transition-opacity active:scale-90 duration-300"
-          title={user ? user.email : 'Iniciar sesión'}
+          title={user ? user.email : 'Cuenta'}
+          className="h-10 flex items-center gap-1.5 px-2 lg:px-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 duration-200"
         >
           <span
             className={`material-symbols-outlined text-[22px] ${user ? 'text-primary' : 'text-slate-400'}`}
@@ -48,22 +48,26 @@ export default function TopAppBar({
           >
             account_circle
           </span>
+          <span className="hidden lg:inline text-[13px] font-semibold text-slate-600 dark:text-slate-300">Cuenta</span>
         </button>
 
         {onShareClick && (
           <button
             onClick={onShareClick}
             aria-label="Importar / Exportar calendario"
-            className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 dark:text-slate-300 hover:opacity-80 transition-opacity active:scale-90 duration-300"
+            title="Importar / Exportar"
+            className="h-10 flex items-center gap-1.5 px-2 lg:px-3 rounded-full text-slate-400 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 duration-200"
           >
             <span className="material-symbols-outlined text-[22px]">ios_share</span>
+            <span className="hidden lg:inline text-[13px] font-semibold text-slate-600 dark:text-slate-300">Importar</span>
           </button>
         )}
 
-<button
+        <button
           onClick={onBellClick}
-          className="relative w-10 h-10 flex items-center justify-center rounded-full text-slate-400 dark:text-slate-300 hover:opacity-80 transition-opacity active:scale-90 duration-300"
           aria-label="Notificaciones"
+          title="Notificaciones"
+          className="relative h-10 flex items-center gap-1.5 px-2 lg:px-3 rounded-full text-slate-400 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 duration-200"
         >
           <span
             className={`material-symbols-outlined text-[22px] ${unreadCount > 0 ? 'text-primary' : ''}`}
@@ -71,8 +75,9 @@ export default function TopAppBar({
           >
             notifications
           </span>
+          <span className="hidden lg:inline text-[13px] font-semibold text-slate-600 dark:text-slate-300">Notificaciones</span>
           {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-primary text-white text-[9px] font-black flex items-center justify-center leading-none">
+            <span className="absolute top-1 right-1 lg:right-2 w-4 h-4 rounded-full bg-primary text-white text-[9px] font-black flex items-center justify-center leading-none">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
