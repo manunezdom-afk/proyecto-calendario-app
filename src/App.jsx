@@ -144,10 +144,10 @@ export default function App() {
         {/* ── Desktop 2-column layout ────────────────────────────────────── */}
         {isDesktop && !isDetail ? (
           <div className="flex h-[calc(100vh-64px)]">
-            <div className="w-[480px] xl:w-[540px] flex-shrink-0 overflow-y-auto border-r border-slate-200">
-              <PlannerView {...plannerProps} />
+            <div className="basis-[40%] max-w-[520px] flex-shrink-0 overflow-y-auto border-r border-slate-200">
+              <PlannerView {...plannerProps} isDesktop />
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="basis-[60%] flex-1 overflow-y-auto">
               <CalendarView
                 events={events}
                 onAddEvent={addEvent}
@@ -155,6 +155,7 @@ export default function App() {
                 onEditEvent={editEvent}
                 onOpenTask={(event) => openTaskDetail(event)}
                 onExportClick={() => { setImportExportInitialTab('export'); setImportExportOpen(true) }}
+                isDesktop
               />
             </div>
           </div>

@@ -250,7 +250,7 @@ function buildInsights(events, profile) {
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────
-export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, events = [], tasks = [], onOpenAssistant, onEveningShutdown }) {
+export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, events = [], tasks = [], onOpenAssistant, onEveningShutdown, isDesktop = false }) {
   const [blocks, setBlocks] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -465,7 +465,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
       )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8">
-        <div className="flex flex-col md:flex-row gap-12">
+        <div className={isDesktop ? "flex flex-col gap-6" : "flex flex-col md:flex-row gap-12"}>
 
           {/* ── Left: Timeline ────────────────────────────────────────────── */}
           <div className="flex-1">
@@ -665,7 +665,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
           </div>
 
           {/* ── Right: Insights personalizados ────────────────────────────── */}
-          <div className="w-full md:w-80 space-y-5">
+          <div className={isDesktop ? "w-full space-y-5" : "w-full md:w-80 space-y-5"}>
 
             {/* ── Card 1: Próximo Bloque ────────────────────────────────── */}
             {blocks.length > 0 && (
@@ -739,7 +739,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
             )}
 
             {/* ── Card 2: Tu Día ────────────────────────────────────────── */}
-            {blocks.length > 0 && (
+            {blocks.length > 0 && !isDesktop && (
             <div className="bg-surface-container-high/40 backdrop-blur-sm rounded-[24px] p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="font-headline font-bold text-on-surface">Tu Día</h4>
@@ -833,8 +833,8 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
         </div>
       </main>
 
-      {/* FAB — solo visible cuando hay bloques */}
-      {blocks.length > 0 && (
+      {/* FAB — solo visible cuando hay bloques y en mobile */}
+      {blocks.length > 0 && !isDesktop && (
         <button
           onClick={() => setShowModal(true)}
           className="fixed bottom-28 right-6 w-14 h-14 bg-primary text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-105 active:scale-90 transition-transform z-40"
