@@ -3,6 +3,7 @@ import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { useEvents }        from './hooks/useEvents'
 import { useTasks }         from './hooks/useTasks'
 import { useNotifications } from './hooks/useNotifications'
+import { useUserProfile }   from './hooks/useUserProfile'
 import { useAuth }          from './context/AuthContext'
 
 import TopAppBar                   from './components/TopAppBar'
@@ -13,23 +14,30 @@ import ImportExportSheet           from './components/ImportExportSheet'
 import GuestBanner                 from './components/GuestBanner'
 import AuthModal                   from './components/AuthModal'
 import NovaWidget                  from './components/NovaWidget'
+import MorningBrief                from './components/MorningBrief'
+import EveningShutdown             from './components/EveningShutdown'
 
 import CalendarView    from './views/CalendarView'
 import TaskDetailView  from './views/TaskDetailView'
 import PlannerView     from './views/PlannerView'
 import TasksView       from './views/TasksView'
 
+const LAST_OPENED_KEY = 'nova_last_opened'
+
 const pageVariants = {
   initial: { opacity: 0, y: 6, scale: 0.99 },
-  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.15, ease: "easeOut" } },
-  exit: { opacity: 0, scale: 0.99, transition: { duration: 0.08 } }
+  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.15, ease: 'easeOut' } },
+  exit:    { opacity: 0, scale: 0.99, transition: { duration: 0.08 } },
 }
 
 export default function App() {
   const { authModal, setAuthModal } = useAuth()
+  const { profile }                 = useUserProfile()
   const [activeView, setActiveView]     = useState('planner')
   const [previousView, setPreviousView] = useState('planner')
-  const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024)
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= 1024,
+  )
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')
@@ -48,11 +56,27 @@ export default function App() {
     markAllRead, dismiss: dismissNotif,
   } = useNotifications({ events })
 
-  const [notifPanelOpen, setNotifPanelOpen]       = useState(false)
-  const [importExportOpen, setImportExportOpen]   = useState(false)
+  const [notifPanelOpen,      setNotifPanelOpen]      = useState(false)
+  const [importExportOpen,    setImportExportOpen]    = useState(false)
   const [importExportInitialTab, setImportExportInitialTab] = useState('export')
   const [selectedEvent, setSelectedEvent] = useState(null)
 
+  // ── Morning Brief ─────────────────────────────────────────────────────────
+  const [showMorningBrief,   setShowMorningBrief]   = useState(false)
+  const [showEveningShutdown, setShowEveningShutdown] = useState(false)
+
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const last  = localStorage.getItem(LAST_OPENED_KEY)
+    if (last !== today) {
+      // Small delay so the app renders first
+      const timer = setTimeout(() => setShowMorningBrief(true), 600)
+      localStorage.setItem(LAST_OPENED_KEY, today)
+      return () => clearTimeout(timer)
+    }
+  }, [])
+
+  // ── Navigation ────────────────────────────────────────────────────────────
   function navigate(view) { setActiveView(view) }
 
   function openTaskDetail(event = null) {
@@ -77,6 +101,16 @@ export default function App() {
     permissionState === 'default' &&
     !permissionDismissed &&
     (activeView === 'planner' || activeView === 'tasks' || activeView === 'calendar')
+
+  // ── Shared PlannerView props ──────────────────────────────────────────────
+  const plannerProps = {
+    events,
+    tasks,
+    onAddEvent:        addEvent,
+    onEditEvent:       editEvent,
+    onDeleteEvent:     deleteEvent,
+    onEveningShutdown: () => setShowEveningShutdown(true),
+  }
 
   return (
     <LayoutGroup>
@@ -107,16 +141,11 @@ export default function App() {
           </motion.div>
         )}
 
-        {/* ── Desktop 2-column layout ──────────────────────────────────── */}
+        {/* ── Desktop 2-column layout ────────────────────────────────────── */}
         {isDesktop && !isDetail ? (
           <div className="flex h-[calc(100vh-64px)]">
             <div className="w-[480px] xl:w-[540px] flex-shrink-0 overflow-y-auto border-r border-slate-200">
-              <PlannerView
-                events={events}
-                onAddEvent={addEvent}
-                onEditEvent={editEvent}
-                onDeleteEvent={deleteEvent}
-              />
+              <PlannerView {...plannerProps} />
             </div>
             <div className="flex-1 overflow-y-auto">
               <CalendarView
@@ -139,14 +168,7 @@ export default function App() {
               exit="exit"
               className="w-full"
             >
-              {activeView === 'planner' && (
-                <PlannerView
-                  events={events}
-                  onAddEvent={addEvent}
-                  onEditEvent={editEvent}
-                  onDeleteEvent={deleteEvent}
-                />
-              )}
+              {activeView === 'planner' && <PlannerView {...plannerProps} />}
 
               {activeView === 'calendar' && (
                 <CalendarView
@@ -176,7 +198,7 @@ export default function App() {
         )}
       </main>
 
-      {/* ── Bottom Nav (siempre visible excepto en task-detail en mobile) ── */}
+      {/* ── Bottom Nav ────────────────────────────────────────────────────── */}
       {!isDesktop && (
         <motion.div
           initial={{ y: 100, opacity: 0 }}
@@ -198,6 +220,32 @@ export default function App() {
         onToggleTask={toggleTask}
         isDesktop={isDesktop}
       />
+
+      {/* ── Morning Brief ─────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showMorningBrief && (
+          <MorningBrief
+            events={events}
+            tasks={tasks}
+            profile={profile}
+            onStart={()      => setShowMorningBrief(false)}
+            onDismiss={()    => setShowMorningBrief(false)}
+            onMoveEvent={(id, updates) => { editEvent(id, updates); setShowMorningBrief(false) }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Evening Shutdown ─────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showEveningShutdown && (
+          <EveningShutdown
+            events={events}
+            tasks={tasks}
+            onClose={()     => setShowEveningShutdown(false)}
+            onEditEvent={editEvent}
+          />
+        )}
+      </AnimatePresence>
 
       <NotificationPanel
         isOpen={notifPanelOpen}

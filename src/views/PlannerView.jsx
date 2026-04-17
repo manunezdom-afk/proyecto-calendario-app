@@ -4,7 +4,6 @@ import FocusTimerOverlay from '../components/FocusTimerOverlay'
 import ProfileSetupCard  from '../components/ProfileSetupCard'
 import FocusBar          from '../components/FocusBar'
 import { useUserProfile } from '../hooks/useUserProfile'
-import { useTasks }       from '../hooks/useTasks'
 import { isInPeak, parseEventHour, peakRangeLabel } from '../utils/peakZone'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -251,7 +250,7 @@ function buildInsights(events, profile) {
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────
-export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, events = [], onOpenAssistant }) {
+export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, events = [], tasks = [], onOpenAssistant, onEveningShutdown }) {
   const [blocks, setBlocks] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -269,7 +268,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
   }, [])
 
   const { profile, saveProfile, snoozeSetup, showSetup } = useUserProfile()
-  const { tasks } = useTasks()
   const semanaCount  = tasks.filter((t) => t.category === 'semana'    && !t.done).length
   const algoDiaCount = tasks.filter((t) => t.category === 'algún día' && !t.done).length
 
@@ -810,6 +808,22 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                 </div>
               )}
             </div>
+
+            {/* ── Cerrar el día ─────────────────────────────────────────── */}
+            {onEveningShutdown && (
+              <button
+                onClick={onEveningShutdown}
+                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-[20px] border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700 hover:bg-slate-50 transition-all active:scale-[0.98] group"
+              >
+                <span
+                  className="material-symbols-outlined text-[18px] group-hover:text-slate-700 transition-colors"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  bedtime
+                </span>
+                <span className="text-[13px] font-semibold">Cerrar el día</span>
+              </button>
+            )}
 
           </div>
         </div>
