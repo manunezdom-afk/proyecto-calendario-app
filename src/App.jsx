@@ -8,6 +8,7 @@ import { useAuth }          from './context/AuthContext'
 
 import TopAppBar                   from './components/TopAppBar'
 import BottomNavBar                from './components/BottomNavBar'
+import DesktopSideBar              from './components/DesktopSideBar'
 import NotificationPanel           from './components/NotificationPanel'
 import NotificationPermissionCard  from './components/NotificationPermissionCard'
 import ImportExportSheet           from './components/ImportExportSheet'
@@ -129,7 +130,15 @@ export default function App() {
         />
       </motion.div>
 
-      <main className="pb-24">
+      {isDesktop && !isDetail && (
+        <DesktopSideBar
+          activeView={navView}
+          onNavigate={navigate}
+          onSettings={() => { setImportExportInitialTab('export'); setImportExportOpen(true) }}
+        />
+      )}
+
+      <main className={isDesktop && !isDetail ? "pb-0 pl-[72px]" : "pb-24"}>
         {!isDetail && <GuestBanner />}
 
         {showPermCard && (
@@ -141,8 +150,8 @@ export default function App() {
           </motion.div>
         )}
 
-        {/* ── Desktop 2-column layout ────────────────────────────────────── */}
-        {isDesktop && !isDetail ? (
+        {/* ── Desktop 2-column layout (solo en Mi Día) ────────────────────── */}
+        {isDesktop && !isDetail && activeView === 'planner' ? (
           <div className="flex h-[calc(100vh-64px)]">
             <div className="basis-[40%] max-w-[520px] flex-shrink-0 overflow-y-auto border-r border-slate-200">
               <PlannerView {...plannerProps} isDesktop />
@@ -169,7 +178,7 @@ export default function App() {
               exit="exit"
               className="w-full"
             >
-              {activeView === 'planner' && <PlannerView {...plannerProps} />}
+              {activeView === 'planner' && <PlannerView {...plannerProps} isDesktop={isDesktop} />}
 
               {activeView === 'calendar' && (
                 <CalendarView
@@ -179,6 +188,7 @@ export default function App() {
                   onEditEvent={editEvent}
                   onOpenTask={(event) => openTaskDetail(event)}
                   onExportClick={() => { setImportExportInitialTab('export'); setImportExportOpen(true) }}
+                  isDesktop={isDesktop}
                 />
               )}
 
