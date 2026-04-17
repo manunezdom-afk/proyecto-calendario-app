@@ -717,23 +717,21 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                 </div>
               )}
 
-              {/* Barra de progreso del día */}
-              <div>
-                <div className="flex justify-between mb-1.5">
-                  <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Progreso del día</span>
-                  <span className="text-[10px] font-bold text-outline tabular-nums">{Math.round(dayProgress * 100)}%</span>
+              {/* Barra de bloques completados */}
+              {totalBlocks > 0 && (
+                <div>
+                  <div className="flex justify-between mb-1.5">
+                    <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Bloques completados</span>
+                    <span className="text-[10px] font-bold text-outline tabular-nums">{completedCount}/{totalBlocks} · {Math.round(blockProgress * 100)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-700"
+                      style={{ width: `${blockProgress * 100}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary rounded-full transition-all duration-700"
-                    style={{ width: `${dayProgress * 100}%` }}
-                  />
-                </div>
-                <div className="flex justify-between mt-1">
-                  <span className="text-[10px] text-outline/50">8:00</span>
-                  <span className="text-[10px] text-outline/50">22:00</span>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* ── Card 2: Tu Día ────────────────────────────────────────── */}
