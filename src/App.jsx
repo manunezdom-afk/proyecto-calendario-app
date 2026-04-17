@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { useEvents }        from './hooks/useEvents'
 import { useNotifications } from './hooks/useNotifications'
+import { useAuth }          from './context/AuthContext'
 
 import TopAppBar                   from './components/TopAppBar'
 import BottomNavBar                from './components/BottomNavBar'
 import NotificationPanel           from './components/NotificationPanel'
 import NotificationPermissionCard  from './components/NotificationPermissionCard'
 import ImportExportSheet           from './components/ImportExportSheet'
+import GuestBanner                 from './components/GuestBanner'
+import AuthModal                   from './components/AuthModal'
 
 import CalendarView    from './views/CalendarView'
 import AssistantView   from './views/AssistantView'
@@ -22,6 +25,7 @@ const pageVariants = {
 }
 
 export default function App() {
+  const { authModal, setAuthModal } = useAuth()
   const [activeView, setActiveView]     = useState('planner')
   const [previousView, setPreviousView] = useState('planner')
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024)
@@ -95,6 +99,8 @@ export default function App() {
       </AnimatePresence>
 
       <main className="pb-24">
+        {!isAssistant && !isDetail && <GuestBanner />}
+
         {showPermCard && (
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
             <NotificationPermissionCard
@@ -224,6 +230,8 @@ export default function App() {
         onImportEvent={addEvent}
         initialTab={importExportInitialTab}
       />
+
+      <AuthModal isOpen={authModal} onClose={() => setAuthModal(false)} />
     </div>
     </LayoutGroup>
   )

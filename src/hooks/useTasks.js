@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-
-const STORAGE_KEY = 'focus_tasks'
+import { dataService } from '../services/dataService'
+import { useAuth } from '../context/AuthContext'
 
 const DEFAULT_TASKS = [
   { id: 'tsk-001', label: 'Revisar Roadmap del Q4', done: false, priority: 'Alta', category: 'hoy' },
@@ -11,49 +11,62 @@ const DEFAULT_TASKS = [
 ]
 
 export function useTasks() {
-  const [tasks, setTasks] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) return JSON.parse(stored)
-    } catch (_) {}
-    return DEFAULT_TASKS
-  })
+  const { user } = useAuth()
+
+  const [tasks, setTasks] = useState(() => dataService.getCachedTasks(DEFAULT_TASKS))
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks))
-    } catch (_) {}
+    if (!user) return
+    dataService.fetchTasks(user.id)
+      .then(cloudTasks => {
+        if (!cloudTasks) return
+        const result = cloudTasks.length > 0 ? cloudTasks : DEFAULT_TASKS
+        setTasks(result)
+        dataService.setCachedTasks(result)
+      })
+      .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar tareas de Supabase', err))
+  }, [user?.id])
+
+  useEffect(() => {
+    dataService.setCachedTasks(tasks)
   }, [tasks])
 
   function addTask({ label, priority = 'Media', category = 'hoy' }) {
     const t = { id: `tsk-${Date.now()}`, label, done: false, priority, category }
-    console.log(`[Focus] ➕ addTask: "${label}" [${priority}] [${category}]`)
-    setTasks((prev) => [...prev, t])
+    console.log(`[Focus] ➕ addTask: "${label}"`)
+    setTasks(prev => [...prev, t])
+    if (user) dataService.upsertTask(t, user.id).catch(console.warn)
     return t
   }
 
   function toggleTask(id) {
-    setTasks((prev) =>
-      prev.map((t) => {
+    setTasks(prev => {
+      const next = prev.map(t => {
         if (t.id !== id) return t
-        const nowDone = !t.done
-        const next = { ...t, done: nowDone, doneAt: nowDone ? Date.now() : null }
-        console.log(`[Focus] ☑️ Task "${t.label}" → ${next.done ? 'done' : 'pending'}`)
-        return next
-      }),
-    )
-  }
-
-  function deleteTask(id) {
-    setTasks((prev) => {
-      const target = prev.find((t) => t.id === id)
-      if (target) console.log(`[Focus] 🗑️ deleteTask: "${target.label}"`)
-      return prev.filter((t) => t.id !== id)
+        return { ...t, done: !t.done, doneAt: !t.done ? Date.now() : null }
+      })
+      if (user) {
+        const updated = next.find(t => t.id === id)
+        if (updated) dataService.upsertTask(updated, user.id).catch(console.warn)
+      }
+      return next
     })
   }
 
+  function deleteTask(id) {
+    setTasks(prev => prev.filter(t => t.id !== id))
+    if (user) dataService.deleteTask(id, user.id).catch(console.warn)
+  }
+
   function updateTask(id, updates) {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)))
+    setTasks(prev => {
+      const next = prev.map(t => t.id === id ? { ...t, ...updates } : t)
+      if (user) {
+        const updated = next.find(t => t.id === id)
+        if (updated) dataService.upsertTask(updated, user.id).catch(console.warn)
+      }
+      return next
+    })
   }
 
   return { tasks, addTask, toggleTask, deleteTask, updateTask }

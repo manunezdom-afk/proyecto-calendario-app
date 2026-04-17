@@ -1,0 +1,213 @@
+import { supabase } from '../lib/supabase'
+
+// ── Cache helpers ─────────────────────────────────────────────────────────────
+
+function cacheGet(key, fallback = null) {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : fallback
+  } catch { return fallback }
+}
+
+function cacheSet(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
+}
+
+// ── DB ↔ App shape converters ─────────────────────────────────────────────────
+
+function eventToDb(event, userId) {
+  return {
+    id: event.id, user_id: userId,
+    title: event.title, time: event.time,
+    description: event.description ?? '',
+    section: event.section ?? 'focus',
+    icon: event.icon ?? 'event',
+    dot_color: event.dotColor ?? 'bg-secondary-container',
+    date: event.date ?? null,
+    featured: event.featured ?? false,
+  }
+}
+
+function eventFromDb(row) {
+  return {
+    id: row.id, title: row.title, time: row.time,
+    description: row.description, section: row.section,
+    icon: row.icon, dotColor: row.dot_color,
+    date: row.date, featured: row.featured,
+  }
+}
+
+function taskToDb(task, userId) {
+  return {
+    id: task.id, user_id: userId,
+    label: task.label, done: task.done,
+    priority: task.priority ?? 'Media',
+    category: task.category ?? 'hoy',
+    done_at: task.doneAt ?? null,
+  }
+}
+
+function taskFromDb(row) {
+  return {
+    id: row.id, label: row.label, done: row.done,
+    priority: row.priority, category: row.category,
+    doneAt: row.done_at,
+  }
+}
+
+function profileToDb(profile, userId) {
+  return {
+    id: userId,
+    chronotype: profile.chronotype, role: profile.role,
+    peak_start: profile.peakStart, peak_end: profile.peakEnd,
+    setup_done: profile.setupDone, snoozed_until: profile.snoozedUntil ?? null,
+  }
+}
+
+function profileFromDb(row) {
+  return {
+    chronotype: row.chronotype, role: row.role,
+    peakStart: row.peak_start, peakEnd: row.peak_end,
+    setupDone: row.setup_done, snoozedUntil: row.snoozed_until,
+  }
+}
+
+// ── Offline sync queue ────────────────────────────────────────────────────────
+
+const QUEUE_KEY = 'focus_sync_queue'
+
+function enqueue(op) {
+  const q = cacheGet(QUEUE_KEY, [])
+  q.push({ ...op, ts: Date.now() })
+  cacheSet(QUEUE_KEY, q)
+}
+
+async function executeOp({ table, type, data, id, userId }) {
+  if (type === 'upsert') {
+    const { error } = await supabase.from(table).upsert(data)
+    if (error) throw error
+  } else if (type === 'delete') {
+    const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', userId)
+    if (error) throw error
+  }
+}
+
+// ── dataService ───────────────────────────────────────────────────────────────
+
+export const dataService = {
+
+  // ── Events ─────────────────────────────────────────────────────────────────
+
+  getCachedEvents() { return cacheGet('focus_events', []) },
+  setCachedEvents(events) { cacheSet('focus_events', events) },
+
+  async fetchEvents(userId) {
+    if (!supabase) return this.getCachedEvents()
+    const { data, error } = await supabase
+      .from('events').select('*').eq('user_id', userId)
+      .order('created_at', { ascending: true })
+    if (error) throw error
+    return data.map(eventFromDb)
+  },
+
+  async upsertEvent(event, userId) {
+    if (!supabase) return
+    const row = eventToDb(event, userId)
+    if (!navigator.onLine) { enqueue({ table: 'events', type: 'upsert', data: row }); return }
+    const { error } = await supabase.from('events').upsert(row)
+    if (error) enqueue({ table: 'events', type: 'upsert', data: row })
+  },
+
+  async deleteEvent(id, userId) {
+    if (!supabase) return
+    if (!navigator.onLine) { enqueue({ table: 'events', type: 'delete', id, userId }); return }
+    const { error } = await supabase.from('events').delete().eq('id', id).eq('user_id', userId)
+    if (error) enqueue({ table: 'events', type: 'delete', id, userId })
+  },
+
+  // ── Tasks ───────────────────────────────────────────────────────────────────
+
+  getCachedTasks(fallback) { return cacheGet('focus_tasks', fallback) },
+  setCachedTasks(tasks) { cacheSet('focus_tasks', tasks) },
+
+  async fetchTasks(userId) {
+    if (!supabase) return null
+    const { data, error } = await supabase
+      .from('tasks').select('*').eq('user_id', userId)
+      .order('created_at', { ascending: true })
+    if (error) throw error
+    return data.map(taskFromDb)
+  },
+
+  async upsertTask(task, userId) {
+    if (!supabase) return
+    const row = taskToDb(task, userId)
+    if (!navigator.onLine) { enqueue({ table: 'tasks', type: 'upsert', data: row }); return }
+    const { error } = await supabase.from('tasks').upsert(row)
+    if (error) enqueue({ table: 'tasks', type: 'upsert', data: row })
+  },
+
+  async deleteTask(id, userId) {
+    if (!supabase) return
+    if (!navigator.onLine) { enqueue({ table: 'tasks', type: 'delete', id, userId }); return }
+    const { error } = await supabase.from('tasks').delete().eq('id', id).eq('user_id', userId)
+    if (error) enqueue({ table: 'tasks', type: 'delete', id, userId })
+  },
+
+  // ── Profile ─────────────────────────────────────────────────────────────────
+
+  getCachedProfile(fallback) { return cacheGet('focus_user_profile', fallback) },
+  setCachedProfile(profile) { cacheSet('focus_user_profile', profile) },
+
+  async fetchProfile(userId) {
+    if (!supabase) return null
+    const { data, error } = await supabase
+      .from('user_profiles').select('*').eq('id', userId).single()
+    if (error && error.code !== 'PGRST116') throw error
+    return data ? profileFromDb(data) : null
+  },
+
+  async upsertProfile(profile, userId) {
+    if (!supabase) return
+    const row = profileToDb(profile, userId)
+    if (!navigator.onLine) { enqueue({ table: 'user_profiles', type: 'upsert', data: row }); return }
+    const { error } = await supabase.from('user_profiles').upsert(row)
+    if (error) enqueue({ table: 'user_profiles', type: 'upsert', data: row })
+  },
+
+  // ── Migration ───────────────────────────────────────────────────────────────
+
+  isMigrated() { return localStorage.getItem('focus_migrated') === 'true' },
+  markMigrated() { localStorage.setItem('focus_migrated', 'true') },
+
+  async migrateToCloud(userId) {
+    if (this.isMigrated() || !supabase) return
+    const events = cacheGet('focus_events', [])
+    const tasks = cacheGet('focus_tasks', [])
+    const profile = cacheGet('focus_user_profile', null)
+
+    if (events.length > 0)
+      await supabase.from('events').upsert(events.map(e => eventToDb(e, userId)))
+    if (tasks.length > 0)
+      await supabase.from('tasks').upsert(tasks.map(t => taskToDb(t, userId)))
+    if (profile)
+      await supabase.from('user_profiles').upsert(profileToDb(profile, userId))
+
+    this.markMigrated()
+    console.log('[Focus] ✅ localStorage migrado a Supabase')
+  },
+
+  // ── Flush offline queue ─────────────────────────────────────────────────────
+
+  async flushQueue() {
+    if (!supabase || !navigator.onLine) return
+    const q = cacheGet(QUEUE_KEY, [])
+    if (q.length === 0) return
+    const failed = []
+    for (const op of q) {
+      try { await executeOp(op) } catch { failed.push(op) }
+    }
+    cacheSet(QUEUE_KEY, failed)
+    if (failed.length === 0) console.log('[Focus] 🔄 Cola offline sincronizada')
+  },
+}
