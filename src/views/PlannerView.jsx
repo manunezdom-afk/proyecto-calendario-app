@@ -3,6 +3,7 @@ import QuickAddSheet     from '../components/QuickAddSheet'
 import FocusTimerOverlay from '../components/FocusTimerOverlay'
 import ProfileSetupCard  from '../components/ProfileSetupCard'
 import FocusBar          from '../components/FocusBar'
+import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { isInPeak, parseEventHour, peakRangeLabel } from '../utils/peakZone'
 
@@ -250,7 +251,7 @@ function buildInsights(events, profile) {
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────
-export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, events = [], tasks = [], onOpenAssistant, onEveningShutdown, isDesktop = false }) {
+export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, events = [], tasks = [], onOpenAssistant, onEveningShutdown, isDesktop = false, morningBrief = null }) {
   const [blocks, setBlocks] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -469,6 +470,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
 
           {/* ── Left: Timeline ────────────────────────────────────────────── */}
           <div className="flex-1">
+            {isDesktop && morningBrief && (
+              <div className="mb-6">
+                <MorningBrief inline {...morningBrief} />
+              </div>
+            )}
             <header className="mb-10">
               <p className="text-primary font-semibold tracking-wider text-xs uppercase mb-2">
                 {formatToday()}

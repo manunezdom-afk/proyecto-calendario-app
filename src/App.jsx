@@ -111,6 +111,14 @@ export default function App() {
     onEditEvent:       editEvent,
     onDeleteEvent:     deleteEvent,
     onEveningShutdown: () => setShowEveningShutdown(true),
+    morningBrief: showMorningBrief ? {
+      events,
+      tasks,
+      profile,
+      onStart:      () => setShowMorningBrief(false),
+      onDismiss:    () => setShowMorningBrief(false),
+      onMoveEvent:  (id, updates) => { editEvent(id, updates); setShowMorningBrief(false) },
+    } : null,
   }
 
   return (
@@ -232,9 +240,9 @@ export default function App() {
         isDesktop={isDesktop}
       />
 
-      {/* ── Morning Brief ─────────────────────────────────────────────────── */}
+      {/* ── Morning Brief (solo modal en mobile; desktop: inline en PlannerView) */}
       <AnimatePresence>
-        {showMorningBrief && (
+        {showMorningBrief && !isDesktop && (
           <MorningBrief
             events={events}
             tasks={tasks}
