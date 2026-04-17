@@ -5,14 +5,12 @@ const navItems = [
   { id: 'settings', icon: 'settings',       label: 'Ajustes'    },
 ]
 
-export default function DesktopSideBar({ activeView, onNavigate, onSettings }) {
+export default function DesktopSideBar({ activeView, onNavigate }) {
   return (
     <aside className="fixed top-16 left-0 bottom-0 w-[72px] bg-white border-r border-slate-200 z-30 flex flex-col items-center py-4 gap-1">
       {navItems.map(({ id, icon, label }) => {
         const isActive = activeView === id
-        const handleClick = id === 'settings'
-          ? () => onSettings?.()
-          : () => onNavigate(id)
+        const handleClick = () => onNavigate(id)
         return (
           <button
             key={id}

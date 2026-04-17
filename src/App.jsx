@@ -27,6 +27,7 @@ import CalendarView    from './views/CalendarView'
 import TaskDetailView  from './views/TaskDetailView'
 import PlannerView     from './views/PlannerView'
 import TasksView       from './views/TasksView'
+import SettingsView    from './views/SettingsView'
 
 const LAST_OPENED_KEY = 'nova_last_opened'
 
@@ -186,7 +187,6 @@ export default function App() {
         <DesktopSideBar
           activeView={navView}
           onNavigate={navigate}
-          onSettings={() => { setImportExportInitialTab('export'); setImportExportOpen(true) }}
         />
       )}
 
@@ -255,6 +255,12 @@ export default function App() {
 
               {activeView === 'task-detail' && (
                 <TaskDetailView event={selectedEvent} onBack={goBack} onSave={handleSaveTask} />
+              )}
+
+              {activeView === 'settings' && (
+                <SettingsView
+                  onOpenImport={() => { setImportExportInitialTab('import'); setImportExportOpen(true) }}
+                />
               )}
             </motion.div>
           </AnimatePresence>
