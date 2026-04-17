@@ -4,7 +4,9 @@ import { useEvents }        from './hooks/useEvents'
 import { useTasks }         from './hooks/useTasks'
 import { useNotifications } from './hooks/useNotifications'
 import { useUserProfile }   from './hooks/useUserProfile'
+import { useSuggestions }   from './hooks/useSuggestions'
 import { useAuth }          from './context/AuthContext'
+import { actionToSuggestion, applySuggestion } from './utils/actionToSuggestion'
 
 import TopAppBar                   from './components/TopAppBar'
 import BottomNavBar                from './components/BottomNavBar'
@@ -17,6 +19,9 @@ import AuthModal                   from './components/AuthModal'
 import NovaWidget                  from './components/NovaWidget'
 import MorningBrief                from './components/MorningBrief'
 import EveningShutdown             from './components/EveningShutdown'
+import SuggestionsInbox            from './components/SuggestionsInbox'
+import WelcomeScreen, { useWelcomeGate } from './components/WelcomeScreen'
+import InstallAppCard              from './components/InstallAppCard'
 
 import CalendarView    from './views/CalendarView'
 import TaskDetailView  from './views/TaskDetailView'
@@ -32,8 +37,12 @@ const pageVariants = {
 }
 
 export default function App() {
-  const { authModal, setAuthModal } = useAuth()
+  const { authModal, setAuthModal, user } = useAuth()
   const { profile }                 = useUserProfile()
+  const { show: showWelcome, dismiss: dismissWelcome } = useWelcomeGate()
+
+  // Nombre para saludo personalizado (si existe email, usamos la parte antes de @)
+  const userName = user?.email ? user.email.split('@')[0].split('.')[0] : null
   const [activeView, setActiveView]     = useState('planner')
   const [previousView, setPreviousView] = useState('planner')
   const [isDesktop, setIsDesktop] = useState(
@@ -49,6 +58,39 @@ export default function App() {
 
   const { events, addEvent, deleteEvent, editEvent } = useEvents()
   const { tasks, addTask, toggleTask, deleteTask }   = useTasks()
+  const {
+    suggestions,
+    pendingCount: inboxPendingCount,
+    addSuggestion,
+    approveSuggestion,
+    rejectSuggestion,
+    clearResolved: clearResolvedSuggestions,
+  } = useSuggestions()
+
+  const [inboxOpen, setInboxOpen] = useState(false)
+
+  // Handlers para ejecutar una sugerencia aprobada
+  const suggestionHandlers = {
+    onAddEvent: addEvent,
+    onEditEvent: editEvent,
+    onDeleteEvent: deleteEvent,
+    onToggleTask: toggleTask,
+  }
+
+  function handleApproveSuggestion(id) {
+    const s = suggestions.find((x) => x.id === id)
+    if (s) applySuggestion(s, suggestionHandlers)
+    approveSuggestion(id)
+  }
+
+  // Callback que Nova invoca con sus propuestas → encolamos
+  function handleProposeActions(actions, { reply } = {}) {
+    const batchId = `batch-${Date.now()}`
+    for (const action of actions) {
+      const sug = actionToSuggestion(action, { reason: reply, batchId, events, tasks })
+      if (sug) addSuggestion(sug)
+    }
+  }
 
   const {
     notifLog, unreadCount,
@@ -111,7 +153,7 @@ export default function App() {
     onEditEvent:       editEvent,
     onDeleteEvent:     deleteEvent,
     onEveningShutdown: () => setShowEveningShutdown(true),
-    morningBrief: showMorningBrief ? {
+    morningBrief: (showMorningBrief && !showWelcome) ? {
       events,
       tasks,
       profile,
@@ -135,6 +177,8 @@ export default function App() {
           onBellClick={() => setNotifPanelOpen(true)}
           unreadCount={unreadCount}
           onShareClick={() => setImportExportOpen(true)}
+          onInboxClick={() => setInboxOpen(true)}
+          inboxCount={inboxPendingCount}
         />
       </motion.div>
 
@@ -229,7 +273,7 @@ export default function App() {
         </motion.div>
       )}
 
-      {/* ── Nova Widget — omnipresente ────────────────────────────────────── */}
+      {/* ── Nova Widget — omnipresente (modo propuesta) ────────────────────── */}
       <NovaWidget
         events={events}
         tasks={tasks}
@@ -237,12 +281,25 @@ export default function App() {
         onEditEvent={editEvent}
         onDeleteEvent={deleteEvent}
         onToggleTask={toggleTask}
+        onProposeActions={handleProposeActions}
+        onOpenInbox={() => setInboxOpen(true)}
+        proposeMode={true}
         isDesktop={isDesktop}
+      />
+
+      {/* ── Bandeja de sugerencias ────────────────────────────────────────── */}
+      <SuggestionsInbox
+        isOpen={inboxOpen}
+        onClose={() => setInboxOpen(false)}
+        suggestions={suggestions}
+        onApprove={handleApproveSuggestion}
+        onReject={rejectSuggestion}
+        onClearResolved={clearResolvedSuggestions}
       />
 
       {/* ── Morning Brief (solo modal en mobile; desktop: inline en PlannerView) */}
       <AnimatePresence>
-        {showMorningBrief && !isDesktop && (
+        {showMorningBrief && !isDesktop && !showWelcome && (
           <MorningBrief
             events={events}
             tasks={tasks}
@@ -253,6 +310,16 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* ── Welcome premium (una vez por día) ─────────────────────────────── */}
+      <AnimatePresence>
+        {showWelcome && (
+          <WelcomeScreen onEnter={dismissWelcome} userName={userName} />
+        )}
+      </AnimatePresence>
+
+      {/* ── Invitación a instalar la app (no aparece si ya está instalada) ── */}
+      {!showWelcome && <InstallAppCard />}
 
       {/* ── Evening Shutdown ─────────────────────────────────────────────── */}
       <AnimatePresence>

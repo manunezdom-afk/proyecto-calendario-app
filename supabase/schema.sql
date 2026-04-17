@@ -71,6 +71,30 @@ ALTER TABLE public.blocks ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own blocks"
   ON public.blocks FOR ALL USING (auth.uid() = user_id);
 
+-- ── suggestions (Nova: modo propuesta) ──────────────────────────────────────
+-- Acciones propuestas por Nova que el usuario aprueba o rechaza antes de aplicar.
+CREATE TABLE IF NOT EXISTS public.suggestions (
+  id           TEXT PRIMARY KEY,
+  user_id      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  kind         TEXT NOT NULL,               -- add_event | edit_event | delete_event | mark_task_done
+  payload      JSONB NOT NULL,              -- los campos de la acción original
+  preview_title TEXT,                       -- "Crear: Reunión con Ana"
+  preview_body  TEXT,                       -- "Mañana 15:00 · Focus"
+  preview_icon  TEXT DEFAULT 'auto_awesome',
+  reason       TEXT,                        -- razón/explicación de Nova
+  status       TEXT NOT NULL DEFAULT 'pending', -- pending | approved | rejected
+  batch_id     TEXT,                        -- agrupa sugerencias de la misma respuesta
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  resolved_at  TIMESTAMPTZ
+);
+
+ALTER TABLE public.suggestions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own suggestions"
+  ON public.suggestions FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS suggestions_user_status_idx
+  ON public.suggestions (user_id, status, created_at DESC);
+
 -- ── notif_log ─────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.notif_log (
   id         TEXT PRIMARY KEY,
