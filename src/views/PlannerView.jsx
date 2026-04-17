@@ -636,29 +636,31 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                 )
               })}
 
-              {blocks.length === 0 && (
-                <div className="flex gap-6">
-                  <div className="w-16" />
-                  <div className="flex-1 bg-surface-container-low rounded-xl p-6 space-y-3">
-                    <p className="text-outline text-sm font-semibold">Hoy está vacío.</p>
-                    {(semanaCount > 0 || algoDiaCount > 0) && (
+              {blocks.length === 0 && (() => {
+                const pendingTotal = semanaCount + algoDiaCount
+                return (
+                  <div className="flex gap-6">
+                    <div className="w-16" />
+                    <div className="flex-1 bg-surface-container-low rounded-xl p-6 space-y-3">
+                      <p className="text-outline text-sm font-semibold">Hoy está vacío.</p>
                       <p className="text-outline/70 text-xs leading-relaxed">
-                        Tienes{semanaCount > 0 ? ` ${semanaCount} tarea${semanaCount !== 1 ? 's' : ''} en "Esta semana"` : ''}{semanaCount > 0 && algoDiaCount > 0 ? ' y' : ''}{algoDiaCount > 0 ? ` ${algoDiaCount} en "Algún día"` : ''}.
-                        {' '}¿Jalamos una para hoy?
+                        {pendingTotal > 0
+                          ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. ¿Qué arrancamos?`
+                          : '¿Qué arrancamos?'}
                       </p>
-                    )}
-                    {onOpenAssistant && (
-                      <button
-                        onClick={onOpenAssistant}
-                        className="flex items-center gap-1.5 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
-                        Pídele a Nova que lo arme
-                      </button>
-                    )}
+                      {onOpenAssistant && (
+                        <button
+                          onClick={onOpenAssistant}
+                          className="flex items-center gap-1.5 text-xs font-bold text-white bg-primary hover:bg-primary/90 px-4 py-2 rounded-full transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                          Hablar con Nova
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
             </div>
           </div>
 
@@ -666,6 +668,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
           <div className="w-full md:w-80 space-y-5">
 
             {/* ── Card 1: Próximo Bloque ────────────────────────────────── */}
+            {blocks.length > 0 && (
             <div className="bg-surface-container-high/40 backdrop-blur-sm rounded-[24px] p-6 space-y-4">
               {/* Header */}
               <div className="flex items-center justify-between">
@@ -733,8 +736,10 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                 </div>
               )}
             </div>
+            )}
 
             {/* ── Card 2: Tu Día ────────────────────────────────────────── */}
+            {blocks.length > 0 && (
             <div className="bg-surface-container-high/40 backdrop-blur-sm rounded-[24px] p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="font-headline font-bold text-on-surface">Tu Día</h4>
@@ -806,6 +811,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                 </div>
               )}
             </div>
+            )}
 
             {/* ── Cerrar el día ─────────────────────────────────────────── */}
             {onEveningShutdown && (

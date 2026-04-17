@@ -312,12 +312,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
               </div>
 
               {focusEvents.length === 0 ? (
-                <div className="col-span-2 bg-surface-container-low rounded-xl p-8 flex flex-col items-center gap-3 text-center">
-                  <span className="material-symbols-outlined text-3xl text-outline">event_note</span>
-                  <p className="text-sm font-semibold text-outline">
-                    No hay eventos para hoy.<br />Pulsa "Añadir" para crear uno.
-                  </p>
-                </div>
+                <p className="text-sm text-outline/70 italic px-1">Día libre</p>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
                   {featuredEvent && (
