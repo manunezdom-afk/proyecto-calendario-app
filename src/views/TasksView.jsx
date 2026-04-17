@@ -44,13 +44,15 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
 
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-32 dark:bg-slate-900 dark:text-slate-100">
-      <main className="max-w-md mx-auto px-6 pt-6 space-y-8">
+      <main className="max-w-md lg:max-w-[1200px] mx-auto px-6 lg:px-10 pt-6 lg:pt-10 space-y-8">
 
-        {/* ── Header + Progress ──────────────────────────────────────────── */}
-        <header className="space-y-4">
-          <h1 className="text-4xl font-extrabold tracking-tight text-on-surface dark:text-slate-100">Tareas</h1>
+        {/* ── Header + Progress + Weekly Stats (grid en desktop) ─────────── */}
+        <header className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[1fr_1fr_1fr] lg:gap-5 lg:items-stretch">
+          <div className="lg:col-span-3 lg:mb-2">
+            <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-on-surface dark:text-slate-100">Tareas</h1>
+          </div>
 
-          <div className="bg-surface-container-lowest p-5 rounded-[24px] border border-outline-variant/20">
+          <div className="bg-surface-container-lowest p-5 rounded-[24px] border border-outline-variant/20 lg:col-span-2">
             <div className="flex justify-between items-center mb-3">
               <span className="text-sm font-bold text-on-surface-variant">Progreso de hoy</span>
               <span className="text-sm font-bold text-primary">{doneCount} / {todayTasks.length} completadas</span>
@@ -68,14 +70,21 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
               </p>
             )}
           </div>
+
+          {/* Weekly stats en desktop va al lado del progreso */}
+          <div className="hidden lg:block">
+            <WeeklyStatsCard tasks={tasks} />
+          </div>
         </header>
 
-        {/* ── Weekly Stats ──────────────────────────────────────────────── */}
-        <WeeklyStatsCard tasks={tasks} />
+        {/* ── Weekly Stats (solo mobile) ────────────────────────────────── */}
+        <div className="lg:hidden">
+          <WeeklyStatsCard tasks={tasks} />
+        </div>
 
         {/* ── Las 3 Victorias (MIT method) ──────────────────────────────── */}
         {topThree.length > 0 && (
-          <section className="space-y-3">
+          <section className="space-y-3 lg:max-w-2xl">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-[18px] text-amber-500" style={{ fontVariationSettings: "'FILL' 1" }}>
                 emoji_events
@@ -109,14 +118,14 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
           </section>
         )}
 
-        {/* ── Tareas agrupadas por categoría ────────────────────────────── */}
-        <section className="space-y-5">
+        {/* ── Tareas agrupadas por categoría (kanban 3-col en desktop) ──── */}
+        <section className="space-y-5 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-5 lg:items-start">
           {CATEGORIES.map((cat) => {
             const catTasks = tasks.filter((t) => t.category === cat)
             const pending  = catTasks.filter((t) => !t.done).length
             const isOpen   = !collapsed[cat]
             return (
-              <div key={cat} className="space-y-2">
+              <div key={cat} className="space-y-2 lg:bg-surface-container-lowest lg:rounded-[20px] lg:border lg:border-outline-variant/20 lg:p-4">
                 {/* Header de sección */}
                 <div className="flex items-center gap-2">
                   <button
@@ -237,7 +246,7 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
         </section>
 
         {/* ── Tip: Patrón de éxito ──────────────────────────────────────── */}
-        <div className="bg-gradient-to-br from-primary/8 to-secondary/5 rounded-[24px] p-5 border border-primary/10 space-y-3">
+        <div className="bg-gradient-to-br from-primary/8 to-secondary/5 rounded-[24px] p-5 lg:p-6 border border-primary/10 space-y-3 lg:max-w-3xl lg:mx-auto">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
               tips_and_updates
