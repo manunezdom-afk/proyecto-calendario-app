@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import DayTimeGrid from '../components/DayTimeGrid'
 import QuickAddSheet from '../components/QuickAddSheet'
 import MonthCalendar from '../components/MonthCalendar'
 import { resolveEventDate } from '../utils/resolveEventDate'
@@ -155,7 +156,7 @@ function EveningEventCard({ event, onDelete }) {
 }
 
 // ─── Main view ────────────────────────────────────────────────────────────────
-export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask, onExportClick }) {
+export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask, onExportClick, isDesktop = false }) {
   const { profile } = useUserProfile()
   const [showModal, setShowModal] = useState(false)
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
@@ -181,7 +182,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
   return (
     <div className="bg-surface text-on-surface min-h-screen pb-32">
 
-      <main className="max-w-md mx-auto px-6 pt-4 space-y-8">
+      <main className={isDesktop ? "max-w-4xl mx-auto px-6 pt-4 space-y-6" : "max-w-md mx-auto px-6 pt-4 space-y-8"}>
 
         {/* ── Header & View Switcher (always visible) ─────────────────── */}
         <header>
@@ -280,6 +281,15 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
               })}
             </div>
 
+            {isDesktop ? (
+              <DayTimeGrid
+                events={dayEvents}
+                peakStart={profile.peakStart}
+                peakEnd={profile.peakEnd}
+                onAdd={() => setShowModal(true)}
+                onOpenTask={onOpenTask}
+              />
+            ) : (<>
             {/* ── Banda zona de rendimiento ──────────────────────────── */}
             {profile.peakStart != null && (
               <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl">
@@ -357,8 +367,10 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                 </div>
               )}
             </section>
+            </>)}
 
-            {/* FAB */}
+            {/* FAB — oculto en desktop y en empty state mobile */}
+            {!isDesktop && focusEvents.length > 0 && (
             <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[60]">
               <button
                 onClick={() => setShowModal(true)}
@@ -368,6 +380,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                 <span className="material-symbols-outlined text-3xl">add</span>
               </button>
             </div>
+            )}
 
             {/* Quick Add Sheet (semana) */}
             {showModal && (
