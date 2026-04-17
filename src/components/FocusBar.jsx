@@ -4,19 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 const SR = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
 
-const API_KEY_STORAGE = 'focus_anthropic_key'
-
-function getApiKey() {
-  return localStorage.getItem(API_KEY_STORAGE) || ''
-}
-
-async function callFocusAssistant({ message, events, apiKey }) {
-  const headers = { 'Content-Type': 'application/json' }
-  if (apiKey) headers['x-user-api-key'] = apiKey
-
+async function callFocusAssistant({ message, events }) {
   const res = await fetch('/api/focus-assistant', {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, events, history: [] }),
   })
 
@@ -73,11 +64,10 @@ export default function FocusBar({
     clearTimeout(silenceRef.current)
     try { srRef.current?.stop() } catch {}
 
-    const apiKey = getApiKey()
     setIsThinking(true)
 
     try {
-      const result = await callFocusAssistant({ message: msg, events, apiKey })
+      const result = await callFocusAssistant({ message: msg, events })
       const { reply: replyText, actions = [] } = result
 
       // Ejecutar acciones en el calendario

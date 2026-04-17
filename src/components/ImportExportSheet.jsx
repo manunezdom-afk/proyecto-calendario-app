@@ -374,40 +374,14 @@ function TextTab({ onImport }) {
   )
 }
 
-const API_KEY_STORAGE = 'focus_anthropic_key'
-
 // ── Photo tab ─────────────────────────────────────────────────────────────────
 function PhotoTab({ onImport }) {
-  // API key guardada en localStorage
-  const [apiKey, setApiKey]         = useState(() => localStorage.getItem(API_KEY_STORAGE) || '')
-  const [keyInput, setKeyInput]     = useState('')
-  const [showKeyForm, setShowKeyForm] = useState(false)
-
-  const [photos, setPhotos]         = useState([])
-  const [preview, setPreview]       = useState([])
-  const [analyzing, setAnalyzing]   = useState(false)
-  const [imported, setImported]     = useState(false)
-  const [error, setError]           = useState('')
+  const [photos, setPhotos]   = useState([])
+  const [preview, setPreview] = useState([])
+  const [analyzing, setAnalyzing] = useState(false)
+  const [imported, setImported]   = useState(false)
+  const [error, setError]         = useState('')
   const fileRef = useRef(null)
-
-  const hasKey = apiKey.trim().length > 10
-
-  function saveKey() {
-    const k = keyInput.trim()
-    if (!k) return
-    localStorage.setItem(API_KEY_STORAGE, k)
-    setApiKey(k)
-    setKeyInput('')
-    setShowKeyForm(false)
-    setError('')
-  }
-
-  function clearKey() {
-    localStorage.removeItem(API_KEY_STORAGE)
-    setApiKey('')
-    setKeyInput('')
-    setShowKeyForm(true)
-  }
 
   function handlePhotos(e) {
     const files = Array.from(e.target.files || [])
@@ -473,7 +447,7 @@ function PhotoTab({ onImport }) {
   }
 
   async function handleAnalyze() {
-    if (!photos.length || !hasKey) return
+    if (!photos.length) return
     setAnalyzing(true)
     setError('')
     setPreview([])
@@ -485,10 +459,7 @@ function PhotoTab({ onImport }) {
       try {
         res = await fetch('/api/analyze-photo', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-api-key': apiKey.trim(),
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ images }),
         })
       } catch {
@@ -504,16 +475,14 @@ function PhotoTab({ onImport }) {
         return
       }
 
-      if (res.status === 401 || data.error === 'invalid_api_key') {
-        setError('La API key es inválida. Revísala y vuelve a ingresarla.')
-        clearKey()
+      if (res.status === 429) {
+        setError('Demasiadas solicitudes. Espera un momento e intenta de nuevo.')
         return
       }
 
       if (!res.ok || data.error) {
         const detail = data.detail ? ` (${data.detail})` : ''
-        const status = data.status ? ` [${data.status}]` : ''
-        setError(`Error al analizar: ${data.error ?? res.status}${status}${detail}. Intenta de nuevo.`)
+        setError(`Error al analizar: ${data.error ?? res.status}${detail}. Intenta de nuevo.`)
         return
       }
 
@@ -541,76 +510,14 @@ function PhotoTab({ onImport }) {
     setPhotos([])
   }
 
-  // ── Pantalla de configuración de API key ───────────────────────────────────
-  if (!hasKey || showKeyForm) {
-    return (
-      <div className="space-y-5">
-        <div className="p-5 rounded-2xl bg-primary/5 border border-primary/15 space-y-3">
-          <div className="flex items-center gap-2.5">
-            <span className="material-symbols-outlined text-primary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>key</span>
-            <div>
-              <p className="font-bold text-on-surface text-sm">Conectar con la IA</p>
-              <p className="text-xs text-outline font-medium">Solo la primera vez — se guarda en tu dispositivo</p>
-            </div>
-          </div>
-          <p className="text-xs text-on-surface-variant font-medium leading-relaxed">
-            Para leer fotos automáticamente necesitas una API key de Anthropic (gratis para empezar).
-          </p>
-          <div className="space-y-2 text-xs text-outline bg-surface-container-low rounded-xl p-3">
-            <p className="font-bold text-on-surface">Cómo obtenerla (gratis):</p>
-            <p>1. Entrá a <span className="font-bold text-primary">console.anthropic.com</span></p>
-            <p>2. Creá una cuenta → API Keys → Create Key</p>
-            <p>3. Copiá la clave y pegála abajo</p>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <input
-            type="password"
-            value={keyInput}
-            onChange={(e) => setKeyInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && saveKey()}
-            placeholder="sk-ant-api03-..."
-            className="w-full bg-surface-container-low rounded-xl px-4 py-3.5 text-sm font-mono text-on-surface placeholder:text-outline/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-          <button
-            onClick={saveKey}
-            disabled={keyInput.trim().length < 10}
-            className="w-full py-3.5 rounded-2xl bg-primary text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-30 active:scale-[0.98] transition-all"
-          >
-            <span className="material-symbols-outlined text-[18px]">check</span>
-            Guardar y continuar
-          </button>
-          {showKeyForm && (
-            <button
-              onClick={() => setShowKeyForm(false)}
-              className="w-full py-2.5 text-sm font-semibold text-outline hover:text-on-surface transition-colors"
-            >
-              Cancelar
-            </button>
-          )}
-        </div>
-      </div>
-    )
-  }
-
   // ── Pantalla principal: subir fotos + analizar ─────────────────────────────
   return (
     <div className="space-y-5">
 
-      {/* Header con estado de key */}
-      <div className="flex items-center justify-between px-1">
+      <div className="px-1">
         <p className="text-sm text-on-surface-variant font-medium">
           Sube fotos — la IA las lee y extrae todos los eventos.
         </p>
-        <button
-          onClick={clearKey}
-          className="flex items-center gap-1 text-[11px] font-semibold text-outline hover:text-primary transition-colors flex-shrink-0 ml-3"
-          title="Cambiar API key"
-        >
-          <span className="material-symbols-outlined text-[14px]">key</span>
-          Cambiar key
-        </button>
       </div>
 
       {/* Upload zone */}

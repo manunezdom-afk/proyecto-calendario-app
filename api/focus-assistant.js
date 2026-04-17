@@ -1,14 +1,15 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-/**
- * Vercel Serverless Function: focus-assistant
- *
- * Focus como secretario IA — entiende lenguaje natural en español
- * y puede agregar, editar, mover o eliminar eventos del calendario.
- * Tiene acceso a ubicación, clima en tiempo real y contactos del usuario.
- *
- * API key: variable de entorno ANTHROPIC_API_KEY o header x-user-api-key
- */
+// ─── Rate limiting en memoria (30 req/min por IP) ────────────────────────────
+const _rl = new Map()
+function rateLimited(ip) {
+  const now = Date.now()
+  const e = _rl.get(ip)
+  if (!e || now > e.reset) { _rl.set(ip, { count: 1, reset: now + 60_000 }); return false }
+  if (e.count >= 30) return true
+  e.count++
+  return false
+}
 
 function describeWeatherCode(code) {
   if (code === 0) return 'Despejado'
@@ -33,19 +34,19 @@ async function fetchWeather(lat, lon) {
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-user-api-key')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'method_not_allowed' })
   }
 
-  const apiKey =
-    process.env.ANTHROPIC_API_KEY ||
-    req.headers['x-user-api-key'] ||
-    req.headers['X-User-Api-Key']
-  const normalizedApiKey = apiKey?.trim()
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown'
+  if (rateLimited(ip)) {
+    return res.status(429).json({ error: 'rate_limit', message: 'Demasiadas solicitudes. Espera un momento.' })
+  }
 
+  const normalizedApiKey = process.env.ANTHROPIC_API_KEY?.trim()
   if (!normalizedApiKey) {
     return res.status(503).json({ error: 'no_api_key' })
   }

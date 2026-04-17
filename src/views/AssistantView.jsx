@@ -7,11 +7,9 @@ const SR = typeof window !== 'undefined' &&
 const CONTACTS_SUPPORTED =
   typeof navigator !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window
 
-const API_KEY_STORAGE    = 'focus_anthropic_key'
 const OPENAI_KEY_STORAGE = 'focus_openai_key'
 const VOICE_STORAGE      = 'focus_tts_voice'
 
-function getApiKey()    { return localStorage.getItem(API_KEY_STORAGE) || '' }
 function getOpenAIKey() { return localStorage.getItem(OPENAI_KEY_STORAGE) || '' }
 function getVoice()     { return localStorage.getItem(VOICE_STORAGE) || 'nova' }
 function saveVoice(v)   { localStorage.setItem(VOICE_STORAGE, v) }
@@ -40,12 +38,11 @@ async function reverseGeocode(lat, lon) {
   } catch { return { city: '', country: '' } }
 }
 
-async function callFocusAssistant({ message, events, history, apiKey, location, contacts }) {
-  const headers = { 'Content-Type': 'application/json' }
-  if (apiKey) headers['x-user-api-key'] = apiKey
+async function callFocusAssistant({ message, events, history, location, contacts }) {
   const res = await fetch('/api/focus-assistant', {
     method: 'POST',
     headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, events, history, location, contacts }),
   })
   if (!res.ok) {
@@ -323,6 +320,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
 
   function updateStatus(s) { statusRef.current = s; setStatus(s) }
 
+  useEffect(() => { localStorage.removeItem('focus_anthropic_key') }, [])
   useEffect(() => { voiceRef.current = (selectedVoice || 'nova').toLowerCase() }, [selectedVoice])
 
   async function unlockAudio() {
@@ -391,7 +389,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
       const result = await callFocusAssistant({
         message: text, events,
         history: historyRef.current.slice(0, -1).slice(-10),
-        apiKey: getApiKey(), location, contacts,
+        location, contacts,
       })
       const { reply, actions = [] } = result
       for (const action of actions) {

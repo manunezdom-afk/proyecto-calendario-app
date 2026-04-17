@@ -1,18 +1,19 @@
-/**
- * Vercel Serverless Function: analyze-photo
- *
- * Proxy CORS para llamar a Claude con visión.
- * La API key se acepta de dos fuentes (en orden de prioridad):
- *   1. Variable de entorno ANTHROPIC_API_KEY (configurada en Vercel)
- *   2. Header x-user-api-key enviado desde el cliente (clave guardada en el navegador)
- */
+// ─── Rate limiting en memoria (20 req/min por IP) ────────────────────────────
+const _rl = new Map()
+function rateLimited(ip) {
+  const now = Date.now()
+  const e = _rl.get(ip)
+  if (!e || now > e.reset) { _rl.set(ip, { count: 1, reset: now + 60_000 }); return false }
+  if (e.count >= 20) return true
+  e.count++
+  return false
+}
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages'
 
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-user-api-key')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end()
@@ -22,12 +23,12 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'method_not_allowed' })
   }
 
-  // Resolver API key: variable de entorno o header del cliente
-  const apiKey =
-    process.env.ANTHROPIC_API_KEY ||
-    req.headers['x-user-api-key'] ||
-    req.headers['X-User-Api-Key']
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown'
+  if (rateLimited(ip)) {
+    return res.status(429).json({ error: 'rate_limit', message: 'Demasiadas solicitudes. Espera un momento.' })
+  }
 
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
   if (!apiKey) {
     return res.status(503).json({ error: 'no_api_key' })
   }
