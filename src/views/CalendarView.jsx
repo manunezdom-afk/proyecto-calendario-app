@@ -236,15 +236,15 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
           <>
             {/* Week strip */}
             <div className="grid grid-cols-7 gap-2">
-              {CALENDAR_DAYS.map(({ day, num }) => {
-                const isActive = num === activeDay
+              {CALENDAR_DAYS.map(({ day, num, iso }) => {
+                const isActive  = num === activeDay
+                const dayEvts   = events.filter((e) => resolveEventDate(e) === iso)
+                const hasEvts   = dayEvts.length > 0
+                const highLoad  = dayEvts.length >= 3
                 return (
                   <button
                     key={day}
-                    onClick={() => {
-                      setActiveDay(num)
-                      console.log(`[Focus] 📅 Day selected: ${day} ${num}`)
-                    }}
+                    onClick={() => { setActiveDay(num); console.log(`[Focus] 📅 Day selected: ${day} ${num}`) }}
                     className="flex flex-col items-center gap-2 focus:outline-none"
                   >
                     <span className={`text-[10px] font-bold uppercase ${isActive ? 'text-primary' : 'text-outline'}`}>
@@ -253,11 +253,22 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                     {isActive ? (
                       <div className="w-10 h-14 flex flex-col items-center justify-center rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20">
                         <span>{num}</span>
-                        <div className="w-1 h-1 bg-white rounded-full mt-1" />
+                        {hasEvts && <div className="w-1 h-1 bg-white/70 rounded-full mt-1" />}
                       </div>
                     ) : (
-                      <div className="w-10 h-14 flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-semibold hover:bg-surface-container transition-colors">
-                        {num}
+                      <div className={`w-10 h-14 flex flex-col items-center justify-center rounded-2xl font-semibold transition-colors ${
+                        highLoad
+                          ? 'bg-primary/15 text-primary hover:bg-primary/20'
+                          : 'bg-surface-container-low text-on-surface hover:bg-surface-container'
+                      }`}>
+                        <span>{num}</span>
+                        {hasEvts && (
+                          <div className="flex gap-[3px] mt-1">
+                            {dayEvts.slice(0, 3).map((ev, i) => (
+                              <div key={i} className={`w-1 h-1 rounded-full ${ev.section === 'evening' ? 'bg-secondary' : 'bg-primary'}`} />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </button>

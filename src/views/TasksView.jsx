@@ -8,16 +8,17 @@ const PRIORITY_CFG = {
   Baja:      { color: 'text-outline',   bg: 'bg-outline/10',   dot: 'bg-outline-variant', ring: 'ring-outline/20' },
 }
 
-const CATEGORIES   = ['hoy', 'semana', 'algún día']
-const CAT_LABELS   = { hoy: 'Hoy', semana: 'Esta semana', 'algún día': 'Algún día' }
-const CAT_ICONS    = { hoy: 'today', semana: 'date_range', 'algún día': 'inbox' }
+const CATEGORIES = ['hoy', 'semana', 'algún día']
+const CAT_LABELS = { hoy: 'Hoy', semana: 'Esta semana', 'algún día': 'Algún día' }
+const CAT_ICONS  = { hoy: 'today', semana: 'date_range', 'algún día': 'inbox' }
 
 export default function TasksView() {
   const { tasks, addTask, toggleTask, deleteTask } = useTasks()
-  const [activeCategory, setActiveCategory] = useState('hoy')
-  const [showInput, setShowInput]   = useState(false)
-  const [newLabel, setNewLabel]     = useState('')
+  const [showInput, setShowInput]     = useState(false)
+  const [addCategory, setAddCategory] = useState('hoy')
+  const [newLabel, setNewLabel]       = useState('')
   const [newPriority, setNewPriority] = useState('Media')
+  const [collapsed, setCollapsed]     = useState({})
 
   // ── Stats ──────────────────────────────────────────────────────────────────
   const todayTasks = tasks.filter((t) => t.category === 'hoy')
@@ -30,21 +31,21 @@ export default function TasksView() {
     .sort((a, b) => ({ Alta: 0, Media: 1, Baja: 2 }[a.priority] - { Alta: 0, Media: 1, Baja: 2 }[b.priority]))
     .slice(0, 3)
 
-  const filtered = tasks.filter((t) => t.category === activeCategory)
-
-  // ── Handlers ───────────────────────────────────────────────────────────────
   function handleAdd(e) {
     e.preventDefault()
     const trimmed = newLabel.trim()
     if (!trimmed) return
-    addTask({ label: trimmed, priority: newPriority, category: activeCategory })
+    addTask({ label: trimmed, priority: newPriority, category: addCategory })
     setNewLabel('')
     setShowInput(false)
   }
 
+  function toggleCollapse(cat) {
+    setCollapsed((prev) => ({ ...prev, [cat]: !prev[cat] }))
+  }
+
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-32 dark:bg-slate-900 dark:text-slate-100">
-
       <main className="max-w-md mx-auto px-6 pt-6 space-y-8">
 
         {/* ── Header + Progress ──────────────────────────────────────────── */}
@@ -64,9 +65,7 @@ export default function TasksView() {
             </div>
             {progress === 100 && todayTasks.length > 0 && (
               <p className="text-xs text-primary font-bold mt-2.5 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  celebration
-                </span>
+                <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>celebration</span>
                 ¡Todas las tareas de hoy completadas!
               </p>
             )}
@@ -80,16 +79,11 @@ export default function TasksView() {
         {topThree.length > 0 && (
           <section className="space-y-3">
             <div className="flex items-center gap-2">
-              <span
-                className="material-symbols-outlined text-[18px] text-amber-500"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
+              <span className="material-symbols-outlined text-[18px] text-amber-500" style={{ fontVariationSettings: "'FILL' 1" }}>
                 emoji_events
               </span>
               <h2 className="font-headline font-bold text-on-surface">Las 3 Victorias de Hoy</h2>
-              <span className="ml-auto text-[10px] text-outline font-bold uppercase tracking-wider">
-                Método MIT
-              </span>
+              <span className="ml-auto text-[10px] text-outline font-bold uppercase tracking-wider">Método MIT</span>
             </div>
 
             {topThree.map(({ id, label, priority }, i) => {
@@ -100,9 +94,7 @@ export default function TasksView() {
                   key={id}
                   onClick={() => toggleTask(id)}
                   className={`w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-[0.98] ${
-                    isTop
-                      ? 'bg-primary/8 ring-1 ring-primary/25'
-                      : 'bg-surface-container-lowest ring-1 ring-outline-variant/15'
+                    isTop ? 'bg-primary/8 ring-1 ring-primary/25' : 'bg-surface-container-lowest ring-1 ring-outline-variant/15'
                   }`}
                 >
                   <span className={`text-2xl font-black tabular-nums w-7 text-center ${isTop ? 'text-primary' : 'text-outline/30'}`}>
@@ -110,172 +102,153 @@ export default function TasksView() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-on-surface text-sm truncate">{label}</p>
-                    <span className={`text-[10px] font-bold uppercase tracking-wider ${cfg.color}`}>
-                      Prioridad {priority}
-                    </span>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${cfg.color}`}>Prioridad {priority}</span>
                   </div>
-                  <span className="material-symbols-outlined text-outline-variant text-[20px]">
-                    radio_button_unchecked
-                  </span>
+                  <span className="material-symbols-outlined text-outline-variant text-[20px]">radio_button_unchecked</span>
                 </button>
               )
             })}
           </section>
         )}
 
-        {/* ── Category tabs + task list ──────────────────────────────────── */}
-        <section className="space-y-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold transition-all ${
-                  activeCategory === cat
-                    ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                    : 'bg-surface-container-low text-outline hover:text-on-surface'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[13px]">{CAT_ICONS[cat]}</span>
-                {CAT_LABELS[cat]}
-                <span className={`ml-0.5 ${activeCategory === cat ? 'text-white/70' : 'text-outline/60'}`}>
-                  ({tasks.filter((t) => t.category === cat && !t.done).length})
-                </span>
-              </button>
-            ))}
-            <button
-              onClick={() => setShowInput(true)}
-              className="ml-auto w-9 h-9 flex items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/20 active:scale-90 transition-transform"
-            >
-              <span className="material-symbols-outlined text-[20px]">add</span>
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {filtered.length === 0 && !showInput && (
-              <div className="bg-surface-container-low rounded-2xl p-8 text-center">
-                <span className="material-symbols-outlined text-4xl text-outline/30 block mb-2">task_alt</span>
-                <p className="text-sm text-outline font-medium">
-                  Sin tareas en <span className="font-bold">{CAT_LABELS[activeCategory]}</span>.<br />
-                  Pulsa + para añadir una.
-                </p>
-              </div>
-            )}
-
-            {filtered.map(({ id, label, done, priority }) => {
-              const cfg = PRIORITY_CFG[priority]
-              return (
-                <div
-                  key={id}
-                  className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${
-                    done
-                      ? 'border-outline-variant/10 bg-surface-container-low/40 opacity-50'
-                      : 'border-outline-variant/20 bg-surface-container-lowest'
-                  }`}
-                >
+        {/* ── Tareas agrupadas por categoría ────────────────────────────── */}
+        <section className="space-y-5">
+          {CATEGORIES.map((cat) => {
+            const catTasks = tasks.filter((t) => t.category === cat)
+            const pending  = catTasks.filter((t) => !t.done).length
+            const isOpen   = !collapsed[cat]
+            return (
+              <div key={cat} className="space-y-2">
+                {/* Header de sección */}
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => toggleTask(id)}
-                    className="flex-shrink-0 active:scale-90 transition-transform"
+                    onClick={() => toggleCollapse(cat)}
+                    className="flex items-center gap-2 flex-1 text-left py-1"
                   >
-                    <span
-                      className={`material-symbols-outlined text-xl transition-colors ${
-                        done ? 'text-primary' : 'text-outline-variant hover:text-primary'
-                      }`}
-                      style={done ? { fontVariationSettings: "'FILL' 1" } : {}}
-                    >
-                      {done ? 'check_circle' : 'radio_button_unchecked'}
+                    <span className="material-symbols-outlined text-[16px] text-outline">{CAT_ICONS[cat]}</span>
+                    <span className="text-sm font-bold text-on-surface">{CAT_LABELS[cat]}</span>
+                    {pending > 0 && (
+                      <span className="text-[10px] font-bold text-outline/60">({pending})</span>
+                    )}
+                    <span className={`material-symbols-outlined text-[16px] text-outline/40 ml-auto transition-transform duration-150 ${isOpen ? '' : '-rotate-90'}`}>
+                      expand_more
                     </span>
                   </button>
-
-                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
-
-                  <span className={`flex-1 text-sm font-semibold ${done ? 'line-through text-outline' : 'text-on-surface'}`}>
-                    {label}
-                  </span>
-
                   <button
-                    onClick={() => deleteTask(id)}
-                    className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-outline hover:bg-error/10 hover:text-error transition-all active:scale-90"
+                    onClick={() => { setAddCategory(cat); setShowInput(true) }}
+                    className="w-7 h-7 flex items-center justify-center rounded-full text-outline hover:text-primary hover:bg-primary/10 transition-colors"
                   >
-                    <span className="material-symbols-outlined text-[15px]">close</span>
+                    <span className="material-symbols-outlined text-[16px]">add</span>
                   </button>
                 </div>
-              )
-            })}
 
-            {/* Inline quick-add form */}
-            {showInput && (
-              <form
-                onSubmit={handleAdd}
-                className="bg-surface-container-lowest rounded-2xl ring-2 ring-primary/30 p-4 space-y-3"
-              >
-                <input
-                  autoFocus
-                  type="text"
-                  value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') { setShowInput(false); setNewLabel('') }
-                  }}
-                  placeholder="¿Qué necesitas hacer?"
-                  className="w-full bg-transparent text-on-surface placeholder:text-outline/50 text-sm font-medium focus:outline-none"
-                />
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="flex gap-1">
-                    {['Alta', 'Media', 'Baja'].map((p) => {
-                      const cfg = PRIORITY_CFG[p]
+                {isOpen && (
+                  <div className="space-y-1.5 pl-1">
+                    {catTasks.length === 0 && !(showInput && addCategory === cat) && (
+                      <p className="text-xs text-outline/50 pl-5 py-1">Sin tareas. Pulsa + para añadir.</p>
+                    )}
+
+                    {catTasks.map(({ id, label, done, priority }) => {
+                      const cfg = PRIORITY_CFG[priority]
                       return (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => setNewPriority(p)}
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
-                            newPriority === p ? `${cfg.bg} ${cfg.color}` : 'text-outline'
+                        <div
+                          key={id}
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all ${
+                            done
+                              ? 'border-outline-variant/10 bg-surface-container-low/40 opacity-50'
+                              : 'border-outline-variant/20 bg-surface-container-lowest'
                           }`}
                         >
-                          {p}
-                        </button>
+                          <button onClick={() => toggleTask(id)} className="flex-shrink-0 active:scale-90 transition-transform">
+                            <span
+                              className={`material-symbols-outlined text-[18px] transition-colors ${done ? 'text-primary' : 'text-outline-variant hover:text-primary'}`}
+                              style={done ? { fontVariationSettings: "'FILL' 1" } : {}}
+                            >
+                              {done ? 'check_circle' : 'radio_button_unchecked'}
+                            </span>
+                          </button>
+
+                          <span className={`flex-1 text-sm font-medium ${done ? 'line-through text-outline' : 'text-on-surface'}`}>
+                            {label}
+                          </span>
+
+                          {/* Priority pill */}
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${cfg.bg} ${cfg.color}`}>
+                            {priority}
+                          </span>
+
+                          {/* Drag handle — decorativo */}
+                          <span className="material-symbols-outlined text-[14px] text-outline/30 flex-shrink-0 cursor-grab">
+                            drag_indicator
+                          </span>
+
+                          <button
+                            onClick={() => deleteTask(id)}
+                            className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-outline/40 hover:bg-error/10 hover:text-error transition-all active:scale-90"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">close</span>
+                          </button>
+                        </div>
                       )
                     })}
+
+                    {/* Inline quick-add para esta categoría */}
+                    {showInput && addCategory === cat && (
+                      <form
+                        onSubmit={handleAdd}
+                        className="bg-surface-container-lowest rounded-xl ring-2 ring-primary/30 px-3 py-2.5 space-y-2"
+                      >
+                        <input
+                          autoFocus
+                          type="text"
+                          value={newLabel}
+                          onChange={(e) => setNewLabel(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Escape') { setShowInput(false); setNewLabel('') } }}
+                          placeholder="¿Qué necesitas hacer?"
+                          className="w-full bg-transparent text-on-surface placeholder:text-outline/50 text-sm font-medium focus:outline-none"
+                        />
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1">
+                            {['Alta', 'Media', 'Baja'].map((p) => {
+                              const c = PRIORITY_CFG[p]
+                              return (
+                                <button key={p} type="button" onClick={() => setNewPriority(p)}
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all ${newPriority === p ? `${c.bg} ${c.color}` : 'text-outline'}`}
+                                >
+                                  {p}
+                                </button>
+                              )
+                            })}
+                          </div>
+                          <div className="flex gap-2 ml-auto">
+                            <button type="button" onClick={() => { setShowInput(false); setNewLabel('') }} className="text-xs text-outline px-2 py-1">
+                              Cancelar
+                            </button>
+                            <button type="submit" className="text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors">
+                              Añadir
+                            </button>
+                          </div>
+                        </div>
+                      </form>
+                    )}
                   </div>
-                  <div className="flex gap-2 ml-auto">
-                    <button
-                      type="button"
-                      onClick={() => { setShowInput(false); setNewLabel('') }}
-                      className="text-xs text-outline hover:text-on-surface px-2 py-1 transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className="text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
-                    >
-                      Añadir
-                    </button>
-                  </div>
-                </div>
-              </form>
-            )}
-          </div>
+                )}
+              </div>
+            )
+          })}
         </section>
 
         {/* ── Tip: Patrón de éxito ──────────────────────────────────────── */}
         <div className="bg-gradient-to-br from-primary/8 to-secondary/5 rounded-[24px] p-5 border border-primary/10 space-y-3">
           <div className="flex items-center gap-2">
-            <span
-              className="material-symbols-outlined text-primary text-[18px]"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
+            <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
               tips_and_updates
             </span>
-            <span className="text-xs font-bold text-primary uppercase tracking-wider">
-              Patrón de Éxito · Método MIT
-            </span>
+            <span className="text-xs font-bold text-primary uppercase tracking-wider">Patrón de Éxito · Método MIT</span>
           </div>
           <p className="text-sm text-on-surface-variant font-medium leading-relaxed">
             Identifica tu <span className="text-on-surface font-bold">tarea más importante</span> del día y
-            complétala antes de revisar correos o mensajes. Un solo foco profundo vale más que diez
-            tareas superficiales.
+            complétala antes de revisar correos o mensajes. Un solo foco profundo vale más que diez tareas superficiales.
           </p>
         </div>
 

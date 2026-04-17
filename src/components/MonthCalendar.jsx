@@ -106,9 +106,11 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
         {grid.map((day, idx) => {
           if (!day) return <div key={`e-${idx}`} />
           const iso = toISO(viewYear, viewMonth, day)
-          const isToday = iso === todayISO
+          const isToday    = iso === todayISO
           const isSelected = iso === selectedDate
-          const count = eventsForDate(iso).length
+          const dayEvts    = eventsForDate(iso)
+          const count      = dayEvts.length
+          const highLoad   = count >= 3
 
           return (
             <button
@@ -119,12 +121,27 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
                   ? 'bg-primary text-white shadow-lg shadow-primary/25'
                   : isToday
                   ? 'bg-primary/10 text-primary font-bold ring-1 ring-primary/30'
+                  : highLoad
+                  ? 'bg-primary/12 text-primary hover:bg-primary/18'
                   : 'hover:bg-surface-container-low text-on-surface'
               }`}
             >
               {day}
               {count > 0 && (
-                <div className={`w-1 h-1 rounded-full ${isSelected ? 'bg-white/70' : 'bg-primary'}`} />
+                <div className="flex gap-[2px]">
+                  {dayEvts.slice(0, 3).map((ev, i) => (
+                    <div
+                      key={i}
+                      className={`w-1 h-1 rounded-full ${
+                        isSelected
+                          ? 'bg-white/70'
+                          : ev.section === 'evening'
+                          ? 'bg-secondary'
+                          : 'bg-primary'
+                      }`}
+                    />
+                  ))}
+                </div>
               )}
             </button>
           )

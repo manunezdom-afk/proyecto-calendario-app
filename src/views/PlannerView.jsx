@@ -4,6 +4,7 @@ import FocusTimerOverlay from '../components/FocusTimerOverlay'
 import ProfileSetupCard  from '../components/ProfileSetupCard'
 import FocusBar          from '../components/FocusBar'
 import { useUserProfile } from '../hooks/useUserProfile'
+import { useTasks }       from '../hooks/useTasks'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
@@ -249,7 +250,7 @@ function buildInsights(events, profile) {
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────
-export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, events = [] }) {
+export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, events = [], onOpenAssistant }) {
   const [blocks, setBlocks] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -267,6 +268,9 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
   }, [])
 
   const { profile, saveProfile, snoozeSetup, showSetup } = useUserProfile()
+  const { tasks } = useTasks()
+  const semanaCount  = tasks.filter((t) => t.category === 'semana'    && !t.done).length
+  const algoDiaCount = tasks.filter((t) => t.category === 'algún día' && !t.done).length
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(blocks))
@@ -466,22 +470,13 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
 
           {/* ── Left: Timeline ────────────────────────────────────────────── */}
           <div className="flex-1">
-            <header className="mb-10 flex justify-between items-end">
-              <div>
-                <p className="text-primary font-semibold tracking-wider text-xs uppercase mb-2">
-                  {formatToday()}
-                </p>
-                <h2 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface">
-                  Mi Día
-                </h2>
-              </div>
-              <button
-                onClick={() => setShowModal(true)}
-                className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
-              >
-                <span className="material-symbols-outlined text-[16px]">add</span>
-                Añadir bloque
-              </button>
+            <header className="mb-10">
+              <p className="text-primary font-semibold tracking-wider text-xs uppercase mb-2">
+                {formatToday()}
+              </p>
+              <h2 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface">
+                Mi Día
+              </h2>
             </header>
 
             <FocusBar
@@ -590,8 +585,23 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
               {blocks.length === 0 && (
                 <div className="flex gap-6">
                   <div className="w-16" />
-                  <div className="flex-1 bg-surface-container-low rounded-xl p-8 text-center">
-                    <p className="text-outline text-sm font-semibold">No hay tareas para hoy.</p>
+                  <div className="flex-1 bg-surface-container-low rounded-xl p-6 space-y-3">
+                    <p className="text-outline text-sm font-semibold">Hoy está vacío.</p>
+                    {(semanaCount > 0 || algoDiaCount > 0) && (
+                      <p className="text-outline/70 text-xs leading-relaxed">
+                        Tienes{semanaCount > 0 ? ` ${semanaCount} tarea${semanaCount !== 1 ? 's' : ''} en "Esta semana"` : ''}{semanaCount > 0 && algoDiaCount > 0 ? ' y' : ''}{algoDiaCount > 0 ? ` ${algoDiaCount} en "Algún día"` : ''}.
+                        {' '}¿Jalamos una para hoy?
+                      </p>
+                    )}
+                    {onOpenAssistant && (
+                      <button
+                        onClick={onOpenAssistant}
+                        className="flex items-center gap-1.5 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                        Pídele a Nova que lo arme
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -674,43 +684,63 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
 
             {/* ── Card 2: Tu Día ────────────────────────────────────────── */}
             <div className="bg-surface-container-high/40 backdrop-blur-sm rounded-[24px] p-5 space-y-4">
-              {/* Header */}
               <div className="flex items-center justify-between">
                 <h4 className="font-headline font-bold text-on-surface">Tu Día</h4>
                 <span className="text-[10px] font-bold text-outline uppercase tracking-wider">HOY</span>
               </div>
 
-              {/* 3 métricas en grid */}
-              <div className="grid grid-cols-3 gap-2">
-                <div className="bg-surface-container-lowest rounded-2xl p-3 text-center">
-                  <p className="text-2xl font-extrabold font-headline text-primary tabular-nums">{confirmedCount}</p>
-                  <p className="text-[10px] font-semibold text-outline mt-0.5 leading-tight">Confirmados</p>
+              {totalBlocks === 0 ? (
+                <div className="text-center py-3 space-y-3">
+                  <span className="material-symbols-outlined text-outline/30 text-[40px] block" style={{ fontVariationSettings: "'FILL' 0" }}>
+                    calendar_today
+                  </span>
+                  <p className="text-sm font-semibold text-outline">Tu día está vacío.</p>
+                  <p className="text-xs text-outline/60 leading-relaxed">Pídele a Nova que lo arme.</p>
+                  {onOpenAssistant && (
+                    <button
+                      onClick={onOpenAssistant}
+                      className="mx-auto flex items-center gap-1.5 text-xs font-bold text-white bg-primary px-4 py-2 rounded-full shadow-lg shadow-primary/20 transition-transform active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                      Hablar con Nova
+                    </button>
+                  )}
                 </div>
-                <div className="bg-surface-container-lowest rounded-2xl p-3 text-center">
-                  <p className="text-2xl font-extrabold font-headline text-secondary tabular-nums">{suggestionCount}</p>
-                  <p className="text-[10px] font-semibold text-outline mt-0.5 leading-tight">Pendientes</p>
-                </div>
-                <div className="bg-surface-container-lowest rounded-2xl p-3 text-center">
-                  <p className="text-2xl font-extrabold font-headline text-on-surface-variant tabular-nums">{completedCount}</p>
-                  <p className="text-[10px] font-semibold text-outline mt-0.5 leading-tight">Completados</p>
-                </div>
-              </div>
+              ) : (
+                <>
+                  {/* 3 métricas en grid */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-surface-container-lowest rounded-2xl p-3 text-center">
+                      <p className="text-2xl font-extrabold font-headline text-primary tabular-nums">{confirmedCount}</p>
+                      <p className="text-[10px] font-semibold text-outline mt-0.5 leading-tight">Confirmados</p>
+                    </div>
+                    <div className="bg-surface-container-lowest rounded-2xl p-3 text-center">
+                      <p className="text-2xl font-extrabold font-headline text-secondary tabular-nums">{suggestionCount}</p>
+                      <p className="text-[10px] font-semibold text-outline mt-0.5 leading-tight">Pendientes</p>
+                    </div>
+                    <div className="bg-surface-container-lowest rounded-2xl p-3 text-center">
+                      <p className="text-2xl font-extrabold font-headline text-on-surface-variant tabular-nums">{completedCount}</p>
+                      <p className="text-[10px] font-semibold text-outline mt-0.5 leading-tight">Completados</p>
+                    </div>
+                  </div>
 
-              {/* Barra de bloques completados */}
-              <div>
-                <div className="flex justify-between mb-1.5">
-                  <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Bloques completados</span>
-                  <span className="text-[10px] font-bold text-outline tabular-nums">{completedCount}/{totalBlocks}</span>
-                </div>
-                <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-secondary rounded-full transition-all duration-500"
-                    style={{ width: `${blockProgress * 100}%` }}
-                  />
-                </div>
-              </div>
+                  {/* Barra de bloques completados */}
+                  <div>
+                    <div className="flex justify-between mb-1.5">
+                      <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Bloques completados</span>
+                      <span className="text-[10px] font-bold text-outline tabular-nums">{completedCount}/{totalBlocks}</span>
+                    </div>
+                    <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-secondary rounded-full transition-all duration-500"
+                        style={{ width: `${blockProgress * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
-              {/* 1 insight prominente */}
+              {/* 1 insight prominente — siempre */}
               {topInsight && (
                 <div className={`p-4 ${topInsight.bg} rounded-2xl`}>
                   <div className="flex items-center gap-2 mb-1.5">
@@ -729,14 +759,16 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
         </div>
       </main>
 
-      {/* FAB */}
-      <button
-        onClick={() => setShowModal(true)}
-        className="fixed bottom-28 right-6 w-14 h-14 bg-primary text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-105 active:scale-90 transition-transform z-40"
-        title="Añadir bloque"
-      >
-        <span className="material-symbols-outlined text-3xl">add</span>
-      </button>
+      {/* FAB — solo visible cuando hay bloques */}
+      {blocks.length > 0 && (
+        <button
+          onClick={() => setShowModal(true)}
+          className="fixed bottom-28 right-6 w-14 h-14 bg-primary text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-105 active:scale-90 transition-transform z-40"
+          title="Añadir bloque"
+        >
+          <span className="material-symbols-outlined text-3xl">add</span>
+        </button>
+      )}
 
       {showModal && (
         <QuickAddSheet onSave={handleModalSave} onCancel={() => setShowModal(false)} />
