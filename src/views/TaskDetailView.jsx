@@ -23,7 +23,7 @@ export default function TaskDetailView({ event, onBack, onSave }) {
 
   // ── Tag handlers ───────────────────────────────────────────────────────────
   function removeTag(tag) {
-    console.log(`[Sanctuary] 🏷️ Removing tag: "${tag}"`)
+    console.log(`[Focus] 🏷️ Removing tag: "${tag}"`)
     setTags((prev) => prev.filter((t) => t !== tag))
   }
 
@@ -34,7 +34,7 @@ export default function TaskDetailView({ event, onBack, onSave }) {
       setAddingTag(false)
       return
     }
-    console.log(`[Sanctuary] 🏷️ Adding tag: "${trimmed}"`)
+    console.log(`[Focus] 🏷️ Adding tag: "${trimmed}"`)
     setTags((prev) => [...prev, trimmed])
     setNewTag('')
     setAddingTag(false)
@@ -42,7 +42,7 @@ export default function TaskDetailView({ event, onBack, onSave }) {
 
   // ── Priority handler ───────────────────────────────────────────────────────
   function selectPriority(p) {
-    console.log(`[Sanctuary] ⚡ Priority changed to: "${p}"`)
+    console.log(`[Focus] ⚡ Priority changed to: "${p}"`)
     setPriority(p)
   }
 
@@ -50,7 +50,7 @@ export default function TaskDetailView({ event, onBack, onSave }) {
   function handleSave(e) {
     e.preventDefault()
     const updated = { title, time, notes, priority, tags }
-    console.log('[Sanctuary] 💾 Saving task details:', updated)
+    console.log('[Focus] 💾 Saving task details:', updated)
     if (onSave) onSave(updated)
     setSaved(true)
     setTimeout(() => {
@@ -115,7 +115,7 @@ export default function TaskDetailView({ event, onBack, onSave }) {
                 <h3 className="font-headline font-bold text-xl">Resumen de Inteligencia IA</h3>
               </div>
               <p className="text-on-surface-variant leading-loose mb-6 text-lg">
-                Sanctuary programó esta tarea para las{' '}
+                Focus programó esta tarea para las{' '}
                 <span className="text-primary font-bold">14:00 hoy</span> basándose en tu ventana
                 de máximo rendimiento cognitivo. Detectamos dependencias con el "Project Alpha" que
                 finalizó hace 2 horas. Este espacio evita tu caída de energía de las 16:30 y

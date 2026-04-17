@@ -29,7 +29,7 @@ export default function AddEventModal({ onSave, onCancel }) {
     e.preventDefault()
     if (!title.trim()) {
       setError('El nombre del evento es obligatorio.')
-      console.warn('[Sanctuary] ⚠️ AddEventModal — tried to save without a title.')
+      console.warn('[Focus] ⚠️ AddEventModal — tried to save without a title.')
       return
     }
     setError('')

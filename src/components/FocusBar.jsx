@@ -201,7 +201,7 @@ export default function FocusBar({
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && hasText && handleSend()}
-            placeholder="Dile algo a Focus..."
+            placeholder="Habla con Nova..."
             disabled={isThinking}
             className="flex-1 bg-transparent text-[14px] text-on-surface outline-none placeholder:text-outline/50 disabled:opacity-50"
           />
@@ -327,7 +327,7 @@ export default function FocusBar({
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && hasText && handleSend()}
-            placeholder="Dile algo a Focus..."
+            placeholder="Habla con Nova..."
             disabled={isThinking}
             className="flex-1 bg-transparent text-[14px] text-white outline-none placeholder:text-white/25 disabled:opacity-50"
           />

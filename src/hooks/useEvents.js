@@ -1,23 +1,34 @@
 import { useState, useEffect } from 'react'
 
-const STORAGE_KEY = 'sanctuary_events'
+const STORAGE_KEY     = 'focus_events'
+const LEGACY_KEY      = 'sanctuary_events'
 
 export function useEvents() {
   const [events, setEvents] = useState(() => {
+    // Migración: si existe la key vieja, moverla a la nueva y borrarla
+    try {
+      const legacy = localStorage.getItem(LEGACY_KEY)
+      if (legacy) {
+        localStorage.setItem(STORAGE_KEY, legacy)
+        localStorage.removeItem(LEGACY_KEY)
+        console.log('[Focus] 🔄 Migrated events from sanctuary_events → focus_events')
+      }
+    } catch {}
+
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
         const parsed = JSON.parse(stored)
         console.log(
-          `[Sanctuary] ✅ Events loaded from localStorage: ${parsed.length} event(s)`,
+          `[Focus] ✅ Events loaded from localStorage: ${parsed.length} event(s)`,
           parsed,
         )
         return parsed
       }
     } catch (err) {
-      console.warn('[Sanctuary] ⚠️ Could not parse localStorage — starting with empty events.', err)
+      console.warn('[Focus] ⚠️ Could not parse localStorage — starting with empty events.', err)
     }
-    console.log('[Sanctuary] 📋 No saved events found. Starting with empty events.')
+    console.log('[Focus] 📋 No saved events found. Starting with empty events.')
     return []
   })
 
@@ -25,9 +36,9 @@ export function useEvents() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(events))
-      console.log(`[Sanctuary] 💾 Events saved to localStorage: ${events.length} event(s)`)
+      console.log(`[Focus] 💾 Events saved to localStorage: ${events.length} event(s)`)
     } catch (err) {
-      console.error('[Sanctuary] ❌ Failed to save events to localStorage.', err)
+      console.error('[Focus] ❌ Failed to save events to localStorage.', err)
     }
   }, [events])
 
@@ -44,7 +55,7 @@ export function useEvents() {
       dotColor,
       date, // YYYY-MM-DD or null (null = treat as today's event)
     }
-    console.log(`[Sanctuary] ➕ addEvent — id: "${newEvent.id}" | title: "${newEvent.title}" | section: "${newEvent.section}"`)
+    console.log(`[Focus] ➕ addEvent — id: "${newEvent.id}" | title: "${newEvent.title}" | section: "${newEvent.section}"`)
     setEvents((prev) => [...prev, newEvent])
     return newEvent
   }
@@ -54,19 +65,19 @@ export function useEvents() {
     setEvents((prev) => {
       const target = prev.find((e) => e.id === id)
       if (!target) {
-        console.warn(`[Sanctuary] ⚠️ deleteEvent — id "${id}" not found in events list. Nothing deleted.`)
+        console.warn(`[Focus] ⚠️ deleteEvent — id "${id}" not found in events list. Nothing deleted.`)
         return prev
       }
-      console.log(`[Sanctuary] 🗑️ deleteEvent — id: "${id}" | title: "${target.title}"`)
+      console.log(`[Focus] 🗑️ deleteEvent — id: "${id}" | title: "${target.title}"`)
       const next = prev.filter((e) => e.id !== id)
-      console.log(`[Sanctuary] ✅ After deletion: ${next.length} event(s) remaining.`)
+      console.log(`[Focus] ✅ After deletion: ${next.length} event(s) remaining.`)
       return next
     })
   }
 
   /** Edit an event by id. Only the provided fields are updated. */
   function editEvent(id, updates) {
-    console.log(`[Sanctuary] ✏️ editEvent — id: "${id}" | updates:`, updates)
+    console.log(`[Focus] ✏️ editEvent — id: "${id}" | updates:`, updates)
     setEvents((prev) =>
       prev.map((e) => (e.id === id ? { ...e, ...updates } : e)),
     )

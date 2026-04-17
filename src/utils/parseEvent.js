@@ -300,7 +300,7 @@ export function parseEvent(rawText) {
   const icon = guessIcon(title)
   const dotColor = section === 'evening' ? 'bg-secondary-container' : ''
 
-  console.log(`[Sanctuary] 🧠 parseEvent("${rawText}") →`, {
+  console.log(`[Focus] 🧠 parseEvent("${rawText}") →`, {
     title,
     displayTime,
     date,
