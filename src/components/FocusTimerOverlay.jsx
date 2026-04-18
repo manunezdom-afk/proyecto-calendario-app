@@ -60,15 +60,22 @@ export default function FocusTimerOverlay({ block, onClose, onComplete }) {
   if (typeof document === 'undefined') return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[150] bg-surface/95 dark:bg-slate-900/95 backdrop-blur-xl flex flex-col items-center justify-center px-6">
-      {/* Close */}
+    <div
+      className="fixed inset-0 z-[150] bg-surface/95 dark:bg-slate-900/95 backdrop-blur-xl flex flex-col items-center justify-center px-6"
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
+      {/* Close — fuera del safe area del notch, hit area grande */}
       <button
         type="button"
         onClick={onClose}
         aria-label="Cerrar"
-        className="absolute top-6 right-6 w-12 h-12 flex items-center justify-center rounded-full bg-surface-container-low text-outline hover:text-on-surface transition-colors active:scale-90 z-10"
+        className="absolute right-4 w-14 h-14 flex items-center justify-center rounded-full bg-surface-container-low text-on-surface shadow-lg active:scale-90 transition-transform z-20"
+        style={{ top: 'calc(env(safe-area-inset-top) + 12px)' }}
       >
-        <span className="material-symbols-outlined">close</span>
+        <span className="material-symbols-outlined text-[26px]">close</span>
       </button>
 
       {/* Block title */}
