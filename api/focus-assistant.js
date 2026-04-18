@@ -53,7 +53,7 @@ export default async function handler(req, res) {
 
   const anthropic = new Anthropic({ apiKey: normalizedApiKey })
 
-  const { message, events = [], history = [], location = null, contacts = [], profile = null, memories = [] } = req.body || {}
+  const { message, events = [], history = [], location = null, contacts = [], profile = null, memories = [], behavior = null } = req.body || {}
 
   if (!message?.trim()) {
     return res.status(400).json({ error: 'no_message' })
@@ -149,6 +149,67 @@ INSTRUCCIÓN CRÍTICA sobre la zona de rendimiento:
 - Si hay eventos que interrumpen la zona de rendimiento (reuniones, llamadas, clases), menciona el conflicto y ofrece moverlos.
 - Cuando propongas mover un evento fuera de la zona de rendimiento, da una hora concreta alternativa.`
     : ''
+
+  // Modelo comportamental derivado de user_signals (analyzeBehavior)
+  // Esto es CLAVE: le da a Nova aprendizaje implícito del usuario sin que él
+  // tenga que escribir nada. Nova ajusta sus propuestas basándose en esto.
+  function buildBehaviorContext(b) {
+    if (!b) return ''
+    const lines = []
+    lines.push(`Comportamiento observado del usuario (últimos ${b.period_days || 30} días, ${b.sample_size || 0} señales):`)
+
+    if (b.real_peak_window) {
+      const { start, end } = b.real_peak_window
+      const profileBit = b.profile_peak
+        ? ` (el usuario DECLARÓ ${b.profile_peak.start}–${b.profile_peak.end}h en su perfil${start !== b.profile_peak.start ? ' — hay un desfase' : ''})`
+        : ''
+      lines.push(`- PICO REAL observado de productividad: ${start}–${end}h${profileBit}.`)
+      lines.push(`  → Prioriza estas horas reales sobre las declaradas al proponer foco/trabajo profundo.`)
+    } else if (b.real_peak_hour != null) {
+      lines.push(`- Hora más productiva observada: ${b.real_peak_hour}h.`)
+    }
+
+    if (b.busy_weekday) {
+      lines.push(`- Día más productivo: ${b.busy_weekday}${b.slow_weekday ? `. Día más lento: ${b.slow_weekday}` : ''}.`)
+    }
+
+    if (b.approval_rate != null) {
+      const pct = Math.round(b.approval_rate * 100)
+      lines.push(`- Tasa de aprobación de sugerencias: ${pct}% (${b.approved_count} aprobadas / ${b.rejected_count} rechazadas).`)
+    }
+
+    if (b.top_approved_kind) {
+      lines.push(`- Tipo de sugerencia que MÁS aprueba: "${b.top_approved_kind}" — seguí proponiendo estas.`)
+    }
+
+    if (b.avoid_kinds && b.avoid_kinds.length > 0) {
+      lines.push(`- EVITÁ sugerir (rechazadas 3+ veces): ${b.avoid_kinds.join(', ')}.`)
+    }
+
+    if (b.top_categories && b.top_categories.length > 0) {
+      const cats = b.top_categories.map(c => `${c.category} (${c.count})`).join(', ')
+      lines.push(`- Categorías de eventos que crea más: ${cats}.`)
+    }
+
+    if (b.nova_favorite_hour != null) {
+      lines.push(`- Suele escribirte alrededor de las ${b.nova_favorite_hour}h.`)
+    }
+
+    if (b.engagement_trend) {
+      const hint = {
+        subiendo: 'Buen momento para sugerencias más ambiciosas.',
+        bajando:  'Está menos activo — sugerencias más simples y motivadoras.',
+        estable:  'Ritmo consistente.',
+      }[b.engagement_trend]
+      lines.push(`- Engagement última semana: ${b.engagement_trend}. ${hint}`)
+    }
+
+    lines.push('')
+    lines.push('INSTRUCCIÓN: Usa este modelo comportamental para personalizar TODAS tus propuestas. Cuando el pico real difiere del declarado, el real tiene prioridad. Cuando hay tipos rechazados, NO los propongas.')
+
+    return lines.join('\n')
+  }
+  const behaviorContext = buildBehaviorContext(behavior)
 
   const systemPrompt = `Eres Focus, un Asistente Ejecutivo de Productividad y Calendario. Hablas en español neutro, con tono formal, profesional y eficiente.
 
@@ -248,6 +309,7 @@ ${weatherContext}
 
 ${contactsContext}
 ${profileContext ? '\n' + profileContext : ''}
+${behaviorContext ? '\n' + behaviorContext : ''}
 
 ${memoriesContext}
 
