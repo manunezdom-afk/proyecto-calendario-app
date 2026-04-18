@@ -29,6 +29,7 @@ import PlannerView     from './views/PlannerView'
 import TasksView       from './views/TasksView'
 import SettingsView    from './views/SettingsView'
 import MemoryView      from './views/MemoryView'
+import NovaKnowsView   from './views/NovaKnowsView'
 
 const LAST_OPENED_KEY = 'nova_last_opened'
 
@@ -140,7 +141,7 @@ export default function App() {
   }
 
   const isDetail = activeView === 'task-detail'
-  const isSubView = isDetail || activeView === 'memory'
+  const isSubView = isDetail || activeView === 'memory' || activeView === 'nova-knows'
   const navView  = isSubView ? (previousView || 'settings') : activeView
 
   const showPermCard =
@@ -263,6 +264,7 @@ export default function App() {
                 <SettingsView
                   onOpenImport={() => { setImportExportInitialTab('import'); setImportExportOpen(true) }}
                   onOpenMemory={() => { setPreviousView('settings'); setActiveView('memory') }}
+                  onOpenNovaKnows={() => { setPreviousView('settings'); setActiveView('nova-knows') }}
                 />
               )}
 
@@ -279,6 +281,10 @@ export default function App() {
                   </div>
                   <MemoryView />
                 </div>
+              )}
+
+              {activeView === 'nova-knows' && (
+                <NovaKnowsView onBack={() => setActiveView(previousView || 'settings')} />
               )}
             </motion.div>
           </AnimatePresence>

@@ -57,7 +57,7 @@ function Row({ icon, label, sub, children, onClick, danger = false }) {
   )
 }
 
-export default function SettingsView({ onOpenImport, onOpenMemory }) {
+export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKnows }) {
   const { user, setAuthModal, signOut } = useAuth()
   const { profile, saveProfile }        = useUserProfile()
 
@@ -187,9 +187,17 @@ export default function SettingsView({ onOpenImport, onOpenMemory }) {
           </div>
         </Row>
         <Row
-          icon="psychology"
+          icon="insights"
           label="Lo que Nova sabe de ti"
-          sub="Memorias persistentes para personalizar respuestas"
+          sub="Patrones que aprendió de tu uso — pico real, días fuertes, tipos rechazados"
+          onClick={onOpenNovaKnows}
+        >
+          <span className="material-symbols-outlined text-[16px] text-slate-300">chevron_right</span>
+        </Row>
+        <Row
+          icon="psychology"
+          label="Memorias de Nova"
+          sub="Datos explícitos que te pedí recordar (relaciones, metas, contextos)"
           onClick={onOpenMemory}
         >
           <span className="material-symbols-outlined text-[16px] text-slate-300">chevron_right</span>
