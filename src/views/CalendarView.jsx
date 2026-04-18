@@ -316,24 +316,26 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
             {isDesktop ? (
               <DayTimeGrid
                 events={dayEvents}
-                peakStart={profile.peakStart}
-                peakEnd={profile.peakEnd}
+                peakStart={profile.setupDone ? profile.peakStart : null}
+                peakEnd={profile.setupDone ? profile.peakEnd : null}
                 onAdd={() => setShowModal(true)}
                 onOpenTask={onOpenTask}
               />
             ) : (<>
-            {/* ── Banda zona de rendimiento ──────────────────────────── */}
-            {profile.peakStart != null && (
-              <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl">
-                <span
-                  className="material-symbols-outlined text-emerald-600 text-[17px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >bolt</span>
+            {/* ── Banda zona de rendimiento (solo si el perfil fue configurado) */}
+            {profile.setupDone && profile.peakStart != null && (
+              <div className="flex items-center gap-3 px-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                  <span
+                    className="material-symbols-outlined text-emerald-600 text-[18px]"
+                    style={{ fontVariationSettings: "'FILL' 1" }}
+                  >bolt</span>
+                </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-emerald-800">
-                    Zona de rendimiento · {peakRangeLabel(profile.peakStart, profile.peakEnd)}
+                  <p className="text-[13px] font-bold text-slate-800 leading-tight">
+                    Tu pico de energía · {peakRangeLabel(profile.peakStart, profile.peakEnd)}
                   </p>
-                  <p className="text-[10px] text-emerald-600 leading-tight">Reserva este horario para trabajo profundo</p>
+                  <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">Protege esta franja para trabajo profundo</p>
                 </div>
               </div>
             )}

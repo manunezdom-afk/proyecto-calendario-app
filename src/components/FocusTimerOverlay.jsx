@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 
 const WORK_SECS  = 25 * 60
 const BREAK_SECS = 5  * 60
@@ -46,15 +47,26 @@ export default function FocusTimerOverlay({ block, onClose, onComplete }) {
     setLeft(WORK_SECS)
   }
 
+  // Bloquear scroll del body mientras el overlay está abierto
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+
   const phaseLabel = phase === 'work' ? 'TRABAJO PROFUNDO' : 'DESCANSO'
   const phaseColor = phase === 'work' ? '#0058bc' : '#4c4aca'
 
-  return (
-    <div className="fixed inset-0 z-[70] bg-surface/95 dark:bg-slate-900/95 backdrop-blur-xl flex flex-col items-center justify-center px-6">
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[150] bg-surface/95 dark:bg-slate-900/95 backdrop-blur-xl flex flex-col items-center justify-center px-6">
       {/* Close */}
       <button
+        type="button"
         onClick={onClose}
-        className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low text-outline hover:text-on-surface transition-colors active:scale-90"
+        aria-label="Cerrar"
+        className="absolute top-6 right-6 w-12 h-12 flex items-center justify-center rounded-full bg-surface-container-low text-outline hover:text-on-surface transition-colors active:scale-90 z-10"
       >
         <span className="material-symbols-outlined">close</span>
       </button>
@@ -138,6 +150,7 @@ export default function FocusTimerOverlay({ block, onClose, onComplete }) {
             : 'Descansa de verdad. Aléjate de la pantalla.'
           : 'Pulsa play para empezar el bloque.'}
       </p>
-    </div>
+    </div>,
+    document.body,
   )
 }

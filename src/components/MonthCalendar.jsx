@@ -113,8 +113,8 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent, profi
           const count      = dayEvts.length
           const highLoad   = count >= 3
 
-          // ✨ Día con zona de rendimiento libre
-          const peakFree = profile?.peakStart != null && (() => {
+          // ✨ Día con zona de rendimiento libre (solo si el perfil fue configurado)
+          const peakFree = profile?.setupDone && profile?.peakStart != null && (() => {
             const hasPeakEvent = dayEvts.some(ev => {
               const h = parseEventHour(ev.time)
               return h !== null && h >= profile.peakStart && h < profile.peakEnd

@@ -494,7 +494,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
 
             {/* ── Shield: eventos que interrumpen la zona de rendimiento ─── */}
             {(() => {
-              if (!profile.peakStart) return null
+              if (!profile.setupDone || !profile.peakStart) return null
               const intruders = displayBlocks.filter(b => {
                 if (b.type === 'suggestion' || b._asReminderOnly) return false
                 const h = parseEventHour(b.time)
@@ -531,7 +531,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
             <div className="relative space-y-2">
               {displayBlocks.map(({ id, time, type, title, description, subtasks = [], _asReminderOnly }) => {
                 const isSuggestion = type === 'suggestion'
-                const inPeak = !isSuggestion && profile.peakStart != null
+                const inPeak = !isSuggestion && profile.setupDone && profile.peakStart != null
                   ? isInPeak(time, profile.peakStart, profile.peakEnd)
                   : null
                 return (
@@ -588,18 +588,19 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                           )}
                         </div>
 
-                        {/* Badge zona de rendimiento */}
-                        {inPeak !== null && (
+                        {/* Badge zona de rendimiento — solo marcar lo que SÍ está en zona */}
+                        {inPeak === true && (
                           <div style={{ marginTop: '6px', marginBottom: '2px' }}>
                             <span style={{
                               display: 'inline-flex', alignItems: 'center', gap: '4px',
-                              fontSize: '9px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px',
-                              ...(inPeak
-                                ? { background: '#d1fae5', color: '#065f46' }
-                                : { background: '#fef9c3', color: '#92400e' })
+                              fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px',
+                              background: '#ecfdf5', color: '#047857', letterSpacing: '0.02em',
                             }}>
-                              {inPeak ? '🟢' : '🟡'}
-                              {inPeak ? 'En tu zona de rendimiento' : 'Fuera de tu zona de rendimiento'}
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: '11px', fontVariationSettings: "'FILL' 1" }}
+                              >bolt</span>
+                              Pico de energía
                             </span>
                           </div>
                         )}

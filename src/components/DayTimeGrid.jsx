@@ -50,11 +50,23 @@ export default function DayTimeGrid({ events = [], peakStart, peakEnd, onAdd, on
       <div className="relative bg-surface-container-lowest border border-slate-200 rounded-2xl overflow-hidden" style={{ height: gridHeight }}>
         {peakStart != null && peakEnd != null && peakHeight > 0 && (
           <div
-            className="absolute left-0 right-0 bg-emerald-50 pointer-events-none"
-            style={{ top: peakTop, height: peakHeight }}
-            title={`Zona de rendimiento · ${peakRangeLabel(peakStart, peakEnd)}`}
+            className="absolute left-0 right-0 pointer-events-none"
+            style={{
+              top: peakTop,
+              height: peakHeight,
+              background: 'linear-gradient(90deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.04) 100%)',
+              borderTop: '1px dashed rgba(16,185,129,0.35)',
+              borderBottom: '1px dashed rgba(16,185,129,0.35)',
+            }}
+            title={`Tu pico de energía · ${peakRangeLabel(peakStart, peakEnd)}`}
           >
-            <span className="absolute top-1 right-2 text-[9px] font-bold text-emerald-700 uppercase tracking-wider">Zona de rendimiento</span>
+            <span className="absolute top-1 right-2 flex items-center gap-1 text-[9px] font-bold text-emerald-700 uppercase tracking-wider">
+              <span
+                className="material-symbols-outlined text-[11px]"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >bolt</span>
+              Pico de energía
+            </span>
           </div>
         )}
 

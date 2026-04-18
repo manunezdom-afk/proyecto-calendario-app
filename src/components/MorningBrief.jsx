@@ -30,6 +30,7 @@ function generateBrief({ events, tasks, profile }) {
   const timeStr = `${hour}:${String(min).padStart(2, '0')}`
 
   const inPeak =
+    profile?.setupDone &&
     profile?.peakStart != null &&
     currentDecimal >= profile.peakStart &&
     currentDecimal < profile.peakEnd
@@ -44,7 +45,7 @@ function generateBrief({ events, tasks, profile }) {
   const pendingTasks = tasks.filter(t => !t.done && t.category === 'hoy').length
 
   const peakConflicts =
-    profile?.peakStart != null
+    profile?.setupDone && profile?.peakStart != null
       ? todayEvents.filter(e => {
           if (!e.time) return false
           const dec = parseTimeToDecimal(e.time)
@@ -61,7 +62,7 @@ function generateBrief({ events, tasks, profile }) {
 
   if (inPeak) {
     text += `Estás en plena zona de rendimiento. `
-  } else if (profile?.peakStart != null) {
+  } else if (profile?.setupDone && profile?.peakStart != null) {
     const minsToP = Math.round((profile.peakStart - currentDecimal) * 60)
     if (minsToP > 0 && minsToP < 240) {
       text += minsToP < 60

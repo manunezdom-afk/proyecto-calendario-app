@@ -228,8 +228,9 @@ export default function NovaWidget({
     }
   }
 
-  // Posición según viewport
-  const position = isDesktop ? 'fixed bottom-6 right-6' : 'fixed bottom-[112px] right-4'
+  // Posición según viewport.
+  // Mobile: por encima del FAB "+" (bottom-28 + w-14 + margen) para no taparlo.
+  const position = isDesktop ? 'fixed bottom-6 right-6' : 'fixed bottom-[188px] right-4'
 
   const hasContent = displayedText || chips.length > 0 || isLoading
 
