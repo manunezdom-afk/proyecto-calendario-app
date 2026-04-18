@@ -205,25 +205,8 @@ export default function App() {
           </motion.div>
         )}
 
-        {/* ── Desktop 2-column layout (solo en Mi Día) ────────────────────── */}
-        {isDesktop && !isDetail && activeView === 'planner' ? (
-          <div className="flex h-[calc(100vh-64px)]">
-            <div className="basis-[40%] max-w-[520px] flex-shrink-0 overflow-y-auto border-r border-slate-200">
-              <PlannerView {...plannerProps} isDesktop />
-            </div>
-            <div className="basis-[60%] flex-1 overflow-y-auto">
-              <CalendarView
-                events={events}
-                onAddEvent={addEvent}
-                onDeleteEvent={deleteEvent}
-                onEditEvent={editEvent}
-                onOpenTask={(event) => openTaskDetail(event)}
-                onExportClick={() => { setImportExportInitialTab('export'); setImportExportOpen(true) }}
-                isDesktop
-              />
-            </div>
-          </div>
-        ) : (
+        {/* ── Single-view layout: cada botón del sidebar → su propia vista ── */}
+        {(
           <AnimatePresence mode="wait">
             <motion.div
               key={activeView}
