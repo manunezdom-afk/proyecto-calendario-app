@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { dataService } from '../services/dataService'
+import { setSignalsUserId, flushSignalsQueue } from '../services/signalsService'
+import { fetchBehavior } from '../services/behaviorAnalysis'
 
 const AuthContext = createContext(null)
 
@@ -13,7 +15,10 @@ export function AuthProvider({ children }) {
     if (!supabase) { setLoading(false); return }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
+      const current = session?.user ?? null
+      setUser(current)
+      setSignalsUserId(current?.id ?? null)
+      if (current) fetchBehavior(current.id).catch(() => {})
       setLoading(false)
     })
 
@@ -21,9 +26,12 @@ export function AuthProvider({ children }) {
       async (event, session) => {
         const newUser = session?.user ?? null
         setUser(newUser)
+        setSignalsUserId(newUser?.id ?? null)
         if (event === 'SIGNED_IN' && newUser) {
           await dataService.migrateToCloud(newUser.id)
           await dataService.flushQueue()
+          await flushSignalsQueue()
+          await fetchBehavior(newUser.id).catch(() => {})
         }
       }
     )

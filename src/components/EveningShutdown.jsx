@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
+import { analyzeBehavior } from '../services/behaviorAnalysis'
+import { useUserProfile } from '../hooks/useUserProfile'
+import { useAuth } from '../context/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const PHASES = ['review', 'move', 'tomorrow']
@@ -277,6 +280,8 @@ export default function EveningShutdown({
 }) {
   const [phaseIdx, setPhaseIdx] = useState(0)
   const [elapsed,  setElapsed]  = useState(0)
+  const { user } = useAuth()
+  const { profile } = useUserProfile()
 
   const todayISO     = getTodayISO()
   const tomorrowISO  = getTomorrowISO()
@@ -288,6 +293,21 @@ export default function EveningShutdown({
     const id = setInterval(() => setElapsed(t => Math.min(t + 1, MAX_SECONDS)), 1000)
     return () => clearInterval(id)
   }, [])
+
+  // Al cerrar el Evening Shutdown (cuando el usuario completa el ritual),
+  // analizamos las señales del día y actualizamos el modelo de comportamiento.
+  // Esto corre una vez por sesión de shutdown, silenciosamente.
+  const analyzedRef = useRef(false)
+  useEffect(() => {
+    if (analyzedRef.current) return
+    analyzedRef.current = true
+    // Pequeño delay para no bloquear el render inicial
+    const id = setTimeout(() => {
+      analyzeBehavior({ userId: user?.id, profile })
+        .catch(err => console.warn('[Focus] ⚠️ analyzeBehavior', err))
+    }, 1500)
+    return () => clearTimeout(id)
+  }, [user?.id, profile])
 
   function nextPhase() {
     setPhaseIdx(i => Math.min(i + 1, PHASES.length - 1))
