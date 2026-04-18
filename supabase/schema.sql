@@ -152,3 +152,38 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.user_profiles
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.user_memories
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- ── user_signals: implicit behavioral events for learning ────────────────────
+-- Cada interacción relevante (task done, event created, sug aprobada/rechazada,
+-- mensaje a Nova) se loguea acá. analyzeBehavior() las agrega en un modelo.
+CREATE TABLE IF NOT EXISTS public.user_signals (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL,
+  payload    JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.user_signals ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own signals"
+  ON public.user_signals FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS user_signals_user_kind_idx
+  ON public.user_signals (user_id, kind, created_at DESC);
+
+-- ── user_behavior: aggregated model built from user_signals ──────────────────
+-- One row per user. analyzeBehavior() upserts esto cada noche (Evening Shutdown)
+-- o a demanda. El modelo se inyecta en el system prompt de Nova.
+CREATE TABLE IF NOT EXISTS public.user_behavior (
+  user_id          UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  model            JSONB NOT NULL DEFAULT '{}'::jsonb,
+  last_analyzed_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.user_behavior ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own behavior"
+  ON public.user_behavior FOR ALL USING (auth.uid() = user_id);
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.user_behavior
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
