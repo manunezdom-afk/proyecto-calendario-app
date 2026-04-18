@@ -87,3 +87,101 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting()
 })
+
+// ── Web Push ────────────────────────────────────────────────────────────────
+// Al recibir un push del backend, mostramos una notificación nativa con acciones.
+self.addEventListener('push', (event) => {
+  if (!event.data) return
+
+  let payload = {}
+  try {
+    payload = event.data.json()
+  } catch {
+    payload = { title: 'Focus', body: event.data.text() || '' }
+  }
+
+  const {
+    title = 'Focus',
+    body = '',
+    url = '/',
+    tag = 'focus-reminder',
+    icon = '/icons/icon-192.png',
+    badge = '/icons/icon-192.png',
+    actions = [],
+    data = {},
+  } = payload
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon,
+      badge,
+      tag,
+      renotify: true,
+      requireInteraction: false,
+      vibrate: [100, 50, 100],
+      data: { url, ...data },
+      actions: actions.length > 0 ? actions : [
+        { action: 'open',   title: 'Abrir' },
+        { action: 'snooze', title: 'Posponer 10 min' },
+      ],
+    }),
+  )
+})
+
+// ── Click en notificación ──────────────────────────────────────────────────
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+
+  const action = event.action
+  const targetUrl = event.notification.data?.url || '/'
+
+  // Snooze: avisar al backend que reprograme +10min
+  if (action === 'snooze') {
+    event.waitUntil(
+      fetch('/api/push-snooze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: event.notification.data?.eventId,
+          minutes: 10,
+        }),
+      }).catch(() => {})
+    )
+    return
+  }
+
+  // Default / "open": enfocar la app o abrirla
+  event.waitUntil(
+    (async () => {
+      const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      for (const client of list) {
+        if (client.url.includes(self.location.origin)) {
+          client.focus()
+          if ('navigate' in client) client.navigate(targetUrl)
+          return
+        }
+      }
+      return self.clients.openWindow(targetUrl)
+    })()
+  )
+})
+
+// Renovar suscripción si el navegador la invalida
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const newSub = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: event.oldSubscription?.options?.applicationServerKey,
+        })
+        await fetch('/api/push-subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription: newSub.toJSON(), renewed: true }),
+        })
+      } catch {}
+    })()
+  )
+})

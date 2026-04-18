@@ -1,0 +1,37 @@
+name: Notifications Cron
+
+# Cada 5 minutos, pingea el endpoint /api/cron-notifications
+# que escanea eventos próximos y dispara Web Push.
+
+on:
+  schedule:
+    # cada 5 minutos — hora UTC (GitHub Actions solo soporta UTC)
+    - cron: '*/5 * * * *'
+  # permite correrlo manualmente desde la UI de GitHub
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping cron endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::APP_URL o CRON_SECRET no configurados en GitHub Secrets"
+            exit 1
+          fi
+          echo "Pinging $APP_URL/api/cron-notifications ..."
+          HTTP_CODE=$(curl -sS -o response.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron-notifications")
+          echo "HTTP status: $HTTP_CODE"
+          cat response.json
+          echo ""
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Cron endpoint devolvió $HTTP_CODE"
+            exit 1
+          fi

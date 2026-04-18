@@ -187,3 +187,40 @@ CREATE POLICY "Users manage own behavior"
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.user_behavior
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- ── push_subscriptions: suscripciones Web Push por usuario ───────────────────
+-- Un usuario puede tener varias (desktop + mobile + etc.) → PK compuesta
+-- endpoint es único globalmente (lo garantiza el navegador)
+CREATE TABLE IF NOT EXISTS public.push_subscriptions (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  endpoint   TEXT NOT NULL UNIQUE,
+  p256dh     TEXT NOT NULL,
+  auth       TEXT NOT NULL,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own push subscriptions"
+  ON public.push_subscriptions FOR ALL USING (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS push_subs_user_idx ON public.push_subscriptions (user_id);
+
+-- ── sent_notifications: dedup para no mandar la misma push 2 veces ───────────
+-- El cron scheduler registra acá cada push enviado (user_id + event_id + offset)
+CREATE TABLE IF NOT EXISTS public.sent_notifications (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  event_id   TEXT NOT NULL,
+  offset_min INTEGER NOT NULL,
+  sent_at    TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (user_id, event_id, offset_min)
+);
+
+ALTER TABLE public.sent_notifications ENABLE ROW LEVEL SECURITY;
+-- El service role bypasea RLS; los users pueden ver las propias
+CREATE POLICY "Users read own sent notifications"
+  ON public.sent_notifications FOR SELECT USING (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS sent_notif_user_evt_idx
+  ON public.sent_notifications (user_id, event_id);

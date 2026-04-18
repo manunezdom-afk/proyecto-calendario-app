@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { parseEventTime } from '../utils/parseEventTime'
+import { subscribeToPush, unsubscribeFromPush, getPushStatus } from '../lib/pushSubscription'
 
 const LOG_KEY    = 'focus_notif_log'
 const FIRED_KEY  = 'focus_notif_fired'
@@ -44,11 +45,31 @@ export function useNotifications({ events = [] } = {}) {
     setNotifLog((prev) => prev.filter((n) => n.timestamp > cutoff))
   }, [])
 
-  // ── Request permission ────────────────────────────────────────────────────
+  // ── Request permission + suscribir a Web Push ────────────────────────────
+  // Si el permiso se otorga, intentamos suscribirnos al push server para
+  // recibir notificaciones aunque la app esté cerrada. Es fire-and-forget:
+  // si la suscripción falla (p.ej. sin VAPID key), la notif local sigue
+  // andando para cuando la pestaña esté visible.
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+
+  useEffect(() => {
+    getPushStatus().then(s => setPushSubscribed(!!s.subscribed)).catch(() => {})
+  }, [])
+
   const requestPermission = useCallback(async () => {
     if (typeof Notification === 'undefined') return
     const result = await Notification.requestPermission()
     setPermissionState(result)
+    if (result === 'granted') {
+      const r = await subscribeToPush()
+      setPushSubscribed(!!r.ok)
+      if (!r.ok) console.warn('[Focus] push subscribe failed:', r.reason)
+    }
+  }, [])
+
+  const disablePush = useCallback(async () => {
+    await unsubscribeFromPush()
+    setPushSubscribed(false)
   }, [])
 
   const dismissPermissionCard = useCallback(() => {
@@ -162,5 +183,7 @@ export function useNotifications({ events = [] } = {}) {
     markRead,
     markAllRead,
     dismiss,
+    pushSubscribed,
+    disablePush,
   }
 }
