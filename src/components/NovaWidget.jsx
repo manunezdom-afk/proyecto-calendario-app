@@ -54,6 +54,7 @@ export default function NovaWidget({
   onDeleteEvent,
   onToggleTask,
   isDesktop = false,
+  hidden = false,
 }) {
   const { profile } = useUserProfile()
   const [isOpen, setIsOpen]         = useState(false)
@@ -227,6 +228,9 @@ export default function NovaWidget({
       setIsLoading(false)
     }
   }
+
+  // Ocultar totalmente (ej. cuando la vista ya tiene su propio input de Nova)
+  if (hidden && !isOpen) return null
 
   // Posición según viewport.
   // Mobile: por encima del FAB "+" (bottom-28 + w-14 + margen) para no taparlo.

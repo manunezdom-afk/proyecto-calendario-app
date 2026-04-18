@@ -229,7 +229,7 @@ export default function App() {
         </motion.div>
       )}
 
-      {/* ── Nova Widget — omnipresente ────────────────────────────────────── */}
+      {/* ── Nova Widget — omnipresente (oculto en Mi Día mobile: ya hay input arriba) */}
       <NovaWidget
         events={events}
         tasks={tasks}
@@ -238,6 +238,7 @@ export default function App() {
         onDeleteEvent={deleteEvent}
         onToggleTask={toggleTask}
         isDesktop={isDesktop}
+        hidden={!isDesktop && activeView === 'planner'}
       />
 
       {/* ── Morning Brief (solo modal en mobile; desktop: inline en PlannerView) */}
