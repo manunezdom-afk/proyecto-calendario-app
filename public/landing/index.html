@@ -4,30 +4,30 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Focus · Calendario con IA que nunca toca sin tu aprobación</title>
-  <meta name="description" content="Focus es un calendario con Nova, la IA que propone cambios y jamás mueve nada sin tu aprobación." />
+  <meta name="description" content="Focus es un calendario con Nova, la IA que propone cambios y jamás mueve nada sin tu aprobación. Morning Brief, Evening Shutdown, tareas kanban y modo offline." />
+  <link rel="canonical" href="https://focus.app/" />
   <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
   <meta name="theme-color" content="#0a0a0f" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Focus" />
+  <meta property="og:url" content="https://focus.app/" />
+  <meta property="og:title" content="Focus · Calendario con IA que nunca toca sin tu aprobación" />
+  <meta property="og:description" content="Nova propone cambios y jamás mueve nada sin tu aprobación. Morning Brief, Evening Shutdown, tareas kanban y modo offline." />
+  <meta property="og:image" content="https://focus.app/landing/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Focus · Calendario con IA que nunca toca sin tu aprobación" />
+  <meta name="twitter:description" content="Nova propone cambios y jamás mueve nada sin tu aprobación." />
+  <meta name="twitter:image" content="https://focus.app/landing/og.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'], headline: ['Manrope', 'system-ui', 'sans-serif'] },
-          colors: { primary: '#0058bc' },
-          animation: { 'aurora-1': 'aurora1 18s ease-in-out infinite', 'aurora-2': 'aurora2 22s ease-in-out infinite', 'aurora-3': 'aurora3 26s ease-in-out infinite', 'pulse-ring': 'pulseRing 3.6s ease-in-out infinite', 'fade-up': 'fadeUp 0.8s ease-out both' },
-          keyframes: {
-            aurora1: { '0%,100%': { transform: 'translate(0,0) scale(1)' }, '50%': { transform: 'translate(60px,-40px) scale(1.15)' } },
-            aurora2: { '0%,100%': { transform: 'translate(0,0) scale(1)' }, '50%': { transform: 'translate(-40px,50px) scale(1.2)' } },
-            aurora3: { '0%,100%': { transform: 'translate(0,0) scale(1)' }, '50%': { transform: 'translate(30px,30px) scale(1.1)' } },
-            pulseRing: { '0%,100%': { transform: 'scale(1)', opacity: '0.35' }, '50%': { transform: 'scale(1.08)', opacity: '0.15' } },
-            fadeUp: { 'from': { opacity: '0', transform: 'translateY(24px)' }, 'to': { opacity: '1', transform: 'translateY(0)' } },
-          },
-        },
-      },
-    }
-  </script>
+  <link rel="stylesheet" href="/landing/styles.css" />
   <style>
     html { scroll-behavior: smooth; }
     body { font-family: 'Inter', system-ui, sans-serif; background: #0a0a0f; color: #fff; -webkit-font-smoothing: antialiased; }
@@ -95,8 +95,8 @@
           <span class="material-symbols-outlined text-[18px] transition-transform group-hover:translate-x-0.5">arrow_forward</span>
         </a>
         <a href="#how" class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3.5 text-[13.5px] font-semibold text-white/80 hover:bg-white/10 hover:text-white transition-all">
-          <span class="material-symbols-outlined text-[16px]">play_circle</span>
           Ver cómo funciona
+          <span class="material-symbols-outlined text-[16px]">arrow_downward</span>
         </a>
       </div>
       <div class="mt-14 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-[12px] font-medium text-white/45 animate-fade-up" style="animation-delay: 0.6s">
@@ -129,7 +129,7 @@
           <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] h-[380px] lg:h-[480px]">
             <div class="bg-white border-r border-slate-100 p-5 space-y-3 hidden lg:block">
               <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mi Día</div>
-              <div class="text-slate-900 text-xl font-extrabold font-headline tracking-tight">Jueves 17</div>
+              <div id="mock-date" class="text-slate-900 text-xl font-extrabold font-headline tracking-tight">Hoy</div>
               <div class="text-[11px] text-slate-500 font-medium">3 eventos · 2 tareas MIT</div>
               <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 space-y-1">
                 <div class="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider">
@@ -350,6 +350,14 @@
 
   <script>
     document.getElementById('year').textContent = new Date().getFullYear()
+
+    const mockDate = document.getElementById('mock-date')
+    if (mockDate) {
+      const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+      const now = new Date()
+      mockDate.textContent = `${days[now.getDay()]} ${now.getDate()}`
+    }
+
     const io = new IntersectionObserver((entries) => {
       entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } })
     }, { threshold: 0.1, rootMargin: '0px 0px -10% 0px' })

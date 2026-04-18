@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:landing": "tailwindcss -c ./landing/tailwind.config.js -i ./landing/input.css -o ./public/landing/styles.css --minify",
+    "build:og": "node scripts/build-og.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.89.0",
