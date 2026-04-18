@@ -475,13 +475,26 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                 <MorningBrief inline {...morningBrief} />
               </div>
             )}
-            <header className="mb-10">
-              <p className="text-primary font-semibold tracking-wider text-xs uppercase mb-2">
-                {formatToday()}
-              </p>
-              <h2 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface">
-                Mi Día
-              </h2>
+            <header className="mb-10 flex items-end justify-between gap-4">
+              <div>
+                <p className="text-primary font-semibold tracking-wider text-xs uppercase mb-2">
+                  {formatToday()}
+                </p>
+                <h2 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface">
+                  Mi Día
+                </h2>
+              </div>
+              {!isDesktop && (
+                <button
+                  type="button"
+                  onClick={() => setShowModal(true)}
+                  aria-label="Añadir bloque"
+                  title="Añadir bloque"
+                  className="flex-shrink-0 w-11 h-11 rounded-2xl bg-primary text-white shadow-lg shadow-primary/25 flex items-center justify-center active:scale-90 transition-transform"
+                >
+                  <span className="material-symbols-outlined text-[22px]">add</span>
+                </button>
+              )}
             </header>
 
             <FocusBar
@@ -839,17 +852,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
           </div>
         </div>
       </main>
-
-      {/* FAB — solo visible cuando hay bloques y en mobile */}
-      {blocks.length > 0 && !isDesktop && (
-        <button
-          onClick={() => setShowModal(true)}
-          className="fixed bottom-28 right-6 w-14 h-14 bg-primary text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-105 active:scale-90 transition-transform z-40"
-          title="Añadir bloque"
-        >
-          <span className="material-symbols-outlined text-3xl">add</span>
-        </button>
-      )}
 
       {showModal && (
         <QuickAddSheet onSave={handleModalSave} onCancel={() => setShowModal(false)} />
