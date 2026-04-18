@@ -55,6 +55,38 @@ function taskFromDb(row) {
   }
 }
 
+function suggestionToDb(s, userId) {
+  return {
+    id: s.id,
+    user_id: userId,
+    kind: s.kind,
+    payload: s.payload ?? {},
+    preview_title: s.previewTitle ?? null,
+    preview_body: s.previewBody ?? null,
+    preview_icon: s.previewIcon ?? 'auto_awesome',
+    reason: s.reason ?? null,
+    status: s.status ?? 'pending',
+    batch_id: s.batchId ?? null,
+    resolved_at: s.resolvedAt ?? null,
+  }
+}
+
+function suggestionFromDb(row) {
+  return {
+    id: row.id,
+    kind: row.kind,
+    payload: row.payload ?? {},
+    previewTitle: row.preview_title,
+    previewBody: row.preview_body,
+    previewIcon: row.preview_icon,
+    reason: row.reason,
+    status: row.status,
+    batchId: row.batch_id,
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at,
+  }
+}
+
 function profileToDb(profile, userId) {
   return {
     id: userId,
@@ -152,6 +184,35 @@ export const dataService = {
     if (!navigator.onLine) { enqueue({ table: 'tasks', type: 'delete', id, userId }); return }
     const { error } = await supabase.from('tasks').delete().eq('id', id).eq('user_id', userId)
     if (error) enqueue({ table: 'tasks', type: 'delete', id, userId })
+  },
+
+  // ── Suggestions (Nova modo propuesta) ──────────────────────────────────────
+
+  getCachedSuggestions() { return cacheGet('focus_suggestions', []) },
+  setCachedSuggestions(suggestions) { cacheSet('focus_suggestions', suggestions) },
+
+  async fetchSuggestions(userId) {
+    if (!supabase) return this.getCachedSuggestions()
+    const { data, error } = await supabase
+      .from('suggestions').select('*').eq('user_id', userId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data.map(suggestionFromDb)
+  },
+
+  async upsertSuggestion(suggestion, userId) {
+    if (!supabase) return
+    const row = suggestionToDb(suggestion, userId)
+    if (!navigator.onLine) { enqueue({ table: 'suggestions', type: 'upsert', data: row }); return }
+    const { error } = await supabase.from('suggestions').upsert(row)
+    if (error) enqueue({ table: 'suggestions', type: 'upsert', data: row })
+  },
+
+  async deleteSuggestion(id, userId) {
+    if (!supabase) return
+    if (!navigator.onLine) { enqueue({ table: 'suggestions', type: 'delete', id, userId }); return }
+    const { error } = await supabase.from('suggestions').delete().eq('id', id).eq('user_id', userId)
+    if (error) enqueue({ table: 'suggestions', type: 'delete', id, userId })
   },
 
   // ── Profile ─────────────────────────────────────────────────────────────────

@@ -2,13 +2,32 @@
 <html lang="es" class="light">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Focus</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Focus · Calendario con IA</title>
+    <meta name="description" content="Tu calendario con Nova, la IA que propone cambios y nunca toca nada sin tu aprobación." />
+
+    <!-- Iconos -->
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/icon.svg" />
+    <link rel="mask-icon" href="/icons/icon.svg" color="#0058bc" />
+
+    <!-- Manifest -->
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#0058bc" />
+
+    <!-- Theme colors (claro/oscuro) -->
+    <meta name="theme-color" content="#0058bc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)" />
+
+    <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Focus" />
+
+    <!-- Open Graph (para compartir) -->
+    <meta property="og:title" content="Focus · Calendario con IA" />
+    <meta property="og:description" content="La IA que propone cambios y nunca toca tu calendario sin tu aprobación." />
+    <meta property="og:type" content="website" />
     <link
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"

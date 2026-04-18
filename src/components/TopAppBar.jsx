@@ -6,6 +6,8 @@ export default function TopAppBar({
   onBellClick,
   unreadCount = 0,
   onShareClick,
+  onInboxClick,
+  inboxCount = 0,
 }) {
   const { user, setAuthModal } = useAuth()
 
@@ -60,6 +62,28 @@ export default function TopAppBar({
           >
             <span className="material-symbols-outlined text-[22px]">ios_share</span>
             <span className="hidden lg:inline text-[13px] font-semibold text-slate-600 dark:text-slate-300">Importar</span>
+          </button>
+        )}
+
+        {onInboxClick && (
+          <button
+            onClick={onInboxClick}
+            aria-label="Bandeja de Nova"
+            title="Bandeja de Nova"
+            className="relative h-10 flex items-center gap-1.5 px-2 lg:px-3 rounded-full text-slate-400 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 duration-200"
+          >
+            <span
+              className={`material-symbols-outlined text-[22px] ${inboxCount > 0 ? 'text-primary' : ''}`}
+              style={inboxCount > 0 ? { fontVariationSettings: "'FILL' 1" } : {}}
+            >
+              inbox
+            </span>
+            <span className="hidden lg:inline text-[13px] font-semibold text-slate-600 dark:text-slate-300">Bandeja</span>
+            {inboxCount > 0 && (
+              <span className="absolute top-1 right-1 lg:right-2 w-4 h-4 rounded-full bg-primary text-white text-[9px] font-black flex items-center justify-center leading-none">
+                {inboxCount > 9 ? '9+' : inboxCount}
+              </span>
+            )}
           </button>
         )}
 

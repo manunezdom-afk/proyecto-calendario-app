@@ -2,9 +2,10 @@ import { motion } from 'framer-motion'
 
 export default function BottomNavBar({ activeView, onNavigate }) {
   const navItems = [
-    { id: 'planner',  icon: 'view_day',      label: 'Mi Día'     },
+    { id: 'planner',  icon: 'view_day',       label: 'Mi Día'     },
     { id: 'calendar', icon: 'calendar_month', label: 'Calendario' },
-    { id: 'tasks',    icon: 'task_alt',       label: 'Tareas'     },
+    { id: 'tasks',    icon: 'task_alt',        label: 'Tareas'     },
+    { id: 'settings', icon: 'settings',        label: 'Ajustes'    },
   ]
 
   return (

@@ -53,6 +53,9 @@ export default function NovaWidget({
   onEditEvent,
   onDeleteEvent,
   onToggleTask,
+  onProposeActions,   // (actions, {reply}) => void — modo propuesta
+  proposeMode = true, // si true, Nova no ejecuta directo; encola sugerencias
+  onOpenInbox,
   isDesktop = false,
 }) {
   const { profile } = useUserProfile()
@@ -216,10 +219,44 @@ export default function NovaWidget({
       const data = await res.json()
       const { reply: replyText = '', actions = [] } = data
 
-      // Ejecutar acciones inmediatamente
-      for (const action of actions) executeAction(action)
+      // ── Modo propuesta: encolar sugerencias en vez de ejecutar ───────────
+      if (proposeMode && actions.length > 0 && onProposeActions) {
+        onProposeActions(actions, { reply: replyText })
 
-      setReply(replyText || (actions.length > 0 ? 'Listo.' : 'No pude procesar eso.'))
+        // Chips visuales: "Propuesta: X"
+        const proposalChips = actions.map((action) => {
+          const labelMap = {
+            add_event:      `Propuesta: crear "${action.event?.title || 'evento'}"`,
+            edit_event:     `Propuesta: actualizar evento`,
+            delete_event:   `Propuesta: eliminar evento`,
+            mark_task_done: `Propuesta: completar tarea`,
+          }
+          const iconMap = {
+            add_event: 'add_circle',
+            edit_event: 'edit_calendar',
+            delete_event: 'delete',
+            mark_task_done: 'task_alt',
+          }
+          return {
+            id: `${Date.now()}-${Math.random()}`,
+            icon: iconMap[action.type] || 'auto_awesome',
+            label: labelMap[action.type] || 'Propuesta',
+            done: true, // propuesta ya encolada
+            proposed: true,
+          }
+        })
+        setChips(proposalChips)
+
+        const suffix = actions.length === 1
+          ? 'Revisá la propuesta en la bandeja antes de aplicarla.'
+          : `Te preparé ${actions.length} propuestas. Revisalas en la bandeja.`
+        setReply(replyText ? `${replyText} ${suffix}` : suffix)
+      } else {
+        // Modo directo (fallback): ejecutar inmediatamente
+        for (const action of actions) executeAction(action)
+        setReply(replyText || (actions.length > 0 ? 'Listo.' : 'No pude procesar eso.'))
+      }
+
       historyRef.current = [...historyRef.current, { role: 'assistant', content: replyText }]
     } catch (err) {
       setReply('No pude conectarme. Intenta de nuevo.')
@@ -328,6 +365,20 @@ export default function NovaWidget({
                         />
                       )}
                     </p>
+                  )}
+
+                  {/* CTA: abrir bandeja si hubo propuestas */}
+                  {chips.some(c => c.proposed) && onOpenInbox && !isLoading && (
+                    <motion.button
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      onClick={() => { onOpenInbox(); setIsOpen(false) }}
+                      className="mt-1 flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11.5px] font-semibold text-blue-600 hover:bg-blue-100 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">inbox</span>
+                      Abrir bandeja
+                      <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                    </motion.button>
                   )}
 
                   {/* Skeleton mientras carga y no hay texto aún */}
