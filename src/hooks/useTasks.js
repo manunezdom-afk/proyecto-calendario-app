@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { dataService } from '../services/dataService'
+import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
 
 const DEFAULT_TASKS = [
@@ -45,9 +46,19 @@ export function useTasks() {
         if (t.id !== id) return t
         return { ...t, done: !t.done, doneAt: !t.done ? Date.now() : null }
       })
-      if (user) {
-        const updated = next.find(t => t.id === id)
-        if (updated) dataService.upsertTask(updated, user.id).catch(console.warn)
+      const updated = next.find(t => t.id === id)
+      if (updated) {
+        if (user) dataService.upsertTask(updated, user.id).catch(console.warn)
+        // Señal: solo al marcar como completa (no al desmarcar)
+        if (updated.done) {
+          const now = new Date()
+          logSignal('task_completed', {
+            hour: now.getHours(),
+            weekday: now.getDay(),
+            category: updated.category,
+            priority: updated.priority,
+          })
+        }
       }
       return next
     })

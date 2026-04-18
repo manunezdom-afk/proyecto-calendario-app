@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { dataService } from '../services/dataService'
+import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
 
 // ── useSuggestions ──────────────────────────────────────────────────────────
@@ -53,11 +54,19 @@ export function useSuggestions() {
   const markResolved = useCallback(
     (id, status) => {
       setSuggestions((prev) => {
+        const target = prev.find((s) => s.id === id)
         const next = prev.map((s) =>
           s.id === id ? { ...s, status, resolvedAt: new Date().toISOString() } : s
         )
         const updated = next.find((s) => s.id === id)
         if (updated && user) dataService.upsertSuggestion(updated, user.id).catch(console.warn)
+        // Señal: qué tipo de sugerencia aprobó/rechazó — clave para que Nova aprenda
+        if (target) {
+          logSignal(
+            status === 'approved' ? 'suggestion_approved' : 'suggestion_rejected',
+            { kind: target.kind || 'unknown', reason: target.reason || null }
+          )
+        }
         return next
       })
     },

@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useUserMemories } from '../hooks/useUserMemories'
+import { logSignal } from '../services/signalsService'
+import { getCachedBehavior } from '../services/behaviorAnalysis'
 
 const SR =
   typeof window !== 'undefined' &&
@@ -200,6 +202,13 @@ export default function NovaWidget({
 
     historyRef.current = [...historyRef.current, { role: 'user', content: msg }]
 
+    // Señal: el usuario mandó un mensaje a Nova (datos no sensibles, solo metadata)
+    logSignal('nova_message', {
+      length: msg.length,
+      hour: new Date().getHours(),
+      weekday: new Date().getDay(),
+    })
+
     try {
       const res = await fetch('/api/focus-assistant', {
         method: 'POST',
@@ -212,6 +221,7 @@ export default function NovaWidget({
           location,
           profile,
           memories,
+          behavior: getCachedBehavior(),
         }),
       })
 
