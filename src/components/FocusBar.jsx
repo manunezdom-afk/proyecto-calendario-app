@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useUserMemories } from '../hooks/useUserMemories'
 
 const SR = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
 
-async function callFocusAssistant({ message, events }) {
+async function callFocusAssistant({ message, events, memories }) {
   const res = await fetch('/api/focus-assistant', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, events, history: [] }),
+    body: JSON.stringify({ message, events, history: [], memories }),
   })
 
   if (!res.ok) {
@@ -25,6 +26,7 @@ export default function FocusBar({
   events = [],
   inline = false,
 }) {
+  const { memories, addMemory } = useUserMemories()
   const [text, setText]             = useState('')
   const [isListening, setIsListening] = useState(false)
   const [isThinking, setIsThinking]   = useState(false)
@@ -67,10 +69,10 @@ export default function FocusBar({
     setIsThinking(true)
 
     try {
-      const result = await callFocusAssistant({ message: msg, events })
+      const result = await callFocusAssistant({ message: msg, events, memories })
       const { reply: replyText, actions = [] } = result
 
-      // Ejecutar acciones en el calendario
+      // Ejecutar acciones en el calendario y memorias
       for (const action of actions) {
         if (action.type === 'add_event' && action.event) {
           onAddEvent?.(action.event)
@@ -78,6 +80,8 @@ export default function FocusBar({
           onEditEvent?.(action.id, action.updates ?? {})
         } else if (action.type === 'delete_event' && action.id) {
           onDeleteEvent?.(action.id)
+        } else if (action.type === 'remember' && action.memory) {
+          addMemory?.(action.memory)
         }
       }
 

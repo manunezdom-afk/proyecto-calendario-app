@@ -28,6 +28,7 @@ import TaskDetailView  from './views/TaskDetailView'
 import PlannerView     from './views/PlannerView'
 import TasksView       from './views/TasksView'
 import SettingsView    from './views/SettingsView'
+import MemoryView      from './views/MemoryView'
 
 const LAST_OPENED_KEY = 'nova_last_opened'
 
@@ -139,7 +140,8 @@ export default function App() {
   }
 
   const isDetail = activeView === 'task-detail'
-  const navView  = isDetail ? previousView : activeView
+  const isSubView = isDetail || activeView === 'memory'
+  const navView  = isSubView ? (previousView || 'settings') : activeView
 
   const showPermCard =
     permissionState === 'default' &&
@@ -260,7 +262,23 @@ export default function App() {
               {activeView === 'settings' && (
                 <SettingsView
                   onOpenImport={() => { setImportExportInitialTab('import'); setImportExportOpen(true) }}
+                  onOpenMemory={() => { setPreviousView('settings'); setActiveView('memory') }}
                 />
+              )}
+
+              {activeView === 'memory' && (
+                <div>
+                  <div className="max-w-lg lg:max-w-2xl mx-auto px-4 pt-4">
+                    <button
+                      onClick={() => setActiveView(previousView || 'settings')}
+                      className="inline-flex items-center gap-1 text-[13px] font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                      Ajustes
+                    </button>
+                  </div>
+                  <MemoryView />
+                </div>
               )}
             </motion.div>
           </AnimatePresence>

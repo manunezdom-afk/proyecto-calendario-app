@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUserProfile } from '../hooks/useUserProfile'
+import { useUserMemories } from '../hooks/useUserMemories'
 
 const SR = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
@@ -39,12 +40,11 @@ async function reverseGeocode(lat, lon) {
   } catch { return { city: '', country: '' } }
 }
 
-async function callFocusAssistant({ message, events, history, location, contacts, profile }) {
+async function callFocusAssistant({ message, events, history, location, contacts, profile, memories }) {
   const res = await fetch('/api/focus-assistant', {
     method: 'POST',
-    headers,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, events, history, location, contacts, profile }),
+    body: JSON.stringify({ message, events, history, location, contacts, profile, memories }),
   })
   if (!res.ok) {
     const rawBody = await res.text().catch(() => '')
@@ -301,6 +301,7 @@ function Orb({ status, onPress }) {
 // ─── Componente principal ────────────────────────────────────────────────────
 export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDeleteEvent, events = [] }) {
   const { profile } = useUserProfile()
+  const { memories, addMemory } = useUserMemories()
   const [status, setStatus]         = useState('idle')
   const [lastReply, setLastReply]   = useState('')
   const [location, setLocation]     = useState(null)
@@ -391,13 +392,14 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
       const result = await callFocusAssistant({
         message: text, events,
         history: historyRef.current.slice(0, -1).slice(-10),
-        location, contacts, profile,
+        location, contacts, profile, memories,
       })
       const { reply, actions = [] } = result
       for (const action of actions) {
         if (action.type === 'add_event' && action.event)      onAddEvent?.(action.event)
         else if (action.type === 'edit_event' && action.id)   onEditEvent?.(action.id, action.updates ?? {})
         else if (action.type === 'delete_event' && action.id) onDeleteEvent?.(action.id)
+        else if (action.type === 'remember' && action.memory) addMemory?.(action.memory)
       }
       historyRef.current = [...historyRef.current, { role: 'assistant', content: reply }]
       setLastReply(reply)

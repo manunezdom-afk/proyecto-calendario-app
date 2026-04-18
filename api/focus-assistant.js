@@ -53,7 +53,7 @@ export default async function handler(req, res) {
 
   const anthropic = new Anthropic({ apiKey: normalizedApiKey })
 
-  const { message, events = [], history = [], location = null, contacts = [], profile = null } = req.body || {}
+  const { message, events = [], history = [], location = null, contacts = [], profile = null, memories = [] } = req.body || {}
 
   if (!message?.trim()) {
     return res.status(400).json({ error: 'no_message' })
@@ -118,6 +118,26 @@ ${forecast}`
   }
   const chronoLabels = { morning: 'matutino', afternoon: 'vespertino', night: 'nocturno' }
   const roleLabels   = { student: 'estudiante', worker: 'trabajador', freelance: 'freelancer', other: 'otro' }
+  // Memoria persistente sobre el usuario
+  const CATEGORY_LABELS = {
+    fact:         'Hecho',
+    relationship: 'Relación',
+    preference:   'Preferencia',
+    goal:         'Meta',
+    pain:         'Dolor/Fricción',
+    routine:      'Rutina',
+    context:      'Contexto',
+  }
+  const memoriesContext = memories.length > 0
+    ? `Memoria sobre el usuario (persistente entre conversaciones — úsala para personalizar TODAS tus respuestas):
+${memories.slice(0, 40).map(m => {
+  const label = CATEGORY_LABELS[m.category] || m.category
+  const subj = m.subject ? ` (${m.subject})` : ''
+  const pin = m.pinned ? ' ⭐' : ''
+  return `- ${label}${subj}${pin}: ${m.content}`
+}).join('\n')}`
+    : 'Aún no tienes memorias sobre este usuario. Cuando aprendas algo relevante sobre él (relaciones, metas, preferencias, rutinas, dolores, contextos), guárdalo usando la acción "remember".'
+
   const profileContext = profile
     ? `Perfil de productividad del usuario:
 - Cronotipo: ${chronoLabels[profile.chronotype] ?? profile.chronotype ?? 'no definido'} (${roleLabels[profile.role] ?? profile.role ?? 'rol no definido'})
@@ -173,6 +193,26 @@ Editar/mover evento:
 Eliminar evento:
 { "type": "delete_event", "id": "id-del-evento" }
 
+Guardar memoria sobre el usuario (CRÍTICO para personalización):
+{ "type": "remember", "memory": { "category": "fact|relationship|preference|goal|pain|routine|context", "subject": "pareja|jefe|proyecto-X|etc", "content": "texto del hecho en tercera persona", "confidence": "high|medium|low" } }
+
+Cuándo guardar memoria (hazlo proactivamente, sin pedir permiso):
+- Relaciones: nombres de pareja, familia, amigos, jefe, compañeros, mascota ("Su pareja se llama Ana")
+- Hechos personales: profesión, ciudad, universidad, edad aproximada, fechas importantes ("Estudia Ingeniería Industrial en la UAndes")
+- Preferencias: comidas, horarios, herramientas, tipos de trabajo que le gustan o evita ("Prefiere reuniones breves por la mañana")
+- Metas: objetivos de corto/mediano/largo plazo ("Quiere terminar su tesis en julio")
+- Dolores/fricciones: cosas que le frustran o estresan ("Le agota tener más de 3 reuniones seguidas")
+- Rutinas: hábitos repetidos ("Hace crossfit lunes, miércoles y viernes 19:00")
+- Contextos: situaciones actuales con fecha posible ("Está buscando práctica este semestre")
+
+Reglas de memoria:
+- Redacta en tercera persona concisa, máximo 1 oración.
+- NO guardes memorias genéricas, triviales o que solo aplican al momento actual.
+- NO dupliques: si una memoria similar ya está en la lista, no la repitas.
+- Si el usuario corrige algo ("no, no es Ana, es Carla"), emite un remember con el dato correcto — el servidor no borra automáticamente, solo agrega.
+- Puedes emitir varias acciones remember en la misma respuesta.
+- La acción remember NO requiere reply adicional — el usuario no verá notificación, es transparente.
+
 Reglas de formato:
 - time: "9:00 AM", "3:30 PM", etc. — vacío si no hay hora
 - date: YYYY-MM-DD — null significa hoy (${todayISO})
@@ -208,6 +248,8 @@ ${weatherContext}
 
 ${contactsContext}
 ${profileContext ? '\n' + profileContext : ''}
+
+${memoriesContext}
 
 Recordatorios previos a un evento (CRÍTICO):
 - Si el usuario pide "avísame X minutos antes", "recuérdame salir X min antes", "ponme un aviso X antes" de un evento existente:

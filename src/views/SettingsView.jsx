@@ -57,7 +57,7 @@ function Row({ icon, label, sub, children, onClick, danger = false }) {
   )
 }
 
-export default function SettingsView({ onOpenImport }) {
+export default function SettingsView({ onOpenImport, onOpenMemory }) {
   const { user, setAuthModal, signOut } = useAuth()
   const { profile, saveProfile }        = useUserProfile()
 
@@ -98,7 +98,7 @@ export default function SettingsView({ onOpenImport }) {
         {/* Cronotype */}
         <div className="px-5 py-4 border-t border-slate-50">
           <p className="text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-3">
-            ¿Cuándo rendís mejor?
+            ¿Cuándo rindes mejor?
           </p>
           <div className="grid grid-cols-3 gap-2">
             {CHRONOTYPES.map(({ id, emoji, label, sub }) => {
@@ -188,6 +188,14 @@ export default function SettingsView({ onOpenImport }) {
         </Row>
         <Row
           icon="psychology"
+          label="Lo que Nova sabe de ti"
+          sub="Memorias persistentes para personalizar respuestas"
+          onClick={onOpenMemory}
+        >
+          <span className="material-symbols-outlined text-[16px] text-slate-300">chevron_right</span>
+        </Row>
+        <Row
+          icon="tune"
           label="Personalidad de Nova"
           sub="Asistente enfocada en productividad"
         >

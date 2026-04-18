@@ -95,6 +95,32 @@ CREATE POLICY "Users manage own suggestions"
 CREATE INDEX IF NOT EXISTS suggestions_user_status_idx
   ON public.suggestions (user_id, status, created_at DESC);
 
+-- ── user_memories (memoria persistente de Nova sobre el usuario) ───────────
+-- Nova guarda aquí hechos, relaciones, preferencias, metas y rutinas que aprende
+-- durante las conversaciones. Se inyectan en el system prompt de cada llamada
+-- para que Nova recuerde y se sienta como un asistente real.
+CREATE TABLE IF NOT EXISTS public.user_memories (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  category      TEXT NOT NULL,              -- fact | relationship | preference | goal | pain | routine | context
+  subject       TEXT,                       -- "pareja", "jefe", "proyecto-tesis", "trabajo", "familia"
+  content       TEXT NOT NULL,              -- texto libre: "Su pareja se llama Ana, aniversario 14 marzo"
+  confidence    TEXT DEFAULT 'medium',      -- high | medium | low
+  source        TEXT DEFAULT 'conversation',-- conversation | inferred | user_edited
+  expires_at    DATE,                       -- null = no expira
+  pinned        BOOLEAN DEFAULT FALSE,      -- usuario la marcó como importante
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  last_seen_at  TIMESTAMPTZ DEFAULT NOW(),  -- actualizado al ser referenciada por Nova
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.user_memories ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own memories"
+  ON public.user_memories FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS user_memories_user_idx
+  ON public.user_memories (user_id, pinned DESC, last_seen_at DESC);
+
 -- ── notif_log ─────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.notif_log (
   id         TEXT PRIMARY KEY,
@@ -123,4 +149,6 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.events
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.tasks
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.user_profiles
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.user_memories
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();

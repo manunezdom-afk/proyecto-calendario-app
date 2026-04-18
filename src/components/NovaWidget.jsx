@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUserProfile } from '../hooks/useUserProfile'
+import { useUserMemories } from '../hooks/useUserMemories'
 
 const SR =
   typeof window !== 'undefined' &&
@@ -59,6 +60,7 @@ export default function NovaWidget({
   isDesktop = false,
 }) {
   const { profile } = useUserProfile()
+  const { memories, addMemory } = useUserMemories()
   const [isOpen, setIsOpen]         = useState(false)
   const [input, setInput]           = useState('')
   const [reply, setReply]           = useState('')
@@ -184,7 +186,8 @@ export default function NovaWidget({
     else if (action.type === 'edit_event')   onEditEvent?.(action.id, action.updates ?? {})
     else if (action.type === 'delete_event') onDeleteEvent?.(action.id)
     else if (action.type === 'mark_task_done') onToggleTask?.(action.id)
-  }, [onAddEvent, onEditEvent, onDeleteEvent, onToggleTask])
+    else if (action.type === 'remember')     addMemory?.(action.memory)
+  }, [onAddEvent, onEditEvent, onDeleteEvent, onToggleTask, addMemory])
 
   async function sendMessage(text) {
     const msg = (text ?? input).trim()
@@ -208,6 +211,7 @@ export default function NovaWidget({
           history: historyRef.current.slice(0, -1).slice(-8),
           location,
           profile,
+          memories,
         }),
       })
 
@@ -219,12 +223,17 @@ export default function NovaWidget({
       const data = await res.json()
       const { reply: replyText = '', actions = [] } = data
 
-      // ── Modo propuesta: encolar sugerencias en vez de ejecutar ───────────
-      if (proposeMode && actions.length > 0 && onProposeActions) {
-        onProposeActions(actions, { reply: replyText })
+      // Las memorias se aplican directo en cualquier modo (son transparentes, sin inbox)
+      const memoryActions = actions.filter(a => a?.type === 'remember')
+      const otherActions  = actions.filter(a => a?.type !== 'remember')
+      for (const mem of memoryActions) executeAction(mem)
+
+      // ── Modo propuesta: encolar el resto en vez de ejecutar ──────────────
+      if (proposeMode && otherActions.length > 0 && onProposeActions) {
+        onProposeActions(otherActions, { reply: replyText })
 
         // Chips visuales: "Propuesta: X"
-        const proposalChips = actions.map((action) => {
+        const proposalChips = otherActions.map((action) => {
           const labelMap = {
             add_event:      `Propuesta: crear "${action.event?.title || 'evento'}"`,
             edit_event:     `Propuesta: actualizar evento`,
@@ -247,14 +256,14 @@ export default function NovaWidget({
         })
         setChips(proposalChips)
 
-        const suffix = actions.length === 1
+        const suffix = otherActions.length === 1
           ? 'Revisa la propuesta en la bandeja antes de aplicarla.'
-          : `Preparé ${actions.length} propuestas. Revísalas en la bandeja.`
+          : `Preparé ${otherActions.length} propuestas. Revísalas en la bandeja.`
         setReply(replyText ? `${replyText} ${suffix}` : suffix)
       } else {
         // Modo directo (fallback): ejecutar inmediatamente
-        for (const action of actions) executeAction(action)
-        setReply(replyText || (actions.length > 0 ? 'Listo.' : 'No pude procesar eso.'))
+        for (const action of otherActions) executeAction(action)
+        setReply(replyText || (otherActions.length > 0 || memoryActions.length > 0 ? 'Listo.' : 'No pude procesar eso.'))
       }
 
       historyRef.current = [...historyRef.current, { role: 'assistant', content: replyText }]

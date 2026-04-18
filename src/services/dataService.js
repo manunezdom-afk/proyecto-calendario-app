@@ -104,6 +104,36 @@ function profileFromDb(row) {
   }
 }
 
+function memoryToDb(m, userId) {
+  return {
+    id: m.id,
+    user_id: userId,
+    category: m.category,
+    subject: m.subject ?? null,
+    content: m.content,
+    confidence: m.confidence ?? 'medium',
+    source: m.source ?? 'conversation',
+    expires_at: m.expiresAt ?? null,
+    pinned: m.pinned ?? false,
+    last_seen_at: m.lastSeenAt ?? new Date().toISOString(),
+  }
+}
+
+function memoryFromDb(row) {
+  return {
+    id: row.id,
+    category: row.category,
+    subject: row.subject,
+    content: row.content,
+    confidence: row.confidence,
+    source: row.source,
+    expiresAt: row.expires_at,
+    pinned: row.pinned,
+    createdAt: row.created_at,
+    lastSeenAt: row.last_seen_at,
+  }
+}
+
 // ── Offline sync queue ────────────────────────────────────────────────────────
 
 const QUEUE_KEY = 'focus_sync_queue'
@@ -234,6 +264,39 @@ export const dataService = {
     if (!navigator.onLine) { enqueue({ table: 'user_profiles', type: 'upsert', data: row }); return }
     const { error } = await supabase.from('user_profiles').upsert(row)
     if (error) enqueue({ table: 'user_profiles', type: 'upsert', data: row })
+  },
+
+  // ── User memories (Nova persistent memory about the user) ──────────────────
+
+  getCachedMemories() { return cacheGet('focus_user_memories', []) },
+  setCachedMemories(memories) { cacheSet('focus_user_memories', memories) },
+
+  async fetchMemories(userId) {
+    if (!supabase) return this.getCachedMemories()
+    const { data, error } = await supabase
+      .from('user_memories').select('*').eq('user_id', userId)
+      .order('pinned', { ascending: false })
+      .order('last_seen_at', { ascending: false })
+    if (error) throw error
+    const today = new Date().toISOString().slice(0, 10)
+    return data
+      .filter(r => !r.expires_at || r.expires_at >= today)
+      .map(memoryFromDb)
+  },
+
+  async upsertMemory(memory, userId) {
+    if (!supabase) return
+    const row = memoryToDb(memory, userId)
+    if (!navigator.onLine) { enqueue({ table: 'user_memories', type: 'upsert', data: row }); return }
+    const { error } = await supabase.from('user_memories').upsert(row)
+    if (error) enqueue({ table: 'user_memories', type: 'upsert', data: row })
+  },
+
+  async deleteMemory(id, userId) {
+    if (!supabase) return
+    if (!navigator.onLine) { enqueue({ table: 'user_memories', type: 'delete', id, userId }); return }
+    const { error } = await supabase.from('user_memories').delete().eq('id', id).eq('user_id', userId)
+    if (error) enqueue({ table: 'user_memories', type: 'delete', id, userId })
   },
 
   // ── Migration ───────────────────────────────────────────────────────────────
