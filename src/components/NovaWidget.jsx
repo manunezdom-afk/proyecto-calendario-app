@@ -248,8 +248,8 @@ export default function NovaWidget({
         setChips(proposalChips)
 
         const suffix = actions.length === 1
-          ? 'Revisá la propuesta en la bandeja antes de aplicarla.'
-          : `Te preparé ${actions.length} propuestas. Revisalas en la bandeja.`
+          ? 'Revisa la propuesta en la bandeja antes de aplicarla.'
+          : `Preparé ${actions.length} propuestas. Revísalas en la bandeja.`
         setReply(replyText ? `${replyText} ${suffix}` : suffix)
       } else {
         // Modo directo (fallback): ejecutar inmediatamente

@@ -65,10 +65,10 @@ export default function InstallAppCard() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[13.5px] font-semibold text-slate-900">
-              Instalá Focus como app
+              Instala Focus como app
             </p>
             <p className="mt-0.5 text-[12px] leading-snug text-slate-500">
-              Abrite directo desde tu pantalla, sin barra del navegador. Funciona offline.
+              Ábrela directo desde tu pantalla, sin barra del navegador. Funciona offline.
             </p>
             <div className="mt-2.5 flex items-center gap-1.5">
               <button
@@ -119,15 +119,15 @@ export default function InstallAppCard() {
               <ol className="space-y-3 text-[13.5px] leading-relaxed text-slate-700">
                 <li className="flex gap-2">
                   <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-bold text-white">1</span>
-                  Tocá el botón <span className="material-symbols-outlined mx-0.5 align-middle text-[17px] text-blue-500">ios_share</span> Compartir en Safari.
+                  Toca el botón <span className="material-symbols-outlined mx-0.5 align-middle text-[17px] text-blue-500">ios_share</span> Compartir en Safari.
                 </li>
                 <li className="flex gap-2">
                   <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-bold text-white">2</span>
-                  Seleccioná <b>Añadir a pantalla de inicio</b>.
+                  Selecciona <b>Añadir a pantalla de inicio</b>.
                 </li>
                 <li className="flex gap-2">
                   <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-bold text-white">3</span>
-                  Tocá <b>Añadir</b>. Listo — Focus queda como app.
+                  Toca <b>Añadir</b>. Listo — Focus queda como app.
                 </li>
               </ol>
               <button

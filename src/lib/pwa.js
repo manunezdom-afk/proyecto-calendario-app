@@ -18,7 +18,7 @@ export function registerServiceWorker() {
           if (!newSW) return
           newSW.addEventListener('statechange', () => {
             if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('[Focus] 🔄 Nueva versión disponible. Recargá para aplicarla.')
+              console.log('[Focus] 🔄 Nueva versión disponible. Recarga para aplicarla.')
               // Dispatch un evento para que la UI muestre un toast si quiere
               window.dispatchEvent(new CustomEvent('focus:sw-update-available'))
             }

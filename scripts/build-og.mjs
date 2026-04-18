@@ -17,7 +17,7 @@ const candidates = [
 
 const chrome = candidates.find(existsSync)
 if (!chrome) {
-  console.error('No se encontró Chrome ni Edge. Instalá alguno o editá scripts/build-og.mjs')
+  console.error('No se encontró Chrome ni Edge. Instala alguno o edita scripts/build-og.mjs')
   process.exit(1)
 }
 

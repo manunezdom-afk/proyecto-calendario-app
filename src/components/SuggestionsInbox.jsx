@@ -239,7 +239,7 @@ export default function SuggestionsInbox({
             {/* Footer con info */}
             <footer className="border-t border-slate-200 bg-white px-5 py-3">
               <p className="text-[11px] leading-relaxed text-slate-500">
-                Nova nunca cambia tu calendario sin tu aprobación. Revisá cada propuesta antes de aplicarla.
+                Nova nunca cambia tu calendario sin tu aprobación. Revisa cada propuesta antes de aplicarla.
               </p>
             </footer>
           </motion.aside>

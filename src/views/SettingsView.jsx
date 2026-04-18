@@ -89,7 +89,7 @@ export default function SettingsView({ onOpenImport }) {
         <Row
           icon={user ? 'account_circle' : 'person_off'}
           label={user ? user.email : 'Modo invitado'}
-          sub={user ? 'Sesión activa · datos en la nube' : 'Iniciá sesión para sincronizar en todos tus dispositivos'}
+          sub={user ? 'Sesión activa · datos en la nube' : 'Inicia sesión para sincronizar en todos tus dispositivos'}
           onClick={() => setAuthModal(true)}
         >
           <span className="material-symbols-outlined text-[16px] text-slate-300">chevron_right</span>
@@ -180,7 +180,7 @@ export default function SettingsView({ onOpenImport }) {
         <Row
           icon="auto_awesome"
           label="Modo propuesta"
-          sub="Nova sugiere cambios — vos aprobás o rechazás cada uno"
+          sub="Nova sugiere cambios — tú apruebas o rechazas cada uno"
         >
           <div className="w-10 h-6 rounded-full bg-primary flex items-center justify-end px-1 flex-shrink-0">
             <div className="w-4 h-4 rounded-full bg-white shadow-sm" />
@@ -200,7 +200,7 @@ export default function SettingsView({ onOpenImport }) {
         <Row
           icon="upload_file"
           label="Importar / Exportar calendario"
-          sub="Importá desde Google Calendar, exportá a .ics"
+          sub="Importa desde Google Calendar, exporta a .ics"
           onClick={onOpenImport}
         >
           <span className="material-symbols-outlined text-[16px] text-slate-300">chevron_right</span>
@@ -221,7 +221,7 @@ export default function SettingsView({ onOpenImport }) {
           <Row
             icon="login"
             label="Iniciar sesión"
-            sub="Sincronizá tus datos en todos tus dispositivos"
+            sub="Sincroniza tus datos en todos tus dispositivos"
             onClick={() => setAuthModal(true)}
           />
         )}
