@@ -228,18 +228,6 @@ function AuroraBackground() {
         transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
       />
 
-      {/* Grid sutil */}
-      <div
-        className="absolute inset-0 opacity-[0.06]"
-        style={{
-          backgroundImage:
-            'linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)',
-          backgroundSize: '64px 64px',
-          maskImage: 'radial-gradient(ellipse 60% 60% at 50% 50%, black 40%, transparent 100%)',
-          WebkitMaskImage: 'radial-gradient(ellipse 60% 60% at 50% 50%, black 40%, transparent 100%)',
-        }}
-      />
-
       {/* Vignette */}
       <div
         className="absolute inset-0"
