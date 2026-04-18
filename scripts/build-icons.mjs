@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import sharp from 'sharp'
 
 const candidates = [
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -21,9 +22,31 @@ if (!chrome) {
   process.exit(1)
 }
 
-const input   = pathToFileURL(resolve('scripts/icon-template.html')).href
-const outDir  = resolve('public/icons')
+const input  = pathToFileURL(resolve('scripts/icon-template.html')).href
+const outDir = resolve('public/icons')
 mkdirSync(outDir, { recursive: true })
+
+const masterSize = 1024
+const master = resolve(outDir, '_master.png')
+
+const args = [
+  '--headless',
+  '--disable-gpu',
+  '--hide-scrollbars',
+  '--force-device-scale-factor=1',
+  `--window-size=${masterSize},${masterSize}`,
+  '--virtual-time-budget=5000',
+  `--screenshot=${master}`,
+  input,
+]
+const { status } = spawnSync(chrome, args, { stdio: 'inherit' })
+if (status !== 0) {
+  console.error('Falló el render del master')
+  process.exit(status ?? 1)
+}
+
+const meta = await sharp(master).metadata()
+const side = Math.min(meta.width, meta.height)
 
 const targets = [
   { size: 180, file: 'apple-touch-icon.png' },
@@ -33,21 +56,12 @@ const targets = [
 ]
 
 for (const { size, file } of targets) {
-  const output = resolve(outDir, file)
-  const args = [
-    '--headless',
-    '--disable-gpu',
-    '--hide-scrollbars',
-    '--force-device-scale-factor=1',
-    `--window-size=${size},${size}`,
-    '--virtual-time-budget=10000',
-    `--screenshot=${output}`,
-    `${input}?v=${Date.now()}`,
-  ]
-  const { status } = spawnSync(chrome, args, { stdio: 'inherit' })
-  if (status !== 0) {
-    console.error(`Falló al renderizar ${file}`)
-    process.exit(status ?? 1)
-  }
+  await sharp(master)
+    .extract({ left: 0, top: 0, width: side, height: side })
+    .resize(size, size, { fit: 'cover', kernel: 'lanczos3' })
+    .png({ compressionLevel: 9 })
+    .toFile(resolve(outDir, file))
   console.log(`✓ ${file} (${size}×${size})`)
 }
+
+unlinkSync(master)
