@@ -19,8 +19,31 @@
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
       rel="stylesheet"
     />
+    <style>
+      html, body { margin: 0; padding: 0; background: #0058bc; }
+      #splash {
+        position: fixed;
+        inset: 0;
+        background: #0058bc;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+      #splash .wordmark {
+        color: #ffffff;
+        font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+        font-weight: 800;
+        font-size: 44px;
+        letter-spacing: -0.02em;
+      }
+      .app-ready #splash { display: none; }
+    </style>
   </head>
   <body>
+    <div id="splash">
+      <span class="wordmark">Focus</span>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

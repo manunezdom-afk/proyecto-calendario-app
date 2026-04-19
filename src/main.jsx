@@ -11,3 +11,8 @@ createRoot(document.getElementById('root')).render(
     </AuthProvider>
   </StrictMode>,
 )
+
+// Ocultar splash una vez que React montó
+requestAnimationFrame(() => {
+  document.documentElement.classList.add('app-ready')
+})
