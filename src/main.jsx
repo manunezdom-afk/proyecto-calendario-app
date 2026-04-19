@@ -4,6 +4,9 @@ import './index.css'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 
+const SPLASH_MIN_MS = 700
+const splashStart = performance.now()
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AuthProvider>
@@ -12,7 +15,9 @@ createRoot(document.getElementById('root')).render(
   </StrictMode>,
 )
 
-// Ocultar splash una vez que React montó
-requestAnimationFrame(() => {
-  document.documentElement.classList.add('app-ready')
-})
+// Ocultar splash cuando (a) React ya montó y (b) pasaron al menos SPLASH_MIN_MS
+const elapsed = performance.now() - splashStart
+setTimeout(
+  () => document.documentElement.classList.add('app-ready'),
+  Math.max(0, SPLASH_MIN_MS - elapsed),
+)

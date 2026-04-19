@@ -2,27 +2,18 @@ import { useState, useEffect } from 'react'
 import { dataService } from '../services/dataService'
 import { useAuth } from '../context/AuthContext'
 
-const DEFAULT_TASKS = [
-  { id: 'tsk-001', label: 'Revisar Roadmap del Q4', done: false, priority: 'Alta', category: 'hoy' },
-  { id: 'tsk-002', label: 'Preparar diapositivas de presentación', done: false, priority: 'Media', category: 'hoy' },
-  { id: 'tsk-003', label: 'Responder emails pendientes', done: false, priority: 'Baja', category: 'hoy' },
-  { id: 'tsk-004', label: 'Revisar métricas de producto', done: false, priority: 'Media', category: 'semana' },
-  { id: 'tsk-005', label: 'Documentar API nueva', done: false, priority: 'Baja', category: 'algún día' },
-]
-
 export function useTasks() {
   const { user } = useAuth()
 
-  const [tasks, setTasks] = useState(() => dataService.getCachedTasks(DEFAULT_TASKS))
+  const [tasks, setTasks] = useState(() => dataService.getCachedTasks([]))
 
   useEffect(() => {
     if (!user) return
     dataService.fetchTasks(user.id)
       .then(cloudTasks => {
         if (!cloudTasks) return
-        const result = cloudTasks.length > 0 ? cloudTasks : DEFAULT_TASKS
-        setTasks(result)
-        dataService.setCachedTasks(result)
+        setTasks(cloudTasks)
+        dataService.setCachedTasks(cloudTasks)
       })
       .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar tareas de Supabase', err))
   }, [user?.id])
