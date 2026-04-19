@@ -8,7 +8,10 @@ export default function BottomNavBar({ activeView, onNavigate }) {
   ]
 
   return (
-    <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] rounded-[24px] z-50 flex justify-around items-center px-4 py-3 bg-slate-50/70 backdrop-blur-2xl shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+    <nav
+      className="fixed left-1/2 -translate-x-1/2 w-[92%] rounded-[24px] z-50 flex justify-around items-center px-4 py-3 bg-slate-50/70 backdrop-blur-2xl shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
+      style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}
+    >
       {navItems.map(({ id, icon, label }) => {
         const isActive = activeView === id
         return (
