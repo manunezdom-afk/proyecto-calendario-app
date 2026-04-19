@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUserMemories } from '../hooks/useUserMemories'
+import { analyzePhotos } from '../utils/photoToEvents'
 
 const SR = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
@@ -37,6 +38,7 @@ export default function FocusBar({
   const srRef      = useRef(null)
   const silenceRef = useRef(null)
   const doneRef    = useRef(false)
+  const photoInputRef = useRef(null)
 
   useEffect(() => {
     if (!SR) return
@@ -92,6 +94,40 @@ export default function FocusBar({
           ? 'Configura tu API key en Importar/Exportar → Foto.'
           : 'Error al conectar con la IA. Intenta de nuevo.'
       setReply({ content: errMsg, actions: [] })
+    } finally {
+      setIsThinking(false)
+    }
+  }
+
+  // Adjuntar foto: analiza con IA y agrega los eventos detectados al día.
+  // Caso de uso: pizarra de clase, horario impreso, flyer con evento.
+  async function handlePhotoPick(e) {
+    const files = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (!files.length || isThinking) return
+
+    setText('')
+    setReply(null)
+    setIsThinking(true)
+
+    try {
+      const events = await analyzePhotos(files)
+      for (const event of events) onAddEvent?.(event)
+      const actions = events.map((event) => ({ type: 'add_event', event }))
+      setReply({
+        content: `Agregué ${events.length} evento${events.length !== 1 ? 's' : ''} desde la foto.`,
+        actions,
+      })
+    } catch (err) {
+      const map = {
+        no_events: 'No vi eventos en la foto. Asegúrate de que la pizarra/horario se lea bien.',
+        rate_limit: 'Demasiadas fotos seguidas. Espera un momento.',
+        network: 'Sin conexión. Vuelve a intentar.',
+      }
+      setReply({
+        content: map[err?.code] || err?.message || 'No pude leer la foto.',
+        actions: [],
+      })
     } finally {
       setIsThinking(false)
     }
@@ -184,7 +220,9 @@ export default function FocusBar({
           }`}
         >
           <motion.button
+            type="button"
             onClick={toggleMic}
+            aria-label={isListening ? 'Detener dictado' : 'Dictar por voz'}
             animate={isListening ? { scale: [1, 1.1, 1] } : { scale: 1 }}
             transition={{ duration: 0.7, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
             className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
@@ -193,10 +231,31 @@ export default function FocusBar({
                 : 'bg-surface-container text-outline hover:bg-surface-container-high hover:text-on-surface'
             }`}
           >
-            <span className="material-symbols-outlined text-[1.05rem]">
+            <span aria-hidden="true" className="material-symbols-outlined text-[1.05rem]">
               {isListening ? 'graphic_eq' : 'mic'}
             </span>
           </motion.button>
+
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            disabled={isThinking || isListening}
+            aria-label="Adjuntar foto (ej. tarea en la pizarra)"
+            title="Adjuntar foto"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-surface-container text-outline hover:bg-surface-container-high hover:text-on-surface transition-colors disabled:opacity-40"
+          >
+            <span aria-hidden="true" className="material-symbols-outlined text-[1.05rem]">photo_camera</span>
+          </button>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handlePhotoPick}
+            aria-hidden="true"
+            tabIndex={-1}
+            className="hidden"
+          />
 
           <input
             ref={inputRef}
@@ -310,7 +369,9 @@ export default function FocusBar({
           className="flex items-center gap-2 rounded-2xl border border-white/[0.09] bg-slate-800/80 px-2 py-2 backdrop-blur-2xl"
         >
           <motion.button
+            type="button"
             onClick={toggleMic}
+            aria-label={isListening ? 'Detener dictado' : 'Dictar por voz'}
             animate={isListening ? { scale: [1, 1.1, 1] } : { scale: 1 }}
             transition={{ duration: 0.7, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
             className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
@@ -319,10 +380,31 @@ export default function FocusBar({
                 : 'bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white/60'
             }`}
           >
-            <span className="material-symbols-outlined text-[1.05rem]">
+            <span aria-hidden="true" className="material-symbols-outlined text-[1.05rem]">
               {isListening ? 'graphic_eq' : 'mic'}
             </span>
           </motion.button>
+
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            disabled={isThinking || isListening}
+            aria-label="Adjuntar foto (ej. tarea en la pizarra)"
+            title="Adjuntar foto"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white/60 transition-colors disabled:opacity-40"
+          >
+            <span aria-hidden="true" className="material-symbols-outlined text-[1.05rem]">photo_camera</span>
+          </button>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handlePhotoPick}
+            aria-hidden="true"
+            tabIndex={-1}
+            className="hidden"
+          />
 
           <input
             ref={inputRef}

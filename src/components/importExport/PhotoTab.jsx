@@ -1,51 +1,10 @@
 import { useRef, useState } from 'react'
 import PreviewCard from './PreviewCard'
-import { guessIcon } from '../../utils/iconGuesser'
+import { resizeToBase64, aiToAppEvent } from '../../utils/photoToEvents'
 
 // Tab "Foto": sube imágenes → resize client-side → /api/analyze-photo → preview.
-// Usa guessIcon compartido en vez de una lista de regex duplicada.
-
-function resizeToBase64(file, maxPx = 1120) {
-  return new Promise((resolve) => {
-    const img = new Image()
-    const url = URL.createObjectURL(file)
-    img.onload = () => {
-      const ratio = Math.min(maxPx / img.width, maxPx / img.height, 1)
-      const canvas = document.createElement('canvas')
-      canvas.width  = Math.round(img.width  * ratio)
-      canvas.height = Math.round(img.height * ratio)
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
-      URL.revokeObjectURL(url)
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
-      resolve({ base64: dataUrl.split(',')[1], mediaType: 'image/jpeg' })
-    }
-    img.src = url
-  })
-}
-
-function aiToAppEvent({ title = 'Evento', date = null, time = null, endTime = null }) {
-  let displayTime = ''
-  let h24 = null
-  if (time) {
-    const [h, m] = time.split(':').map(Number)
-    h24 = h
-    const period = h >= 12 ? 'PM' : 'AM'
-    const h12 = h % 12 === 0 ? 12 : h % 12
-    displayTime = `${h12}:${String(m).padStart(2, '0')} ${period}`
-  }
-  const section = h24 !== null && h24 >= 14 ? 'evening' : 'focus'
-  return {
-    id: `evt-ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    title: title.trim(),
-    time: displayTime,
-    date,
-    section,
-    featured: false,
-    icon: guessIcon(title),
-    dotColor: section === 'evening' ? 'bg-secondary-container' : '',
-    description: endTime ? `Hasta las ${endTime}` : '',
-  }
-}
+// resizeToBase64 y aiToAppEvent viven en utils/photoToEvents.js porque
+// también los usan NovaWidget y FocusBar (adjuntar foto al chat).
 
 export default function PhotoTab({ onImport }) {
   const [photos, setPhotos] = useState([])

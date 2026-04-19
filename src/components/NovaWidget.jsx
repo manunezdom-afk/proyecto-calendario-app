@@ -4,6 +4,7 @@ import { useUserProfile } from '../hooks/useUserProfile'
 import { useUserMemories } from '../hooks/useUserMemories'
 import { logSignal } from '../services/signalsService'
 import { getCachedBehavior } from '../services/behaviorAnalysis'
+import { analyzePhotos } from '../utils/photoToEvents'
 
 const SR =
   typeof window !== 'undefined' &&
@@ -76,6 +77,7 @@ export default function NovaWidget({
   const pressTimer  = useRef(null)
   const historyRef  = useRef([])
   const responseRef = useRef(null)  // scroll anchor
+  const photoInputRef = useRef(null)
 
   const displayedText = useSimulatedStream(reply, isLoading)
 
@@ -294,6 +296,64 @@ export default function NovaWidget({
     }
   }
 
+  // Adjuntar foto: mandarla a /api/analyze-photo, extraer eventos y
+  // proponerlos exactamente como si los hubiese generado un mensaje de texto.
+  // Caso de uso: profesor escribe la tarea en la pizarra → foto → eventos.
+  async function handlePhotoPick(e) {
+    const files = Array.from(e.target.files || [])
+    e.target.value = '' // permitir re-seleccionar la misma foto
+    if (!files.length || isLoading) return
+
+    setReply('')
+    setChips([{
+      id: `photo-${Date.now()}`,
+      icon: 'photo_camera',
+      label: `Analizando ${files.length === 1 ? 'la foto' : `${files.length} fotos`}…`,
+      done: false,
+    }])
+    setIsLoading(true)
+
+    logSignal('nova_photo', { count: files.length, hour: new Date().getHours() })
+
+    try {
+      const events = await analyzePhotos(files)
+      const actions = events.map((event) => ({ type: 'add_event', event }))
+
+      if (proposeMode && onProposeActions) {
+        onProposeActions(actions, { reply: '' })
+        setChips(actions.map((a, i) => ({
+          id: `p-${Date.now()}-${i}`,
+          icon: 'add_circle',
+          label: `Propuesta: "${a.event.title}"`,
+          done: true,
+          proposed: true,
+        })))
+        const word = events.length === 1 ? 'evento' : 'eventos'
+        setReply(`Detecté ${events.length} ${word} en la foto. Revísalos en la bandeja antes de aplicarlos.`)
+      } else {
+        for (const action of actions) executeAction(action)
+        setChips(actions.map((a, i) => ({
+          id: `p-${Date.now()}-${i}`,
+          icon: 'check_circle',
+          label: `Agregado: "${a.event.title}"`,
+          done: true,
+        })))
+        setReply(`Agregué ${events.length} evento${events.length !== 1 ? 's' : ''} desde la foto.`)
+      }
+    } catch (err) {
+      const map = {
+        no_events: 'No vi ningún evento en la foto. Asegúrate de que la pizarra/horario se lea bien.',
+        rate_limit: 'Demasiadas fotos seguidas. Espera un momento y vuelve a intentar.',
+        network: 'Sin conexión al servidor. Vuelve a intentar.',
+      }
+      setReply(map[err?.code] || err?.message || 'No pude leer la foto.')
+      setChips([])
+      console.warn('[Nova] photo error:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Posición según viewport
   const position = isDesktop ? 'fixed bottom-6 right-6' : 'fixed bottom-[112px] right-4'
 
@@ -439,8 +499,10 @@ export default function NovaWidget({
             {/* Input */}
             <div className="border-t border-slate-100 px-3 py-2 flex items-center gap-2">
               <button
+                type="button"
                 onPointerDown={isListening ? stopVoice : startVoice}
                 disabled={isLoading}
+                aria-label={isListening ? 'Detener dictado' : 'Dictar por voz'}
                 className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full transition-all ${
                   isListening
                     ? 'bg-red-50 text-red-500 ring-2 ring-red-200'
@@ -448,6 +510,7 @@ export default function NovaWidget({
                 }`}
               >
                 <motion.span
+                  aria-hidden="true"
                   className="material-symbols-outlined text-[17px]"
                   animate={isListening ? { scale: [1, 1.2, 1] } : { scale: 1 }}
                   transition={isListening ? { duration: 0.8, repeat: Infinity } : {}}
@@ -455,6 +518,29 @@ export default function NovaWidget({
                   {isListening ? 'stop' : 'mic'}
                 </motion.span>
               </button>
+
+              {/* Foto → Nova la analiza y propone los eventos detectados */}
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={isLoading || isListening}
+                aria-label="Adjuntar foto (ej. tarea en la pizarra)"
+                title="Adjuntar foto"
+                className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full text-slate-400 hover:text-blue-500 hover:bg-blue-50 disabled:opacity-30 transition-all"
+              >
+                <span aria-hidden="true" className="material-symbols-outlined text-[17px]">photo_camera</span>
+              </button>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhotoPick}
+                aria-hidden="true"
+                tabIndex={-1}
+                className="hidden"
+              />
+
               <input
                 ref={inputRef}
                 value={input}

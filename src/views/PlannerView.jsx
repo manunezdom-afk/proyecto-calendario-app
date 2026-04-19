@@ -418,7 +418,10 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                         <p className="text-outline text-sm font-semibold">Tu día todavía está en blanco.</p>
                         <p className="text-outline/70 text-xs leading-relaxed">
                           {pendingTotal > 0
-                            ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. ¿Qué arrancamos?`
+                            ? <>
+                                Tienes <b>{pendingTotal} tarea{pendingTotal !== 1 ? 's' : ''}</b> en la pestaña{' '}
+                                <b>Tareas</b>. Pídele a Nova que agende alguna en tu día, o crea un evento directamente.
+                              </>
                             : 'Abajo verás ejemplos de cómo podría lucir. Desaparecen cuando crees tu primer evento.'}
                         </p>
                         {onOpenAssistant && (
