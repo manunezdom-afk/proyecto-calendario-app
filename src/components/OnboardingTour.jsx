@@ -68,7 +68,7 @@ function RitualVisual() {
         className="w-20 h-28 rounded-2xl bg-gradient-to-b from-amber-300 to-orange-400 p-2 flex flex-col items-center justify-between"
       >
         <span className="material-symbols-outlined text-white text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>wb_sunny</span>
-        <p className="text-[8px] font-bold text-white text-center leading-tight">Morning<br/>Brief</p>
+        <p className="text-[8px] font-bold text-white text-center leading-tight">Tu<br/>mañana</p>
       </motion.div>
       {/* Conector */}
       <motion.div initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 0.4 }} className="w-6 h-[2px] bg-white/30 origin-left" />
@@ -91,7 +91,7 @@ function RitualVisual() {
         className="w-20 h-28 rounded-2xl bg-gradient-to-b from-violet-500 to-fuchsia-600 p-2 flex flex-col items-center justify-between"
       >
         <span className="material-symbols-outlined text-white text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>bedtime</span>
-        <p className="text-[8px] font-bold text-white text-center leading-tight">Evening<br/>Shutdown</p>
+        <p className="text-[8px] font-bold text-white text-center leading-tight">Tu<br/>cierre</p>
       </motion.div>
     </div>
   )
@@ -233,7 +233,7 @@ const SLIDES = [
     id: 'ritual',
     eyebrow: 'Ritual diario',
     title: 'Tu día empieza y termina con claridad.',
-    desc: 'Morning Brief al abrir. Evening Shutdown al cerrar. La retención viene del ritual, no del calendario.',
+    desc: 'Un resumen al despertar. Un cierre reflexivo al terminar. Así el día no se te escapa.',
     Visual: RitualVisual,
   },
   {
