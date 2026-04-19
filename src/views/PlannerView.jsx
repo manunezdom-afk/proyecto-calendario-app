@@ -460,10 +460,8 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-52 dark:bg-slate-900 dark:text-slate-100">
 
-      {/* Setup card */}
-      {showSetup && (
-        <ProfileSetupCard onSave={saveProfile} onSnooze={snoozeSetup} />
-      )}
+      {/* Setup card legacy — reemplazado por OnboardingTour animado.
+          El sistema de user_signals aprende el cronotipo solo, sin preguntar. */}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8">
         <div className={isDesktop ? "flex flex-col gap-6" : "flex flex-col md:flex-row gap-12"}>

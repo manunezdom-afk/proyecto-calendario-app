@@ -21,6 +21,7 @@ import MorningBrief                from './components/MorningBrief'
 import EveningShutdown             from './components/EveningShutdown'
 import SuggestionsInbox            from './components/SuggestionsInbox'
 import WelcomeScreen, { useWelcomeGate } from './components/WelcomeScreen'
+import OnboardingTour, { useOnboardingTour } from './components/OnboardingTour'
 import InstallAppCard              from './components/InstallAppCard'
 
 import CalendarView    from './views/CalendarView'
@@ -44,6 +45,7 @@ export default function App() {
   const { authModal, setAuthModal, user } = useAuth()
   const { profile }                 = useUserProfile()
   const { show: showWelcome, dismiss: dismissWelcome } = useWelcomeGate()
+  const { show: showTour,    complete: completeTour }  = useOnboardingTour()
 
   // Nombre para saludo personalizado (si existe email, usamos la parte antes de @)
   const userName = user?.email ? user.email.split('@')[0].split('.')[0] : null
@@ -348,8 +350,15 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* ── Onboarding tour animado (una vez por navegador) ──────────────── */}
+      <AnimatePresence>
+        {showTour && !showWelcome && (
+          <OnboardingTour onDone={completeTour} />
+        )}
+      </AnimatePresence>
+
       {/* ── Invitación a instalar la app (no aparece si ya está instalada) ── */}
-      {!showWelcome && <InstallAppCard />}
+      {!showWelcome && !showTour && <InstallAppCard />}
 
       {/* ── Evening Shutdown ─────────────────────────────────────────────── */}
       <AnimatePresence>
