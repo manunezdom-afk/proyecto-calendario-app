@@ -157,27 +157,11 @@ export default function MorningBrief({
     return () => clearTimeout(timer)
   }, [muted, inline]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (inline || !SR) return
-    let r
-    try {
-      r = new SR()
-      r.lang = 'es-ES'
-      r.continuous = true
-      r.interimResults = false
-      r.onresult = (e) => {
-        const last = e.results[e.results.length - 1]
-        if (!last?.isFinal) return
-        const t = last[0].transcript.toLowerCase()
-        if      (/\b(s[ií]|arranca|listo|dale|bien|empezar)\b/.test(t)) handleStart()
-        else if (/\b(no|luego|despu[eé]s|m[aá]s tarde|espera)\b/.test(t)) handleDismiss()
-        else if (/\b(cambia|modifica|mueve|mover)\b/.test(t))             handleModify()
-      }
-      r.start()
-      srRef.current = r
-    } catch {}
-    return () => { try { r?.stop() } catch {} }
-  }, [inline]) // eslint-disable-line react-hooks/exhaustive-deps
+  // ⚠️ La escucha por voz al abrir el MorningBrief fue removida.
+  // iOS pedía permiso de micrófono al arrancar la app, sin que el usuario
+  // lo pidiera explícitamente. Mala UX. Ahora el micrófono solo se activa
+  // cuando tocan el botón del mic en NovaWidget (gesto explícito).
+  // El brief se navega por botones (arrancamos / rechazar / modificar).
 
   function stopSpeech() {
     window.speechSynthesis?.cancel()
