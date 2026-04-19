@@ -5,253 +5,28 @@ import FocusBar          from '../components/FocusBar'
 import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { isInPeak, parseEventHour, peakRangeLabel } from '../utils/peakZone'
-import { todayISO, weekdayName, monthName } from '../utils/dateHelpers'
+import { todayISO } from '../utils/dateHelpers'
+import {
+  formatToday,
+  currentHour,
+  parseTimeToDecimal,
+  formatMinutes,
+  eventTimeToBlockTime,
+  normalizeTitleKey,
+  extractReminderMeta,
+  titleTokenSet,
+  jaccard,
+  looksLikeReminderTitle,
+} from './planner/plannerHelpers'
+import { buildInsights } from './planner/buildInsights'
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-// Nombres de días/meses vienen de Intl.DateTimeFormat (dateHelpers.js)
-// para no hardcodear arrays en español y permitir i18n futuro.
-function formatToday() {
-  const d = new Date()
-  const day = weekdayName(d)
-  // Capitalizamos para que "lunes" → "Lunes"
-  const dayCap = day.charAt(0).toUpperCase() + day.slice(1)
-  return `${dayCap}, ${d.getDate()} de ${monthName(d)}`
-}
-
-function currentHour() {
-  const d = new Date()
-  return d.getHours() + d.getMinutes() / 60
-}
-
-// Parser simple (HH:MM 24h) usado por el render. Para parseo coloquial
-// completo hay parseTimeToDecimal en utils/dateHelpers.js — aquí solo
-// necesitamos interpretar los horarios normalizados del grid.
-function parseTimeToDecimal(timeStr) {
-  if (!timeStr || timeStr === '—') return null
-  const [h, m] = timeStr.split(':').map(Number)
-  if (isNaN(h)) return null
-  return h + m / 60
-}
-
-function formatMinutes(totalMinutes) {
-  if (totalMinutes < 1) return 'ahora'
-  if (totalMinutes < 60) return `${Math.round(totalMinutes)} min`
-  const h = Math.floor(totalMinutes / 60)
-  const m = Math.round(totalMinutes % 60)
-  return m > 0 ? `${h}h ${m}m` : `${h}h`
-}
+// Helpers formateo/hora/similitud viven en ./planner/plannerHelpers.js
+// Generación de insights personalizados vive en ./planner/buildInsights.js
 
 // Alias mantenido por compatibilidad con el resto del archivo.
 const todayISODate = todayISO
 
-function eventTimeToBlockTime(timeStr) {
-  // Accepts: "3:00 PM", "2:00 PM - 3:30 PM", "15:00", "09:00"
-  if (!timeStr) return '—'
-  const first = String(timeStr).split('-')[0].trim()
-  // 24h "HH:mm"
-  const m24 = first.match(/^(\d{1,2}):(\d{2})$/)
-  if (m24) {
-    const hh = Math.max(0, Math.min(23, Number(m24[1])))
-    const mm = Math.max(0, Math.min(59, Number(m24[2])))
-    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
-  }
-  // 12h "h:mm AM/PM"
-  const m12 = first.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i)
-  if (m12) {
-    let hh = Number(m12[1])
-    const mm = Number(m12[2] ?? '00')
-    const ap = m12[3].toUpperCase()
-    if (hh === 12) hh = 0
-    if (ap === 'PM') hh += 12
-    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
-  }
-  return '—'
-}
-
-function normalizeTitleKey(s) {
-  return String(s || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function extractReminderMeta(title) {
-  const t = String(title || '').trim()
-  // Common patterns:
-  // - "Recordatorio: Clases de Historia"
-  // - "Clases de Historia — recordatorio"
-  // - "Clases de Historia (recordatorio 10 min)"
-  // - "Clases de Historia en 10 minutos"
-  const m1 = t.match(/^recordatorio:\s*(.+)$/i)
-  if (m1) return { isReminder: true, parentTitle: m1[1].trim(), label: 'Recordatorio' }
-
-  const m2 = t.match(/^(.+?)\s*(?:—|-)\s*recordatorio\b.*$/i)
-  if (m2) return { isReminder: true, parentTitle: m2[1].trim(), label: 'Recordatorio' }
-
-  const m3 = t.match(/^(.+?)\s*\((?:.*\brecordatorio\b.*)\)\s*$/i)
-  if (m3) {
-    const inside = t.replace(m3[1], '').trim().replace(/^\(|\)$/g, '').trim()
-    return { isReminder: true, parentTitle: m3[1].trim(), label: inside || 'Recordatorio' }
-  }
-
-  const m4 = t.match(/^(.+?)\s+en\s+(?:10|30|60)\s+minutos\b/i)
-  if (m4) return { isReminder: true, parentTitle: m4[1].trim(), label: t.slice(m4[1].length).trim() }
-
-  if (/\b(recordatorio|reminder)\b/i.test(t)) {
-    // Fallback: try stripping the keyword and using the rest
-    const guessParent = t
-      .replace(/\b(recordatorio|reminder)\b/ig, '')
-      .replace(/[()—-]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-    return { isReminder: true, parentTitle: guessParent || t, label: 'Recordatorio' }
-  }
-
-  return { isReminder: false, parentTitle: '', label: '' }
-}
-
-function titleTokenSet(title) {
-  const cleaned = normalizeTitleKey(title)
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const tokens = cleaned.split(' ').filter(Boolean)
-  // remove very common stop-words to improve similarity signal
-  const STOP = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'y', 'a', 'en', 'para', 'por', 'con', 'un', 'una'])
-  return new Set(tokens.filter((t) => t.length > 2 && !STOP.has(t)))
-}
-
-function jaccard(a, b) {
-  if (!a?.size || !b?.size) return 0
-  let inter = 0
-  for (const x of a) if (b.has(x)) inter++
-  const union = a.size + b.size - inter
-  return union === 0 ? 0 : inter / union
-}
-
-function looksLikeReminderTitle(title) {
-  const t = normalizeTitleKey(title)
-  // Imperative / checklist-like reminders often created as short standalone events.
-  // Examples: "Recordar enviar mail", "Check presentación", "Revisar notas", etc.
-  if (/^(recordar|recuerda|remember|check|revisar|enviar|llamar|pagar|comprar|hacer|preparar|confirmar|agendar)\b/.test(t)) return true
-  if (/\b(recordatorio|reminder)\b/.test(t)) return true
-  if (/^todo\b/.test(t)) return true
-  return false
-}
-
 const STORAGE_KEY = 'focus_planner_blocks'
-
-// ── Lógica de insights personalizados ─────────────────────────────────────
-function buildInsights(events, profile) {
-  const todayISO = (() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-  })()
-
-  const todayEvents = events.filter((e) => !e.date || e.date === todayISO)
-  const eveningCount = todayEvents.filter((e) => e.section === 'evening').length
-  const meetingCount = todayEvents.filter((e) =>
-    /reuni[oó]n|meeting|llamada|call|sincro|junta/i.test(e.title)
-  ).length
-  const h = currentHour()
-
-  const { role, chronotype, peakStart } = profile
-  const roleLabel = { student: 'estudiar', worker: 'trabajar', freelance: 'producir', other: 'concentrarte' }[role] ?? 'concentrarte'
-
-  const insights = []
-
-  // Insight 1: basado en cantidad de reuniones
-  if (meetingCount >= 3) {
-    insights.push({
-      color: 'text-amber-600',
-      bg: 'bg-amber-50 dark:bg-amber-900/20',
-      icon: 'groups',
-      label: 'REUNIONES',
-      text: `${meetingCount} reuniones hoy. Bloquea al menos 30 min de recuperación entre ellas para mantener el foco.`,
-    })
-  } else if (meetingCount > 0) {
-    insights.push({
-      color: 'text-primary',
-      bg: 'bg-primary/5',
-      icon: 'groups',
-      label: 'AGENDA',
-      text: `${meetingCount} reunión${meetingCount > 1 ? 'es' : ''} programada${meetingCount > 1 ? 's' : ''}. Prepara los puntos clave antes de entrar.`,
-    })
-  }
-
-  // Insight 2: carga de tarde
-  if (eveningCount >= 2) {
-    insights.push({
-      color: 'text-secondary',
-      bg: 'bg-secondary/5',
-      icon: 'nights_stay',
-      label: 'TARDE OCUPADA',
-      text: 'Tu tarde está cargada. Resuelve lo urgente antes del mediodía para llegar sin presión.',
-    })
-  }
-
-  // Insight 3: agenda vacía
-  if (todayEvents.length === 0) {
-    insights.push({
-      color: 'text-primary',
-      bg: 'bg-primary/5',
-      icon: 'spa',
-      label: 'ESPACIO LIBRE',
-      text: `Sin eventos agendados. Día ideal para ${roleLabel} profundo sin interrupciones. Usa Time Blocking.`,
-    })
-  } else if (todayEvents.length <= 2) {
-    insights.push({
-      color: 'text-primary',
-      bg: 'bg-primary/5',
-      icon: 'self_improvement',
-      label: 'AGENDA LIGERA',
-      text: `Pocos eventos hoy. Aprovecha los bloques libres para ${roleLabel} con máxima concentración.`,
-    })
-  }
-
-  // Insight 4: cronobio + hora actual
-  if (chronotype === 'night' && h < 13) {
-    insights.push({
-      color: 'text-outline',
-      bg: 'bg-surface-container-low',
-      icon: 'bedtime',
-      label: 'TU MOMENTO',
-      text: 'Aún no es tu pico de energía. Haz tareas rutinarias ahora y guarda lo difícil para la noche.',
-    })
-  } else if (chronotype === 'morning' && h > 14) {
-    insights.push({
-      color: 'text-outline',
-      bg: 'bg-surface-container-low',
-      icon: 'wb_twilight',
-      label: 'TU MOMENTO',
-      text: 'Tu pico de mañana ya pasó. Es buen momento para reuniones, correos y tareas más ligeras.',
-    })
-  }
-
-  // Insight 5: tip según rol
-  if (role === 'student') {
-    insights.push({
-      color: 'text-secondary',
-      bg: 'bg-secondary/5',
-      icon: 'timer',
-      label: 'TÉCNICA',
-      text: 'Pomodoro activo: 25 min de estudio sin distracciones → 5 min de descanso. La ciencia lo respalda.',
-    })
-  } else {
-    insights.push({
-      color: 'text-primary',
-      bg: 'bg-primary/5',
-      icon: 'tips_and_updates',
-      label: 'TIME BLOCKING',
-      text: 'Divide tu día en bloques dedicados. Los estudios muestran hasta un 80% más de productividad frente a listas de tareas.',
-    })
-  }
-
-  // Devolver los 2 más relevantes (los primeros que se acumularon)
-  return insights.slice(0, 2)
-}
 
 // ── Componente ─────────────────────────────────────────────────────────────
 export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, events = [], tasks = [], onOpenAssistant, onEveningShutdown, isDesktop = false, morningBrief = null }) {

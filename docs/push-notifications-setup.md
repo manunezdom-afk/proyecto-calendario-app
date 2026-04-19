@@ -54,38 +54,11 @@ Guardá las dos (no subas la private a GitHub).
 
 ### 2. Correr el SQL en Supabase
 
-Copiá y ejecutá esto en el SQL Editor de Supabase:
+Todo el schema vive en `supabase/schema.sql` (todas las tablas, policies, índices, triggers y RPCs). Pegá el contenido de ese archivo en el SQL Editor de Supabase y ejecutalo. Es idempotente (`CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`) — podés correrlo varias veces sin romper nada.
 
-```sql
-CREATE TABLE IF NOT EXISTS public.push_subscriptions (
-  id         BIGSERIAL PRIMARY KEY,
-  user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  endpoint   TEXT NOT NULL UNIQUE,
-  p256dh     TEXT NOT NULL,
-  auth       TEXT NOT NULL,
-  user_agent TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  last_used_at TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users manage own push subscriptions"
-  ON public.push_subscriptions FOR ALL USING (auth.uid() = user_id);
-CREATE INDEX IF NOT EXISTS push_subs_user_idx ON public.push_subscriptions (user_id);
+Si ya lo corriste hace tiempo, aplicá también las migraciones en `supabase/migrations/` (por ejemplo `0001_indexes_and_feed_rpc.sql`, que agrega el índice compuesto `events(user_id, date)` y la RPC `increment_feed_read` usada por `/api/ics-feed`).
 
-CREATE TABLE IF NOT EXISTS public.sent_notifications (
-  id         BIGSERIAL PRIMARY KEY,
-  user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  event_id   TEXT NOT NULL,
-  offset_min INTEGER NOT NULL,
-  sent_at    TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (user_id, event_id, offset_min)
-);
-ALTER TABLE public.sent_notifications ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users read own sent notifications"
-  ON public.sent_notifications FOR SELECT USING (auth.uid() = user_id);
-CREATE INDEX IF NOT EXISTS sent_notif_user_evt_idx
-  ON public.sent_notifications (user_id, event_id);
-```
+> Las tablas que importan para push notifications son `push_subscriptions` y `sent_notifications`. Están definidas en `schema.sql` junto con RLS y el UNIQUE constraint que protege de duplicados cuando el cron corre dos veces concurrentemente.
 
 ### 3. Agregar env vars en Vercel
 
@@ -131,6 +104,9 @@ Deployments → último → ⋯ → Redeploy → **desmarcá "Use existing Build
 - **Push no llega:** Chrome DevTools → Application → Service Workers → ver si hay errores
 - **"no_vapid_key":** Verificar que `VITE_VAPID_PUBLIC_KEY` está en Vercel y se hizo redeploy después
 - **Ejecutar el cron manualmente:** Actions → "Notifications Cron" → Run workflow
+- **Push duplicada:** el cron reserva cada `(user_id, event_id, offset_min)` antes de enviar y
+  maneja `23505` (unique_violation) si otra instancia ganó la carrera. Si ves duplicados,
+  revisa que el UNIQUE en `sent_notifications` siga presente en el schema.
 
 ## Costos
 

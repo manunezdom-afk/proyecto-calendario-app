@@ -12,11 +12,8 @@ Agrupado por resultado, no por tiempo. Avanza en orden, cada tarea desbloquea la
 
 ## Bloque 1 — Desbloquear la app
 
-- [ ] Ejecutar los 4 SQL pendientes en Supabase:
-  - `user_signals`
-  - `user_behavior`
-  - `push_subscriptions` + `sent_notifications`
-  - `calendar_feeds`
+- [ ] Ejecutar `supabase/schema.sql` completo en el SQL Editor (idempotente — ya contiene todas las tablas: `user_profiles`, `events`, `tasks`, `blocks`, `suggestions`, `user_memories`, `notif_log`, `user_signals`, `user_behavior`, `push_subscriptions`, `sent_notifications`, `calendar_feeds`)
+- [ ] Aplicar las migraciones en `supabase/migrations/` (al menos `0001_indexes_and_feed_rpc.sql`, que agrega el índice compuesto `events(user_id, date)` y la RPC `increment_feed_read`)
 - [ ] Arreglar el login de Supabase usando la página `/#/diagnostic`
 - [ ] Probar flujo completo con tu propia cuenta:
   - Crear 5 eventos
@@ -108,13 +105,19 @@ Agrupado por resultado, no por tiempo. Avanza en orden, cada tarea desbloquea la
 
 ## Bloque 6 — Seguridad mínima
 
-- [ ] Rate limiting en `/api/calendar-feeds` y `/api/focus-assistant`
+Estado al 2026-04-19 (auditoría `claude/app-review-improvements-n6gri`):
+
+- [x] Rate limiting in-memory en `/api/focus-assistant` y `/api/analyze-photo` (20-30 req/min por IP). **Limitación**: al ser in-memory no es global entre instancias serverless — migrar a Redis/Upstash sigue pendiente.
+- [ ] Rate limiting en `/api/calendar-feeds` (pendiente)
 - [ ] Validar inputs con Zod en todos los endpoints del API
 - [ ] Instalar Sentry para tracking de errores (plan gratis hasta 5k errors/mes)
 - [ ] Activar 2FA en Vercel, Supabase, GitHub y Stripe
-- [ ] Revisar que no haya `console.log` con datos sensibles (tokens, emails, keys)
+- [ ] Revisar que no haya `console.log` con datos sensibles — pendiente: `api/tts.js:41` loguea el prefijo de la API key
+- [ ] `/api/push-snooze` acepta requests sin JWT — falta `getUserIdFromAuth` + filtro por `user_id` (flagged en auditoría)
+- [ ] Tope de costo diario para `/api/tts` (OpenAI TTS $0.015/1K chars)
 - [ ] Configurar `Content-Security-Policy` en `vercel.json`
-- [ ] Revisar que las RLS policies de Supabase estén restrictivas (ya están OK)
+- [x] RLS policies de Supabase restrictivas por `auth.uid()` (verificado en schema)
+- [x] VAPID public key en cliente, private solo en server; ICS con token aleatorio (no expone user_id)
 
 ---
 
