@@ -11,8 +11,11 @@ export default function TopAppBar({
 
   return (
     <nav
-      className="sticky top-0 z-50 bg-slate-50/70 dark:bg-slate-900/70 backdrop-blur-lg flex justify-between items-center w-full px-6 py-4"
-      style={{ paddingTop: 'calc(env(safe-area-inset-top) + 16px)' }}
+      className="sticky top-0 z-50 bg-slate-50/70 dark:bg-slate-900/70 backdrop-blur-lg flex justify-between items-center w-full px-6 pb-3"
+      style={{
+        // Nunca menos de 56px arriba (aún sin notch) + safe-area del dispositivo
+        paddingTop: 'calc(max(env(safe-area-inset-top), 20px) + 24px)',
+      }}
     >
       {/* Left: back button OR logo */}
       <div className="flex items-center gap-3">
