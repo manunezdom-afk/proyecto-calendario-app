@@ -122,8 +122,6 @@ export default function MorningBrief({
   const [phase, setPhase]   = useState('brief')
   const [muted, setMuted]   = useState(inline) // inline: start muted, no TTS auto
   const [speaking, setSpeaking] = useState(false)
-  const [listening, setListening] = useState(false)
-  const srRef     = useRef(null)
   const spokenRef = useRef(false)
 
   useEffect(() => {
@@ -159,45 +157,13 @@ export default function MorningBrief({
     return () => clearTimeout(timer)
   }, [muted, inline]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // NO auto-start del micrófono. Solo inicializa el objeto SR; se activa con toggleListening().
-  useEffect(() => {
-    if (inline || !SR) return
-    const r = new SR()
-    r.lang = 'es-ES'
-    r.continuous = true
-    r.interimResults = false
-    r.onresult = (e) => {
-      const last = e.results[e.results.length - 1]
-      if (!last?.isFinal) return
-      const t = last[0].transcript.toLowerCase()
-      if      (/\b(s[ií]|arranca|listo|dale|bien|empezar)\b/.test(t)) handleStart()
-      else if (/\b(no|luego|despu[eé]s|m[aá]s tarde|espera)\b/.test(t)) handleDismiss()
-      else if (/\b(cambia|modifica|mueve|mover)\b/.test(t))             handleModify()
-    }
-    r.onend   = () => setListening(false)
-    r.onerror = () => setListening(false)
-    srRef.current = r
-    return () => { try { r.stop() } catch {} }
-  }, [inline]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function toggleListening() {
-    const r = srRef.current
-    if (!r) return
-    if (listening) {
-      try { r.stop() } catch {}
-      setListening(false)
-    } else {
-      try { r.start(); setListening(true) } catch {}
-    }
-  }
-
   function stopSpeech() {
     window.speechSynthesis?.cancel()
     setSpeaking(false)
   }
 
-  function handleStart()   { stopSpeech(); try { srRef.current?.stop() } catch {}; onStart?.() }
-  function handleDismiss() { stopSpeech(); try { srRef.current?.stop() } catch {}; onDismiss?.() }
+  function handleStart()   { stopSpeech(); onStart?.() }
+  function handleDismiss() { stopSpeech(); onDismiss?.() }
   function handleModify()  {
     stopSpeech()
     if (brief.peakConflicts.length > 0) setPhase('conflicts')
@@ -280,24 +246,8 @@ export default function MorningBrief({
         transition={{ duration: 0.25, ease: 'easeOut' }}
         className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-xl p-6 relative"
       >
-        {/* Controles (mute voz + mic opt-in) */}
-        <div className="absolute top-3 right-3 flex items-center gap-1">
-          {SR && (
-            <button
-              onClick={toggleListening}
-              aria-label={listening ? 'Dejar de escuchar' : 'Activar micrófono'}
-              title={listening ? 'Dejar de escuchar' : 'Activar micrófono'}
-              className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-                listening
-                  ? 'bg-red-50 text-red-500 ring-2 ring-red-200'
-                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[16px]">
-                {listening ? 'mic' : 'mic_off'}
-              </span>
-            </button>
-          )}
+        {/* Control mute voz */}
+        <div className="absolute top-3 right-3">
           <button
             onClick={() => { setMuted(m => !m); stopSpeech() }}
             aria-label={muted ? 'Activar voz' : 'Silenciar voz'}
