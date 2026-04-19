@@ -30,6 +30,7 @@ import TasksView       from './views/TasksView'
 import SettingsView    from './views/SettingsView'
 import MemoryView      from './views/MemoryView'
 import NovaKnowsView   from './views/NovaKnowsView'
+import DiagnosticView  from './views/DiagnosticView'
 
 const LAST_OPENED_KEY = 'nova_last_opened'
 
@@ -46,7 +47,15 @@ export default function App() {
 
   // Nombre para saludo personalizado (si existe email, usamos la parte antes de @)
   const userName = user?.email ? user.email.split('@')[0].split('.')[0] : null
-  const [activeView, setActiveView]     = useState('planner')
+
+  // Soporte de ruta especial via URL hash: #/diagnostic
+  const initialView = () => {
+    if (typeof window !== 'undefined' && window.location.hash === '#/diagnostic') {
+      return 'diagnostic'
+    }
+    return 'planner'
+  }
+  const [activeView, setActiveView]     = useState(initialView)
   const [previousView, setPreviousView] = useState('planner')
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window !== 'undefined' && window.innerWidth >= 1024,
@@ -248,6 +257,7 @@ export default function App() {
                   onOpenImport={() => { setImportExportInitialTab('import'); setImportExportOpen(true) }}
                   onOpenMemory={() => { setPreviousView('settings'); setActiveView('memory') }}
                   onOpenNovaKnows={() => { setPreviousView('settings'); setActiveView('nova-knows') }}
+                  onOpenDiagnostic={() => { setPreviousView('settings'); setActiveView('diagnostic') }}
                 />
               )}
 
@@ -268,6 +278,13 @@ export default function App() {
 
               {activeView === 'nova-knows' && (
                 <NovaKnowsView onBack={() => setActiveView(previousView || 'settings')} />
+              )}
+
+              {activeView === 'diagnostic' && (
+                <DiagnosticView onBack={() => {
+                  if (typeof window !== 'undefined') window.location.hash = ''
+                  setActiveView('settings')
+                }} />
               )}
             </motion.div>
           </AnimatePresence>

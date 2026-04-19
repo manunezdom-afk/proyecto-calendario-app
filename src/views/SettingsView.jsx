@@ -57,7 +57,7 @@ function Row({ icon, label, sub, children, onClick, danger = false }) {
   )
 }
 
-export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKnows }) {
+export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKnows, onOpenDiagnostic }) {
   const { user, setAuthModal, signOut } = useAuth()
   const { profile, saveProfile }        = useUserProfile()
 
@@ -240,6 +240,16 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
             sub="Sincroniza tus datos en todos tus dispositivos"
             onClick={() => setAuthModal(true)}
           />
+        )}
+        {onOpenDiagnostic && (
+          <Row
+            icon="bug_report"
+            label="Diagnóstico"
+            sub="Revisar config del runtime si algo falla"
+            onClick={onOpenDiagnostic}
+          >
+            <span className="material-symbols-outlined text-[16px] text-slate-300">chevron_right</span>
+          </Row>
         )}
       </SectionCard>
 

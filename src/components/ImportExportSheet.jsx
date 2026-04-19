@@ -1,14 +1,16 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { downloadICS }        from '../utils/icsExport'
 import { parseICS }           from '../utils/icsImport'
 import { parseEvent }         from '../utils/parseEvent'
 import { googleCalendarUrl }  from '../utils/googleCalendarUrl'
+import { supabase }           from '../lib/supabase'
 
 const TABS = [
-  { id: 'export', label: 'Exportar', icon: 'ios_share' },
-  { id: 'import', label: 'Importar', icon: 'download' },
-  { id: 'text',   label: 'Por texto', icon: 'edit_note' },
-  { id: 'photo',  label: 'Foto',      icon: 'photo_camera' },
+  { id: 'export',    label: 'Exportar',    icon: 'ios_share' },
+  { id: 'subscribe', label: 'Suscripción', icon: 'rss_feed' },
+  { id: 'import',    label: 'Importar',    icon: 'download' },
+  { id: 'text',      label: 'Por texto',   icon: 'edit_note' },
+  { id: 'photo',     label: 'Foto',        icon: 'photo_camera' },
 ]
 
 // ── Small preview card for an event to be imported ──────────────────────────
@@ -45,10 +47,54 @@ function PreviewCard({ ev, onRemove }) {
 function ExportTab({ events }) {
   const [copied, setCopied] = useState(false)
 
+  // ── Filtros ─────────────────────────────────────────────────────────────
+  const [rangePreset, setRangePreset] = useState('all') // all, today, week, month
+  const [selectedSections, setSelectedSections] = useState(new Set())
+
+  // Categorías únicas presentes en los eventos
+  const allSections = Array.from(
+    new Set((events || []).map(e => e.section).filter(Boolean))
+  )
+
+  function inRange(ev) {
+    if (rangePreset === 'all') return true
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const evDate = ev.date ? new Date(ev.date) : today
+    if (rangePreset === 'today') {
+      return evDate.toDateString() === today.toDateString()
+    }
+    if (rangePreset === 'week') {
+      const end = new Date(today); end.setDate(today.getDate() + 7)
+      return evDate >= today && evDate <= end
+    }
+    if (rangePreset === 'month') {
+      const end = new Date(today); end.setDate(today.getDate() + 30)
+      return evDate >= today && evDate <= end
+    }
+    return true
+  }
+
+  function inSection(ev) {
+    if (selectedSections.size === 0) return true
+    return selectedSections.has(ev.section)
+  }
+
+  const filteredEvents = (events || []).filter(e => inRange(e) && inSection(e))
+
+  function toggleSection(section) {
+    setSelectedSections(prev => {
+      const next = new Set(prev)
+      if (next.has(section)) next.delete(section)
+      else next.add(section)
+      return next
+    })
+  }
+
   async function handleCopy() {
     const { eventsToICS } = await import('../utils/icsExport')
     try {
-      await navigator.clipboard.writeText(eventsToICS(events))
+      await navigator.clipboard.writeText(eventsToICS(filteredEvents))
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (_) {}
@@ -56,6 +102,76 @@ function ExportTab({ events }) {
 
   return (
     <div className="space-y-5">
+
+      {/* ── Filtros ─────────────────────────────────────────────────────── */}
+      <div className="p-4 bg-surface-container-lowest rounded-2xl border border-outline-variant/20 space-y-3">
+        <p className="text-[11px] font-bold text-on-surface uppercase tracking-wider">Qué exportar</p>
+
+        {/* Rango de fechas */}
+        <div>
+          <p className="text-[11px] text-outline mb-1.5">Rango</p>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { id: 'all',   label: 'Todo' },
+              { id: 'today', label: 'Hoy' },
+              { id: 'week',  label: 'Próx. 7 días' },
+              { id: 'month', label: 'Próx. 30 días' },
+            ].map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setRangePreset(id)}
+                className={`px-3 py-1.5 rounded-full text-[11.5px] font-semibold transition-all ${
+                  rangePreset === id
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'bg-white text-on-surface-variant border border-outline-variant/30 hover:border-primary/40'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Categorías */}
+        {allSections.length > 1 && (
+          <div>
+            <p className="text-[11px] text-outline mb-1.5">
+              Categorías {selectedSections.size > 0 && `(${selectedSections.size} seleccionadas)`}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {allSections.map(section => {
+                const sel = selectedSections.has(section)
+                return (
+                  <button
+                    key={section}
+                    onClick={() => toggleSection(section)}
+                    className={`px-3 py-1.5 rounded-full text-[11.5px] font-semibold transition-all ${
+                      sel
+                        ? 'bg-primary text-white shadow-sm'
+                        : 'bg-white text-on-surface-variant border border-outline-variant/30 hover:border-primary/40'
+                    }`}
+                  >
+                    {section}
+                  </button>
+                )
+              })}
+              {selectedSections.size > 0 && (
+                <button
+                  onClick={() => setSelectedSections(new Set())}
+                  className="px-3 py-1.5 rounded-full text-[11.5px] font-semibold text-outline hover:text-on-surface"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Resumen */}
+        <p className="text-[11px] text-outline pt-0.5">
+          <b className="text-on-surface">{filteredEvents.length}</b> de {events.length} evento{events.length !== 1 ? 's' : ''} seleccionado{filteredEvents.length !== 1 ? 's' : ''}
+        </p>
+      </div>
 
       {/* ── Opción 1: Google Calendar directo ── */}
       <div className="space-y-3">
@@ -65,11 +181,11 @@ function ExportTab({ events }) {
         </div>
         <p className="text-xs text-on-surface-variant pl-7">Sin descargar nada. Se abre directamente en Google Calendar con la hora y fecha correctas.</p>
 
-        {events.length === 0 ? (
-          <p className="text-xs text-outline pl-7 italic">No hay eventos para exportar.</p>
+        {filteredEvents.length === 0 ? (
+          <p className="text-xs text-outline pl-7 italic">No hay eventos para exportar con los filtros actuales.</p>
         ) : (
           <div className="space-y-2 max-h-56 overflow-y-auto pl-7">
-            {events.map((ev) => (
+            {filteredEvents.map((ev) => (
               <div key={ev.id} className="flex items-center gap-3 p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/20">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-on-surface text-sm truncate">{ev.title}</p>
@@ -105,17 +221,17 @@ function ExportTab({ events }) {
 
         <div className="pl-7 space-y-2">
           <button
-            onClick={() => { downloadICS(events) }}
-            disabled={events.length === 0}
+            onClick={() => { downloadICS(filteredEvents) }}
+            disabled={filteredEvents.length === 0}
             className="w-full py-3.5 rounded-2xl bg-primary text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-30 active:scale-[0.98] transition-all"
           >
             <span className="material-symbols-outlined text-[20px]">ios_share</span>
-            Descargar {events.length} evento{events.length !== 1 ? 's' : ''} (.ics)
+            Descargar {filteredEvents.length} evento{filteredEvents.length !== 1 ? 's' : ''} (.ics)
           </button>
 
           <button
             onClick={handleCopy}
-            disabled={events.length === 0}
+            disabled={filteredEvents.length === 0}
             className="w-full py-3 rounded-2xl bg-surface-container-low text-on-surface font-semibold flex items-center justify-center gap-2 disabled:opacity-30 text-sm active:scale-[0.98] transition-all"
           >
             <span className="material-symbols-outlined text-[18px]">{copied ? 'check_circle' : 'content_copy'}</span>
@@ -141,6 +257,252 @@ function ExportTab({ events }) {
         </div>
       </div>
 
+    </div>
+  )
+}
+
+// ── Subscribe tab (live calendar feed) ────────────────────────────────────────
+function SubscribeTab() {
+  const [feeds, setFeeds]     = useState([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [newLabel, setNewLabel] = useState('Focus')
+  const [copied, setCopied]   = useState(null)
+  const [authed, setAuthed]   = useState(false)
+  const [error, setError]     = useState('')
+
+  async function getToken() {
+    if (!supabase) return null
+    const { data } = await supabase.auth.getSession()
+    return data?.session?.access_token || null
+  }
+
+  const loadFeeds = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    const token = await getToken()
+    if (!token) {
+      setAuthed(false)
+      setLoading(false)
+      return
+    }
+    setAuthed(true)
+    try {
+      const res = await fetch('/api/calendar-feeds', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error(`status ${res.status}`)
+      const data = await res.json()
+      setFeeds(data.feeds || [])
+    } catch (err) {
+      setError(String(err.message || err))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadFeeds() }, [loadFeeds])
+
+  async function handleCreate() {
+    setCreating(true)
+    setError('')
+    try {
+      const token = await getToken()
+      if (!token) throw new Error('Necesitás iniciar sesión')
+      const res = await fetch('/api/calendar-feeds', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ label: newLabel.trim() || 'Focus' }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `status ${res.status}`)
+      await loadFeeds()
+    } catch (err) {
+      setError(String(err.message || err))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function handleDelete(token) {
+    if (!confirm('¿Revocar este feed? Las apps suscritas dejarán de recibir actualizaciones.')) return
+    try {
+      const jwt = await getToken()
+      await fetch('/api/calendar-feeds', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${jwt}`,
+        },
+        body: JSON.stringify({ token }),
+      })
+      await loadFeeds()
+    } catch {}
+  }
+
+  function feedUrl(token) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    return `${origin}/api/ics-feed?token=${token}`
+  }
+
+  async function copyUrl(url) {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(url)
+      setTimeout(() => setCopied(null), 2000)
+    } catch {}
+  }
+
+  function qrUrl(url) {
+    // Usamos un servicio público de QR — no requiere dependencias
+    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}`
+  }
+
+  // No está logueado
+  if (!authed && !loading) {
+    return (
+      <div className="p-6 bg-surface-container-lowest rounded-2xl border border-outline-variant/20 text-center space-y-3">
+        <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
+          <span className="material-symbols-outlined text-primary text-[26px]">account_circle</span>
+        </div>
+        <div>
+          <p className="font-bold text-on-surface text-sm">Iniciá sesión para crear feeds</p>
+          <p className="text-xs text-outline mt-1.5 leading-snug">
+            La suscripción en vivo necesita una cuenta para asociar tu calendario a un URL privado.
+            Podés seguir usando la exportación clásica (archivo .ics) sin cuenta.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Intro */}
+      <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500/10 to-violet-500/10 border border-blue-500/20 space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>rss_feed</span>
+          <p className="text-[13px] font-bold text-on-surface">Sincronización automática</p>
+        </div>
+        <p className="text-[12px] text-on-surface-variant leading-snug">
+          Generá un URL privado y suscribí tu Google Calendar / Apple Calendar a él.
+          <b> Cada cambio que hagas en Focus se reflejará solo en tus otros calendarios</b>, sin re-exportar nada.
+        </p>
+      </div>
+
+      {/* Crear nuevo feed */}
+      {feeds.length === 0 && (
+        <div className="space-y-3 p-4 bg-surface-container-lowest rounded-2xl border border-outline-variant/20">
+          <p className="text-[12px] font-bold text-on-surface uppercase tracking-wider">Crear tu primer feed</p>
+          <input
+            type="text"
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            placeholder="Nombre del feed (ej. Focus Personal)"
+            className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant/30 bg-white text-sm focus:outline-none focus:border-primary"
+          />
+          <button
+            onClick={handleCreate}
+            disabled={creating}
+            className="w-full py-3 rounded-2xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-40 active:scale-[0.98] transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">add_link</span>
+            {creating ? 'Generando…' : 'Generar URL de suscripción'}
+          </button>
+        </div>
+      )}
+
+      {/* Lista de feeds */}
+      {loading && (
+        <p className="text-[12px] text-outline text-center py-4">Cargando feeds…</p>
+      )}
+
+      {!loading && feeds.map((f) => {
+        const url = feedUrl(f.token)
+        return (
+          <div key={f.token} className="space-y-3 p-4 bg-white rounded-2xl border border-outline-variant/20 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-bold text-on-surface truncate">{f.label || 'Focus'}</p>
+                <p className="text-[11px] text-outline mt-0.5">
+                  Creado {new Date(f.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                  {f.last_read_at ? ` · última lectura ${new Date(f.last_read_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ' · aún sin lecturas'}
+                </p>
+              </div>
+              <button
+                onClick={() => handleDelete(f.token)}
+                title="Revocar feed"
+                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-outline hover:text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+              </button>
+            </div>
+
+            {/* URL + copiar */}
+            <div className="flex items-center gap-2">
+              <code className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-slate-100 text-[10.5px] text-slate-700 truncate">
+                {url}
+              </code>
+              <button
+                onClick={() => copyUrl(url)}
+                className="flex-shrink-0 px-3 py-2 rounded-lg bg-primary text-white text-[11px] font-bold hover:brightness-110 active:scale-95 transition-all whitespace-nowrap"
+              >
+                {copied === url ? '¡Copiado!' : 'Copiar'}
+              </button>
+            </div>
+
+            {/* QR para mobile */}
+            <details className="group">
+              <summary className="text-[11.5px] font-semibold text-primary cursor-pointer list-none flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px] group-open:rotate-90 transition-transform">chevron_right</span>
+                Ver código QR para escanear en otro dispositivo
+              </summary>
+              <div className="mt-3 flex justify-center p-3 bg-white rounded-xl border border-outline-variant/20">
+                <img src={qrUrl(url)} alt="QR del feed" width={220} height={220} className="rounded-lg" />
+              </div>
+            </details>
+
+            {/* Instrucciones por app */}
+            <div className="pt-1 space-y-2">
+              <p className="text-[11px] font-bold text-on-surface uppercase tracking-wider">Cómo suscribirse</p>
+              {[
+                { label: 'Google Calendar', desc: 'calendar.google.com → ⚙ Configuración → "Agregar calendario" → "A partir de URL" → pegar el URL' },
+                { label: 'Apple Calendar (iPhone)', desc: 'Ajustes → Calendario → Cuentas → Añadir cuenta → Otras → Añadir calendario suscrito → pegar URL' },
+                { label: 'Apple Calendar (Mac)', desc: 'Archivo → Nueva suscripción a calendario → pegar URL' },
+                { label: 'Outlook', desc: 'Configuración → Calendario → Calendarios compartidos → "Suscribirse desde la web" → pegar URL' },
+              ].map(({ label, desc }) => (
+                <div key={label} className="p-2.5 bg-surface-container-lowest rounded-lg">
+                  <p className="text-[11.5px] font-bold text-on-surface">{label}</p>
+                  <p className="text-[10.5px] text-outline mt-0.5 leading-snug">{desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[10.5px] text-outline leading-snug pt-1">
+              💡 Los calendarios se actualizan cada 1-24 h según la app. Si revocás este feed, todos los calendarios suscritos dejan de ver tus eventos.
+            </p>
+          </div>
+        )
+      })}
+
+      {!loading && feeds.length > 0 && (
+        <button
+          onClick={handleCreate}
+          disabled={creating}
+          className="w-full py-2.5 rounded-xl border border-outline-variant/30 text-primary text-[13px] font-semibold flex items-center justify-center gap-1.5 hover:bg-primary/5 transition-colors disabled:opacity-40"
+        >
+          <span className="material-symbols-outlined text-[16px]">add</span>
+          {creating ? 'Generando…' : 'Crear otro feed'}
+        </button>
+      )}
+
+      {error && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-[11.5px]">
+          Error: {error}
+        </div>
+      )}
     </div>
   )
 }
@@ -673,10 +1035,11 @@ export default function ImportExportSheet({ isOpen, onClose, events, onImportEve
 
         {/* Tab content */}
         <div className="flex-1 overflow-y-auto hide-scrollbar px-6 pb-10">
-          {activeTab === 'export' && <ExportTab events={events} />}
-          {activeTab === 'import' && <ImportICSTab onImport={onImportEvent} />}
-          {activeTab === 'text'   && <TextTab onImport={onImportEvent} />}
-          {activeTab === 'photo'  && <PhotoTab onImport={onImportEvent} />}
+          {activeTab === 'export'    && <ExportTab events={events} />}
+          {activeTab === 'subscribe' && <SubscribeTab />}
+          {activeTab === 'import'    && <ImportICSTab onImport={onImportEvent} />}
+          {activeTab === 'text'      && <TextTab onImport={onImportEvent} />}
+          {activeTab === 'photo'     && <PhotoTab onImport={onImportEvent} />}
         </div>
       </div>
     </>

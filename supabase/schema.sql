@@ -224,3 +224,23 @@ CREATE POLICY "Users read own sent notifications"
   ON public.sent_notifications FOR SELECT USING (auth.uid() = user_id);
 CREATE INDEX IF NOT EXISTS sent_notif_user_evt_idx
   ON public.sent_notifications (user_id, event_id);
+
+-- ── calendar_feeds: tokens para URLs suscribibles de calendario ──────────────
+-- Cada usuario puede tener 1+ "feeds" — URL públicas con un token que
+-- expone su calendario en formato ICS para que apps como Google Calendar o
+-- Apple Calendar se suscriban y se actualicen automáticamente.
+CREATE TABLE IF NOT EXISTS public.calendar_feeds (
+  token        TEXT PRIMARY KEY,
+  user_id      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  label        TEXT,
+  filter       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  last_read_at TIMESTAMPTZ,
+  read_count   INTEGER DEFAULT 0
+);
+
+ALTER TABLE public.calendar_feeds ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own feeds"
+  ON public.calendar_feeds FOR ALL USING (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS calendar_feeds_user_idx
+  ON public.calendar_feeds (user_id, created_at DESC);
