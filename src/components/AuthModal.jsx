@@ -1,33 +1,80 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 
 export default function AuthModal({ isOpen, onClose }) {
-  const { signInWithEmail, user, signOut } = useAuth()
-  const [email, setEmail]   = useState('')
-  const [sent, setSent]     = useState(false)
+  const { signInWithEmail, verifyOtp, user, signOut } = useAuth()
+  const [email, setEmail]     = useState('')
+  const [code, setCode]       = useState('')
+  const [step, setStep]       = useState('email') // 'email' | 'code'
   const [loading, setLoading] = useState(false)
-  const [error, setError]   = useState(null)
+  const [error, setError]     = useState(null)
 
-  async function handleSubmit(e) {
+  const codeInputRef = useRef(null)
+
+  useEffect(() => {
+    if (step === 'code' && codeInputRef.current) {
+      codeInputRef.current.focus()
+    }
+  }, [step])
+
+  async function handleSendEmail(e) {
     e.preventDefault()
     setLoading(true)
     setError(null)
     try {
       await signInWithEmail(email)
-      setSent(true)
+      setStep('code')
     } catch (err) {
-      setError(err.message)
+      setError(err.message || 'No se pudo enviar el código')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleVerify(e) {
+    e.preventDefault()
+    if (code.length !== 6) {
+      setError('El código debe tener 6 dígitos')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      await verifyOtp(email, code)
+      handleClose()
+    } catch (err) {
+      setError(err.message || 'Código inválido o expirado')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleResend() {
+    setLoading(true)
+    setError(null)
+    setCode('')
+    try {
+      await signInWithEmail(email)
+    } catch (err) {
+      setError(err.message || 'No se pudo reenviar')
     } finally {
       setLoading(false)
     }
   }
 
   function handleClose() {
-    setSent(false)
+    setStep('email')
+    setCode('')
     setEmail('')
     setError(null)
     onClose()
+  }
+
+  function handleChangeEmail() {
+    setStep('email')
+    setCode('')
+    setError(null)
   }
 
   return (
@@ -62,25 +109,75 @@ export default function AuthModal({ isOpen, onClose }) {
                   Cancelar
                 </button>
               </div>
-            ) : sent ? (
-              /* ── Email sent ── */
-              <div className="text-center py-6">
-                <span className="material-symbols-outlined text-5xl text-primary mb-4 block">mark_email_read</span>
-                <h2 className="text-xl font-bold mb-2">Revisa tu correo</h2>
-                <p className="text-slate-500 text-sm">
-                  Enviamos un link mágico a <strong>{email}</strong>. Toca el link para entrar sin contraseña.
-                </p>
-                <button onClick={handleClose} className="mt-6 w-full py-3 bg-slate-100 rounded-2xl text-sm font-medium">
-                  Cerrar
-                </button>
-              </div>
+            ) : step === 'code' ? (
+              /* ── Enter 6-digit code ── */
+              <>
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h2 className="text-xl font-bold">Revisa tu correo</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Enviamos un código a <strong className="text-slate-700">{email}</strong>
+                    </p>
+                  </div>
+                  <button onClick={handleClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
+                    <span className="material-symbols-outlined text-slate-400">close</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-2xl mb-5">
+                  <span className="material-symbols-outlined text-primary text-[20px]">mark_email_read</span>
+                  <p className="text-[12px] text-slate-600 leading-snug">
+                    Buscá el código de <b>6 dígitos</b> en tu email (revisá spam si no llega).
+                    Pegalo acá abajo.
+                  </p>
+                </div>
+
+                <form onSubmit={handleVerify}>
+                  <input
+                    ref={codeInputRef}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    autoComplete="one-time-code"
+                    value={code}
+                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="123456"
+                    maxLength={6}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-center text-2xl font-mono tracking-[0.3em] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  {error && <p className="text-red-500 text-xs mb-3 text-center">{error}</p>}
+                  <button
+                    type="submit"
+                    disabled={loading || code.length !== 6}
+                    className="w-full py-3 bg-primary text-white rounded-2xl text-sm font-bold disabled:opacity-40 transition-opacity"
+                  >
+                    {loading ? 'Verificando…' : 'Entrar'}
+                  </button>
+                </form>
+
+                <div className="mt-4 flex items-center justify-between text-[11.5px]">
+                  <button
+                    onClick={handleChangeEmail}
+                    className="text-slate-500 hover:text-slate-800 font-semibold"
+                  >
+                    ← Cambiar email
+                  </button>
+                  <button
+                    onClick={handleResend}
+                    disabled={loading}
+                    className="text-primary hover:underline font-semibold disabled:opacity-40"
+                  >
+                    Reenviar código
+                  </button>
+                </div>
+              </>
             ) : (
               /* ── Sign in form ── */
               <>
                 <div className="flex items-center justify-between mb-5">
                   <div>
                     <h2 className="text-xl font-bold">Guardar tu progreso</h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Sin contraseña · link mágico por email</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Sin contraseña · código por email</p>
                   </div>
                   <button onClick={handleClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
                     <span className="material-symbols-outlined text-slate-400">close</span>
@@ -100,20 +197,25 @@ export default function AuthModal({ isOpen, onClose }) {
                   ))}
                 </div>
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSendEmail}>
                   <input
                     type="email" value={email} onChange={e => setEmail(e.target.value)}
                     placeholder="tu@email.com" required
+                    autoComplete="email"
                     className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                   {error && <p className="text-red-500 text-xs mb-3">{error}</p>}
                   <button
-                    type="submit" disabled={loading}
-                    className="w-full py-3 bg-primary text-white rounded-2xl text-sm font-bold disabled:opacity-50 transition-opacity"
+                    type="submit" disabled={loading || !email}
+                    className="w-full py-3 bg-primary text-white rounded-2xl text-sm font-bold disabled:opacity-40 transition-opacity"
                   >
-                    {loading ? 'Enviando...' : 'Enviar link mágico'}
+                    {loading ? 'Enviando...' : 'Enviar código'}
                   </button>
                 </form>
+
+                <p className="mt-3 text-[10.5px] text-center text-slate-400">
+                  Te enviamos un código de 6 dígitos por email. Sin contraseñas.
+                </p>
               </>
             )}
           </motion.div>

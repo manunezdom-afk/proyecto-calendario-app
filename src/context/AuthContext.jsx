@@ -50,11 +50,27 @@ export function AuthProvider({ children }) {
 
   const signInWithEmail = useCallback(async (email) => {
     if (!supabase) throw new Error('Supabase no configurado')
+    // Pedimos OTP + magic link. En mobile (sobre todo iOS PWA) usamos el
+    // código de 6 dígitos. En desktop podés usar cualquiera de los 2.
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: {
+        emailRedirectTo: window.location.origin,
+        shouldCreateUser: true,
+      },
     })
     if (error) throw error
+  }, [])
+
+  const verifyOtp = useCallback(async (email, token) => {
+    if (!supabase) throw new Error('Supabase no configurado')
+    const clean = String(token || '').replace(/\D/g, '').slice(0, 6)
+    if (clean.length !== 6) throw new Error('El código debe tener 6 dígitos')
+    const { data, error } = await supabase.auth.verifyOtp({
+      email, token: clean, type: 'email',
+    })
+    if (error) throw error
+    return data?.user || null
   }, [])
 
   const signOut = useCallback(async () => {
@@ -63,7 +79,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, authModal, setAuthModal, signInWithEmail, signOut }}>
+    <AuthContext.Provider value={{ user, loading, authModal, setAuthModal, signInWithEmail, verifyOtp, signOut }}>
       {children}
     </AuthContext.Provider>
   )
