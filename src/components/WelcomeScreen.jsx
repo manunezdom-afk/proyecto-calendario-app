@@ -29,7 +29,7 @@ export default function WelcomeScreen({ onEnter, userName }) {
 
   // Animación escalonada de palabras
   const headlineWords = headline.split(' ')
-  const taglineWords = 'Tu día, afinado al detalle.'.split(' ')
+  const taglineWords = 'Menos ruido, más foco.'.split(' ')
 
   return (
     <motion.div
