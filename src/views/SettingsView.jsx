@@ -1,20 +1,4 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { useAuth }        from '../context/AuthContext'
-import { useUserProfile } from '../hooks/useUserProfile'
-
-const CHRONOTYPES = [
-  { id: 'morning',   emoji: '🌅', label: 'Mañana',  sub: '6–12 AM' },
-  { id: 'afternoon', emoji: '☀️',  label: 'Tarde',   sub: '1–6 PM'  },
-  { id: 'night',     emoji: '🌙', label: 'Noche',   sub: '7–11 PM' },
-]
-
-const ROLES = [
-  { id: 'student',   icon: 'menu_book',  label: 'Estudiante'        },
-  { id: 'worker',    icon: 'work',       label: 'Trabajo / Oficina' },
-  { id: 'freelance', icon: 'laptop_mac', label: 'Freelance'         },
-  { id: 'other',     icon: 'person',     label: 'Otro'              },
-]
+import { useAuth } from '../context/AuthContext'
 
 function SectionCard({ title, children }) {
   return (
@@ -59,21 +43,6 @@ function Row({ icon, label, sub, children, onClick, danger = false }) {
 
 export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKnows, onOpenDiagnostic }) {
   const { user, setAuthModal, signOut } = useAuth()
-  const { profile, saveProfile }        = useUserProfile()
-
-  const [chronotype, setChronotype] = useState(profile.chronotype)
-  const [role, setRole]             = useState(profile.role)
-  const [saved, setSaved]           = useState(false)
-
-  function handleSave() {
-    if (!chronotype || !role) return
-    saveProfile({ chronotype, role })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  const profileDirty =
-    chronotype !== profile.chronotype || role !== profile.role
 
   return (
     <div className="max-w-lg lg:max-w-2xl mx-auto px-4 py-6 space-y-4 pb-32">
@@ -95,84 +64,20 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
           <span className="material-symbols-outlined text-[16px] text-slate-300">chevron_right</span>
         </Row>
 
-        {/* Cronotype */}
-        <div className="px-5 py-4 border-t border-slate-50">
-          <p className="text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-3">
-            ¿Cuándo rindes mejor?
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {CHRONOTYPES.map(({ id, emoji, label, sub }) => {
-              const sel = chronotype === id
-              return (
-                <button
-                  key={id}
-                  onClick={() => setChronotype(id)}
-                  className={`flex flex-col items-center gap-1 py-3 px-2 rounded-2xl border-2 transition-all active:scale-95 text-center ${
-                    sel
-                      ? 'border-primary bg-primary text-white shadow-md shadow-primary/20'
-                      : 'border-slate-100 bg-slate-50 text-slate-700 hover:border-primary/30'
-                  }`}
-                >
-                  <span className="text-xl leading-none">{emoji}</span>
-                  <span className="font-bold text-xs leading-tight">{label}</span>
-                  <span className={`text-[10px] font-medium leading-tight ${sel ? 'text-white/70' : 'text-slate-400'}`}>
-                    {sub}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Rol */}
-        <div className="px-5 pb-4 border-t border-slate-50">
-          <p className="text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-3 pt-4">
-            Tu rol
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {ROLES.map(({ id, icon, label }) => {
-              const sel = role === id
-              return (
-                <button
-                  key={id}
-                  onClick={() => setRole(id)}
-                  className={`flex items-center gap-2.5 px-3.5 py-3 rounded-2xl border-2 transition-all active:scale-95 ${
-                    sel
-                      ? 'border-primary bg-primary text-white shadow-md shadow-primary/20'
-                      : 'border-slate-100 bg-slate-50 text-slate-700 hover:border-primary/30'
-                  }`}
-                >
-                  <span
-                    className={`material-symbols-outlined text-[18px] flex-shrink-0 ${sel ? 'text-white' : 'text-primary'}`}
-                    style={{ fontVariationSettings: "'FILL' 1" }}
-                  >
-                    {icon}
-                  </span>
-                  <span className="font-semibold text-xs leading-tight text-left">{label}</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Guardar perfil */}
-        {profileDirty && (
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="px-5 pb-5"
+        {/* Nota sobre aprendizaje automático */}
+        <div className="px-5 py-3 border-t border-slate-50 flex items-start gap-2.5">
+          <span
+            className="material-symbols-outlined text-primary text-[18px] flex-shrink-0 mt-0.5"
+            style={{ fontVariationSettings: "'FILL' 1" }}
           >
-            <button
-              onClick={handleSave}
-              className="w-full py-3 rounded-2xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
-            >
-              <span className="material-symbols-outlined text-[18px]">
-                {saved ? 'check_circle' : 'save'}
-              </span>
-              {saved ? '¡Guardado!' : 'Guardar cambios'}
-            </button>
-          </motion.div>
-        )}
+            auto_awesome
+          </span>
+          <p className="text-[12px] text-slate-500 leading-snug">
+            Focus aprende tus patrones solo — cuándo completas tareas, qué
+            sugerencias aceptas, qué días rindes más. Revisa lo que Nova va
+            entendiendo en <b>Nova IA → Lo que Nova sabe de ti</b>.
+          </p>
+        </div>
       </SectionCard>
 
       {/* ── Nova IA ──────────────────────────────────────────────────────── */}
