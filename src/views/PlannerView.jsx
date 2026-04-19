@@ -673,22 +673,22 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                       </div>
                     </div>
 
-                    {/* Ghost events preview */}
+                    {/* Events preview: se ven como eventos reales (a color)
+                        pero tienen chip 'ejemplo' y no son interactivos */}
                     <div className="space-y-2 pt-2 pointer-events-none select-none" aria-hidden="true">
                       {GHOSTS.map((g, i) => (
                         <div key={i} className="flex gap-6 items-start">
-                          <div className="w-16 pt-3 text-right text-outline/40 text-[12px] font-semibold">
+                          <div className="w-16 pt-3 text-right text-outline text-[12px] font-semibold">
                             {g.time}
                           </div>
-                          <div className="flex-1 rounded-xl bg-surface-container-lowest border border-dashed border-outline-variant/30 p-3 opacity-50 flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-lg ${g.color} opacity-60 flex items-center justify-center flex-shrink-0`}>
+                          <div className="flex-1 rounded-xl bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 border-primary p-3 flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg ${g.color} flex items-center justify-center flex-shrink-0`}>
                               <span className="material-symbols-outlined text-white text-[16px]">{g.icon}</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="font-bold text-on-surface/60 text-sm truncate">{g.title}</p>
-                              <p className="text-[10px] text-outline/60 mt-0.5">Ejemplo</p>
+                              <p className="font-bold text-on-surface text-sm truncate">{g.title}</p>
                             </div>
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-outline-variant/20 text-outline/60 uppercase tracking-wider">
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 uppercase tracking-wider flex-shrink-0">
                               ejemplo
                             </span>
                           </div>
