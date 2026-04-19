@@ -76,6 +76,7 @@ export default function App() {
   const { tasks, addTask, toggleTask, deleteTask }   = useTasks()
   const {
     suggestions,
+    pending,
     pendingCount: inboxPendingCount,
     addSuggestion,
     approveSuggestion,
@@ -339,6 +340,7 @@ export default function App() {
       <NovaWidget
         events={events}
         tasks={tasks}
+        pendingSuggestions={pending}
         onAddEvent={addEvent}
         onEditEvent={editEvent}
         onDeleteEvent={deleteEvent}

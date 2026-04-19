@@ -53,6 +53,7 @@ function useSimulatedStream(fullText, isLoading) {
 export default function NovaWidget({
   events = [],
   tasks = [],
+  pendingSuggestions = [], // bandeja de propuestas sin aprobar — Nova las lee como candidatas
   onAddEvent,
   onEditEvent,
   onDeleteEvent,
@@ -219,6 +220,16 @@ export default function NovaWidget({
           message: msg,
           events,
           tasks,
+          // Propuestas pendientes (aún sin aprobar) que Nova acaba de crear
+          // en esta misma conversación. Clave para que reconozca "15 min
+          // antes" refiriéndose a algo que propuso hace un mensaje y que
+          // todavía no está en `events` porque el usuario no aprobó.
+          pendingSuggestions: pendingSuggestions.slice(0, 15).map((s) => ({
+            id: s.id,
+            kind: s.kind,
+            payload: s.payload,
+            createdAt: s.createdAt,
+          })),
           history: historyRef.current.slice(0, -1).slice(-8),
           location,
           profile,

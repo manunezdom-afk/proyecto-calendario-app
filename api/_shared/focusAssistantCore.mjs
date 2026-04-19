@@ -111,7 +111,36 @@ function buildBehaviorContext(b) {
   return lines.join('\n')
 }
 
-function buildSystemPrompt({ events, tasks, contacts, profile, memories, behavior, weatherContext, todayISO, todayStr, tomorrow, dayAfter, currentTime24, currentTime12, weekDates }) {
+// Resume propuestas pendientes (sin aprobar) para inyectarlas al prompt.
+// Clave para que Nova pueda referenciar eventos que acaba de proponer en la
+// misma conversación — cuando el usuario dice "15 min antes" justo después
+// de "leer a las 8", ese evento todavía no está en `events` porque el
+// usuario no lo aprobó aún desde la bandeja.
+function buildPendingContext(pendingSuggestions) {
+  if (!pendingSuggestions?.length) return ''
+  const lines = pendingSuggestions.slice(0, 10).map((s) => {
+    const p = s.payload || {}
+    if (s.kind === 'add_event') {
+      const ev = p.event || {}
+      const parts = [
+        `"${ev.title || 'evento'}"`,
+        ev.time ? `a las ${ev.time}` : 'sin hora',
+        ev.date ? `(${ev.date})` : '',
+      ].filter(Boolean).join(' ')
+      return `- propose_id:${s.id} · add_event · ${parts}`
+    }
+    if (s.kind === 'edit_event') return `- propose_id:${s.id} · edit_event · id:${p.id} · updates:${JSON.stringify(p.updates || {})}`
+    if (s.kind === 'delete_event') return `- propose_id:${s.id} · delete_event · id:${p.id}`
+    if (s.kind === 'mark_task_done') return `- propose_id:${s.id} · mark_task_done · id:${p.id}`
+    return `- propose_id:${s.id} · ${s.kind}`
+  })
+  return `Propuestas pendientes (aún sin aprobar por el usuario en la bandeja):
+${lines.join('\n')}
+
+Para efectos de referencia conversacional, trátalas como si ya existieran. Si el usuario dice "avísame 15 min antes" justo después de pedirte crear algo, refiere al add_event pendiente más reciente y calcula la hora a partir de ahí — aunque todavía no esté en el calendario real. Crea el recordatorio aparte como nueva add_event; NO edites la propuesta original.`
+}
+
+function buildSystemPrompt({ events, tasks, contacts, profile, memories, behavior, pendingSuggestions, weatherContext, todayISO, todayStr, tomorrow, dayAfter, currentTime24, currentTime12, weekDates }) {
   const contactsContext = contacts?.length > 0
     ? `Contactos del usuario:\n${contacts.map(c => `- ${c.name ?? 'Sin nombre'}${c.tel ? ': ' + c.tel : ''}${c.email ? ' / ' + c.email : ''}`).join('\n')}`
     : 'El usuario no ha compartido contactos.'
@@ -150,6 +179,7 @@ INSTRUCCIÓN CRÍTICA sobre la zona de rendimiento:
     : 'Sin tareas registradas.'
 
   const behaviorContext = buildBehaviorContext(behavior)
+  const pendingContext  = buildPendingContext(pendingSuggestions)
 
   return `Eres Nova, la asistente ejecutiva de productividad. Hablas en español neutro, tono formal y eficiente.
 
@@ -215,6 +245,8 @@ ${events?.length > 0
     ? JSON.stringify(events.map(e => ({ id: e.id, title: e.title, time: e.time || '', date: e.date || null, section: e.section })), null, 2)
     : 'Sin eventos aún.'}
 
+${pendingContext}
+
 ${tasksContext}
 
 ${weatherContext}
@@ -225,8 +257,10 @@ ${behaviorContext ? '\n' + behaviorContext : ''}
 
 ${memoriesContext}
 
-Recordatorios previos a un evento:
-- Si piden "avísame X min antes" de un evento existente: NO edites el evento, CREA uno nuevo con add_event, title "Recordatorio: [título]", time = hora del evento MENOS X, icon "alarm", description "Salir para [título] a las [hora original]".
+Recordatorios previos a un evento (MUY IMPORTANTE — memoria conversacional):
+- Si piden "avísame X min antes", "recuérdame X antes", "ponme un aviso X antes" referido a un evento: NO edites el evento, CREA uno nuevo con add_event, title "Recordatorio: [título original]", time = hora del evento MENOS X, icon "alarm", description "Salir para [título] a las [hora original]".
+- El evento al que se refieren puede estar en "Eventos actuales" o en "Propuestas pendientes" — si la última intención del usuario en esta conversación fue crear un evento (aunque aún no esté aprobado en la bandeja), asume que "X min antes" se refiere a ese. Usa el título y la hora de esa propuesta para calcular el recordatorio.
+- Si hay ambigüedad real entre varios candidatos, pregunta; si solo hay uno reciente, úsalo sin preguntar.
 
 Hora ambigua: si dicen "a las 9" sin AM/PM y 9:00 AM ya pasó (son las ${currentTime24}), interpretar como 9:00 PM. En contextos nocturnos (cena, deporte, cine) prioriza la tarde/noche.
 
@@ -305,6 +339,7 @@ export async function runFocusAssistant(input) {
     profile: input.profile,
     memories: input.memories || [],
     behavior: input.behavior,
+    pendingSuggestions: input.pendingSuggestions || [],
     weatherContext,
     todayISO, todayStr, tomorrow, dayAfter,
     currentTime24, currentTime12, weekDates,
