@@ -66,7 +66,8 @@ export default function UpdateAvailableBanner() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 60, opacity: 0 }}
           transition={{ duration: 0.25 }}
-          className="fixed bottom-[92px] inset-x-4 z-[95] md:bottom-6 md:left-auto md:right-6 md:w-[360px] mx-auto max-w-md rounded-2xl bg-slate-900 text-white shadow-2xl px-4 py-3 flex items-center gap-3"
+          className="fixed inset-x-4 z-[95] md:left-auto md:right-6 md:w-[360px] mx-auto max-w-md rounded-2xl bg-slate-900 text-white shadow-2xl px-4 py-3 flex items-center gap-3"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 92px)' }}
         >
           <span aria-hidden="true" className="material-symbols-outlined text-[20px] text-emerald-400">
             system_update
