@@ -24,6 +24,7 @@ import WelcomeScreen, { useWelcomeGate } from './components/WelcomeScreen'
 import OnboardingTour, { useOnboardingTour } from './components/OnboardingTour'
 import InstallAppCard              from './components/InstallAppCard'
 import OfflineBanner               from './components/OfflineBanner'
+import UpdateAvailableBanner       from './components/UpdateAvailableBanner'
 
 import CalendarView    from './views/CalendarView'
 import TaskDetailView  from './views/TaskDetailView'
@@ -112,6 +113,7 @@ export default function App() {
     permissionState, permissionDismissed,
     requestPermission, dismissPermissionCard,
     markAllRead, dismiss: dismissNotif,
+    pushError,
   } = useNotifications({ events })
 
   const [notifPanelOpen,      setNotifPanelOpen]      = useState(false)
@@ -207,6 +209,7 @@ export default function App() {
     <LayoutGroup>
     <div className="min-h-screen bg-slate-50 overflow-hidden">
       <OfflineBanner />
+      <UpdateAvailableBanner />
       <motion.div
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -238,6 +241,7 @@ export default function App() {
             <NotificationPermissionCard
               onAllow={requestPermission}
               onDismiss={dismissPermissionCard}
+              error={pushError}
             />
           </motion.div>
         )}

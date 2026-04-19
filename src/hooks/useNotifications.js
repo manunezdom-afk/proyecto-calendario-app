@@ -51,20 +51,31 @@ export function useNotifications({ events = [] } = {}) {
   // si la suscripción falla (p.ej. sin VAPID key), la notif local sigue
   // andando para cuando la pestaña esté visible.
   const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushError, setPushError]           = useState(null) // último reason si falló
 
   useEffect(() => {
     getPushStatus().then(s => setPushSubscribed(!!s.subscribed)).catch(() => {})
   }, [])
 
   const requestPermission = useCallback(async () => {
-    if (typeof Notification === 'undefined') return
+    if (typeof Notification === 'undefined') {
+      setPushError('unsupported')
+      return { ok: false, reason: 'unsupported' }
+    }
+    setPushError(null)
     const result = await Notification.requestPermission()
     setPermissionState(result)
     if (result === 'granted') {
       const r = await subscribeToPush()
       setPushSubscribed(!!r.ok)
-      if (!r.ok) console.warn('[Focus] push subscribe failed:', r.reason)
+      if (!r.ok) {
+        setPushError(r.reason || 'unknown')
+        console.warn('[Focus] push subscribe failed:', r.reason)
+      }
+      return r
     }
+    if (result === 'denied') setPushError('permission_denied')
+    return { ok: false, reason: `permission_${result}` }
   }, [])
 
   const disablePush = useCallback(async () => {
@@ -184,6 +195,7 @@ export function useNotifications({ events = [] } = {}) {
     markAllRead,
     dismiss,
     pushSubscribed,
+    pushError,
     disablePush,
   }
 }

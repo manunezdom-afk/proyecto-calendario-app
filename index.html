@@ -32,10 +32,24 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
+    <!-- display=block para iconos: evita que aparezca el nombre literal
+         ("brightness_high", "business", etc.) antes de que cargue la fuente.
+         Texto normal con swap está bien; iconos NO. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block"
       rel="stylesheet"
     />
+    <style>
+      /* Doble red: si el UA ignora display=block por algún motivo,
+         los spans con esta clase se ocultan hasta que main.jsx les
+         agrega `.msl-ready` tras `document.fonts.ready`. */
+      .material-symbols-outlined {
+        visibility: hidden;
+      }
+      .msl-ready .material-symbols-outlined {
+        visibility: visible;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
