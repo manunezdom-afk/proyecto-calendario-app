@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import QuickAddSheet     from '../components/QuickAddSheet'
 import FocusTimerOverlay from '../components/FocusTimerOverlay'
-import ProfileSetupCard  from '../components/ProfileSetupCard'
 import FocusBar          from '../components/FocusBar'
 import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
@@ -268,7 +267,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
     return () => clearInterval(id)
   }, [])
 
-  const { profile, saveProfile, snoozeSetup, showSetup } = useUserProfile()
+  const { profile } = useUserProfile()
   const semanaCount  = tasks.filter((t) => t.category === 'semana'    && !t.done).length
   const algoDiaCount = tasks.filter((t) => t.category === 'algún día' && !t.done).length
 
