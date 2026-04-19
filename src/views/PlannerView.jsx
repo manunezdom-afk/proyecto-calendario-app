@@ -658,16 +658,18 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
 
               {blocks.length === 0 && (() => {
                 const pendingTotal = semanaCount + algoDiaCount
+                const headline = pendingTotal > 0
+                  ? 'Sin bloques programados todavía.'
+                  : 'Día libre.'
+                const sub = pendingTotal > 0
+                  ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''} — ¿las agendamos?`
+                  : '¿Querés programar algo?'
                 return (
                   <div className="flex gap-6">
                     <div className="w-16" />
                     <div className="flex-1 bg-surface-container-low rounded-xl p-6 space-y-3">
-                      <p className="text-outline text-sm font-semibold">Hoy está vacío.</p>
-                      <p className="text-outline/70 text-xs leading-relaxed">
-                        {pendingTotal > 0
-                          ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. ¿Qué arrancamos?`
-                          : '¿Qué arrancamos?'}
-                      </p>
+                      <p className="text-outline text-sm font-semibold">{headline}</p>
+                      <p className="text-outline/70 text-xs leading-relaxed">{sub}</p>
                       {onOpenAssistant && (
                         <button
                           onClick={onOpenAssistant}
