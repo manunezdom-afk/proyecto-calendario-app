@@ -7,7 +7,10 @@ let _admin = null
 
 export function getSupabaseAdmin() {
   if (_admin) return _admin
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  // Solo leemos variables de servidor. Las VITE_* son para el cliente y
+  // mezclarlas aquí invita a errores (p.ej. la key del admin accidentalmente
+  // con un nombre VITE_ que se expone al bundle).
+  const url = process.env.SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
   _admin = createClient(url, key, {

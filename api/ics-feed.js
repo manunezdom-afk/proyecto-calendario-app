@@ -45,7 +45,7 @@ function foldLine(line) {
 // Parsea "HH:MM" o "HH:MM – HH:MM" del evento en una fecha dada
 function buildEventDates(eventDate, timeStr) {
   if (!timeStr) return null
-  const [startStr, endStr] = String(timeStr).split(/[–\-]/).map(s => s.trim())
+  const [startStr, endStr] = String(timeStr).split(/[–-]/).map(s => s.trim())
   const mStart = startStr?.match(/^(\d{1,2}):(\d{2})/)
   if (!mStart) return null
 
@@ -132,15 +132,19 @@ export default async function handler(req, res) {
   const { data: events, error: evErr } = await q
   if (evErr) return res.status(500).json({ error: 'events_fetch' })
 
-  // Actualizar métricas de lectura (fire-and-forget)
+  // Actualizar métricas de lectura (fire-and-forget). Usamos RPC para incrementar
+  // atómicamente; si la RPC no existe, hacemos un UPDATE simple a last_read_at.
   admin
-    .from('calendar_feeds')
-    .update({
-      last_read_at: new Date().toISOString(),
-      read_count: (events?.length >= 0) ? undefined : 0,
-    })
-    .eq('token', token)
-    .then(() => {}, () => {})
+    .rpc('increment_feed_read', { p_token: token })
+    .then(({ error }) => {
+      if (error) {
+        admin
+          .from('calendar_feeds')
+          .update({ last_read_at: new Date().toISOString() })
+          .eq('token', token)
+          .then(() => {}, () => {})
+      }
+    }, () => {})
 
   // Mapear a shape compatible con buildICS
   const mapped = (events || []).map(r => ({

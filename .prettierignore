@@ -1,0 +1,6 @@
+dist
+node_modules
+coverage
+public/landing/styles.css
+package-lock.json
+*.rtf

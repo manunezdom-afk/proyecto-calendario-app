@@ -125,7 +125,9 @@ export default async function handler(req, res) {
       const delta = Math.abs(minsLeft - offset)
       if (delta > WINDOW_MIN) continue
 
-      // ¿Ya se envió esta combinación?
+      // Reservamos la combinación ANTES de enviar para evitar doble envío
+      // si dos crons corren concurrentemente. La UNIQUE (user_id, event_id,
+      // offset_min) del schema garantiza que solo uno gane la carrera.
       const { data: sentRow } = await admin
         .from('sent_notifications')
         .select('id, sent_at')
@@ -138,6 +140,22 @@ export default async function handler(req, res) {
         // Si sent_at está en el futuro (snooze), esperar
         if (new Date(sentRow.sent_at) > now) continue
         // Si ya se envió antes, skip
+        continue
+      }
+
+      // Intento de reserva: si otra instancia gana, el insert falla con 23505
+      const { error: reserveErr } = await admin
+        .from('sent_notifications')
+        .insert({
+          user_id: ev.user_id,
+          event_id: ev.id,
+          offset_min: offset,
+        })
+
+      if (reserveErr) {
+        // 23505 = unique_violation: otro cron ya lo tomó, seguimos
+        if (reserveErr.code === '23505') continue
+        console.warn('[cron] reserve failed', reserveErr.message)
         continue
       }
 
@@ -157,12 +175,16 @@ export default async function handler(req, res) {
       failures += failed
 
       if (sent > 0) {
-        await admin.from('sent_notifications').insert({
-          user_id: ev.user_id,
-          event_id: ev.id,
-          offset_min: offset,
-        }).then(() => {}, () => {})
         actionsSummary.push({ event_id: ev.id, user_id: ev.user_id, offset, sent })
+      } else {
+        // Si no se mandó a ningún device, liberamos la reserva para reintentar
+        // en el próximo tick. Sin esto, quedaría "sent" aunque nunca llegó.
+        await admin.from('sent_notifications')
+          .delete()
+          .eq('user_id', ev.user_id)
+          .eq('event_id', ev.id)
+          .eq('offset_min', offset)
+          .then(() => {}, () => {})
       }
     }
   }

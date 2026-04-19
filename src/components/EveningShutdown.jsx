@@ -3,24 +3,14 @@ import { analyzeBehavior } from '../services/behaviorAnalysis'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useAuth } from '../context/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
+import { todayISO, tomorrowISO, formatDateLong } from '../utils/dateHelpers'
 
 const PHASES = ['review', 'move', 'tomorrow']
 const PHASE_LABELS = { review: 'Revisión', move: 'Pendientes', tomorrow: 'Mañana' }
 const MAX_SECONDS = 90
 
-function getTodayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function getTomorrowISO() {
-  const d = new Date(Date.now() + 86400000)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 function formatTomorrowDate() {
-  const d = new Date(Date.now() + 86400000)
-  return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
+  return formatDateLong(new Date(Date.now() + 86400000))
 }
 
 // ─── Phase 1: Review ────────────────────────────────────────────────────────
@@ -112,10 +102,10 @@ function PhaseMove({ tasks, todayEvents, onMoveEvent, onNext }) {
   const [movedEvents, setMovedEvents] = useState(new Set())
   const [keptEvents, setKeptEvents]   = useState(new Set())
 
-  const tomorrowISO = getTomorrowISO()
+  const tomorrow = tomorrowISO()
 
   function moveEvent(id) {
-    onMoveEvent?.(id, { date: tomorrowISO })
+    onMoveEvent?.(id, { date: tomorrow })
     setMovedEvents(prev => new Set([...prev, id]))
   }
 
@@ -283,10 +273,10 @@ export default function EveningShutdown({
   const { user } = useAuth()
   const { profile } = useUserProfile()
 
-  const todayISO     = getTodayISO()
-  const tomorrowISO  = getTomorrowISO()
-  const todayEvents  = events.filter(e => !e.date || e.date === todayISO)
-  const tomorrowEvents = events.filter(e => e.date === tomorrowISO)
+  const today    = todayISO()
+  const tomorrow = tomorrowISO()
+  const todayEvents    = events.filter(e => !e.date || e.date === today)
+  const tomorrowEvents = events.filter(e => e.date === tomorrow)
 
   // 90-second soft timer
   useEffect(() => {

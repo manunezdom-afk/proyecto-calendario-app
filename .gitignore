@@ -1,8 +1,16 @@
 .vercel
+.netlify
 dist
 node_modules
+coverage
 .DS_Store
 .env
 .env.local
 *.log
 .claude/
+.vscode/
+.idea/
+*.swp
+.nyc_output
+# Archivos temporales / binarios pegados por error
+*.rtf

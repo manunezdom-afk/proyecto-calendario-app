@@ -22,20 +22,8 @@ function toISO(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-// Guess a Material Symbol icon from a title string
-function guessIcon(text) {
-  const t = text.toLowerCase()
-  if (/f[uú]tbol|deporte|gym|ejercicio|entrena|yoga|correr|nadar|pilates/.test(t)) return 'fitness_center'
-  if (/reuni[oó]n|meeting|llamada|call|videollamada|sincro/.test(t)) return 'groups'
-  if (/almuerzo|comida|cena|desayuno|caf[eé]|restaurante/.test(t)) return 'restaurant'
-  if (/estudio|clase|tarea|leer|examen/.test(t)) return 'menu_book'
-  if (/trabajo|proyecto|informe|presentaci[oó]n/.test(t)) return 'work'
-  if (/m[eé]dico|doctor|cita|dentista/.test(t)) return 'local_hospital'
-  if (/compras|supermercado|tienda/.test(t)) return 'shopping_cart'
-  if (/cumplea[ñn]os|fiesta|celebraci[oó]n/.test(t)) return 'cake'
-  if (/viaje|vuelo|aeropuerto/.test(t)) return 'flight'
-  return 'event'
-}
+// Icon guesser compartido en src/utils/iconGuesser.js
+import { guessIcon } from './iconGuesser'
 
 /**
  * Unfold ICS lines (continued lines start with a space/tab).

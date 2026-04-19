@@ -5,14 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run build:landing && vite build",
+    "build:full": "npm run build:icons && npm run build:og && npm run build:landing && vite build",
     "preview": "vite preview",
     "build:landing": "tailwindcss -c ./landing/tailwind.config.js -i ./landing/input.css -o ./public/landing/styles.css --minify",
     "build:og": "node scripts/build-og.mjs",
-    "build:icons": "node scripts/build-icons.mjs"
+    "build:icons": "node scripts/build-icons.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage",
+    "lint": "eslint 'src/**/*.{js,jsx}' 'api/**/*.{js,mjs}'",
+    "format": "prettier --write 'src/**/*.{js,jsx,css}' 'api/**/*.{js,mjs}'"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.89.0",
     "@supabase/supabase-js": "^2.103.3",
     "framer-motion": "^12.38.0",
     "react": "^18.3.1",
@@ -21,10 +26,17 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
+    "@vitest/coverage-v8": "^4.1.4",
     "autoprefixer": "^10.4.20",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "happy-dom": "^20.9.0",
     "postcss": "^8.4.47",
+    "prettier": "^3.8.3",
     "sharp": "^0.34.5",
     "tailwindcss": "^3.4.14",
-    "vite": "^5.4.10"
+    "vite": "^5.4.10",
+    "vitest": "^4.1.4"
   }
 }

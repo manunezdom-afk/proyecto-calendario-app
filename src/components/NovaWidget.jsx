@@ -278,7 +278,17 @@ export default function NovaWidget({
 
       historyRef.current = [...historyRef.current, { role: 'assistant', content: replyText }]
     } catch (err) {
-      setReply('No pude conectarme. Intenta de nuevo.')
+      const msg = err?.message || ''
+      let userMsg = 'No pude conectarme. Intenta de nuevo.'
+      if (/no_api_key|invalid_api_key/i.test(msg)) {
+        userMsg = 'Falta la API key. Configúrala en Importar/Exportar → Foto.'
+      } else if (/rate|429/i.test(msg)) {
+        userMsg = 'Demasiados mensajes seguidos. Espera unos segundos y vuelve a intentar.'
+      } else if (/network|fetch|offline/i.test(msg) || !navigator.onLine) {
+        userMsg = 'Sin conexión. Revisa tu internet y vuelve a intentar.'
+      }
+      console.warn('[Nova] sendMessage error:', err)
+      setReply(userMsg)
     } finally {
       setIsLoading(false)
     }

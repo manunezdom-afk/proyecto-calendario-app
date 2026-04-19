@@ -27,10 +27,8 @@ function toISO(date) {
 
 function todayISO() { return toISO(new Date()) }
 
-/** Normaliza texto: minúsculas + sin tildes */
-function norm(s) {
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-}
+// Icon guesser + norm compartidos (antes estaban duplicados aquí).
+import { guessIcon, norm } from './iconGuesser'
 
 /** Devuelve YYYY-MM-DD para la próxima ocurrencia del día de semana (0=Dom) */
 function isoForDow(targetDow) {
@@ -50,23 +48,6 @@ function fmt12(h24, min) {
 
 function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
-}
-
-// ── Iconos ───────────────────────────────────────────────────────────────────
-
-function guessIcon(text) {
-  const t = norm(text)
-  if (/futbol|deporte|gym|ejercicio|entrena|yoga|correr|nadar|pilates/.test(t)) return 'fitness_center'
-  if (/reunion|meeting|llamada|call|videollamada|sincro|junta/.test(t))          return 'groups'
-  if (/almuerzo|comida|cena|desayuno|cafe|restaurante|brunch/.test(t))           return 'restaurant'
-  if (/estudio|estudiar|clase|tarea|libro|leer|examen|facultad|universidad/.test(t)) return 'menu_book'
-  if (/trabajo|proyecto|informe|reporte|presentacion|oficina/.test(t))           return 'work'
-  if (/medico|doctor|cita|dentista|consulta|hospital|clinica/.test(t))           return 'local_hospital'
-  if (/compras|supermercado|tienda|mercado/.test(t))                             return 'shopping_cart'
-  if (/cumpleanos|fiesta|celebracion|boda|evento/.test(t))                       return 'cake'
-  if (/viaje|vuelo|aeropuerto|hotel|vacaciones/.test(t))                         return 'flight'
-  if (/banco|pago|factura|tramite/.test(t))                                      return 'account_balance'
-  return 'event'
 }
 
 // ── Mapas de fecha ────────────────────────────────────────────────────────────

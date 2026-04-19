@@ -11,12 +11,23 @@ export default function AuthModal({ isOpen, onClose }) {
   const [error, setError]     = useState(null)
 
   const codeInputRef = useRef(null)
+  const dialogRef    = useRef(null)
 
   useEffect(() => {
     if (step === 'code' && codeInputRef.current) {
       codeInputRef.current.focus()
     }
   }, [step])
+
+  // Cerrar con Escape — atajo estándar para modales.
+  useEffect(() => {
+    if (!isOpen) return
+    function onKey(e) { if (e.key === 'Escape') handleClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // handleClose es estable (no depende de nada que cambie por frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
 
   async function handleSendEmail(e) {
     e.preventDefault()
@@ -85,8 +96,13 @@ export default function AuthModal({ isOpen, onClose }) {
             className="fixed inset-0 bg-black/40 z-50"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={handleClose}
+            aria-hidden="true"
           />
           <motion.div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="auth-modal-title"
             className="fixed inset-x-4 bottom-0 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 bg-white rounded-t-3xl md:rounded-3xl p-6 z-50 md:w-96 shadow-2xl"
             initial={{ y: '100%', opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -114,13 +130,18 @@ export default function AuthModal({ isOpen, onClose }) {
               <>
                 <div className="flex items-center justify-between mb-5">
                   <div>
-                    <h2 className="text-xl font-bold">Revisa tu correo</h2>
+                    <h2 id="auth-modal-title" className="text-xl font-bold">Revisa tu correo</h2>
                     <p className="text-xs text-slate-400 mt-0.5">
                       Enviamos un código a <strong className="text-slate-700">{email}</strong>
                     </p>
                   </div>
-                  <button onClick={handleClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
-                    <span className="material-symbols-outlined text-slate-400">close</span>
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    aria-label="Cerrar"
+                    className="p-2 rounded-full hover:bg-slate-100 transition-colors"
+                  >
+                    <span aria-hidden="true" className="material-symbols-outlined text-slate-400">close</span>
                   </button>
                 </div>
 
@@ -176,11 +197,16 @@ export default function AuthModal({ isOpen, onClose }) {
               <>
                 <div className="flex items-center justify-between mb-5">
                   <div>
-                    <h2 className="text-xl font-bold">Guardar tu progreso</h2>
+                    <h2 id="auth-modal-title" className="text-xl font-bold">Guardar tu progreso</h2>
                     <p className="text-xs text-slate-400 mt-0.5">Sin contraseña · código por email</p>
                   </div>
-                  <button onClick={handleClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
-                    <span className="material-symbols-outlined text-slate-400">close</span>
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    aria-label="Cerrar"
+                    className="p-2 rounded-full hover:bg-slate-100 transition-colors"
+                  >
+                    <span aria-hidden="true" className="material-symbols-outlined text-slate-400">close</span>
                   </button>
                 </div>
 

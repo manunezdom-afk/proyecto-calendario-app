@@ -38,6 +38,9 @@ ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own events"
   ON public.events FOR ALL USING (auth.uid() = user_id);
 
+CREATE INDEX IF NOT EXISTS events_user_date_idx
+  ON public.events (user_id, date DESC);
+
 -- ── tasks ─────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.tasks (
   id         TEXT PRIMARY KEY,
@@ -244,3 +247,18 @@ CREATE POLICY "Users manage own feeds"
   ON public.calendar_feeds FOR ALL USING (auth.uid() = user_id);
 CREATE INDEX IF NOT EXISTS calendar_feeds_user_idx
   ON public.calendar_feeds (user_id, created_at DESC);
+
+-- RPC para incrementar atómicamente read_count del feed (llamado por ics-feed.js)
+CREATE OR REPLACE FUNCTION public.increment_feed_read(p_token TEXT)
+RETURNS VOID
+LANGUAGE SQL
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE public.calendar_feeds
+     SET read_count   = COALESCE(read_count, 0) + 1,
+         last_read_at = NOW()
+   WHERE token = p_token;
+$$;
+REVOKE EXECUTE ON FUNCTION public.increment_feed_read(TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.increment_feed_read(TEXT) FROM anon, authenticated;

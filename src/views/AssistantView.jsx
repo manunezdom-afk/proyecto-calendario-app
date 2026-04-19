@@ -382,7 +382,7 @@ export default function AssistantView({ onClose, onAddEvent, onEditEvent, onDele
     r.onend    = () => { clearTimeout(silenceRef.current); if (statusRef.current === 'listening') updateStatus('idle') }
     srRef.current = r
     return () => { clearTimeout(silenceRef.current); try { r.abort() } catch {}; stopAudioRef() }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])  
 
   async function handleVoiceInput(text) {
     updateStatus('thinking')

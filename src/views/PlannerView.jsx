@@ -5,14 +5,17 @@ import FocusBar          from '../components/FocusBar'
 import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { isInPeak, parseEventHour, peakRangeLabel } from '../utils/peakZone'
+import { todayISO, weekdayName, monthName } from '../utils/dateHelpers'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
-const MONTH_NAMES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
-
+// Nombres de días/meses vienen de Intl.DateTimeFormat (dateHelpers.js)
+// para no hardcodear arrays en español y permitir i18n futuro.
 function formatToday() {
   const d = new Date()
-  return `${DAY_NAMES_ES[d.getDay()]}, ${d.getDate()} de ${MONTH_NAMES_ES[d.getMonth()]}`
+  const day = weekdayName(d)
+  // Capitalizamos para que "lunes" → "Lunes"
+  const dayCap = day.charAt(0).toUpperCase() + day.slice(1)
+  return `${dayCap}, ${d.getDate()} de ${monthName(d)}`
 }
 
 function currentHour() {
@@ -20,6 +23,9 @@ function currentHour() {
   return d.getHours() + d.getMinutes() / 60
 }
 
+// Parser simple (HH:MM 24h) usado por el render. Para parseo coloquial
+// completo hay parseTimeToDecimal en utils/dateHelpers.js — aquí solo
+// necesitamos interpretar los horarios normalizados del grid.
 function parseTimeToDecimal(timeStr) {
   if (!timeStr || timeStr === '—') return null
   const [h, m] = timeStr.split(':').map(Number)
@@ -35,10 +41,8 @@ function formatMinutes(totalMinutes) {
   return m > 0 ? `${h}h ${m}m` : `${h}h`
 }
 
-function todayISODate() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+// Alias mantenido por compatibilidad con el resto del archivo.
+const todayISODate = todayISO
 
 function eventTimeToBlockTime(timeStr) {
   // Accepts: "3:00 PM", "2:00 PM - 3:30 PM", "15:00", "09:00"

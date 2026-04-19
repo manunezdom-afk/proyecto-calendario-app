@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useId } from 'react'
 
 const ICONS = [
   { value: 'event', label: 'General' },
@@ -25,6 +25,18 @@ export default function AddEventModal({ onSave, onCancel }) {
   const [dotColor, setDotColor] = useState('bg-secondary-container')
   const [error, setError] = useState('')
 
+  const titleId = useId()
+  const timeId = useId()
+  const descId = useId()
+  const dialogTitleId = useId()
+
+  // Cerrar con Escape
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
   function handleSubmit(e) {
     e.preventDefault()
     if (!title.trim()) {
@@ -43,42 +55,53 @@ export default function AddEventModal({ onSave, onCancel }) {
       onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
     >
       {/* Sheet */}
-      <div className="w-full max-w-md bg-surface rounded-t-[28px] p-6 space-y-5 shadow-2xl animate-[slideUp_0.25s_ease-out]">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={dialogTitleId}
+        className="w-full max-w-md bg-surface rounded-t-[28px] p-6 space-y-5 shadow-2xl animate-[slideUp_0.25s_ease-out]"
+      >
         <div className="flex justify-between items-center">
-          <h2 className="text-xl font-extrabold font-headline text-on-surface">Nuevo Evento</h2>
+          <h2 id={dialogTitleId} className="text-xl font-extrabold font-headline text-on-surface">Nuevo Evento</h2>
           <button
+            type="button"
             onClick={onCancel}
+            aria-label="Cerrar"
             className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-container-low text-outline hover:text-on-surface transition-colors"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Title */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-outline uppercase tracking-wider">
+            <label htmlFor={titleId} className="text-xs font-bold text-outline uppercase tracking-wider">
               Nombre del evento *
             </label>
             <input
+              id={titleId}
               autoFocus
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Ej: Reunión con el equipo"
+              aria-required="true"
+              aria-invalid={!!error}
               className="w-full bg-surface-container-low rounded-lg px-4 py-3 text-sm font-semibold text-on-surface placeholder:text-outline/60 border-none focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
             />
             {error && (
-              <p className="text-xs font-semibold text-error">{error}</p>
+              <p role="alert" className="text-xs font-semibold text-error">{error}</p>
             )}
           </div>
 
           {/* Time */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-outline uppercase tracking-wider">
+            <label htmlFor={timeId} className="text-xs font-bold text-outline uppercase tracking-wider">
               Horario
             </label>
             <input
+              id={timeId}
               type="text"
               value={time}
               onChange={(e) => setTime(e.target.value)}
@@ -89,10 +112,11 @@ export default function AddEventModal({ onSave, onCancel }) {
 
           {/* Description */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-outline uppercase tracking-wider">
+            <label htmlFor={descId} className="text-xs font-bold text-outline uppercase tracking-wider">
               Descripción
             </label>
             <input
+              id={descId}
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}

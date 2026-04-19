@@ -144,8 +144,28 @@ function enqueue(op) {
   cacheSet(QUEUE_KEY, q)
 }
 
-async function executeOp({ table, type, data, id, userId }) {
+// Tablas que tienen columna `updated_at`: solo aplicamos la op offline si
+// nuestra versión no es más vieja que la del servidor (last-write-wins con
+// comparación de timestamps, para evitar que un upsert tardío pise cambios
+// hechos desde otro dispositivo mientras estábamos offline).
+const TABLES_WITH_UPDATED_AT = new Set(['events', 'tasks', 'user_profiles', 'user_memories'])
+
+async function executeOp({ table, type, data, id, userId, ts }) {
   if (type === 'upsert') {
+    if (ts && TABLES_WITH_UPDATED_AT.has(table) && data?.id) {
+      // Comparar con el servidor: si la fila remota se actualizó DESPUÉS de
+      // encolar esta op, lo nuestro está stale y lo descartamos.
+      const pkCol = table === 'user_profiles' ? 'id' : 'id'
+      const { data: remote } = await supabase
+        .from(table)
+        .select('updated_at')
+        .eq(pkCol, data.id)
+        .maybeSingle()
+      if (remote?.updated_at && new Date(remote.updated_at).getTime() > ts) {
+        console.log(`[Focus] ⏭️  Skip stale upsert en ${table}:${data.id} (remoto más nuevo)`)
+        return
+      }
+    }
     const { error } = await supabase.from(table).upsert(data)
     if (error) throw error
   } else if (type === 'delete') {

@@ -23,6 +23,7 @@ import SuggestionsInbox            from './components/SuggestionsInbox'
 import WelcomeScreen, { useWelcomeGate } from './components/WelcomeScreen'
 import OnboardingTour, { useOnboardingTour } from './components/OnboardingTour'
 import InstallAppCard              from './components/InstallAppCard'
+import OfflineBanner               from './components/OfflineBanner'
 
 import CalendarView    from './views/CalendarView'
 import TaskDetailView  from './views/TaskDetailView'
@@ -205,6 +206,7 @@ export default function App() {
   return (
     <LayoutGroup>
     <div className="min-h-screen bg-slate-50 overflow-hidden">
+      <OfflineBanner />
       <motion.div
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}

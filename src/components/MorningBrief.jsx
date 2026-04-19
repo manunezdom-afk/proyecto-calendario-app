@@ -1,26 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { todayISO, parseTimeToDecimal } from '../utils/dateHelpers'
 
 const SR =
   typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
-
-function getTodayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function parseTimeToDecimal(timeStr) {
-  if (!timeStr) return null
-  const m = String(timeStr).match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i)
-  if (!m) return null
-  let h = parseInt(m[1])
-  const min = parseInt(m[2] ?? '0')
-  const ap = m[3]?.toUpperCase()
-  if (ap === 'PM' && h !== 12) h += 12
-  if (ap === 'AM' && h === 12) h = 0
-  return h + min / 60
-}
 
 function generateBrief({ events, tasks, profile }) {
   const now = new Date()
@@ -34,8 +18,8 @@ function generateBrief({ events, tasks, profile }) {
     currentDecimal >= profile.peakStart &&
     currentDecimal < profile.peakEnd
 
-  const todayISO = getTodayISO()
-  const todayEvents = events.filter(e => !e.date || e.date === todayISO)
+  const today = todayISO()
+  const todayEvents = events.filter(e => !e.date || e.date === today)
 
   const meetingCount = todayEvents.filter(e =>
     /reuni[oó]n|meeting|llamada|call|sincro|junta/i.test(e.title),
@@ -126,13 +110,20 @@ export default function MorningBrief({
 
   useEffect(() => {
     if (inline || muted || spokenRef.current || !window.speechSynthesis) return
-    const timer = setTimeout(() => {
-      if (spokenRef.current) return
+
+    // Guardamos TODO lo asíncrono para poder cancelarlo en el unmount y no
+    // dejar que Nova siga hablando o disparando utterances en segundo plano.
+    let cancelled = false
+    const timers = []
+
+    const startTimer = setTimeout(() => {
+      if (cancelled || spokenRef.current) return
       spokenRef.current = true
       setSpeaking(true)
       window.speechSynthesis.cancel()
 
       const speak = () => {
+        if (cancelled) return
         const utter = new SpeechSynthesisUtterance(brief.text)
         utter.lang = 'es-ES'
         utter.rate = 1.0
@@ -149,12 +140,24 @@ export default function MorningBrief({
       if (window.speechSynthesis.getVoices().length > 0) {
         speak()
       } else {
-        window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.onvoiceschanged = null; speak() }
-        setTimeout(speak, 600)
+        const handler = () => {
+          window.speechSynthesis.onvoiceschanged = null
+          speak()
+        }
+        window.speechSynthesis.onvoiceschanged = handler
+        timers.push(setTimeout(speak, 600))
       }
     }, 900)
+    timers.push(startTimer)
 
-    return () => clearTimeout(timer)
+    return () => {
+      cancelled = true
+      timers.forEach(clearTimeout)
+      try { window.speechSynthesis.cancel() } catch {}
+      if (window.speechSynthesis?.onvoiceschanged) {
+        window.speechSynthesis.onvoiceschanged = null
+      }
+    }
   }, [muted, inline]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ⚠️ La escucha por voz al abrir el MorningBrief fue removida.

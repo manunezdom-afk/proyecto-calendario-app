@@ -11,26 +11,10 @@
  */
 
 // ── Icon guesser ──────────────────────────────────────────────────────────────
+// Lógica compartida en src/utils/iconGuesser.js (antes estaba duplicada aquí,
+// en parseScheduleText.js y en icsImport.js con listas distintas).
 
-function norm(s) {
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-}
-
-function guessIcon(text) {
-  const t = norm(text)
-  if (/futbol|deporte|gym|gimnasio|ejercicio|entrena|yoga|correr|nadar|pilates|crossfit|pesas/.test(t)) return 'fitness_center'
-  if (/reunion|meeting|llamada|call|videollamada|sincro|junta|zoom|teams/.test(t)) return 'groups'
-  if (/almuerzo|comida|cena|desayuno|cafe|restaurante|brunch|pizza|sushi/.test(t)) return 'restaurant'
-  if (/estudio|estudiar|clase|tarea|libro|leer|examen|facultad|universidad|curso/.test(t)) return 'menu_book'
-  if (/trabajo|proyecto|informe|reporte|presentacion|oficina|cliente/.test(t)) return 'work'
-  if (/medico|doctor|cita|dentista|consulta|hospital|clinica|turno/.test(t)) return 'local_hospital'
-  if (/compras|supermercado|tienda|mercado|farmacia/.test(t)) return 'shopping_cart'
-  if (/cumpleanos|fiesta|celebracion|boda|festejo/.test(t)) return 'cake'
-  if (/viaje|vuelo|aeropuerto|hotel|vacaciones|pasaje/.test(t)) return 'flight'
-  if (/banco|pago|factura|tramite|cobro/.test(t)) return 'account_balance'
-  if (/levantarme|despertarme|despertar|alarma/.test(t)) return 'alarm'
-  return 'event'
-}
+import { guessIcon } from './iconGuesser'
 
 // ── Command prefixes (colloquial Spanish) ─────────────────────────────────────
 

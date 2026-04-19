@@ -17,7 +17,10 @@ const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY
 function urlBase64ToUint8Array(base64) {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4)
   const b = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
-  const raw = typeof window !== 'undefined' ? window.atob(b) : Buffer.from(b, 'base64').toString('binary')
+  // Este archivo se usa solo en el navegador (requiere ServiceWorker),
+  // así que atob siempre existe. No hacemos fallback a Buffer para no
+  // depender de Node en el bundle.
+  const raw = atob(b)
   const out = new Uint8Array(raw.length)
   for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i)
   return out
