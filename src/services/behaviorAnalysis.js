@@ -5,7 +5,7 @@
  * de los últimos 30 días, las agrega en patrones interpretables, y guarda
  * el resultado en `user_behavior`. Ese modelo se inyecta en el system prompt
  * de Nova (para decisiones en tiempo real) y se muestra en la vista
- * "Lo que Nova sabe de vos" (para transparencia).
+ * "Lo que Nova sabe de ti" (para transparencia).
  *
  * Principio: todas las métricas son derivadas, no se guarda data bruta en el
  * modelo. El usuario siempre puede borrar las señales y el modelo se regenera.

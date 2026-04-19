@@ -19,7 +19,7 @@ function buildInsights(b, profile) {
         icon: 'bolt',
         gradient: 'from-amber-400 to-orange-500',
         title: `Tu pico real es ${start}–${end}h, no ${decl.start}–${decl.end}h`,
-        body: `Tu perfil declara esa franja, pero los datos muestran que rendís mejor más tarde. Estoy usando la observada, no la declarada.`,
+        body: `Tu perfil declara esa franja, pero los datos muestran que rindes mejor más tarde. Estoy usando la observada, no la declarada.`,
       })
     } else {
       out.push({
@@ -51,7 +51,7 @@ function buildInsights(b, profile) {
       delete_event: 'cancelar eventos',
       add_task: 'agregar tareas',
       toggle_task: 'marcar tareas',
-      remember: 'recordar datos sobre vos',
+      remember: 'recordar datos sobre ti',
     }
     out.push({
       icon: 'thumb_up',
@@ -69,7 +69,7 @@ function buildInsights(b, profile) {
       delete_event: 'cancelar eventos',
       add_task: 'agregar tareas',
       toggle_task: 'marcar tareas',
-      remember: 'recordar datos sobre vos',
+      remember: 'recordar datos sobre ti',
     }
     const friendly = b.avoid_kinds.map(k => KIND_LABELS[k] || k).join(', ')
     out.push({
@@ -203,7 +203,7 @@ export default function NovaKnowsView({ onBack }) {
           </button>
         )}
         <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-headline">
-          Lo que Nova sabe de vos
+          Lo que Nova sabe de ti
         </h1>
         <p className="text-[13.5px] text-slate-500 mt-1 leading-snug">
           Un resumen transparente de los patrones que Nova aprendió de tu uso.
@@ -232,7 +232,7 @@ export default function NovaKnowsView({ onBack }) {
           <p className="text-[13px] text-slate-500 mt-2 leading-snug max-w-sm mx-auto">
             {justCleared
               ? 'Seguirá aprendiendo a medida que uses la app.'
-              : 'Usá Focus unos días — completá tareas, aceptá o rechazá sugerencias — y acá vas a empezar a ver patrones.'}
+              : 'Usa Focus unos días — completa tareas, acepta o rechaza sugerencias — y aquí empezarás a ver patrones.'}
           </p>
           <button
             onClick={runAnalysis}

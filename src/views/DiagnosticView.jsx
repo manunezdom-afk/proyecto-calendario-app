@@ -112,7 +112,7 @@ export default function DiagnosticView({ onBack }) {
           label="VITE_VAPID_PUBLIC_KEY"
           value={mask(vapidPub)}
           ok={!!vapidPub}
-          hint="Opcional — solo si querés push notifications"
+          hint="Opcional — solo si quieres push notifications"
         />
       </section>
 
@@ -193,10 +193,10 @@ export default function DiagnosticView({ onBack }) {
           Si algo dice "No configurado"
         </p>
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-[12px] text-amber-900 leading-relaxed space-y-1.5">
-          <p>1. Verificá que la env var esté en Vercel → Settings → Environment Variables (los 3 ambientes marcados).</p>
-          <p>2. Redeployá SIN caché: Deployments → último → ⋯ → Redeploy → <b>desmarcá "Use existing Build Cache"</b>.</p>
+          <p>1. Verifica que la env var esté en Vercel → Settings → Environment Variables (los 3 ambientes marcados).</p>
+          <p>2. Redeploy SIN caché: Deployments → último → ⋯ → Redeploy → <b>desmarca "Use existing Build Cache"</b>.</p>
           <p>3. Hard refresh del navegador (Ctrl+Shift+R) o ventana incógnito.</p>
-          <p>4. Si el valor se ve cortado acá (ej. solo 20-30 chars), se truncó al copiar. Volvé a pegarlo completo.</p>
+          <p>4. Si el valor se ve cortado aquí (ej. solo 20-30 chars), se truncó al copiar. Vuelve a pegarlo completo.</p>
         </div>
       </section>
     </div>

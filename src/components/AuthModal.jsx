@@ -148,8 +148,8 @@ export default function AuthModal({ isOpen, onClose }) {
                 <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-2xl mb-5">
                   <span className="material-symbols-outlined text-primary text-[20px]">mark_email_read</span>
                   <p className="text-[12px] text-slate-600 leading-snug">
-                    Buscá el código de <b>6 dígitos</b> en tu email (revisá spam si no llega).
-                    Pegalo acá abajo.
+                    Busca el código de <b>6 dígitos</b> en tu email (revisa spam si no llega).
+                    Pégalo aquí abajo.
                   </p>
                 </div>
 
