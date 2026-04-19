@@ -172,10 +172,34 @@ export default function App() {
       events,
       tasks,
       profile,
-      onStart:      () => setShowMorningBrief(false),
+      onStart:      () => { setShowMorningBrief(false); handleStartDay() },
       onDismiss:    () => setShowMorningBrief(false),
       onMoveEvent:  (id, updates) => { editEvent(id, updates); setShowMorningBrief(false) },
     } : null,
+  }
+
+  // Al arrancar el día desde el brief, navegamos al planner y scrolleamos
+  // al primer evento próximo (si existe) para que el usuario vea al toque
+  // con qué empezar.
+  function handleStartDay() {
+    setActiveView('planner')
+    // Pequeño delay para que la animación de cierre del modal termine y el
+    // planner ya esté visible antes de hacer el scroll
+    setTimeout(() => {
+      // Buscamos el próximo evento del día (dentro de la próxima hora),
+      // o el primero pendiente, y lo scrolleamos al centro con highlight
+      const nextEvent = document.querySelector('[data-next-event], [data-event-card]')
+      if (nextEvent) {
+        nextEvent.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        nextEvent.classList.add('ring-2', 'ring-primary', 'ring-offset-2')
+        setTimeout(() => {
+          nextEvent.classList.remove('ring-2', 'ring-primary', 'ring-offset-2')
+        }, 2000)
+      } else {
+        // Sin eventos → scroll suave al top del main
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+    }, 400)
   }
 
   return (
@@ -336,7 +360,7 @@ export default function App() {
             events={events}
             tasks={tasks}
             profile={profile}
-            onStart={()      => setShowMorningBrief(false)}
+            onStart={()      => { setShowMorningBrief(false); handleStartDay() }}
             onDismiss={()    => setShowMorningBrief(false)}
             onMoveEvent={(id, updates) => { editEvent(id, updates); setShowMorningBrief(false) }}
           />
