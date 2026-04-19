@@ -642,27 +642,61 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
 
               {blocks.length === 0 && (() => {
                 const pendingTotal = semanaCount + algoDiaCount
+                // Ghost events: previews no-interactivos que desaparecen en
+                // cuanto el usuario crea su primer evento real. Visibles solo
+                // cuando blocks.length === 0.
+                const GHOSTS = [
+                  { time: '09:00', title: 'Reunión de equipo',   icon: 'groups',        color: 'bg-blue-500' },
+                  { time: '10:30', title: 'Foco profundo',       icon: 'bolt',          color: 'bg-violet-500' },
+                  { time: '13:00', title: 'Almuerzo',            icon: 'restaurant',    color: 'bg-emerald-500' },
+                  { time: '18:00', title: 'Gym',                 icon: 'fitness_center',color: 'bg-rose-500' },
+                ]
                 return (
-                  <div className="flex gap-6">
-                    <div className="w-16" />
-                    <div className="flex-1 bg-surface-container-low rounded-xl p-6 space-y-3">
-                      <p className="text-outline text-sm font-semibold">Hoy está vacío.</p>
-                      <p className="text-outline/70 text-xs leading-relaxed">
-                        {pendingTotal > 0
-                          ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. ¿Qué arrancamos?`
-                          : '¿Qué arrancamos?'}
-                      </p>
-                      {onOpenAssistant && (
-                        <button
-                          onClick={onOpenAssistant}
-                          className="flex items-center gap-1.5 text-xs font-bold text-white bg-primary hover:bg-primary/90 px-4 py-2 rounded-full transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
-                          Hablar con Nova
-                        </button>
-                      )}
+                  <>
+                    <div className="flex gap-6">
+                      <div className="w-16" />
+                      <div className="flex-1 bg-surface-container-low rounded-xl p-6 space-y-3">
+                        <p className="text-outline text-sm font-semibold">Tu día todavía está en blanco.</p>
+                        <p className="text-outline/70 text-xs leading-relaxed">
+                          {pendingTotal > 0
+                            ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. ¿Qué arrancamos?`
+                            : 'Abajo verás ejemplos de cómo podría lucir. Desaparecen cuando crees tu primer evento.'}
+                        </p>
+                        {onOpenAssistant && (
+                          <button
+                            onClick={onOpenAssistant}
+                            className="flex items-center gap-1.5 text-xs font-bold text-white bg-primary hover:bg-primary/90 px-4 py-2 rounded-full transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                            Hablar con Nova
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
+
+                    {/* Ghost events preview */}
+                    <div className="space-y-2 pt-2 pointer-events-none select-none" aria-hidden="true">
+                      {GHOSTS.map((g, i) => (
+                        <div key={i} className="flex gap-6 items-start">
+                          <div className="w-16 pt-3 text-right text-outline/40 text-[12px] font-semibold">
+                            {g.time}
+                          </div>
+                          <div className="flex-1 rounded-xl bg-surface-container-lowest border border-dashed border-outline-variant/30 p-3 opacity-50 flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg ${g.color} opacity-60 flex items-center justify-center flex-shrink-0`}>
+                              <span className="material-symbols-outlined text-white text-[16px]">{g.icon}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-on-surface/60 text-sm truncate">{g.title}</p>
+                              <p className="text-[10px] text-outline/60 mt-0.5">Ejemplo</p>
+                            </div>
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-outline-variant/20 text-outline/60 uppercase tracking-wider">
+                              ejemplo
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )
               })()}
             </div>
