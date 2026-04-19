@@ -31,6 +31,14 @@ export default function WelcomeScreen({ onEnter, userName }) {
   const headlineWords = headline.split(' ')
   const taglineWords = 'Menos ruido, más foco.'.split(' ')
 
+  // Auto-dismiss: la bienvenida dura lo que tarda la animación en completarse
+  // (~3.5s). No requiere interacción del usuario — se cierra sola. En mobile
+  // no hay teclado, y es más elegante que apretar un botón al inicio.
+  useEffect(() => {
+    const id = setTimeout(() => { onEnter?.() }, 3500)
+    return () => clearTimeout(id)
+  }, [onEnter])
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -141,43 +149,25 @@ export default function WelcomeScreen({ onEnter, userName }) {
           ))}
         </motion.div>
 
-        {/* CTA premium con shimmer */}
-        <motion.button
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 2.1, type: 'spring', damping: 20, stiffness: 260 }}
-          onClick={onEnter}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.97 }}
-          className="group relative overflow-hidden rounded-full bg-white px-8 py-3.5 text-[14px] font-semibold text-slate-900 shadow-[0_20px_60px_-12px_rgba(255,255,255,0.35)] transition-shadow hover:shadow-[0_25px_70px_-10px_rgba(255,255,255,0.45)]"
-        >
-          <span className="relative z-10 flex items-center gap-2">
-            Entrar
-            <motion.span
-              className="material-symbols-outlined text-[17px]"
-              animate={{ x: [0, 3, 0] }}
-              transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              arrow_forward
-            </motion.span>
-          </span>
-
-          {/* Shimmer */}
-          <span
-            className="absolute inset-y-0 -left-full w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-blue-200/60 to-transparent transition-all duration-700 group-hover:left-full"
-            aria-hidden
-          />
-        </motion.button>
-
-        {/* Disclaimer tenue */}
-        <motion.p
+        {/* Loader tenue — indica que está cargando sin pedir interacción */}
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 2.4, duration: 0.8 }}
-          className="mt-6 text-[10.5px] uppercase tracking-[0.2em] text-white/30"
+          transition={{ delay: 2.2, duration: 0.6 }}
+          className="mt-10 flex flex-col items-center gap-3"
         >
-          Presiona cualquier tecla para continuar
-        </motion.p>
+          <div className="h-[2px] w-32 overflow-hidden rounded-full bg-white/10">
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: '100%' }}
+              transition={{ duration: 1.3, ease: 'easeInOut', delay: 2.2 }}
+              className="h-full w-1/2 rounded-full bg-gradient-to-r from-transparent via-white/70 to-transparent"
+            />
+          </div>
+          <p className="text-[10.5px] uppercase tracking-[0.25em] text-white/30">
+            Iniciando tu espacio
+          </p>
+        </motion.div>
       </div>
     </motion.div>
   )
