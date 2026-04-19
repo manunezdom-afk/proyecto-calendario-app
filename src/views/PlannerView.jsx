@@ -4,7 +4,7 @@ import FocusTimerOverlay from '../components/FocusTimerOverlay'
 import FocusBar          from '../components/FocusBar'
 import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
-import { isInPeak, parseEventHour, peakRangeLabel } from '../utils/peakZone'
+import { parseEventHour, peakRangeLabel } from '../utils/peakZone'
 import { todayISO } from '../utils/dateHelpers'
 import {
   formatToday,
@@ -307,9 +307,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
             <div className="relative space-y-2">
               {displayBlocks.map(({ id, time, type, title, description, subtasks = [], _asReminderOnly }) => {
                 const isSuggestion = type === 'suggestion'
-                const inPeak = !isSuggestion && profile.peakStart != null
-                  ? isInPeak(time, profile.peakStart, profile.peakEnd)
-                  : null
                 return (
                   <div key={id} style={{ display: 'flex', gap: '24px', overflow: 'visible' }} className="group">
                     {/* Columna de hora — nunca se comprime */}
@@ -363,22 +360,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                             </button>
                           )}
                         </div>
-
-                        {/* Badge zona de rendimiento */}
-                        {inPeak !== null && (
-                          <div style={{ marginTop: '6px', marginBottom: '2px' }}>
-                            <span style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '4px',
-                              fontSize: '9px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px',
-                              ...(inPeak
-                                ? { background: '#d1fae5', color: '#065f46' }
-                                : { background: '#fef9c3', color: '#92400e' })
-                            }}>
-                              {inPeak ? '🟢' : '🟡'}
-                              {inPeak ? 'En tu zona de rendimiento' : 'Fuera de tu zona de rendimiento'}
-                            </span>
-                          </div>
-                        )}
 
                         {subtasks.length > 0 && (
                           <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
