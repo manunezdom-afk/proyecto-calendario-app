@@ -23,6 +23,16 @@
   <meta name="twitter:description" content="Nova propone cambios y jamás mueve nada sin tu aprobación." />
   <meta name="twitter:image" content="https://focus.app/landing/og.png" />
 
+  <!-- Manifest + SW: necesarios para que Chrome/Edge/Brave disparen
+       beforeinstallprompt en la landing y el botón "Instalar como app"
+       funcione directo desde acá sin pasar por la app. -->
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Focus" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -90,10 +100,18 @@
         Resumen matutino, cierre nocturno, tareas kanban y modo offline.
       </p>
       <div class="flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-up" style="animation-delay: 0.45s">
-        <a href="/" class="shimmer-btn group inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-[14px] font-bold text-slate-900 shadow-2xl shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-0.5 transition-all">
-          Probar Focus ahora
-          <span class="material-symbols-outlined text-[18px] transition-transform group-hover:translate-x-0.5">arrow_forward</span>
-        </a>
+        <!-- Botón principal: si el browser soporta beforeinstallprompt
+             (Chrome/Edge/Brave), se convierte en "Instalar como app".
+             Si no, queda como link a abrir la app o abre modal de
+             instrucciones (Safari / iOS). -->
+        <button
+          id="install-cta"
+          type="button"
+          class="shimmer-btn group inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-[14px] font-bold text-slate-900 shadow-2xl shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-0.5 transition-all"
+        >
+          <span id="install-cta-label">Probar Focus ahora</span>
+          <span class="material-symbols-outlined text-[18px] transition-transform group-hover:translate-x-0.5" id="install-cta-icon">arrow_forward</span>
+        </button>
         <a href="#how" class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3.5 text-[13.5px] font-semibold text-white/80 hover:bg-white/10 hover:text-white transition-all">
           Ver cómo funciona
           <span class="material-symbols-outlined text-[16px]">arrow_downward</span>
@@ -290,26 +308,53 @@
         <p class="mt-5 text-[15px] text-white/60 max-w-xl mx-auto">Focus es una Progressive Web App. No necesita tienda, no ocupa memoria extra, abre directo desde tu pantalla de inicio.</p>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="reveal glass rounded-[24px] p-7">
+        <!-- Android / Chrome / Edge: botón instalar directo -->
+        <div class="reveal glass rounded-[24px] p-7 flex flex-col">
           <div class="h-11 w-11 rounded-2xl bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center mb-4"><span class="material-symbols-outlined text-white text-[22px]">android</span></div>
           <h3 class="font-headline text-[19px] font-extrabold tracking-tight mb-2">Android · Chrome · Edge</h3>
-          <p class="text-[13.5px] leading-relaxed text-white/65 mb-4">Al abrir la app aparece una card: "Instalar Focus como app". Un toque y listo.</p>
-          <a href="/" class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-white/80 hover:text-white">Abrir e instalar <span class="material-symbols-outlined text-[15px]">arrow_forward</span></a>
+          <p class="text-[13.5px] leading-relaxed text-white/65 mb-4 flex-1">Tocá el botón y el navegador abre el diálogo nativo de instalación.</p>
+          <button
+            type="button"
+            data-install-trigger="chromium"
+            class="inline-flex items-center gap-1.5 rounded-full bg-white text-slate-900 text-[13px] font-bold px-4 py-2 hover:-translate-y-0.5 transition-all w-fit"
+          >
+            <span class="material-symbols-outlined text-[15px]">download</span>
+            <span data-install-label="chromium">Instalar como app</span>
+          </button>
         </div>
-        <div class="reveal glass rounded-[24px] p-7">
+
+        <!-- iPhone / Safari: A2HS -->
+        <div class="reveal glass rounded-[24px] p-7 flex flex-col">
           <div class="h-11 w-11 rounded-2xl bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center mb-4"><span class="material-symbols-outlined text-white text-[22px]">phone_iphone</span></div>
           <h3 class="font-headline text-[19px] font-extrabold tracking-tight mb-2">iPhone · Safari</h3>
-          <ol class="text-[13px] leading-relaxed text-white/65 space-y-1.5 list-decimal list-inside marker:text-white/40">
+          <ol class="text-[13px] leading-relaxed text-white/65 space-y-1.5 list-decimal list-inside marker:text-white/40 flex-1">
             <li>Abre Focus en Safari</li>
             <li>Toca el botón compartir</li>
             <li>"Añadir a pantalla de inicio"</li>
           </ol>
+          <button
+            type="button"
+            data-install-trigger="ios"
+            class="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 text-white text-[13px] font-semibold px-4 py-2 hover:bg-white/10 transition-all w-fit"
+          >
+            <span class="material-symbols-outlined text-[15px]">ios_share</span>
+            Ver instrucciones
+          </button>
         </div>
-        <div class="reveal glass rounded-[24px] p-7">
+
+        <!-- Mac · Windows: mismo flujo que Chromium mobile -->
+        <div class="reveal glass rounded-[24px] p-7 flex flex-col">
           <div class="h-11 w-11 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center mb-4"><span class="material-symbols-outlined text-white text-[22px]">desktop_windows</span></div>
           <h3 class="font-headline text-[19px] font-extrabold tracking-tight mb-2">Mac · Windows</h3>
-          <p class="text-[13.5px] leading-relaxed text-white/65 mb-4">Busca el ícono de instalación en la barra de URL de Chrome, Edge o Brave. Queda como app nativa en tu escritorio.</p>
-          <a href="/" class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-white/80 hover:text-white">Abrir en escritorio <span class="material-symbols-outlined text-[15px]">arrow_forward</span></a>
+          <p class="text-[13.5px] leading-relaxed text-white/65 mb-4 flex-1">Queda como app nativa en tu escritorio. En Chrome/Edge/Brave el botón de abajo dispara la instalación; en Safari macOS usa <b>Archivo → Añadir al Dock</b>.</p>
+          <button
+            type="button"
+            data-install-trigger="desktop"
+            class="inline-flex items-center gap-1.5 rounded-full bg-white text-slate-900 text-[13px] font-bold px-4 py-2 hover:-translate-y-0.5 transition-all w-fit"
+          >
+            <span class="material-symbols-outlined text-[15px]">desktop_mac</span>
+            <span data-install-label="desktop">Instalar en escritorio</span>
+          </button>
         </div>
       </div>
     </div>
@@ -348,6 +393,36 @@
     </div>
   </footer>
 
+  <!-- Modal para instrucciones iOS / Safari macOS / fallback sin install API -->
+  <div
+    id="install-modal"
+    class="fixed inset-0 z-[95] hidden items-center justify-center px-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="install-modal-title"
+  >
+    <div class="absolute inset-0 bg-slate-900/70 backdrop-blur-md" data-install-close></div>
+    <div class="relative w-full max-w-md rounded-3xl bg-slate-900 border border-white/10 p-6 text-white shadow-2xl">
+      <button
+        type="button"
+        data-install-close
+        aria-label="Cerrar"
+        class="absolute top-3 right-3 h-8 w-8 rounded-full flex items-center justify-center text-white/50 hover:bg-white/10 hover:text-white transition-colors"
+      >
+        <span class="material-symbols-outlined text-[18px]">close</span>
+      </button>
+      <h3 id="install-modal-title" class="font-headline text-[20px] font-extrabold tracking-tight mb-4"></h3>
+      <div id="install-modal-body" class="text-[14px] leading-relaxed text-white/75 space-y-3"></div>
+      <a
+        href="/"
+        class="mt-5 inline-flex items-center justify-center gap-2 w-full rounded-full bg-white text-slate-900 text-[13.5px] font-bold px-5 py-3 hover:-translate-y-0.5 transition-transform"
+      >
+        Abrir Focus ahora
+        <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+      </a>
+    </div>
+  </div>
+
   <script>
     document.getElementById('year').textContent = new Date().getFullYear()
 
@@ -362,6 +437,149 @@
       entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } })
     }, { threshold: 0.1, rootMargin: '0px 0px -10% 0px' })
     document.querySelectorAll('.reveal').forEach((el) => io.observe(el))
+
+    // ── Instalación PWA desde la landing ────────────────────────────────────
+    //
+    // El navegador solo dispara beforeinstallprompt cuando (1) hay manifest
+    // vinculado a este origen (ya agregado arriba en <head>), (2) hay un SW
+    // registrado, (3) se cumplen criterios de engagement del browser.
+    // Registramos /sw.js con scope "/" para que Chrome/Edge/Brave consideren
+    // la landing como entrada válida de la PWA y el botón abra el diálogo
+    // nativo aquí mismo, sin tener que pasar por la app primero.
+    if ('serviceWorker' in navigator) {
+      // No lo esperamos — registrar es suficiente para que el browser tenga
+      // la info que necesita.
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {})
+    }
+
+    const UA = navigator.userAgent
+    const PLATFORM = navigator.platform || ''
+    const isIOS = /iPhone|iPad|iPod/.test(UA) || (PLATFORM === 'MacIntel' && navigator.maxTouchPoints > 1)
+    const isSafari = /^((?!chrome|android|crios|fxios|edg|opr).)*safari/i.test(UA)
+    const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator?.standalone === true
+
+    let deferredPrompt = null
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault()
+      deferredPrompt = e
+      updateCTAs()
+    })
+    window.addEventListener('appinstalled', () => {
+      deferredPrompt = null
+      updateCTAs()
+      showModal({
+        title: '¡Listo!',
+        body: '<p>Focus quedó instalado como app. Podés abrirlo desde tu escritorio o pantalla de inicio.</p>',
+      })
+    })
+
+    function updateCTAs() {
+      const canInstall = !!deferredPrompt
+      // Hero CTA
+      const heroLabel = document.getElementById('install-cta-label')
+      const heroIcon  = document.getElementById('install-cta-icon')
+      if (heroLabel && heroIcon) {
+        if (isStandalone) {
+          heroLabel.textContent = 'Abrir Focus'
+          heroIcon.textContent  = 'arrow_forward'
+        } else if (canInstall) {
+          heroLabel.textContent = 'Instalar Focus como app'
+          heroIcon.textContent  = 'download'
+        } else if (isIOS) {
+          heroLabel.textContent = 'Instalar en iPhone'
+          heroIcon.textContent  = 'ios_share'
+        } else {
+          heroLabel.textContent = 'Probar Focus ahora'
+          heroIcon.textContent  = 'arrow_forward'
+        }
+      }
+    }
+
+    function showModal({ title, body }) {
+      const m = document.getElementById('install-modal')
+      document.getElementById('install-modal-title').textContent = title
+      document.getElementById('install-modal-body').innerHTML = body
+      m.classList.remove('hidden')
+      m.classList.add('flex')
+    }
+    function hideModal() {
+      const m = document.getElementById('install-modal')
+      m.classList.add('hidden')
+      m.classList.remove('flex')
+    }
+    document.querySelectorAll('[data-install-close]').forEach((el) => {
+      el.addEventListener('click', hideModal)
+    })
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideModal() })
+
+    const iosHint = `
+      <ol class="list-decimal list-inside space-y-2 marker:text-white/40">
+        <li>Abrí Focus en <b>Safari</b> (no en el browser in-app de otra red social).</li>
+        <li>Tocá el botón <b>Compartir</b> (cuadrado con flecha hacia arriba).</li>
+        <li>Elegí <b>"Añadir a pantalla de inicio"</b>.</li>
+        <li>Tocá <b>Añadir</b> y abrí Focus desde el home.</li>
+      </ol>
+      <p class="text-white/50 text-[12.5px] pt-1">En iPhone las notificaciones push solo llegan desde la app instalada (iOS 16.4+).</p>
+    `
+    const safariMacHint = `
+      <ol class="list-decimal list-inside space-y-2 marker:text-white/40">
+        <li>Abrí Focus en <b>Safari</b>.</li>
+        <li>En el menú, <b>Archivo → Añadir al Dock</b> (requiere macOS Sonoma 14+).</li>
+        <li>Confirmá — Focus queda como app en el Dock.</li>
+      </ol>
+      <p class="text-white/50 text-[12.5px] pt-1">Si usás Chrome/Edge/Brave en Mac, apretá <b>Instalar como app</b> y el browser se encarga.</p>
+    `
+    const genericHint = `
+      <p>Tu navegador no expone un botón directo para instalar apps web. Estas son tus opciones:</p>
+      <ul class="list-disc list-inside space-y-1.5 marker:text-white/40">
+        <li>Abrir Focus en <b>Chrome, Edge o Brave</b> y usar el botón "Instalar".</li>
+        <li>En iPhone, abrilo en <b>Safari</b> y usá "Añadir a pantalla de inicio".</li>
+        <li>En Mac con Safari 17+, usá <b>Archivo → Añadir al Dock</b>.</li>
+      </ul>
+    `
+
+    async function triggerInstall() {
+      if (isStandalone) {
+        // Ya está instalado → abrir la app
+        window.location.href = '/'
+        return
+      }
+      if (deferredPrompt) {
+        try {
+          deferredPrompt.prompt()
+          await deferredPrompt.userChoice
+        } catch {}
+        deferredPrompt = null
+        updateCTAs()
+        return
+      }
+      if (isIOS) {
+        showModal({ title: 'Instalar Focus en iPhone', body: iosHint })
+        return
+      }
+      if (isSafari) {
+        showModal({ title: 'Instalar Focus en Mac', body: safariMacHint })
+        return
+      }
+      // Sin install API y no es Safari — probablemente Firefox desktop o IE.
+      // Fallback: mostrar instrucciones generales y dejar abrir la app.
+      showModal({ title: 'Instalar Focus', body: genericHint })
+    }
+
+    document.getElementById('install-cta')?.addEventListener('click', triggerInstall)
+    document.querySelectorAll('[data-install-trigger]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const trigger = e.currentTarget.getAttribute('data-install-trigger')
+        if (trigger === 'ios') {
+          showModal({ title: 'Instalar Focus en iPhone', body: iosHint })
+          return
+        }
+        // chromium + desktop → mismo flujo (beforeinstallprompt o fallback)
+        triggerInstall()
+      })
+    })
+
+    updateCTAs()
   </script>
 </body>
 </html>
