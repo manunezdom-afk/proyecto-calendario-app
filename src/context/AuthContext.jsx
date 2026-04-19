@@ -42,9 +42,21 @@ export function AuthProvider({ children }) {
 
   const signInWithEmail = useCallback(async (email) => {
     if (!supabase) throw new Error('Supabase no configurado')
+    // shouldCreateUser:true crea la cuenta si no existe
+    // Sin emailRedirectTo → Supabase envía el OTP (6 dígitos) en vez de un link
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: { shouldCreateUser: true },
+    })
+    if (error) throw error
+  }, [])
+
+  const verifyEmailCode = useCallback(async (email, token) => {
+    if (!supabase) throw new Error('Supabase no configurado')
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: token.trim(),
+      type: 'email',
     })
     if (error) throw error
   }, [])
@@ -55,7 +67,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, authModal, setAuthModal, signInWithEmail, signOut }}>
+    <AuthContext.Provider value={{ user, loading, authModal, setAuthModal, signInWithEmail, verifyEmailCode, signOut }}>
       {children}
     </AuthContext.Provider>
   )

@@ -3,19 +3,46 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 
 export default function AuthModal({ isOpen, onClose }) {
-  const { signInWithEmail, user, signOut } = useAuth()
-  const [email, setEmail]   = useState('')
-  const [sent, setSent]     = useState(false)
+  const { signInWithEmail, verifyEmailCode, user, signOut } = useAuth()
+  const [email, setEmail]     = useState('')
+  const [code, setCode]       = useState('')
+  const [step, setStep]       = useState('email') // 'email' | 'code'
   const [loading, setLoading] = useState(false)
-  const [error, setError]   = useState(null)
+  const [error, setError]     = useState(null)
 
-  async function handleSubmit(e) {
+  async function handleSendCode(e) {
     e.preventDefault()
     setLoading(true)
     setError(null)
     try {
       await signInWithEmail(email)
-      setSent(true)
+      setStep('code')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleVerifyCode(e) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      await verifyEmailCode(email, code)
+      handleClose()
+    } catch (err) {
+      setError('Código inválido o expirado. Intenta de nuevo.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleResend() {
+    setLoading(true)
+    setError(null)
+    try {
+      await signInWithEmail(email)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -24,8 +51,9 @@ export default function AuthModal({ isOpen, onClose }) {
   }
 
   function handleClose() {
-    setSent(false)
+    setStep('email')
     setEmail('')
+    setCode('')
     setError(null)
     onClose()
   }
@@ -62,25 +90,66 @@ export default function AuthModal({ isOpen, onClose }) {
                   Cancelar
                 </button>
               </div>
-            ) : sent ? (
-              /* ── Email sent ── */
-              <div className="text-center py-6">
-                <span className="material-symbols-outlined text-5xl text-primary mb-4 block">mark_email_read</span>
-                <h2 className="text-xl font-bold mb-2">Revisa tu correo</h2>
-                <p className="text-slate-500 text-sm">
-                  Enviamos un link mágico a <strong>{email}</strong>. Toca el link para entrar sin contraseña.
-                </p>
-                <button onClick={handleClose} className="mt-6 w-full py-3 bg-slate-100 rounded-2xl text-sm font-medium">
-                  Cerrar
-                </button>
-              </div>
+            ) : step === 'code' ? (
+              /* ── Enter 6-digit code ── */
+              <>
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h2 className="text-xl font-bold">Ingresa tu código</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">Enviamos un código de 6 dígitos a <strong>{email}</strong></p>
+                  </div>
+                  <button onClick={handleClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
+                    <span className="material-symbols-outlined text-slate-400">close</span>
+                  </button>
+                </div>
+
+                <form onSubmit={handleVerifyCode}>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    autoComplete="one-time-code"
+                    autoFocus
+                    maxLength={6}
+                    value={code}
+                    onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="123456"
+                    required
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-center text-2xl font-bold tracking-[0.5em] tabular-nums mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  {error && <p className="text-red-500 text-xs mb-3">{error}</p>}
+                  <button
+                    type="submit"
+                    disabled={loading || code.length < 6}
+                    className="w-full py-3 bg-primary text-white rounded-2xl text-sm font-bold disabled:opacity-50 transition-opacity"
+                  >
+                    {loading ? 'Verificando...' : 'Verificar código'}
+                  </button>
+                </form>
+
+                <div className="flex justify-between mt-4 text-xs">
+                  <button
+                    onClick={() => { setStep('email'); setCode(''); setError(null) }}
+                    className="text-slate-500 hover:text-slate-700"
+                  >
+                    ← Cambiar email
+                  </button>
+                  <button
+                    onClick={handleResend}
+                    disabled={loading}
+                    className="text-primary font-semibold hover:underline disabled:opacity-50"
+                  >
+                    Reenviar código
+                  </button>
+                </div>
+              </>
             ) : (
-              /* ── Sign in form ── */
+              /* ── Sign in form (email step) ── */
               <>
                 <div className="flex items-center justify-between mb-5">
                   <div>
                     <h2 className="text-xl font-bold">Guardar tu progreso</h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Sin contraseña · link mágico por email</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Sin contraseña · código de 6 dígitos por email</p>
                   </div>
                   <button onClick={handleClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
                     <span className="material-symbols-outlined text-slate-400">close</span>
@@ -100,7 +169,7 @@ export default function AuthModal({ isOpen, onClose }) {
                   ))}
                 </div>
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSendCode}>
                   <input
                     type="email" value={email} onChange={e => setEmail(e.target.value)}
                     placeholder="tu@email.com" required
@@ -111,7 +180,7 @@ export default function AuthModal({ isOpen, onClose }) {
                     type="submit" disabled={loading}
                     className="w-full py-3 bg-primary text-white rounded-2xl text-sm font-bold disabled:opacity-50 transition-opacity"
                   >
-                    {loading ? 'Enviando...' : 'Enviar link mágico'}
+                    {loading ? 'Enviando...' : 'Enviar código'}
                   </button>
                 </form>
               </>
