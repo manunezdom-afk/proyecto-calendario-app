@@ -70,12 +70,15 @@ export default function NovaWidget({
   const [isListening, setIsListening] = useState(false)
   const [chips, setChips]           = useState([])  // { id, icon, label, done }
   const [location, setLocation]     = useState(null)
+  const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false)
+  const [photoPreview, setPhotoPreview]         = useState(null)
 
   const inputRef    = useRef(null)
   const srRef       = useRef(null)
   const pressTimer  = useRef(null)
   const historyRef  = useRef([])
   const responseRef = useRef(null)  // scroll anchor
+  const photoInputRef = useRef(null)
 
   const displayedText = useSimulatedStream(reply, isLoading)
 
@@ -209,6 +212,86 @@ export default function NovaWidget({
     else if (action.type === 'mark_task_done') onToggleTask?.(action.id)
     else if (action.type === 'remember')     addMemory?.(action.memory)
   }, [onAddEvent, onEditEvent, onDeleteEvent, onToggleTask, addMemory])
+
+  async function handlePhoto(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+
+    const preview = URL.createObjectURL(file)
+    setPhotoPreview(preview)
+    setIsOpen(true)
+    setReply('')
+    setChips([])
+    setIsAnalyzingPhoto(true)
+
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      const res = await fetch('/api/analyze-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images: [{ base64, mediaType: file.type || 'image/jpeg' }] }),
+      })
+
+      const data = await res.json()
+      const events = data?.events ?? []
+
+      if (events.length === 0) {
+        setReply('No encontré eventos claros en la foto. Podés describirlos con texto.')
+      } else {
+        const names = events.map(ev => `"${ev.title}"`).join(', ')
+        const msg = events.length === 1
+          ? `Encontré 1 evento en la foto: ${names}. ¿Lo agrego al calendario?`
+          : `Encontré ${events.length} eventos en la foto: ${names}. ¿Los agrego?`
+        setReply(msg)
+
+        historyRef.current = [
+          ...historyRef.current,
+          { role: 'user', content: '[Foto enviada]' },
+          { role: 'assistant', content: msg },
+        ]
+        try { sessionStorage.setItem('nova_history', JSON.stringify(historyRef.current.slice(-40))) } catch {}
+
+        setChips(events.map((ev, i) => ({
+          id: `photo-ev-${i}`,
+          icon: 'event',
+          label: ev.title + (ev.time ? ` · ${ev.time}` : '') + (ev.date ? ` · ${ev.date}` : ''),
+          done: false,
+          photoEvent: ev,
+        })))
+      }
+    } catch {
+      setReply('No pude analizar la foto. Intentá de nuevo.')
+    } finally {
+      setIsAnalyzingPhoto(false)
+      URL.revokeObjectURL(preview)
+      setPhotoPreview(null)
+    }
+  }
+
+  function confirmPhotoEvents() {
+    chips.filter(c => c.photoEvent).forEach(c => {
+      onAddEvent?.({
+        id: `${Date.now()}-${Math.random()}`,
+        title: c.photoEvent.title,
+        time: c.photoEvent.time ?? '',
+        date: c.photoEvent.date ?? null,
+        description: '',
+        section: 'focus',
+        icon: 'event',
+        dotColor: 'bg-secondary-container',
+        featured: false,
+      })
+    })
+    setChips(prev => prev.map(c => c.photoEvent ? { ...c, done: true } : c))
+    setReply('¡Listo! Eventos agregados al calendario.')
+  }
 
   async function sendMessage(text) {
     const msg = (text ?? input).trim()
@@ -467,11 +550,47 @@ export default function NovaWidget({
               </div>
             )}
 
+            {/* Botón confirmar eventos de foto */}
+            {chips.some(c => c.photoEvent && !c.done) && (
+              <div className="px-3 pb-2">
+                <button
+                  onClick={confirmPhotoEvents}
+                  className="w-full py-1.5 rounded-xl bg-blue-500 text-white text-[12px] font-semibold hover:bg-blue-600 active:scale-95 transition-all"
+                >
+                  Agregar al calendario
+                </button>
+              </div>
+            )}
+
             {/* Input */}
             <div className="border-t border-slate-100 px-3 py-2 flex items-center gap-2">
+              {/* Cámara */}
+              <button
+                onClick={() => photoInputRef.current?.click()}
+                disabled={isLoading || isListening || isAnalyzingPhoto}
+                className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-all disabled:opacity-30"
+                aria-label="Enviar foto a Nova"
+              >
+                <motion.span
+                  className="material-symbols-outlined text-[17px]"
+                  animate={isAnalyzingPhoto ? { rotate: [0, 360] } : { rotate: 0 }}
+                  transition={isAnalyzingPhoto ? { duration: 1.2, repeat: Infinity, ease: 'linear' } : {}}
+                >
+                  {isAnalyzingPhoto ? 'progress_activity' : 'add_a_photo'}
+                </motion.span>
+              </button>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhoto}
+              />
+
+              {/* Mic */}
               <button
                 onPointerDown={isListening ? stopVoice : startVoice}
-                disabled={isLoading}
+                disabled={isLoading || isAnalyzingPhoto}
                 className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full transition-all ${
                   isListening
                     ? 'bg-red-50 text-red-500 ring-2 ring-red-200'
@@ -486,6 +605,7 @@ export default function NovaWidget({
                   {isListening ? 'stop' : 'mic'}
                 </motion.span>
               </button>
+
               <input
                 ref={inputRef}
                 value={input}
@@ -493,13 +613,13 @@ export default function NovaWidget({
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
                 }}
-                placeholder={isListening ? 'Escuchando…' : 'Escribe o habla…'}
-                disabled={isLoading || isListening}
+                placeholder={isAnalyzingPhoto ? 'Analizando foto…' : isListening ? 'Escuchando…' : 'Escribe o habla…'}
+                disabled={isLoading || isListening || isAnalyzingPhoto}
                 className="flex-1 text-[13px] bg-transparent outline-none text-slate-700 placeholder:text-slate-300 disabled:opacity-50"
               />
               <button
                 onClick={() => sendMessage()}
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || isLoading || isAnalyzingPhoto}
                 className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full bg-blue-500 text-white hover:bg-blue-600 active:scale-90 transition-all disabled:opacity-25"
               >
                 <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
