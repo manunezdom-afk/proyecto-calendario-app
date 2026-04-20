@@ -307,59 +307,29 @@
         <h2 class="font-headline text-[34px] sm:text-[44px] lg:text-[56px] font-black leading-[1.05] tracking-tight max-w-3xl mx-auto">En cualquier dispositivo.</h2>
         <p class="mt-5 text-[15px] text-white/60 max-w-xl mx-auto">Focus es una Progressive Web App. No necesita tienda, no ocupa memoria extra, abre directo desde tu pantalla de inicio.</p>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <!-- Windows: .msix download -->
-        <div class="reveal glass rounded-[24px] p-7 flex flex-col">
-          <div class="h-11 w-11 rounded-2xl bg-gradient-to-br from-blue-400 to-sky-600 flex items-center justify-center mb-4"><span class="material-symbols-outlined text-white text-[22px]">laptop_windows</span></div>
-          <h3 class="font-headline text-[19px] font-extrabold tracking-tight mb-2">Windows</h3>
-          <p class="text-[13.5px] leading-relaxed text-white/65 mb-4 flex-1">Instalador <b>.msix</b> para Windows 10 y 11. Doble click y queda en el menú Inicio.</p>
-          <button
-            type="button"
-            data-install-trigger="windows"
-            class="inline-flex items-center gap-1.5 rounded-full bg-white text-slate-900 text-[13px] font-bold px-4 py-2 hover:-translate-y-0.5 transition-all w-fit"
-          >
-            <span class="material-symbols-outlined text-[15px]">download</span>
-            Descargar .msix
-          </button>
-        </div>
-
-        <!-- macOS: .pkg download -->
-        <div class="reveal glass rounded-[24px] p-7 flex flex-col">
-          <div class="h-11 w-11 rounded-2xl bg-gradient-to-br from-slate-300 to-slate-500 flex items-center justify-center mb-4"><span class="material-symbols-outlined text-white text-[22px]">laptop_mac</span></div>
-          <h3 class="font-headline text-[19px] font-extrabold tracking-tight mb-2">macOS</h3>
-          <p class="text-[13.5px] leading-relaxed text-white/65 mb-4 flex-1">Paquete <b>.pkg</b> para Mac. El instalador lo pone en <b>Applications</b>.</p>
-          <button
-            type="button"
-            data-install-trigger="mac"
-            class="inline-flex items-center gap-1.5 rounded-full bg-white text-slate-900 text-[13px] font-bold px-4 py-2 hover:-translate-y-0.5 transition-all w-fit"
-          >
-            <span class="material-symbols-outlined text-[15px]">download</span>
-            Descargar .pkg
-          </button>
-        </div>
-
-        <!-- Android: .apk o PWA -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Android / Chrome / Edge: botón instalar directo -->
         <div class="reveal glass rounded-[24px] p-7 flex flex-col">
           <div class="h-11 w-11 rounded-2xl bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center mb-4"><span class="material-symbols-outlined text-white text-[22px]">android</span></div>
-          <h3 class="font-headline text-[19px] font-extrabold tracking-tight mb-2">Android</h3>
-          <p class="text-[13.5px] leading-relaxed text-white/65 mb-4 flex-1">APK directo, o PWA desde Chrome (<b>⋮ → Instalar app</b>).</p>
+          <h3 class="font-headline text-[19px] font-extrabold tracking-tight mb-2">Android · Chrome · Edge</h3>
+          <p class="text-[13.5px] leading-relaxed text-white/65 mb-4 flex-1">Tocá el botón y el navegador abre el diálogo nativo de instalación.</p>
           <button
             type="button"
-            data-install-trigger="android"
+            data-install-trigger="chromium"
             class="inline-flex items-center gap-1.5 rounded-full bg-white text-slate-900 text-[13px] font-bold px-4 py-2 hover:-translate-y-0.5 transition-all w-fit"
           >
             <span class="material-symbols-outlined text-[15px]">download</span>
-            Descargar APK
+            <span data-install-label="chromium">Instalar como app</span>
           </button>
         </div>
 
         <!-- iPhone / Safari: A2HS -->
         <div class="reveal glass rounded-[24px] p-7 flex flex-col">
           <div class="h-11 w-11 rounded-2xl bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center mb-4"><span class="material-symbols-outlined text-white text-[22px]">phone_iphone</span></div>
-          <h3 class="font-headline text-[19px] font-extrabold tracking-tight mb-2">iPhone · iPad</h3>
+          <h3 class="font-headline text-[19px] font-extrabold tracking-tight mb-2">iPhone · Safari</h3>
           <ol class="text-[13px] leading-relaxed text-white/65 space-y-1.5 list-decimal list-inside marker:text-white/40 flex-1">
-            <li>Abrí Focus en Safari</li>
-            <li>Tocá <b>Compartir</b></li>
+            <li>Abre Focus en Safari</li>
+            <li>Toca el botón compartir</li>
             <li>"Añadir a pantalla de inicio"</li>
           </ol>
           <button
@@ -369,6 +339,21 @@
           >
             <span class="material-symbols-outlined text-[15px]">ios_share</span>
             Ver instrucciones
+          </button>
+        </div>
+
+        <!-- Mac · Windows: mismo flujo que Chromium mobile -->
+        <div class="reveal glass rounded-[24px] p-7 flex flex-col">
+          <div class="h-11 w-11 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center mb-4"><span class="material-symbols-outlined text-white text-[22px]">desktop_windows</span></div>
+          <h3 class="font-headline text-[19px] font-extrabold tracking-tight mb-2">Mac · Windows</h3>
+          <p class="text-[13.5px] leading-relaxed text-white/65 mb-4 flex-1">Queda como app nativa en tu escritorio. En Chrome/Edge/Brave el botón de abajo dispara la instalación; en Safari macOS usa <b>Archivo → Añadir al Dock</b>.</p>
+          <button
+            type="button"
+            data-install-trigger="desktop"
+            class="inline-flex items-center gap-1.5 rounded-full bg-white text-slate-900 text-[13px] font-bold px-4 py-2 hover:-translate-y-0.5 transition-all w-fit"
+          >
+            <span class="material-symbols-outlined text-[15px]">desktop_mac</span>
+            <span data-install-label="desktop">Instalar en escritorio</span>
           </button>
         </div>
       </div>
@@ -493,20 +478,6 @@
       })
     })
 
-    // ── Descargas de instaladores nativos (Windows / macOS / Android) ─────
-    //
-    // Los instaladores los generás con PWABuilder (ver docs/desktop-packaging.md),
-    // los subís como assets de GitHub Releases con estos nombres exactos,
-    // y las URLs "latest/download" funcionan sin tener que versionar la landing.
-    //
-    // Si el repo pasa a otro origin, cambiá GITHUB_REPO.
-    const GITHUB_REPO = 'manunezdom-afk/proyecto-calendario-app'
-    const DOWNLOADS = {
-      windows: `https://github.com/${GITHUB_REPO}/releases/latest/download/Focus-Windows.msix`,
-      mac:     `https://github.com/${GITHUB_REPO}/releases/latest/download/Focus-Mac.pkg`,
-      android: `https://github.com/${GITHUB_REPO}/releases/latest/download/Focus-Android.apk`,
-    }
-
     function updateCTAs() {
       const heroLabel = document.getElementById('install-cta-label')
       const heroIcon  = document.getElementById('install-cta-icon')
@@ -519,42 +490,22 @@
         if (heroHint) heroHint.textContent = 'Ya tenés Focus instalado — tocá para abrirlo.'
         return
       }
-      // Descarga nativa: tenemos instalador específico para este OS.
-      if (isWin) {
-        heroLabel.textContent = 'Descargar para Windows'
-        heroIcon.textContent  = 'download'
-        if (heroHint) heroHint.textContent = '.msix para Windows 10/11 — un doble click y queda instalado.'
-        return
-      }
-      if (isMac) {
-        heroLabel.textContent = 'Descargar para Mac'
-        heroIcon.textContent  = 'download'
-        if (heroHint) heroHint.textContent = '.pkg para macOS — abrí el instalador y Focus queda en Applications.'
-        return
-      }
-      if (isAndroid) {
-        heroLabel.textContent = 'Descargar para Android'
-        heroIcon.textContent  = 'download'
-        if (heroHint) heroHint.textContent = 'APK directo — o tocá "Instalar como app" desde Chrome.'
-        return
-      }
-      // iPhone: no hay binario descargable sin App Store, A2HS manual.
-      if (isIOS) {
-        heroLabel.textContent = 'Instalar en iPhone'
-        heroIcon.textContent  = 'ios_share'
-        if (heroHint) heroHint.textContent = 'En iOS se instala desde Safari — te muestro los 3 pasos.'
-        return
-      }
-      // Linux / ChromeOS / unknown → PWA install prompt es la mejor opción.
       if (deferredPrompt) {
         heroLabel.textContent = 'Instalar Focus'
         heroIcon.textContent  = 'download'
         if (heroHint) heroHint.textContent = 'Un click y se instala como app nativa.'
         return
       }
+      if (isIOS) {
+        heroLabel.textContent = 'Instalar en iPhone'
+        heroIcon.textContent  = 'ios_share'
+        if (heroHint) heroHint.textContent = 'Te muestro cómo en 3 pasos.'
+        return
+      }
+      // Chrome/Edge sin prompt listo aún, o Safari mac, o Firefox.
       heroLabel.textContent = 'Instalar Focus'
       heroIcon.textContent  = 'download'
-      if (heroHint) heroHint.textContent = 'Te abro las instrucciones para tu sistema.'
+      if (heroHint) heroHint.textContent = 'Te abro las instrucciones según tu navegador.'
     }
 
     function showModal({ title, body }) {
@@ -649,51 +600,11 @@
       return { title: 'Instalar Focus', body: genericHint }
     }
 
-    // Intenta descargar un instalador nativo. Si GitHub Releases aún no
-    // tiene el asset (404), mostramos un modal con la explicación y el
-    // fallback de PWA install, en lugar de dejar al usuario frente a un
-    // "Not Found" crudo.
-    async function tryNativeDownload(url, platformLabel) {
-      try {
-        const head = await fetch(url, { method: 'HEAD', cache: 'no-store' })
-        if (!head.ok) throw new Error('not_available')
-      } catch {
-        showModal({
-          title: `Instalador ${platformLabel} en preparación`,
-          body: `
-            <p>El instalador nativo para ${platformLabel} todavía no está publicado en GitHub Releases.</p>
-            <p>Mientras tanto podés usar Focus como PWA — mismo código, mismo comportamiento, se instala desde el browser:</p>
-            <ul class="list-disc list-inside space-y-1.5 marker:text-white/40">
-              <li>Abrí la app y tocá <b>"Instalar como app"</b> en Chrome/Edge.</li>
-              <li>O mantené esta pestaña abierta — funciona offline igual.</li>
-            </ul>
-          `,
-        })
-        return
-      }
-      // Disparar la descarga. Un <a download> nuevo evita problemas con popup
-      // blockers en gestos que pasaron por un await.
-      const a = document.createElement('a')
-      a.href = url
-      a.rel = 'noopener'
-      a.click()
-    }
-
     async function triggerInstall() {
       if (isStandalone) {
         window.location.href = '/'
         return
       }
-      // Ruta "nativa": descargar el instalador correcto según OS.
-      if (isWin)     return tryNativeDownload(DOWNLOADS.windows, 'Windows')
-      if (isMac)     return tryNativeDownload(DOWNLOADS.mac,     'Mac')
-      if (isAndroid) return tryNativeDownload(DOWNLOADS.android, 'Android')
-      // iPhone: no hay binario descargable legítimo.
-      if (isIOS) {
-        showModal({ title: 'Instalar Focus en iPhone', body: iosHint })
-        return
-      }
-      // Linux / ChromeOS / otro: PWA prompt o instrucciones del browser.
       if (deferredPrompt) {
         try {
           deferredPrompt.prompt()
