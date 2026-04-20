@@ -365,13 +365,19 @@ export default function NovaWidget({
     }
   }
 
-  // Posición según viewport
-  const position = isDesktop ? 'fixed bottom-6 right-6' : 'fixed bottom-[112px] right-4'
+  // Posición según viewport. En mobile tenemos que sumar env(safe-area-inset-bottom)
+  // para que en iPhones con home indicator el pill no quede tapado por la
+  // BottomNavBar (que vive en `calc(env(safe-area-inset-bottom) + 1.5rem)` +
+  // altura ~68px). Dejamos ~16px de gap arriba de la nav.
+  const positionClass = isDesktop ? 'fixed right-6' : 'fixed right-4'
+  const positionStyle = isDesktop
+    ? { bottom: '1.5rem' }
+    : { bottom: 'calc(env(safe-area-inset-bottom, 0px) + 108px)' }
 
   const hasContent = displayedText || chips.length > 0 || isLoading
 
   return (
-    <div className={`${position} z-[60]`}>
+    <div className={`${positionClass} z-[60]`} style={positionStyle}>
       <AnimatePresence mode="wait">
         {isOpen ? (
           // ── Panel expandido ───────────────────────────────────────────────
