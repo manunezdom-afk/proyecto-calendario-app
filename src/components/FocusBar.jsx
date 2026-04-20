@@ -32,11 +32,13 @@ export default function FocusBar({
   const [isThinking, setIsThinking]   = useState(false)
   const [reply, setReply]             = useState(null)   // { content, actions }
   const [isFocused, setIsFocused]     = useState(false)
+  const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false)
 
   const inputRef   = useRef(null)
   const srRef      = useRef(null)
   const silenceRef = useRef(null)
   const doneRef    = useRef(false)
+  const photoInputRef = useRef(null)
 
   useEffect(() => {
     if (!SR) return
@@ -94,6 +96,62 @@ export default function FocusBar({
       setReply({ content: errMsg, actions: [] })
     } finally {
       setIsThinking(false)
+    }
+  }
+
+  async function handlePhoto(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+
+    setReply(null)
+    setIsAnalyzingPhoto(true)
+
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      const res = await fetch('/api/analyze-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images: [{ base64, mediaType: file.type || 'image/jpeg' }] }),
+      })
+
+      const data = await res.json()
+      const extracted = Array.isArray(data?.events) ? data.events : []
+
+      if (extracted.length === 0) {
+        setReply({ content: 'No encontré eventos claros en la foto. Intenta con otra o descríbelos con texto.', actions: [] })
+      } else {
+        const actions = []
+        for (const ev of extracted) {
+          const newEvent = {
+            id: `${Date.now()}-${Math.random()}`,
+            title: ev.title,
+            time: ev.time ?? '',
+            date: ev.date ?? null,
+            description: '',
+            section: 'focus',
+            icon: 'event',
+            dotColor: 'bg-secondary-container',
+            featured: false,
+          }
+          onAddEvent?.(newEvent)
+          actions.push({ type: 'add_event', event: newEvent })
+        }
+        const summary = extracted.length === 1
+          ? `Agregué 1 evento desde la foto: "${extracted[0].title}".`
+          : `Agregué ${extracted.length} eventos desde la foto.`
+        setReply({ content: summary, actions })
+      }
+    } catch {
+      setReply({ content: 'No pude analizar la foto. Intenta de nuevo.', actions: [] })
+    } finally {
+      setIsAnalyzingPhoto(false)
     }
   }
 
@@ -198,6 +256,28 @@ export default function FocusBar({
             </span>
           </motion.button>
 
+          <button
+            onClick={() => photoInputRef.current?.click()}
+            disabled={isThinking || isAnalyzingPhoto}
+            aria-label="Enviar foto"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-surface-container text-outline hover:bg-surface-container-high hover:text-on-surface transition-colors disabled:opacity-40"
+          >
+            <motion.span
+              className="material-symbols-outlined text-[1.05rem]"
+              animate={isAnalyzingPhoto ? { rotate: 360 } : { rotate: 0 }}
+              transition={isAnalyzingPhoto ? { duration: 1.2, repeat: Infinity, ease: 'linear' } : {}}
+            >
+              {isAnalyzingPhoto ? 'progress_activity' : 'add_a_photo'}
+            </motion.span>
+          </button>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhoto}
+          />
+
           <input
             ref={inputRef}
             value={text}
@@ -205,8 +285,8 @@ export default function FocusBar({
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && hasText && handleSend()}
-            placeholder="Habla con Nova..."
-            disabled={isThinking}
+            placeholder={isAnalyzingPhoto ? 'Analizando foto…' : 'Habla con Nova...'}
+            disabled={isThinking || isAnalyzingPhoto}
             className="flex-1 bg-transparent text-[14px] text-on-surface outline-none placeholder:text-outline/50 disabled:opacity-50"
           />
 
@@ -324,6 +404,28 @@ export default function FocusBar({
             </span>
           </motion.button>
 
+          <button
+            onClick={() => photoInputRef.current?.click()}
+            disabled={isThinking || isAnalyzingPhoto}
+            aria-label="Enviar foto"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white/60 transition-colors disabled:opacity-40"
+          >
+            <motion.span
+              className="material-symbols-outlined text-[1.05rem]"
+              animate={isAnalyzingPhoto ? { rotate: 360 } : { rotate: 0 }}
+              transition={isAnalyzingPhoto ? { duration: 1.2, repeat: Infinity, ease: 'linear' } : {}}
+            >
+              {isAnalyzingPhoto ? 'progress_activity' : 'add_a_photo'}
+            </motion.span>
+          </button>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhoto}
+          />
+
           <input
             ref={inputRef}
             value={text}
@@ -331,8 +433,8 @@ export default function FocusBar({
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && hasText && handleSend()}
-            placeholder="Habla con Nova..."
-            disabled={isThinking}
+            placeholder={isAnalyzingPhoto ? 'Analizando foto…' : 'Habla con Nova...'}
+            disabled={isThinking || isAnalyzingPhoto}
             className="flex-1 bg-transparent text-[14px] text-white outline-none placeholder:text-white/25 disabled:opacity-50"
           />
 
