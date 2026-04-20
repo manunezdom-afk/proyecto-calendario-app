@@ -322,19 +322,21 @@ export default function App() {
         </motion.div>
       )}
 
-      {/* ── Nova Widget — omnipresente (modo propuesta) ────────────────────── */}
-      <NovaWidget
-        events={events}
-        tasks={tasks}
-        onAddEvent={addEvent}
-        onEditEvent={editEvent}
-        onDeleteEvent={deleteEvent}
-        onToggleTask={toggleTask}
-        onProposeActions={handleProposeActions}
-        onOpenInbox={() => setInboxOpen(true)}
-        proposeMode={true}
-        isDesktop={isDesktop}
-      />
+      {/* ── Nova Widget — solo en vistas sin FocusBar (calendar, tasks, settings) ── */}
+      {activeView !== 'planner' && (
+        <NovaWidget
+          events={events}
+          tasks={tasks}
+          onAddEvent={addEvent}
+          onEditEvent={editEvent}
+          onDeleteEvent={deleteEvent}
+          onToggleTask={toggleTask}
+          onProposeActions={handleProposeActions}
+          onOpenInbox={() => setInboxOpen(true)}
+          proposeMode={true}
+          isDesktop={isDesktop}
+        />
+      )}
 
       {/* ── Bandeja de sugerencias ────────────────────────────────────────── */}
       <SuggestionsInbox
