@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 
 const DEFAULT_TASKS = [
   { id: 'tsk-001', label: 'Revisar Roadmap del Q4', done: false, priority: 'Alta', category: 'hoy' },
@@ -18,14 +19,37 @@ export function useTasks() {
 
   useEffect(() => {
     if (!user) return
-    dataService.fetchTasks(user.id)
-      .then(cloudTasks => {
-        if (!cloudTasks) return
-        const result = cloudTasks.length > 0 ? cloudTasks : DEFAULT_TASKS
-        setTasks(result)
-        dataService.setCachedTasks(result)
-      })
-      .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar tareas de Supabase', err))
+
+    const refetch = () => {
+      dataService.fetchTasks(user.id)
+        .then(cloudTasks => {
+          if (!cloudTasks) return
+          const result = cloudTasks.length > 0 ? cloudTasks : DEFAULT_TASKS
+          setTasks(result)
+          dataService.setCachedTasks(result)
+        })
+        .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar tareas de Supabase', err))
+    }
+
+    refetch()
+
+    const onVisibility = () => { if (!document.hidden) refetch() }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onVisibility)
+
+    const channel = supabase
+      .channel(`tasks-${user.id}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` },
+        () => refetch(),
+      )
+      .subscribe()
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onVisibility)
+      supabase.removeChannel(channel)
+    }
   }, [user?.id])
 
   useEffect(() => {

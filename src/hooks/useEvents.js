@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 
 // Extrae la hora (0-23) de un string "HH:MM" o "HH:MM – HH:MM"
 function parseEventHour(time) {
@@ -32,13 +33,38 @@ export function useEvents() {
   // Carga desde Supabase cuando el usuario inicia sesión
   useEffect(() => {
     if (!user) return
-    dataService.fetchEvents(user.id)
-      .then(cloudEvents => {
-        setEvents(cloudEvents)
-        dataService.setCachedEvents(cloudEvents)
-        console.log(`[Focus] ☁️ ${cloudEvents.length} eventos cargados desde Supabase`)
-      })
-      .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar eventos de Supabase', err))
+
+    const refetch = (tag = '') => {
+      dataService.fetchEvents(user.id)
+        .then(cloudEvents => {
+          setEvents(cloudEvents)
+          dataService.setCachedEvents(cloudEvents)
+          console.log(`[Focus] ☁️ ${cloudEvents.length} eventos cargados desde Supabase ${tag}`)
+        })
+        .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar eventos de Supabase', err))
+    }
+
+    refetch('(init)')
+
+    // Sync al volver a la pestaña
+    const onVisibility = () => { if (!document.hidden) refetch('(visibilitychange)') }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onVisibility)
+
+    // Realtime: cualquier cambio en la tabla events del user dispara refetch
+    const channel = supabase
+      .channel(`events-${user.id}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'events', filter: `user_id=eq.${user.id}` },
+        () => refetch('(realtime)'),
+      )
+      .subscribe()
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onVisibility)
+      supabase.removeChannel(channel)
+    }
   }, [user?.id])
 
   // Mantiene el cache local sincronizado
