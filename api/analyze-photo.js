@@ -48,12 +48,38 @@ export default async function handler(req, res) {
   const today    = new Date()
   const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
+  // Construir mapping "lunes→ISO" relativo a ESTA semana (lunes-domingo) para que
+  // el modelo coloque cada clase en el día real, no en hoy.
+  const DAY_NAMES_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+  const dow = today.getDay() // 0=domingo
+  const monday = new Date(today)
+  monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1))
+  const weekMap = {}
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    const name = DAY_NAMES_ES[d.getDay()]
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    weekMap[name] = iso
+  }
+  const weekMapStr = Object.entries(weekMap).map(([k, v]) => `  ${k} → ${v}`).join('\n')
+  const todayName = DAY_NAMES_ES[today.getDay()]
+
   const textBlock = {
     type: 'text',
     text: `Eres un extractor de eventos de calendario. Analiza las imágenes y extrae TODOS los eventos, clases, citas o actividades que veas.
 
-Hoy es ${todayISO}. Año actual: ${today.getFullYear()}.
-Si ves nombres de días sin año, calcúlalos desde hoy.
+Hoy es ${todayISO} (${todayName}). Año actual: ${today.getFullYear()}.
+
+MAPEO DE DÍAS DE ESTA SEMANA (úsalo SIEMPRE para convertir nombres de día a fecha):
+${weekMapStr}
+
+REGLAS CRÍTICAS DE FECHA:
+- Si un evento dice "Lunes", usa ${weekMap.lunes}. Si dice "Martes", usa ${weekMap.martes}. Etc.
+- Si un horario de clases muestra una CLASE en varios días (ej: "Cultura e Ideas — Lunes y Miércoles 10:30"), genera DOS eventos separados: uno con date=${weekMap.lunes} y otro con date=${weekMap.miércoles}, ambos con el mismo title.
+- Si ves "Lunes a Viernes" o "L-V" o "Lun-Vie", expande a 5 eventos (lunes, martes, miércoles, jueves, viernes) con el mismo horario y título.
+- NUNCA uses ${todayISO} para TODOS los eventos solo porque hoy es ${todayName}. Usa la fecha real de cada clase según su día de la semana.
+- Si el día no está indicado y no puedes inferirlo, usa null.
 
 Devuelve SOLO un array JSON con objetos que tengan exactamente estos campos:
 - "title": nombre de la actividad (string)
@@ -63,7 +89,11 @@ Devuelve SOLO un array JSON con objetos que tengan exactamente estos campos:
 
 SIN markdown, SIN texto extra. Solo el array JSON.
 
-Ejemplo: [{"title":"Gym","date":"${todayISO}","time":"09:00","endTime":"10:00"}]
+Ejemplo de input: "Cultura e Ideas — Lunes y Miércoles 10:30-12:20"
+Ejemplo de output: [
+  {"title":"Cultura e Ideas","date":"${weekMap.lunes}","time":"10:30","endTime":"12:20"},
+  {"title":"Cultura e Ideas","date":"${weekMap.miércoles}","time":"10:30","endTime":"12:20"}
+]
 
 Si no hay eventos claros: []`,
   }

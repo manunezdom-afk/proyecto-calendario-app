@@ -342,7 +342,16 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
             <section className="space-y-4">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold tracking-tight text-on-surface">
-                  {activeDayISO === todayISOStr ? 'Enfoque de Hoy' : `Enfoque del ${activeDay}`}
+                  {(() => {
+                    const DAY_FULL = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
+                    const activeDate = new Date(activeDayISO + 'T00:00:00')
+                    const dayName = DAY_FULL[activeDate.getDay()]
+                    const monthName = MONTH_NAMES_ES[activeDate.getMonth()]
+                    const isToday = activeDayISO === todayISOStr
+                    return isToday
+                      ? `Hoy · ${dayName} ${activeDay}`
+                      : `${dayName} ${activeDay} de ${monthName.toLowerCase()}`
+                  })()}
                 </h2>
                 <button
                   onClick={() => setShowModal(true)}
