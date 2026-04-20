@@ -409,7 +409,7 @@ export default function NovaWidget({
   }
 
   // Posición según viewport
-  const position = isDesktop ? 'fixed bottom-6 right-6' : 'fixed bottom-[112px] right-4'
+  const position = isDesktop ? 'fixed bottom-6 right-6' : 'fixed bottom-[148px] right-4'
 
   const hasContent = displayedText || chips.length > 0 || isLoading
 

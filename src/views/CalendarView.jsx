@@ -403,7 +403,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
 
             {/* FAB — oculto en desktop y en empty state mobile */}
             {!isDesktop && focusEvents.length > 0 && (
-            <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[60]">
+            <div className="fixed bottom-[148px] left-1/2 -translate-x-1/2 z-[60]">
               <button
                 onClick={() => setShowModal(true)}
                 className="w-16 h-16 rounded-full bg-gradient-to-tr from-primary to-primary-container text-white shadow-[0_16px_32px_rgba(0,88,188,0.3)] flex items-center justify-center active:scale-90 transition-transform duration-300"

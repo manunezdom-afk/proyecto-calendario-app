@@ -842,7 +842,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       {blocks.length > 0 && !isDesktop && (
         <button
           onClick={() => setShowModal(true)}
-          className="fixed bottom-28 right-6 w-14 h-14 bg-primary text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-105 active:scale-90 transition-transform z-40"
+          className="fixed bottom-[148px] right-6 w-14 h-14 bg-primary text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-105 active:scale-90 transition-transform z-40"
           title="Añadir bloque"
         >
           <span className="material-symbols-outlined text-3xl">add</span>
