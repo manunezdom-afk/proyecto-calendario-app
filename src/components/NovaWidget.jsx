@@ -71,6 +71,10 @@ export default function NovaWidget({
   const [isListening, setIsListening] = useState(false)
   const [chips, setChips]           = useState([])  // { id, icon, label, done }
   const [location, setLocation]     = useState(null)
+  // Altura ocupada por el teclado en iOS PWA standalone. Cuando el teclado
+  // sube, `visualViewport.height` se reduce; usamos esa diferencia para
+  // empujar el panel hacia arriba y que no quede tapado.
+  const [keyboardOffset, setKeyboardOffset] = useState(0)
 
   const inputRef    = useRef(null)
   const srRef       = useRef(null)
@@ -109,6 +113,27 @@ export default function NovaWidget({
   useEffect(() => {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 80)
   }, [isOpen])
+
+  // Seguir el teclado en iOS PWA: sin esto, el panel queda tapado porque los
+  // elementos `position: fixed` no se mueven al abrir el teclado en modo
+  // standalone. Calculamos cuánto sube el teclado y lo traducimos en Y.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return
+    const vv = window.visualViewport
+    function update() {
+      // Diferencia entre el viewport completo y el visible = altura del teclado.
+      // offsetTop es 0 en iOS cuando el teclado sube sin desplazar la página.
+      const hidden = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      setKeyboardOffset(hidden)
+    }
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    update()
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+    }
+  }, [])
 
   // Auto-scroll al respuesta
   useEffect(() => {
@@ -291,7 +316,15 @@ export default function NovaWidget({
   const hasContent = displayedText || chips.length > 0 || isLoading
 
   return (
-    <div className={`${position} z-[60]`}>
+    <div
+      className={`${position} z-[60]`}
+      style={{
+        // Cuando el teclado abre, elevamos el widget su altura para que
+        // quede visible arriba del teclado en iOS PWA.
+        transform: keyboardOffset > 0 ? `translateY(-${keyboardOffset}px)` : undefined,
+        transition: 'transform 180ms ease-out',
+      }}
+    >
       <AnimatePresence mode="wait">
         {isOpen ? (
           // ── Panel expandido ───────────────────────────────────────────────
@@ -455,7 +488,10 @@ export default function NovaWidget({
                 }}
                 placeholder={isListening ? 'Escuchando…' : 'Escribe o habla…'}
                 disabled={isLoading || isListening}
-                className="flex-1 text-[13px] bg-transparent outline-none text-slate-700 placeholder:text-slate-300 disabled:opacity-50"
+                enterKeyHint="send"
+                autoComplete="off"
+                autoCorrect="off"
+                className="flex-1 text-[16px] bg-transparent outline-none text-slate-700 placeholder:text-slate-300 disabled:opacity-50"
               />
               <button
                 onClick={() => sendMessage()}
