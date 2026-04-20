@@ -45,8 +45,12 @@ export default function AuthModal({ isOpen, onClose }) {
 
   async function handleVerify(e) {
     e.preventDefault()
-    if (code.length !== 6) {
-      setError('El código debe tener 6 dígitos')
+    // Supabase OTP puede ser 6-10 dígitos según el setting del proyecto
+    // (Project Settings → Auth → OTP Length). Antes forzábamos 6 y si el
+    // proyecto estaba configurado con 7/8 dígitos, el token siempre daba
+    // "invalid". Ahora aceptamos cualquier longitud >= 6.
+    if (code.length < 6) {
+      setError('El código debe tener al menos 6 dígitos')
       return
     }
     setLoading(true)
@@ -148,8 +152,7 @@ export default function AuthModal({ isOpen, onClose }) {
                 <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-2xl mb-5">
                   <span className="material-symbols-outlined text-primary text-[20px]">mark_email_read</span>
                   <p className="text-[12px] text-slate-600 leading-snug">
-                    Busca el código de <b>6 dígitos</b> en tu email (revisa spam si no llega).
-                    Pégalo aquí abajo.
+                    Busca el código en tu email (revisa spam si no llega). Pégalo aquí abajo.
                   </p>
                 </div>
 
@@ -161,15 +164,17 @@ export default function AuthModal({ isOpen, onClose }) {
                     pattern="[0-9]*"
                     autoComplete="one-time-code"
                     value={code}
-                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="123456"
-                    maxLength={6}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-center text-2xl font-mono tracking-[0.3em] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    // Solo filtramos no-dígitos. Tope de 10 por seguridad
+                    // (Supabase soporta hasta 10 según su setting de OTP Length).
+                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="Pega el código"
+                    maxLength={10}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-center text-2xl font-mono tracking-[0.2em] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                   {error && <p className="text-red-500 text-xs mb-3 text-center">{error}</p>}
                   <button
                     type="submit"
-                    disabled={loading || code.length !== 6}
+                    disabled={loading || code.length < 6}
                     className="w-full py-3 bg-primary text-white rounded-2xl text-sm font-bold disabled:opacity-40 transition-opacity"
                   >
                     {loading ? 'Verificando…' : 'Entrar'}
@@ -240,7 +245,7 @@ export default function AuthModal({ isOpen, onClose }) {
                 </form>
 
                 <p className="mt-3 text-[10.5px] text-center text-slate-400">
-                  Te enviamos un código de 6 dígitos por email. Sin contraseñas.
+                  Te enviamos un código numérico por email. Sin contraseñas.
                 </p>
               </>
             )}
