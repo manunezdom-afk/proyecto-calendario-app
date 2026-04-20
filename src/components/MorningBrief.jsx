@@ -14,11 +14,13 @@ function parseTimeToDecimal(timeStr) {
   if (!timeStr) return null
   const m = String(timeStr).match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i)
   if (!m) return null
-  let h = parseInt(m[1])
-  const min = parseInt(m[2] ?? '0')
+  let h = parseInt(m[1], 10)
+  const min = parseInt(m[2] ?? '0', 10)
   const ap = m[3]?.toUpperCase()
+  if (Number.isNaN(h) || Number.isNaN(min)) return null
   if (ap === 'PM' && h !== 12) h += 12
   if (ap === 'AM' && h === 12) h = 0
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null
   return h + min / 60
 }
 

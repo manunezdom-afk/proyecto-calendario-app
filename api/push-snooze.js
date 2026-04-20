@@ -16,21 +16,27 @@ export default async function handler(req, res) {
   // por ahora aceptamos snooze sin auth (el eventId + endpoint son suficiente
   // prueba para re-enviar la misma notif al mismo dispositivo). Se puede
   // endurecer en el futuro.
-  const { eventId, minutes = 10 } = req.body || {}
-  if (!eventId) return res.status(400).json({ error: 'missing_eventId' })
+  const body = req.body || {}
+  const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : ''
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!eventId || !UUID_RE.test(eventId)) {
+    return res.status(400).json({ error: 'missing_eventId' })
+  }
+
+  const parsed = parseInt(body.minutes, 10)
+  const minutes = Math.max(1, Math.min(Number.isFinite(parsed) ? parsed : 10, 1440))
 
   const admin = getSupabaseAdmin()
   if (!admin) return res.status(503).json({ error: 'no_backend_supabase' })
 
   const snoozeUntil = new Date(Date.now() + minutes * 60 * 1000).toISOString()
   try {
-    // Borramos la entrada "sent" del offset más cercano para que vuelva a dispararse.
-    // Y además creamos un override que diga "no enviar hasta snoozeUntil".
     await admin.from('sent_notifications')
       .update({ sent_at: snoozeUntil })
       .eq('event_id', eventId)
-    return res.status(200).json({ ok: true, snoozeUntil })
+    return res.status(200).json({ ok: true, snoozeUntil, minutes })
   } catch (err) {
+    console.error('[push-snooze] Error:', err)
     return res.status(500).json({ error: 'internal' })
   }
 }

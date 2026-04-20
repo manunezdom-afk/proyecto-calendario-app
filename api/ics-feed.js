@@ -105,7 +105,7 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
 
   const token = req.query?.token
-  if (!token || typeof token !== 'string' || token.length < 20) {
+  if (!token || typeof token !== 'string' || !/^[A-Za-z0-9_-]{32,128}$/.test(token)) {
     return res.status(400).json({ error: 'invalid_token' })
   }
 
@@ -132,13 +132,10 @@ export default async function handler(req, res) {
   const { data: events, error: evErr } = await q
   if (evErr) return res.status(500).json({ error: 'events_fetch' })
 
-  // Actualizar métricas de lectura (fire-and-forget)
+  // Actualizar métrica de última lectura (fire-and-forget). read_count lo actualizará un job batch.
   admin
     .from('calendar_feeds')
-    .update({
-      last_read_at: new Date().toISOString(),
-      read_count: (events?.length >= 0) ? undefined : 0,
-    })
+    .update({ last_read_at: new Date().toISOString() })
     .eq('token', token)
     .then(() => {}, () => {})
 

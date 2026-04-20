@@ -29,15 +29,43 @@ function configureWebPush() {
   return true
 }
 
-// Parsea "HH:MM" o "HH:MM – HH:MM" → Date del event en la fecha dada
-function buildEventDate(eventDate, timeStr) {
+// Parsea "HH:MM" o "HH:MM – HH:MM" en la timezone del usuario → Date absoluta.
+// timezone: IANA string (ej. "America/Santiago"). Si no se pasa, asume UTC.
+function buildEventDate(eventDate, timeStr, timezone = 'UTC') {
   if (!eventDate || !timeStr) return null
-  const m = String(timeStr).match(/^(\d{1,2}):(\d{2})/)
+  const m = String(timeStr).match(/^(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i)
   if (!m) return null
   const [y, mo, d] = eventDate.split('-').map(Number)
-  const h = parseInt(m[1], 10)
-  const mn = parseInt(m[2], 10)
-  return new Date(y, mo - 1, d, h, mn, 0, 0)
+  let h = parseInt(m[1], 10)
+  const mn = parseInt(m[2] ?? '0', 10)
+  const ap = m[3]?.toUpperCase()
+  if (Number.isNaN(h) || Number.isNaN(mn)) return null
+  if (ap === 'PM' && h !== 12) h += 12
+  if (ap === 'AM' && h === 12) h = 0
+  if (h < 0 || h > 23 || mn < 0 || mn > 59) return null
+  // Calculamos el timestamp UTC que corresponde a esa hora local en la zona del usuario.
+  // Estrategia: construir un Date como si fuera UTC, luego ajustar por el offset de la tz.
+  const asUtc = Date.UTC(y, mo - 1, d, h, mn, 0, 0)
+  try {
+    // Queremos saber qué hora local es ese instante en la tz del usuario, y medir la diferencia.
+    const localStr = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(new Date(asUtc))
+    const parts = Object.fromEntries(localStr.filter(p => p.type !== 'literal').map(p => [p.type, p.value]))
+    const localH = parseInt(parts.hour, 10) === 24 ? 0 : parseInt(parts.hour, 10)
+    const localM = parseInt(parts.minute, 10)
+    // offset en minutos: (hora local - hora UTC) módulo 1440
+    const utcTotal = h * 60 + mn
+    const localTotal = localH * 60 + localM
+    let deltaMin = localTotal - utcTotal
+    if (deltaMin > 720) deltaMin -= 1440
+    if (deltaMin < -720) deltaMin += 1440
+    return new Date(asUtc - deltaMin * 60000)
+  } catch {
+    return new Date(asUtc)
+  }
 }
 
 function minutesUntil(date) {
@@ -98,22 +126,36 @@ export default async function handler(req, res) {
   const now = new Date()
   const horizon = new Date(now.getTime() + 65 * 60 * 1000) // 65 min hacia adelante
   const todayISO = now.toISOString().slice(0, 10)
+  const yesterdayISO = new Date(now.getTime() - 86400000).toISOString().slice(0, 10)
   const tomorrowISO = new Date(now.getTime() + 86400000).toISOString().slice(0, 10)
 
-  // Traemos eventos de hoy y mañana (cross-day si es de noche)
+  // Traemos eventos del rango [ayer, hoy, mañana] para cubrir cruces de medianoche
+  // en distintas zonas horarias.
   const { data: events, error: evErr } = await admin
     .from('events')
     .select('id, user_id, title, time, date, section, icon')
-    .in('date', [todayISO, tomorrowISO, null])
+    .in('date', [yesterdayISO, todayISO, tomorrowISO])
 
   if (evErr) return res.status(500).json({ error: 'events_fetch', message: evErr.message })
+
+  // Cachear timezones por user_id (evita queries repetidas)
+  const userTzCache = new Map()
+  async function getUserTz(userId) {
+    if (userTzCache.has(userId)) return userTzCache.get(userId)
+    const { data } = await admin
+      .from('user_profiles').select('timezone').eq('id', userId).maybeSingle()
+    const tz = data?.timezone || 'UTC'
+    userTzCache.set(userId, tz)
+    return tz
+  }
 
   let checked = 0, pushes = 0, failures = 0
   const actionsSummary = []
 
   for (const ev of (events || [])) {
     const eventDate = ev.date || todayISO
-    const when = buildEventDate(eventDate, ev.time)
+    const tz = await getUserTz(ev.user_id)
+    const when = buildEventDate(eventDate, ev.time, tz)
     if (!when || when < now) continue
     const minsLeft = minutesUntil(when)
     if (minsLeft > 65) continue
@@ -157,11 +199,14 @@ export default async function handler(req, res) {
       failures += failed
 
       if (sent > 0) {
-        await admin.from('sent_notifications').insert({
+        // Upsert para evitar condiciones de carrera si el cron corre dos veces simultáneamente.
+        // Requiere unique constraint (user_id, event_id, offset_min) en sent_notifications.
+        await admin.from('sent_notifications').upsert({
           user_id: ev.user_id,
           event_id: ev.id,
           offset_min: offset,
-        }).then(() => {}, () => {})
+          sent_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,event_id,offset_min' }).then(() => {}, () => {})
         actionsSummary.push({ event_id: ev.id, user_id: ev.user_id, offset, sent })
       }
     }

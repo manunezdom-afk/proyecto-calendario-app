@@ -66,7 +66,27 @@ export default {
         body: ['Inter', 'sans-serif'],
         label: ['Inter', 'sans-serif'],
       },
+      spacing: {
+        'safe-top': 'env(safe-area-inset-top, 0px)',
+        'safe-bottom': 'env(safe-area-inset-bottom, 0px)',
+        'safe-left': 'env(safe-area-inset-left, 0px)',
+        'safe-right': 'env(safe-area-inset-right, 0px)',
+      },
     },
   },
-  plugins: [],
+  plugins: [
+    function ({ addUtilities }) {
+      addUtilities({
+        '.pt-safe':  { paddingTop:    'env(safe-area-inset-top, 0px)' },
+        '.pb-safe':  { paddingBottom: 'env(safe-area-inset-bottom, 0px)' },
+        '.pl-safe':  { paddingLeft:   'env(safe-area-inset-left, 0px)' },
+        '.pr-safe':  { paddingRight:  'env(safe-area-inset-right, 0px)' },
+        '.mt-safe':  { marginTop:     'env(safe-area-inset-top, 0px)' },
+        '.mb-safe':  { marginBottom:  'env(safe-area-inset-bottom, 0px)' },
+        '.top-safe': { top:           'env(safe-area-inset-top, 0px)' },
+        '.bottom-safe': { bottom:     'env(safe-area-inset-bottom, 0px)' },
+        '.h-safe-bottom': { height:   'env(safe-area-inset-bottom, 0px)' },
+      })
+    },
+  ],
 }

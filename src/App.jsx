@@ -228,7 +228,10 @@ export default function App() {
         />
       )}
 
-      <main className={isDesktop && !isDetail ? "pb-0 pl-[72px]" : "pb-24"}>
+      <main
+        className={isDesktop && !isDetail ? "pb-0 pl-[72px]" : "w-full"}
+        style={!isDesktop || isDetail ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)' } : undefined}
+      >
         {!isDetail && <GuestBanner />}
 
         {showPermCard && (

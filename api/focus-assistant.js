@@ -53,31 +53,72 @@ export default async function handler(req, res) {
 
   const anthropic = new Anthropic({ apiKey: normalizedApiKey })
 
-  const { message, events = [], history = [], location = null, contacts = [], profile = null, memories = [], behavior = null } = req.body || {}
+  const body = req.body || {}
+  const { message, location = null, contacts = [], profile = null, behavior = null } = body
+  const clientNow = typeof body.clientNow === 'number' ? body.clientNow : Date.now()
+  const clientTimezone = typeof body.clientTimezone === 'string' && body.clientTimezone
+    ? body.clientTimezone
+    : 'UTC'
+
+  // Validación estricta: events e history pueden venir malformados desde el cliente.
+  const rawEvents = Array.isArray(body.events) ? body.events : []
+  const events = rawEvents
+    .filter(e => e && typeof e === 'object' && typeof e.title === 'string' && e.title.trim())
+    .slice(0, 200)
+
+  const rawHistory = Array.isArray(body.history) ? body.history : []
+  const history = rawHistory
+    .filter(h => h && typeof h === 'object' && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string')
+    .slice(-20)
+
+  const rawMemories = Array.isArray(body.memories) ? body.memories : []
+  const memories = rawMemories
+    .filter(m => m && typeof m === 'object' && typeof m.content === 'string')
+    .slice(0, 100)
 
   if (!message?.trim()) {
     return res.status(400).json({ error: 'no_message' })
   }
+  if (message.length > 4000) {
+    return res.status(400).json({ error: 'message_too_long', message: 'Mensaje demasiado largo (máx 4000 caracteres).' })
+  }
 
-  const today = new Date()
-  const todayISO = today.toISOString().slice(0, 10)
-  const tomorrow = new Date(today.getTime() + 86400000).toISOString().slice(0, 10)
-  const dayAfter  = new Date(today.getTime() + 2 * 86400000).toISOString().slice(0, 10)
+  // Helpers de fecha en timezone del cliente (fix crítico: antes usaba hora del server en UTC).
+  function formatInTz(date, options) {
+    try {
+      return new Intl.DateTimeFormat('es-ES', { timeZone: clientTimezone, ...options }).format(date)
+    } catch {
+      return new Intl.DateTimeFormat('es-ES', options).format(date)
+    }
+  }
+  function isoDateInTz(date) {
+    const parts = formatInTz(date, { year: 'numeric', month: '2-digit', day: '2-digit' })
+    const [d, m, y] = parts.split('/')
+    return `${y}-${m}-${d}`
+  }
+  function timeInTz(date) {
+    return formatInTz(date, { hour: '2-digit', minute: '2-digit', hour12: false })
+  }
 
-  const hh = String(today.getHours()).padStart(2, '0')
-  const mm = String(today.getMinutes()).padStart(2, '0')
-  const currentTime24 = `${hh}:${mm}`
-  const currentTime12 = today.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })
+  const today = new Date(clientNow)
+  const todayISO = isoDateInTz(today)
+  const tomorrow = isoDateInTz(new Date(today.getTime() + 86400000))
+  const dayAfter = isoDateInTz(new Date(today.getTime() + 2 * 86400000))
+
+  const currentTime24 = timeInTz(today)
+  const currentTime12 = formatInTz(today, { hour: '2-digit', minute: '2-digit', hour12: true })
 
   const DAY_NAMES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
-  const todayStr = today.toLocaleDateString('es-ES', {
+  const todayStr = formatInTz(today, {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   })
+  const todayWeekdayIdx = DAY_NAMES.indexOf(formatInTz(today, { weekday: 'long' }).toLowerCase())
 
   const weekDates = {}
   for (let i = 1; i <= 7; i++) {
     const d = new Date(today.getTime() + i * 86400000)
-    weekDates[DAY_NAMES[d.getDay()]] = d.toISOString().slice(0, 10)
+    const weekday = todayWeekdayIdx >= 0 ? DAY_NAMES[(todayWeekdayIdx + i) % 7] : formatInTz(d, { weekday: 'long' }).toLowerCase()
+    weekDates[weekday] = isoDateInTz(d)
   }
 
   // Clima en tiempo real
@@ -336,20 +377,37 @@ Instrucciones adicionales:
 - No pidas confirmación salvo que falten datos críticos (por ejemplo: fecha imposible o evento ambiguo entre dos ids). Si faltan detalles no críticos (por ejemplo: hora), crea el evento sin hora y menciónalo en el reply.
 - Si no hay suficiente información (ej. no se menciona hora), agrega el evento sin hora y menciona que lo puede editar después
 
-Interpretación de hora ambigua (CRÍTICO):
-- Si el usuario menciona una hora sin AM/PM (ej. "a las 9", "a las 7"), aplica esta lógica:
-  1. Convierte la hora mencionada a AM. Si ya pasó respecto a ${currentTime24}, asume automáticamente que se refiere a la noche (PM). Ejemplo: son las 17:00 y dice "a las 9" → 9:00 AM ya pasó → interpreta como 9:00 PM (21:00).
-  2. En contextos de ocio o deporte (fútbol, cena, cine, reunión social), si la hora es ambigua y es tarde del día, prioriza siempre el bloque tarde/noche.
-  3. No crees eventos en horas que ya transcurrieron hoy (ni AM ni PM). Si la hora en PM también ya pasó, responde preguntando: "¿Te referís a mañana a esa hora?"
-- Al confirmar siempre indica el periodo para evitar errores: "Perfecto, agendado Fútbol para hoy a las 21:00 (9 PM)".
+Interpretación de hora (CRÍTICO — leer completo):
+
+Regla principal: la hora es PARA HOY por defecto salvo que el usuario diga explícitamente otra cosa ("mañana", "el viernes", "la próxima semana"). Si la hora aún no pasó hoy, SIEMPRE es hoy.
+
+Hora con minutos explícitos (ej. "12:40", "15:30", "7:45", "8:15"):
+- NO es ambigua. Usa el formato 24h más razonable según el contexto del reloj actual.
+- Si el número de hora es > 12 (ej. "15:30"), es PM obvio (formato 24h).
+- Si el número ≤ 12 (ej. "12:40", "7:45"):
+  - Si esa hora en AM aún no ha pasado hoy respecto a ${currentTime24} → interpreta como AM hoy.
+  - Si AM ya pasó pero PM aún no → interpreta como PM hoy (la opción más cercana en el futuro).
+  - Si ambas ya pasaron → pregunta "¿te referís a mañana a las X?" antes de agendar.
+- Ejemplo: son las 10:20 y el usuario dice "a las 12:40" → 12:40 PM aún no pasó → agenda para HOY 12:40 PM.
+- Ejemplo: son las 14:00 y dice "a las 12:40" → 12:40 AM y 12:40 PM ya pasaron → pregunta si es mañana.
+
+Hora sin minutos, sin AM/PM (ej. "a las 9", "a las 7"):
+- Aplica la misma lógica que arriba: elige la próxima ocurrencia (AM hoy → PM hoy → AM mañana).
+- En contextos de ocio/deporte/social (fútbol, cena, cine), si la hora es ambigua y tarde, prioriza noche.
+- No crees eventos en horas que ya transcurrieron hoy.
+
+Al confirmar siempre indica el periodo para evitar errores: "Perfecto, agendado Fútbol para hoy a las 21:00 (9 PM)".
 
 Eliminación y búsqueda por hora actual (CRÍTICO):
-- Cuando el usuario diga "el de ahora", "el que tengo ahora", "el actual", "en este momento", "el que empieza ahora" o expresiones similares, identifica el evento cuya hora de inicio esté dentro de un rango de ±30 minutos respecto a la hora actual del sistema (${currentTime24}).
-- Para comparar: convierte los tiempos de los eventos (formato "H:MM AM/PM") a 24h y calcula la diferencia en minutos con ${currentTime24}. Si la diferencia absoluta es ≤ 30 minutos, ese evento es el candidato.
-- Si hay exactamente un candidato en ese rango, selecciónalo y ejecuta la acción (delete_event / edit_event) directamente sin pedir confirmación ni nombre.
-- Solo pide clarificación si hay dos o más eventos dentro del rango de ±30 minutos al mismo tiempo.
-- Al comparar por nombre, ignora prefijos como "Recordatorio:", "Recuerda:", "Reminder:" — tratalos como parte del mismo evento. "clase de historia" hace match con "Recordatorio: Clase de Historia".
-- Al confirmar la eliminación, incluye el título exacto del evento eliminado en el reply.
+- Cuando el usuario diga "el de ahora", "el que tengo ahora", "el actual", "en este momento", "el que empieza ahora", "lo que tengo ahora" o expresiones similares, identifica el evento "activo" ahora:
+  1. Un evento está ACTIVO ahora si su hora de inicio está dentro de un rango de [hora inicio - 15 min, hora inicio + 90 min] respecto a ${currentTime24}. Esto cubre tanto eventos que acaban de empezar como los que están en medio de su duración típica (clases, reuniones, etc).
+  2. Si hay más de uno activo, preferí el más reciente (el que empezó hace menos tiempo pero ya empezó).
+  3. Si ninguno está activo, buscá el próximo que empieza en los próximos 30 min.
+- Para comparar: convertí los tiempos de los eventos (formato "H:MM AM/PM") a 24h y calculá la diferencia en minutos con ${currentTime24}.
+- Si hay exactamente un candidato claro, seleccionalo y ejecutá la acción (delete_event / edit_event) directamente sin pedir confirmación ni nombre.
+- Solo pedí clarificación si hay dos o más eventos con solapamiento ambiguo al mismo tiempo.
+- Al comparar por nombre, ignorá prefijos como "Recordatorio:", "Recuerda:", "Reminder:" — tratalos como parte del mismo evento. "clase de historia" hace match con "Recordatorio: Clase de Historia".
+- Al confirmar la eliminación, incluí el título exacto del evento eliminado en el reply.
 
 - IMPORTANTE — esta es una interfaz de VOZ. Responde siempre en español neutro, con trato impecable (perfil estudiante‑ejecutivo de la Universidad de los Andes). Máximo 2 oraciones claras y directas. No uses modismos chilenos ni jerga informal. Sin negritas, sin asteriscos, sin guiones, sin listas, sin símbolos ni formato. Solo texto plano, apto para ser leído en voz alta.`
 
@@ -375,8 +433,7 @@ Eliminación y búsqueda por hora actual (CRÍTICO):
       : []
     return anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      // 200 tokens puede truncar JSON; subir para respuestas + acciones.
-      max_tokens: 700,
+      max_tokens: 1500,
       system: systemPrompt,
       messages: [...messages, ...extra],
     })
@@ -390,7 +447,6 @@ Eliminación y búsqueda por hora actual (CRÍTICO):
       const parsed1 = safeParseAssistantJSON(raw1)
       return res.status(200).json(parsed1)
     } catch (e1) {
-      // Reintento: pedir al modelo que regenere SOLO JSON válido.
       const data2 = await runClaude({
         extraUserInstruction:
           'Tu respuesta anterior tuvo JSON inválido o incompleto. Reintenta ahora. Responde SOLO con un objeto JSON válido siguiendo exactamente el formato indicado. Cierra todas las llaves y corchetes.',
@@ -400,18 +456,34 @@ Eliminación y búsqueda por hora actual (CRÍTICO):
         const parsed2 = safeParseAssistantJSON(raw2)
         return res.status(200).json(parsed2)
       } catch (e2) {
-        console.error('[focus-assistant] JSON parse failed after retry:', { e1: String(e1), e2: String(e2), raw1, raw2 })
-        return res.status(200).json({
-          reply: 'No pude generar una respuesta estructurada en este momento. Por favor, repite tu solicitud.',
+        console.error('[focus-assistant] JSON parse failed after retry:', {
+          e1: String(e1),
+          e2: String(e2),
+          raw1: raw1.slice(0, 500),
+          raw2: raw2.slice(0, 500),
+        })
+        return res.status(502).json({
+          error: 'llm_bad_output',
+          reply: 'Tuve un problema procesando la respuesta. Repetí el mensaje por favor.',
           actions: [],
         })
       }
     }
   } catch (err) {
-    if (err?.status === 401) {
-      return res.status(401).json({ error: 'invalid_api_key' })
+    const status = err?.status || err?.response?.status
+    if (status === 401) {
+      console.error('[focus-assistant] Invalid ANTHROPIC_API_KEY')
+      return res.status(503).json({ error: 'invalid_api_key', message: 'Servicio temporalmente no disponible.' })
     }
-    console.error('[focus-assistant] Error:', err)
-    return res.status(500).json({ error: 'internal_error', message: err.message })
+    if (status === 429) {
+      console.error('[focus-assistant] Upstream rate limit')
+      return res.status(429).json({ error: 'upstream_rate_limit', message: 'Demasiadas solicitudes. Probá en unos segundos.' })
+    }
+    if (status === 529 || status === 503) {
+      console.error('[focus-assistant] Upstream overloaded')
+      return res.status(503).json({ error: 'upstream_overloaded', message: 'El servicio está sobrecargado. Intentá de nuevo.' })
+    }
+    console.error('[focus-assistant] Unexpected error:', err)
+    return res.status(500).json({ error: 'internal_error', message: 'Error interno. Reintentá en un momento.' })
   }
 }

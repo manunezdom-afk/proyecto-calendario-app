@@ -79,13 +79,32 @@ export default function NovaWidget({
 
   const displayedText = useSimulatedStream(reply, isLoading)
 
-  // Geolocalización (una vez)
+  // Geolocalización (una vez) con timeout para no dejar location en null para siempre
   useEffect(() => {
     if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(async ({ coords: { latitude: lat, longitude: lon } }) => {
-      const { city, country } = await reverseGeocode(lat, lon)
-      setLocation({ lat, lon, city, country })
-    }, () => {})
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords: { latitude: lat, longitude: lon } }) => {
+        const { city, country } = await reverseGeocode(lat, lon)
+        setLocation({ lat, lon, city, country })
+      },
+      () => {},
+      { timeout: 6000, maximumAge: 600000 },
+    )
+  }, [])
+
+  // Rehidratar historial persistido desde sessionStorage
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('nova_history')
+      if (raw) {
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr)) {
+          historyRef.current = arr.filter(
+            h => h && typeof h === 'object' && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string',
+          )
+        }
+      }
+    } catch {}
   }, [])
 
   // Atajo global Cmd/Ctrl+K
@@ -193,7 +212,11 @@ export default function NovaWidget({
 
   async function sendMessage(text) {
     const msg = (text ?? input).trim()
-    if (!msg || isLoading) return
+    if (!msg || isLoading || isListening) return
+    if (msg.length > 4000) {
+      setReply('El mensaje es demasiado largo. Acortalo por favor.')
+      return
+    }
 
     setInput('')
     setReply('')
@@ -202,7 +225,6 @@ export default function NovaWidget({
 
     historyRef.current = [...historyRef.current, { role: 'user', content: msg }]
 
-    // Señal: el usuario mandó un mensaje a Nova (datos no sensibles, solo metadata)
     logSignal('nova_message', {
       length: msg.length,
       hour: new Date().getHours(),
@@ -217,17 +239,29 @@ export default function NovaWidget({
           message: msg,
           events,
           tasks,
-          history: historyRef.current.slice(0, -1).slice(-8),
+          history: historyRef.current.slice(0, -1).slice(-20),
           location,
           profile,
           memories,
           behavior: getCachedBehavior(),
+          clientNow: Date.now(),
+          clientTimezone: (typeof Intl !== 'undefined' && Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC',
         }),
       })
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.message || `Error ${res.status}`)
+        const code = data?.error
+        const statusMsg = {
+          rate_limit:           'Muchos mensajes seguidos. Esperá unos segundos.',
+          upstream_rate_limit:  'Muchos mensajes seguidos. Esperá unos segundos.',
+          upstream_overloaded:  'El servicio está sobrecargado. Reintentá.',
+          invalid_api_key:      'Servicio no disponible en este momento.',
+          no_api_key:           'Servicio no disponible en este momento.',
+          message_too_long:     'Mensaje demasiado largo.',
+          llm_bad_output:       'No pude procesarlo. Repetí por favor.',
+        }[code] || data?.message || `Error ${res.status}`
+        throw new Error(statusMsg)
       }
 
       const data = await res.json()
@@ -277,8 +311,15 @@ export default function NovaWidget({
       }
 
       historyRef.current = [...historyRef.current, { role: 'assistant', content: replyText }]
+      // Persistir historial para que sobreviva a refresh (útil en PWA)
+      try {
+        sessionStorage.setItem('nova_history', JSON.stringify(historyRef.current.slice(-40)))
+      } catch {}
     } catch (err) {
-      setReply('No pude conectarme. Intenta de nuevo.')
+      const msg = err?.message && typeof err.message === 'string' && err.message.length < 200
+        ? err.message
+        : 'No pude conectarme. Probá de nuevo.'
+      setReply(msg)
     } finally {
       setIsLoading(false)
     }

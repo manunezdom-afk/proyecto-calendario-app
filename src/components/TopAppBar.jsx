@@ -12,7 +12,10 @@ export default function TopAppBar({
   const { user, setAuthModal } = useAuth()
 
   return (
-    <nav className="sticky top-0 z-50 bg-slate-50/70 dark:bg-slate-900/70 backdrop-blur-lg flex justify-between items-center w-full px-6 py-4">
+    <nav
+      className="sticky top-0 z-50 bg-slate-50/70 dark:bg-slate-900/70 backdrop-blur-lg flex justify-between items-center w-full px-6 pb-4"
+      style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)' }}
+    >
       {/* Left: back button OR logo */}
       <div className="flex items-center gap-3">
         {showBack ? (

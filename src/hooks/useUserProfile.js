@@ -2,6 +2,14 @@ import { useState, useEffect } from 'react'
 import { dataService } from '../services/dataService'
 import { useAuth } from '../context/AuthContext'
 
+function detectBrowserTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
 const DEFAULT_PROFILE = {
   chronotype:   null,
   role:         null,
@@ -9,6 +17,7 @@ const DEFAULT_PROFILE = {
   peakEnd:      11.5,
   setupDone:    false,
   snoozedUntil: null,
+  timezone:     detectBrowserTimezone(),
 }
 
 const CHRONOTYPE_PEAKS = {
@@ -29,11 +38,17 @@ export function useUserProfile() {
     if (!user) return
     dataService.fetchProfile(user.id)
       .then(cloudProfile => {
-        if (cloudProfile) {
-          const merged = { ...DEFAULT_PROFILE, ...cloudProfile }
-          setProfile(merged)
-          dataService.setCachedProfile(merged)
+        const browserTz = detectBrowserTimezone()
+        const merged = { ...DEFAULT_PROFILE, ...(cloudProfile || {}) }
+        // Si el perfil en la nube no tiene timezone o está default, actualizarlo con el del navegador.
+        if (!merged.timezone || merged.timezone === 'UTC') {
+          merged.timezone = browserTz
+          if (browserTz && browserTz !== 'UTC') {
+            dataService.upsertProfile(merged, user.id).catch(() => {})
+          }
         }
+        setProfile(merged)
+        dataService.setCachedProfile(merged)
       })
       .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar perfil de Supabase', err))
   }, [user?.id])

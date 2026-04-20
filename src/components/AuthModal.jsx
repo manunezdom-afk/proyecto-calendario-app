@@ -18,6 +18,21 @@ export default function AuthModal({ isOpen, onClose }) {
     }
   }, [step])
 
+  // Bloquear scroll del body + cierre con Escape mientras el modal está abierto
+  useEffect(() => {
+    if (!isOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    function onKey(e) {
+      if (e.key === 'Escape') handleClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [isOpen]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function handleSendEmail(e) {
     e.preventDefault()
     setLoading(true)

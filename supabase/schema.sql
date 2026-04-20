@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   peak_end      NUMERIC  DEFAULT 11.5,
   setup_done    BOOLEAN  DEFAULT FALSE,
   snoozed_until BIGINT,
+  timezone      TEXT     DEFAULT 'UTC',
   created_at    TIMESTAMPTZ DEFAULT NOW(),
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
