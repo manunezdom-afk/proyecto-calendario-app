@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { todayISO, parseTimeToDecimal } from '../utils/dateHelpers'
 
-const SR =
-  typeof window !== 'undefined' &&
-  (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
+// Nota: la escucha por voz en el MorningBrief se removió (iOS pedía permiso
+// de micrófono al arrancar la app sin gesto explícito del usuario — mala UX).
+// El micrófono vive sólo en NovaWidget / FocusBar, detrás de un botón.
 
 function generateBrief({ events, tasks, profile }) {
   const now = new Date()
@@ -105,7 +105,6 @@ export default function MorningBrief({
   const [phase, setPhase]   = useState('brief')
   const [muted, setMuted]   = useState(inline) // inline: start muted, no TTS auto
   const [speaking, setSpeaking] = useState(false)
-  const srRef     = useRef(null)
   const spokenRef = useRef(false)
 
   useEffect(() => {
@@ -171,8 +170,8 @@ export default function MorningBrief({
     setSpeaking(false)
   }
 
-  function handleStart()   { stopSpeech(); try { srRef.current?.stop() } catch {}; onStart?.() }
-  function handleDismiss() { stopSpeech(); try { srRef.current?.stop() } catch {}; onDismiss?.() }
+  function handleStart()   { stopSpeech(); onStart?.() }
+  function handleDismiss() { stopSpeech(); onDismiss?.() }
   function handleModify()  {
     stopSpeech()
     if (brief.peakConflicts.length > 0) setPhase('conflicts')
@@ -255,34 +254,29 @@ export default function MorningBrief({
         transition={{ duration: 0.25, ease: 'easeOut' }}
         className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-xl p-6 relative"
       >
-        {/* Mute toggle */}
-        <div className="absolute top-4 right-4 flex items-center gap-2">
-          {SR && (
-            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-              Escuchando
-            </span>
-          )}
-          <button
-            onClick={() => { setMuted(m => !m); stopSpeech() }}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-          >
-            <span className="material-symbols-outlined text-[16px]">
-              {muted ? 'volume_off' : 'volume_up'}
-            </span>
-          </button>
-        </div>
+        {/* Mute toggle — flota arriba a la derecha sin colisionar con el badge */}
+        <button
+          type="button"
+          onClick={() => { setMuted(m => !m); stopSpeech() }}
+          aria-label={muted ? 'Activar voz' : 'Silenciar voz'}
+          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+        >
+          <span aria-hidden="true" className="material-symbols-outlined text-[16px]">
+            {muted ? 'volume_off' : 'volume_up'}
+          </span>
+        </button>
 
-        {/* Nova badge */}
-        <div className="flex items-center gap-2 mb-5">
+        {/* Nova badge — con pr-12 para no pasar por debajo del botón de mute */}
+        <div className="flex items-center gap-2 mb-5 pr-12">
           <motion.span
-            className="material-symbols-outlined text-[14px] text-primary"
+            className="material-symbols-outlined text-[14px] text-primary flex-shrink-0"
             style={{ fontVariationSettings: "'FILL' 1" }}
             animate={speaking ? { opacity: [0.5, 1, 0.5] } : { opacity: 1 }}
             transition={speaking ? { duration: 1.4, repeat: Infinity } : {}}
           >
             auto_awesome
           </motion.span>
-          <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-primary">
+          <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-primary truncate">
             Nova ·{' '}
             {new Date().toLocaleDateString('es-ES', {
               weekday: 'long', day: 'numeric', month: 'long',
