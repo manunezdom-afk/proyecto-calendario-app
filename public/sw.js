@@ -5,7 +5,7 @@
 //   - Recursos estáticos (JS/CSS/imágenes): stale-while-revalidate
 //   - Llamadas a /api/: siempre red (no se cachean)
 
-const VERSION = 'v3'
+const VERSION = 'v4'
 const STATIC_CACHE = `focus-static-${VERSION}`
 const RUNTIME_CACHE = `focus-runtime-${VERSION}`
 
@@ -37,6 +37,8 @@ self.addEventListener('activate', (event) => {
         )
       )
       .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then((clients) => clients.forEach((client) => client.postMessage({ type: 'SW_UPDATED' })))
   )
 })
 

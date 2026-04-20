@@ -12,20 +12,24 @@ export function registerServiceWorker() {
       .then((reg) => {
         console.log('[Focus] 🛰️ Service Worker registrado', reg.scope)
 
-        // Auto-update al detectar nueva versión
         reg.addEventListener('updatefound', () => {
           const newSW = reg.installing
           if (!newSW) return
           newSW.addEventListener('statechange', () => {
             if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('[Focus] 🔄 Nueva versión disponible. Recarga para aplicarla.')
-              // Dispatch un evento para que la UI muestre un toast si quiere
               window.dispatchEvent(new CustomEvent('focus:sw-update-available'))
             }
           })
         })
       })
       .catch((err) => console.warn('[Focus] ⚠️ SW registration failed', err))
+
+    // El SW avisa cuando activó una nueva versión → recargamos para aplicarla
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data?.type === 'SW_UPDATED') {
+        window.location.reload()
+      }
+    })
   })
 }
 
