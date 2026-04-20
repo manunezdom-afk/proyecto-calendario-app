@@ -3,25 +3,31 @@ import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
 
-const DEFAULT_TASKS = [
-  { id: 'tsk-001', label: 'Revisar Roadmap del Q4', done: false, priority: 'Alta', category: 'hoy' },
-  { id: 'tsk-002', label: 'Preparar diapositivas de presentación', done: false, priority: 'Media', category: 'hoy' },
-  { id: 'tsk-003', label: 'Responder emails pendientes', done: false, priority: 'Baja', category: 'hoy' },
-  { id: 'tsk-004', label: 'Revisar métricas de producto', done: false, priority: 'Media', category: 'semana' },
-  { id: 'tsk-005', label: 'Documentar API nueva', done: false, priority: 'Baja', category: 'algún día' },
-]
+// IDs de las tareas demo viejas. Antes el hook pre-poblaba el estado con 5
+// tareas sample ("Revisar Roadmap del Q4", etc.) para que la UI no se viera
+// vacía en la primera visita — pero confundía al usuario porque aparecían
+// como "pendientes" reales en Mi Día. Ahora arrancamos en blanco. Para los
+// usuarios que ya tenían las demo cacheadas, las limpiamos al montar.
+const LEGACY_DEMO_IDS = new Set([
+  'tsk-001', 'tsk-002', 'tsk-003', 'tsk-004', 'tsk-005',
+])
+
+function cleanLegacyDemo(list) {
+  if (!Array.isArray(list)) return []
+  return list.filter((t) => !LEGACY_DEMO_IDS.has(t.id))
+}
 
 export function useTasks() {
   const { user } = useAuth()
 
-  const [tasks, setTasks] = useState(() => dataService.getCachedTasks(DEFAULT_TASKS))
+  const [tasks, setTasks] = useState(() => cleanLegacyDemo(dataService.getCachedTasks([])))
 
   useEffect(() => {
     if (!user) return
     dataService.fetchTasks(user.id)
       .then(cloudTasks => {
         if (!cloudTasks) return
-        const result = cloudTasks.length > 0 ? cloudTasks : DEFAULT_TASKS
+        const result = cleanLegacyDemo(cloudTasks)
         setTasks(result)
         dataService.setCachedTasks(result)
       })
