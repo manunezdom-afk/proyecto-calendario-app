@@ -551,9 +551,14 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                         className={`rounded-xl ${
                           isSuggestion
                             ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
-                            : 'bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 border-primary cursor-pointer hover:shadow-md transition-shadow'
+                            : `bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 cursor-pointer hover:shadow-md transition-shadow ${
+                                inPeak === true ? 'border-emerald-500'
+                                  : inPeak === false ? 'border-amber-400'
+                                  : 'border-primary'
+                              }`
                         }`}
                         style={{ padding: '14px 16px 14px 14px', overflow: 'visible' }}
+                        title={inPeak === true ? 'En tu zona de rendimiento' : inPeak === false ? 'Fuera de tu zona de rendimiento' : undefined}
                         onClick={!isSuggestion && !_asReminderOnly ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
                       >
                         <div className="flex justify-between items-start gap-2" style={{ marginBottom: '2px' }}>
@@ -584,22 +589,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
                             </button>
                           )}
                         </div>
-
-                        {/* Badge zona de rendimiento */}
-                        {inPeak !== null && (
-                          <div style={{ marginTop: '6px', marginBottom: '2px' }}>
-                            <span style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '4px',
-                              fontSize: '9px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px',
-                              ...(inPeak
-                                ? { background: '#d1fae5', color: '#065f46' }
-                                : { background: '#fef9c3', color: '#92400e' })
-                            }}>
-                              {inPeak ? '🟢' : '🟡'}
-                              {inPeak ? 'En tu zona de rendimiento' : 'Fuera de tu zona de rendimiento'}
-                            </span>
-                          </div>
-                        )}
 
                         {subtasks.length > 0 && (
                           <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
