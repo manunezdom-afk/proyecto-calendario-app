@@ -1,0 +1,1587 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#09090b">
+<meta name="color-scheme" content="dark">
+
+<title>Focus — La IA que propone. Vos decidís.</title>
+<meta name="description" content="Nova analiza tu ritmo real y ajusta tu calendario. Nunca aplica cambios sin tu aprobación. Gratis, sin cuenta, funciona offline.">
+
+<!-- Open Graph -->
+<meta property="og:title" content="Focus — La IA que propone. Vos decidís.">
+<meta property="og:description" content="Nova analiza tu ritmo real y ajusta tu calendario. Nunca aplica cambios sin tu aprobación. Gratis, sin cuenta, offline.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/og-image.png">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Focus — La IA que propone. Vos decidís.">
+<meta name="twitter:description" content="Nova analiza tu ritmo real y sugiere cambios a tu calendario. Nunca ejecuta nada sin tu aprobación.">
+
+<!-- Favicon -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%233b82f6'/%3E%3Cstop offset='.5' stop-color='%237c3aed'/%3E%3Cstop offset='1' stop-color='%23ec4899'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='32' r='8' fill='white'/%3E%3C/svg%3E">
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800;900&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800;900&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0..1,0&display=swap">
+
+<style>
+/* ================================================================
+   VARIABLES
+================================================================ */
+:root {
+  --bg:        #09090b;
+  --surface:   #111113;
+  --surface-2: #18181b;
+  --border:    rgba(255,255,255,.07);
+  --border-h:  rgba(255,255,255,.13);
+  --text:      #fafafa;
+  --text-2:    rgba(255,255,255,.6);
+  --text-3:    rgba(255,255,255,.32);
+  --accent:    #6366f1;
+  --accent-2:  #818cf8;
+  --green:     #34d399;
+  --r-sm:  10px;
+  --r:     16px;
+  --r-lg:  24px;
+  --r-xl:  32px;
+}
+
+/* ================================================================
+   RESET & BASE
+================================================================ */
+*,*::before,*::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 16px/1.6 Inter,system-ui,-apple-system,sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+h1,h2,h3,h4 { font-family: Manrope,system-ui,sans-serif; margin: 0; }
+p { margin: 0; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; cursor: pointer; border: 0; background: none; }
+img { max-width: 100%; display: block; }
+ul,ol { padding: 0; margin: 0; list-style: none; }
+
+.mi-fill { font-variation-settings:"FILL" 1,"wght" 400,"GRAD" 0,"opsz" 24; }
+.material-symbols-outlined {
+  font-family:"Material Symbols Outlined";
+  font-weight: normal; font-style: normal;
+  display: inline-block; line-height: 1;
+  text-transform: none; letter-spacing: normal;
+  word-wrap: normal; white-space: nowrap; direction: ltr;
+  font-feature-settings:"liga"; -webkit-font-feature-settings:"liga";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ================================================================
+   LAYOUT
+================================================================ */
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+/* ================================================================
+   SCROLL REVEAL
+================================================================ */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity .65s ease, transform .65s ease;
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+.d1 { transition-delay: .1s; }
+.d2 { transition-delay: .2s; }
+.d3 { transition-delay: .3s; }
+.d4 { transition-delay: .4s; }
+
+/* ================================================================
+   COMPONENTS
+================================================================ */
+
+/* Pill badge */
+.pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 14px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface);
+  font-size: 11px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-2);
+}
+.dot-live {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 8px var(--green);
+  animation: live-pulse 2.5s ease-in-out infinite;
+}
+@keyframes live-pulse { 50% { opacity: .4; box-shadow: 0 0 3px var(--green); } }
+
+/* Gradient text */
+.grad {
+  background: linear-gradient(135deg,#818cf8,#a78bfa,#c084fc);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+
+/* Buttons */
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 28px; border-radius: 999px;
+  background: #fff; color: #09090b;
+  font: 700 14px/1 Manrope,sans-serif; letter-spacing: -.01em;
+  box-shadow: 0 20px 48px -12px rgba(99,102,241,.4);
+  transition: transform .2s, box-shadow .2s, background .2s;
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 28px 56px -12px rgba(99,102,241,.55);
+  background: #f0f0ff;
+}
+
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 13px 24px; border-radius: 999px;
+  border: 1px solid var(--border-h); background: rgba(255,255,255,.04);
+  color: var(--text-2); font-size: 13.5px; font-weight: 600;
+  backdrop-filter: blur(8px);
+  transition: background .2s, border-color .2s, color .2s;
+}
+.btn-secondary:hover {
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.2); color: var(--text);
+}
+
+/* Card */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  transition: border-color .25s, background .25s;
+}
+.card:hover { border-color: var(--border-h); background: var(--surface-2); }
+
+/* Section labels & titles */
+.s-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--accent-2); margin-bottom: 14px;
+}
+.s-title {
+  font-size: clamp(34px,5vw,54px); font-weight: 900;
+  line-height: 1.05; letter-spacing: -.03em; color: var(--text);
+}
+.s-sub {
+  margin-top: 16px; font-size: clamp(15px,2vw,17px);
+  line-height: 1.7; color: var(--text-2); max-width: 560px;
+}
+
+/* Icon box */
+.ibox {
+  width: 44px; height: 44px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.ibox .material-symbols-outlined { font-size: 20px; color: #fff; }
+
+/* Divider */
+hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
+
+/* ================================================================
+   HEADER
+================================================================ */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  height: 60px; padding: 0 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: rgba(9,9,11,.88); backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: border-color .25s;
+}
+.header.scrolled { border-bottom-color: rgba(255,255,255,.12); }
+
+.h-logo {
+  display: flex; align-items: center; gap: 9px;
+  font: 800 17px/1 Manrope,sans-serif; letter-spacing: -.03em; color: var(--text);
+}
+.logo-mark {
+  width: 32px; height: 32px; border-radius: 10px;
+  background: linear-gradient(135deg,#3b82f6,#7c3aed,#ec4899);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 24px -8px rgba(124,58,237,.6);
+  flex-shrink: 0;
+}
+.logo-mark .material-symbols-outlined { font-size: 16px; color: #fff; }
+
+.h-nav {
+  display: flex; align-items: center; gap: 28px;
+  font-size: 13px; font-weight: 500; color: var(--text-3);
+}
+.h-nav a { transition: color .2s; }
+.h-nav a:hover { color: var(--text); }
+
+.btn-nav {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 12.5px; font-weight: 600; color: var(--text-2);
+  transition: background .2s, color .2s, border-color .2s;
+}
+.btn-nav:hover { background: rgba(255,255,255,.08); color: var(--text); border-color: var(--border-h); }
+.btn-nav .material-symbols-outlined { font-size: 14px; }
+
+/* ================================================================
+   HERO
+================================================================ */
+.hero {
+  padding: 96px 24px 80px; text-align: center;
+  position: relative; overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute; top: -240px; left: 50%; transform: translateX(-50%);
+  width: 1000px; height: 800px;
+  background: radial-gradient(ellipse at center, rgba(99,102,241,.1) 0%, transparent 68%);
+  pointer-events: none; z-index: 0;
+}
+/* Subtle dot grid behind hero content */
+.hero::after {
+  content: '';
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-image: radial-gradient(rgba(255,255,255,.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%);
+}
+.hero-inner { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; }
+
+.hero h1 {
+  font-size: clamp(48px,8vw,92px); font-weight: 900;
+  line-height: 1.0; letter-spacing: -.045em; margin-bottom: 24px;
+}
+.hero-sub {
+  font-size: clamp(16px,2.2vw,19px); line-height: 1.65; color: var(--text-2);
+  max-width: 560px; margin: 0 auto 40px; font-weight: 400;
+}
+.hero-sub strong { color: rgba(255,255,255,.88); font-weight: 600; }
+
+.hero-actions {
+  display: flex; justify-content: center; align-items: center;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 52px;
+}
+
+.hero-trust {
+  display: flex; justify-content: center; flex-wrap: wrap;
+  gap: 6px 22px; font-size: 12px; font-weight: 500; color: var(--text-3);
+}
+.hero-trust span { display: inline-flex; align-items: center; gap: 6px; }
+.hero-trust .material-symbols-outlined { font-size: 14px; color: var(--green); }
+
+/* ---- Hero mockup ---- */
+.hero-mockup {
+  position: relative; margin: 72px auto 0; max-width: 980px;
+  animation: float 7s ease-in-out infinite;
+}
+@keyframes float {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+@media (prefers-reduced-motion: reduce) { .hero-mockup { animation: none; } }
+.mockup-glow {
+  position: absolute; inset: 40px; bottom: -80px; z-index: -1;
+  border-radius: 48px;
+  background: linear-gradient(135deg,rgba(99,102,241,.45),rgba(124,58,237,.38),rgba(236,72,153,.3));
+  filter: blur(88px);
+}
+.mockup-frame {
+  border-radius: 24px; border: 1px solid rgba(255,255,255,.1);
+  overflow: hidden; background: #f8fafc;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.04),
+    0 60px 140px -30px rgba(99,102,241,.45),
+    0 30px 60px -20px rgba(0,0,0,.7);
+}
+.mockup-chrome {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0;
+}
+.mc-dots { display: flex; gap: 5px; }
+.mc-dots span { width: 11px; height: 11px; border-radius: 50%; }
+.mockup-body { display: grid; grid-template-columns: 280px 1fr; }
+.mockup-sidebar {
+  background: #fff; border-right: 1px solid #f1f5f9;
+  padding: 20px 16px; display: flex; flex-direction: column; gap: 10px;
+}
+.mockup-main {
+  background: #f8fafc; padding: 20px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* In-app elements */
+.a-label { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .18em; color: #94a3b8; }
+.a-day { font: 800 20px/1 Manrope,sans-serif; color: #0f172a; letter-spacing: -.02em; }
+.a-daysub { font-size: 11px; color: #64748b; font-weight: 500; margin-bottom: 6px; }
+.a-brief {
+  border-radius: 12px; border: 1px solid #fde68a; background: #fffbeb;
+  padding: 10px 12px; display: flex; align-items: flex-start; gap: 8px;
+  font-size: 11px; color: #92400e; line-height: 1.5;
+}
+.a-brief .material-symbols-outlined { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.a-event {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 10px; border-radius: 10px;
+}
+.a-dot {
+  width: 24px; height: 24px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.a-dot .material-symbols-outlined { font-size: 12px; color: #fff; }
+.a-event-title { font-size: 11px; font-weight: 700; color: #0f172a; }
+.a-event-time  { font-size: 10px; color: #64748b; }
+
+.a-inbox-title {
+  font: 800 16px/1 Manrope,sans-serif; color: #0f172a; letter-spacing: -.02em;
+}
+.a-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 19px; height: 19px; border-radius: 999px;
+  background: #6366f1; color: #fff; font-size: 10.5px; font-weight: 700;
+  margin-left: 5px;
+}
+.a-proposal {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+  padding: 14px; box-shadow: 0 4px 24px -8px rgba(99,102,241,.18);
+}
+.a-proposal-hd { display: flex; gap: 11px; align-items: flex-start; margin-bottom: 10px; }
+.a-picon {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: linear-gradient(135deg,#6366f1,#7c3aed);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.a-picon .material-symbols-outlined { font-size: 16px; color: #fff; }
+.a-ptitle { font-size: 12.5px; font-weight: 700; color: #0f172a; line-height: 1.3; }
+.a-pdesc  { font-size: 11px; color: #64748b; margin-top: 2px; line-height: 1.45; }
+.a-pactions { display: flex; gap: 7px; }
+.a-approve {
+  border: 0; border-radius: 999px; background: #0f172a; color: #fff;
+  font: 600 11px/1 Inter,sans-serif; padding: 7px 13px;
+  display: flex; align-items: center; gap: 4px;
+}
+.a-approve .material-symbols-outlined { font-size: 13px; }
+.a-reject {
+  border: 1px solid #e2e8f0; border-radius: 999px;
+  background: #fff; color: #64748b; font: 600 11px/1 Inter,sans-serif; padding: 7px 13px;
+}
+
+/* ================================================================
+   STATS
+================================================================ */
+.stats { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.stats-grid {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  background: var(--border); border-radius: 0;
+}
+.stat-cell {
+  background: var(--bg); padding: 40px 32px; text-align: center;
+}
+.stat-val {
+  font: 900 clamp(36px,5vw,56px)/1 Manrope,sans-serif;
+  letter-spacing: -.05em; color: var(--text); margin-bottom: 10px;
+}
+.stat-lbl { font-size: 13px; font-weight: 500; color: var(--text-3); line-height: 1.5; }
+
+/* ================================================================
+   PROBLEM
+================================================================ */
+.problem { padding: 120px 24px; }
+.problem-hd { max-width: 700px; margin-bottom: 64px; }
+.pain-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+.pain-card {
+  padding: 32px; border-radius: var(--r-lg);
+  background: var(--surface); border: 1px solid var(--border);
+  position: relative; overflow: hidden;
+}
+.pain-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg,transparent,rgba(99,102,241,.5),transparent);
+}
+.pain-emoji { font-size: 28px; margin-bottom: 18px; opacity: .8; }
+.pain-card h3 {
+  font-size: 18px; font-weight: 800; letter-spacing: -.02em;
+  color: var(--text); margin-bottom: 10px;
+}
+.pain-card p { font-size: 14px; line-height: 1.65; color: var(--text-2); }
+
+/* ================================================================
+   SOLUTION
+================================================================ */
+.solution {
+  padding: 120px 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.solution-inner {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center;
+}
+.flow { display: flex; flex-direction: column; gap: 4px; }
+.flow-step {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 20px; border-radius: var(--r); border: 1px solid transparent;
+  transition: background .25s, border-color .25s;
+}
+.flow-step:hover { background: var(--surface-2); border-color: var(--border); }
+.ficon {
+  width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; margin-top: 2px;
+  display: flex; align-items: center; justify-content: center;
+}
+.ficon .material-symbols-outlined { font-size: 18px; color: #fff; }
+.flow-step h3 { font-size: 16px; font-weight: 800; letter-spacing: -.02em; color: var(--text); margin-bottom: 6px; }
+.flow-step p  { font-size: 13.5px; line-height: 1.65; color: var(--text-2); }
+.flow-join {
+  display: flex; align-items: center; gap: 12px; padding: 0 20px;
+  color: var(--text-3); font-size: 10.5px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.flow-join::before,.flow-join::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* ================================================================
+   FEATURES
+================================================================ */
+.features { padding: 120px 24px; }
+.features-hd { text-align: center; margin-bottom: 64px; }
+.features-hd .s-sub { margin: 16px auto 0; }
+.features-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.feat-card { padding: 32px; }
+.feat-label-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.feat-card h3 { font-size: 22px; font-weight: 800; letter-spacing: -.025em; color: var(--text); margin-bottom: 10px; }
+.feat-card p  { font-size: 14.5px; line-height: 1.65; color: var(--text-2); }
+.feat-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.feat-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 999px;
+  background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.2);
+  font-size: 11.5px; font-weight: 600; color: var(--accent-2);
+}
+.feat-tag .material-symbols-outlined { font-size: 13px; }
+
+/* ================================================================
+   HOW IT WORKS
+================================================================ */
+.how {
+  padding: 120px 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.how-hd { text-align: center; margin-bottom: 72px; }
+.how-hd .s-sub { margin: 16px auto 0; }
+.steps-grid {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  gap: 2px; background: var(--border);
+  border-radius: var(--r-xl); overflow: hidden;
+}
+.step-cell {
+  background: var(--surface); padding: 40px 32px;
+  display: flex; flex-direction: column; gap: 20px;
+  transition: background .25s;
+}
+.step-cell:hover { background: var(--surface-2); }
+.step-num { font: 700 12px/1 Manrope,sans-serif; color: var(--accent-2); letter-spacing: .08em; }
+.step-cell h3 { font-size: 20px; font-weight: 800; letter-spacing: -.025em; color: var(--text); margin-bottom: 8px; }
+.step-cell p  { font-size: 14px; line-height: 1.65; color: var(--text-2); }
+
+/* ================================================================
+   DEMO (CSS-only animation, improved)
+================================================================ */
+.demo { padding: 120px 24px; }
+.demo-hd { text-align: center; margin-bottom: 56px; }
+.demo-hd .s-sub { margin: 16px auto 0; }
+
+.demo-stage {
+  border-radius: 24px; overflow: hidden; position: relative;
+  border: 1px solid rgba(255,255,255,.08);
+  background: #0f172a; aspect-ratio: 16/9;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.04),
+    0 60px 140px -30px rgba(99,102,241,.45);
+  max-width: 1000px; margin: 0 auto;
+}
+.demo-screen {
+  width: 100%; height: 100%;
+  display: grid; grid-template-columns: 280px 1fr; background: #f8fafc;
+}
+.demo-sidebar {
+  background: #fff; border-right: 1px solid #f1f5f9;
+  padding: 24px 18px; display: flex; flex-direction: column; gap: 10px;
+}
+.demo-main {
+  padding: 24px; display: flex; flex-direction: column; gap: 16px;
+  background: linear-gradient(180deg,#f8fafc,#eef2ff);
+}
+.d-eyebrow { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .18em; }
+.d-day     { font: 800 19px/1 Manrope,sans-serif; color: #0f172a; letter-spacing: -.02em; margin-bottom: 2px; }
+.d-daysub  { font-size: 11px; color: #64748b; font-weight: 500; margin-bottom: 8px; }
+.d-event {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 10px; border-radius: 10px;
+}
+.d-eicon {
+  width: 24px; height: 24px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.d-eicon .material-symbols-outlined { font-size: 12px; color: #fff; }
+.d-etitle { font-size: 11px; font-weight: 700; color: #0f172a; }
+.d-etime  { font-size: 10px; color: #64748b; }
+
+/* Chat & animation */
+.d-chat {
+  display: flex; gap: 10px; align-items: flex-end;
+  opacity: 0; transform: translateY(12px);
+  animation: chatIn 14s ease infinite;
+}
+.d-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: linear-gradient(135deg,#fbbf24,#f97316);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; color: #fff; font: 800 11px/1 Manrope,sans-serif;
+}
+.d-bubble {
+  background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 16px 16px 16px 4px; padding: 12px 14px;
+  font-size: 13px; color: #0f172a; line-height: 1.4;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04); max-width: 380px;
+}
+
+.d-nova-thinking {
+  display: flex; gap: 10px; align-items: center;
+  opacity: 0; animation: thinkIn 14s ease infinite;
+}
+.d-nova-av {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: linear-gradient(135deg,#6366f1,#7c3aed);
+  display: flex; align-items: center; justify-content: center;
+}
+.d-nova-av .material-symbols-outlined { color: #fff; font-size: 15px; }
+.d-typing {
+  background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 16px; padding: 10px 14px; display: flex; gap: 4px;
+}
+.d-typing span {
+  width: 6px; height: 6px; border-radius: 50%; background: #94a3b8;
+  animation: typing 1.4s ease-in-out infinite;
+}
+.d-typing span:nth-child(2) { animation-delay: .2s; }
+.d-typing span:nth-child(3) { animation-delay: .4s; }
+@keyframes typing {
+  0%,60%,100% { transform: translateY(0); opacity: .4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.d-proposal {
+  border-radius: 18px; border: 1px solid #e2e8f0; background: #fff;
+  padding: 18px; box-shadow: 0 10px 40px -10px rgba(99,102,241,.25);
+  opacity: 0; transform: translateY(20px) scale(.96);
+  animation: proposalIn 14s ease infinite;
+}
+.d-phd { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+.d-picon {
+  width: 38px; height: 38px; border-radius: 12px;
+  background: linear-gradient(135deg,#6366f1,#7c3aed);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  box-shadow: 0 8px 20px -8px rgba(99,102,241,.5);
+}
+.d-picon .material-symbols-outlined { color: #fff; font-size: 17px; }
+.d-ptitle { font-size: 14px; font-weight: 700; color: #0f172a; line-height: 1.3; }
+.d-pdesc  { font-size: 12px; color: #64748b; margin-top: 3px; line-height: 1.45; }
+.d-pactions { display: flex; gap: 8px; }
+.d-approve {
+  border: 0; border-radius: 999px; background: #0f172a; color: #fff;
+  font: 600 12px/1 Inter,sans-serif; padding: 8px 16px;
+  position: relative; overflow: hidden; display: flex; align-items: center; gap: 6px;
+}
+.d-approve::after {
+  content: ''; position: absolute; inset: 0; background: #10b981;
+  transform: translateX(-100%); animation: btnFill 14s ease infinite;
+}
+.d-approve .material-symbols-outlined { font-size: 14px; position: relative; z-index: 1; opacity: 0; animation: checkShow 14s ease infinite; }
+.d-approve .lbl { position: relative; z-index: 1; animation: labelFade 14s ease infinite; }
+.d-reject {
+  border: 1px solid #e2e8f0; border-radius: 999px;
+  background: #fff; color: #64748b; font: 600 12px/1 Inter,sans-serif; padding: 8px 16px;
+}
+
+.d-toast {
+  position: absolute; top: 16px; right: 16px;
+  background: #10b981; color: #fff;
+  padding: 10px 14px; border-radius: 12px;
+  font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+  box-shadow: 0 10px 30px -10px rgba(16,185,129,.5);
+  opacity: 0; transform: translateY(-8px); animation: toastIn 14s ease infinite;
+}
+.d-toast .material-symbols-outlined { font-size: 15px; }
+
+.d-event-moving {
+  background: #eff6ff; border: 1px solid #dbeafe;
+  position: relative; overflow: hidden;
+  animation: eventMove 14s ease infinite;
+}
+.d-event-moving .d-etime::after { content: ''; animation: timeSwap 14s step-end infinite; }
+.d-event-moving::after {
+  content: ''; position: absolute; inset: 0; border-radius: 10px;
+  background: #10b981; opacity: 0;
+  animation: flashGreen 14s ease infinite; pointer-events: none;
+}
+
+/* Animation keyframes */
+@keyframes chatIn {
+  0%,8%  { opacity: 0; transform: translateY(12px); }
+  12%,100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes thinkIn {
+  0%,22% { opacity: 0; }
+  26%,33% { opacity: 1; }
+  37%,100% { opacity: 0; }
+}
+@keyframes proposalIn {
+  0%,37%  { opacity: 0; transform: translateY(20px) scale(.96); }
+  42%,70% { opacity: 1; transform: translateY(0) scale(1); }
+  80%,100% { opacity: 0; transform: translateY(-10px) scale(.98); }
+}
+@keyframes btnFill {
+  0%,58%  { transform: translateX(-100%); }
+  63%,100% { transform: translateX(0); }
+}
+@keyframes checkShow {
+  0%,60%  { opacity: 0; }
+  65%,100% { opacity: 1; }
+}
+@keyframes labelFade {
+  0%,60%  { opacity: 1; }
+  62%,100% { opacity: 0; }
+}
+@keyframes toastIn {
+  0%,72%  { opacity: 0; transform: translateY(-8px); }
+  75%,88% { opacity: 1; transform: translateY(0); }
+  92%,100% { opacity: 0; transform: translateY(-8px); }
+}
+@keyframes eventMove {
+  0%,68%  { transform: translateY(0); background: #eff6ff; border-color: #dbeafe; }
+  72%     { background: #dcfce7; border-color: #86efac; }
+  78%,88% { transform: translateY(44px); background: #dcfce7; border-color: #86efac; }
+  94%,100% { transform: translateY(44px); background: #eff6ff; border-color: #dbeafe; }
+}
+@keyframes timeSwap {
+  0%,72%  { content: '15:00 – 16:00'; }
+  75%,100% { content: '16:00 – 17:00'; }
+}
+@keyframes flashGreen {
+  0%,68%  { opacity: 0; }
+  72%,76% { opacity: .15; }
+  80%,100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .d-chat,.d-nova-thinking,.d-proposal,.d-toast,
+  .d-approve::after,.d-approve .material-symbols-outlined,
+  .d-event-moving,.d-event-moving::after { animation: none; }
+  .d-chat,.d-proposal { opacity: 1; transform: none; }
+}
+
+/* ================================================================
+   INSTALL
+================================================================ */
+.install {
+  padding: 120px 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.install-hd { text-align: center; margin-bottom: 64px; }
+.install-hd .s-sub { margin: 16px auto 0; }
+.install-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+.install-card { padding: 32px; }
+.install-plat { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.install-icon {
+  width: 44px; height: 44px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.install-icon .material-symbols-outlined { font-size: 22px; color: #fff; }
+.install-card h3 { font-size: 17px; font-weight: 800; letter-spacing: -.02em; color: var(--text); margin-bottom: 10px; }
+.install-card p  { font-size: 13.5px; line-height: 1.65; color: var(--text-2); margin-bottom: 16px; }
+.install-steps { display: flex; flex-direction: column; gap: 9px; }
+.install-step { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
+.step-n {
+  width: 21px; height: 21px; border-radius: 999px;
+  background: rgba(99,102,241,.12); border: 1px solid rgba(99,102,241,.25);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 700; color: var(--accent-2); flex-shrink: 0;
+}
+.install-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 20px; font-size: 13px; font-weight: 700; color: var(--accent-2);
+  transition: gap .2s, color .2s;
+}
+.install-link:hover { gap: 10px; color: #a5b4fc; }
+.install-link .material-symbols-outlined { font-size: 15px; }
+
+/* ================================================================
+   FAQ
+================================================================ */
+.faq { padding: 120px 24px; }
+.faq-inner { max-width: 760px; margin: 0 auto; }
+.faq-hd { text-align: center; margin-bottom: 64px; }
+.faq-list { display: flex; flex-direction: column; }
+.faq-item { border-top: 1px solid var(--border); }
+.faq-item:last-child { border-bottom: 1px solid var(--border); }
+.faq-q {
+  width: 100%; padding: 22px 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  color: var(--text); font: 700 16px/1.3 Manrope,sans-serif; letter-spacing: -.01em;
+  text-align: left; transition: color .2s;
+}
+.faq-q:hover { color: var(--accent-2); }
+.faq-toggle {
+  width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  transition: background .2s, border-color .2s;
+}
+.faq-toggle .material-symbols-outlined {
+  font-size: 16px; transition: transform .3s;
+}
+.faq-item.open .faq-toggle {
+  background: rgba(99,102,241,.12); border-color: rgba(99,102,241,.3);
+}
+.faq-item.open .faq-toggle .material-symbols-outlined { transform: rotate(45deg); }
+.faq-a { max-height: 0; overflow: hidden; transition: max-height .35s ease; }
+.faq-item.open .faq-a { max-height: 240px; }
+.faq-a p { padding-bottom: 22px; font-size: 15px; line-height: 1.7; color: var(--text-2); }
+
+/* ================================================================
+   FINAL CTA
+================================================================ */
+.cta-final {
+  padding: 160px 24px; text-align: center;
+  position: relative; overflow: hidden;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.cta-final::before {
+  content: '';
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  width: 900px; height: 700px;
+  background: radial-gradient(ellipse at center, rgba(99,102,241,.14) 0%, transparent 65%);
+  pointer-events: none;
+}
+.cta-inner { position: relative; z-index: 1; max-width: 640px; margin: 0 auto; }
+.cta-mark {
+  width: 72px; height: 72px; border-radius: 22px;
+  background: linear-gradient(135deg,#3b82f6,#7c3aed,#ec4899);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 32px;
+  box-shadow: 0 30px 64px -16px rgba(99,102,241,.55);
+}
+.cta-mark .material-symbols-outlined { font-size: 32px; color: #fff; }
+.cta-final h2 {
+  font-size: clamp(44px,7vw,80px); font-weight: 900;
+  letter-spacing: -.045em; line-height: 1.0; margin-bottom: 20px;
+}
+.cta-final .lead {
+  font-size: 17px; line-height: 1.65; color: var(--text-2);
+  margin-bottom: 40px; max-width: 440px; margin-left: auto; margin-right: auto;
+}
+.cta-final .btn-primary { padding: 16px 36px; font-size: 15px; }
+.cta-micro { margin-top: 20px; font-size: 12px; color: var(--text-3); }
+
+/* ================================================================
+   FOOTER
+================================================================ */
+.footer { border-top: 1px solid var(--border); padding: 40px 24px; }
+.footer-inner {
+  max-width: 1120px; margin: 0 auto;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 20px;
+}
+.f-brand {
+  display: flex; align-items: center; gap: 8px;
+  font: 700 15px/1 Manrope,sans-serif; color: var(--text-3);
+}
+.f-nav { display: flex; gap: 22px; font-size: 12.5px; color: var(--text-3); }
+.f-nav a { transition: color .2s; }
+.f-nav a:hover { color: var(--text-2); }
+.f-copy { font-size: 12px; color: var(--text-3); }
+
+/* ================================================================
+   RESPONSIVE
+================================================================ */
+@media (max-width: 900px) {
+  .h-nav { display: none; }
+
+  .hero { padding: 64px 20px 60px; }
+  .mockup-body { grid-template-columns: 1fr; }
+  .mockup-sidebar { border-right: 0; border-bottom: 1px solid #f1f5f9; padding: 16px; }
+  .mockup-main { padding: 16px; }
+
+  .stats-grid { grid-template-columns: 1fr; background: none; gap: 1px; }
+  .stat-cell { border-top: 1px solid var(--border); }
+
+  .problem { padding: 80px 20px; }
+  .pain-grid { grid-template-columns: 1fr; gap: 12px; }
+
+  .solution { padding: 80px 20px; }
+  .solution-inner { grid-template-columns: 1fr; gap: 48px; }
+
+  .features { padding: 80px 20px; }
+  .features-grid { grid-template-columns: 1fr; gap: 12px; }
+
+  .how { padding: 80px 20px; }
+  .steps-grid {
+    grid-template-columns: 1fr; background: none;
+    border-radius: 0; gap: 12px;
+  }
+  .step-cell { border-radius: var(--r-lg); border: 1px solid var(--border); }
+
+  .demo { padding: 80px 20px; }
+  .demo-stage { aspect-ratio: 4/3; }
+  .demo-screen { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .demo-sidebar { border-right: 0; border-bottom: 1px solid #f1f5f9; }
+
+  .install { padding: 80px 20px; }
+  .install-grid { grid-template-columns: 1fr; gap: 12px; }
+
+  .faq { padding: 80px 20px; }
+  .cta-final { padding: 100px 20px; }
+
+  .footer-inner { flex-direction: column; text-align: center; }
+  .f-nav { flex-wrap: wrap; justify-content: center; }
+}
+
+@media (max-width: 600px) {
+  .hero h1 { font-size: 42px; letter-spacing: -.03em; }
+  .hero-actions { flex-direction: column; align-items: stretch; }
+  .hero-actions .btn-primary,
+  .hero-actions .btn-secondary { justify-content: center; }
+  .demo-stage { aspect-ratio: 3/4; }
+  .stats-grid { gap: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<header class="header" id="header">
+  <a href="#top" class="h-logo">
+    <span class="logo-mark">
+      <span class="material-symbols-outlined mi-fill">brightness_high</span>
+    </span>
+    Focus
+  </a>
+
+  <nav class="h-nav">
+    <a href="#problema">El problema</a>
+    <a href="#funciones">Funciones</a>
+    <a href="#instalar">Instalar</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+
+  <a href="https://proyecto-calendario-app.vercel.app" class="btn-nav">
+    Abrir app
+    <span class="material-symbols-outlined">arrow_forward</span>
+  </a>
+</header>
+
+
+<!-- ===== HERO ===== -->
+<section class="hero" id="top">
+  <div class="hero-inner">
+    <div class="pill" style="margin-bottom:32px">
+      <span class="dot-live"></span>
+      Gratis · Sin cuenta · Funciona offline
+    </div>
+
+    <h1>La IA que propone.<br><span class="grad">Vos decidís.</span></h1>
+
+    <p class="hero-sub">
+      Nova analiza cómo rendés de verdad y sugiere cambios a tu calendario.
+      <strong>Nunca aplica nada sin que vos lo aprobés.</strong>
+    </p>
+
+    <div class="hero-actions">
+      <a href="https://proyecto-calendario-app.vercel.app" class="btn-primary">
+        Empezar gratis
+        <span class="material-symbols-outlined" style="font-size:18px">arrow_forward</span>
+      </a>
+      <a href="#demo" class="btn-secondary">
+        <span class="material-symbols-outlined" style="font-size:17px">play_circle</span>
+        Ver en acción
+      </a>
+    </div>
+
+    <div class="hero-trust">
+      <span><span class="material-symbols-outlined">check_circle</span>Sin cuenta para empezar</span>
+      <span><span class="material-symbols-outlined">check_circle</span>Tus datos son tuyos</span>
+      <span><span class="material-symbols-outlined">check_circle</span>Sin ads ni tracking</span>
+      <span><span class="material-symbols-outlined">check_circle</span>Instalable como app nativa</span>
+    </div>
+  </div>
+
+  <!-- Mockup -->
+  <div class="hero-mockup reveal" style="padding:0 24px">
+    <div class="mockup-glow" aria-hidden="true"></div>
+    <div class="mockup-frame">
+      <!-- Chrome bar -->
+      <div class="mockup-chrome">
+        <div class="mc-dots">
+          <span style="background:#ef4444"></span>
+          <span style="background:#f59e0b"></span>
+          <span style="background:#22c55e"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px">
+          <span class="logo-mark" style="width:26px;height:26px;border-radius:8px;box-shadow:none">
+            <span class="material-symbols-outlined mi-fill" style="font-size:13px;color:#fff">brightness_high</span>
+          </span>
+          <span style="font:800 14px/1 Manrope,sans-serif;color:#0f172a;letter-spacing:-.02em">Focus</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <div style="width:24px;height:24px;border-radius:8px;background:#e2e8f0"></div>
+          <div style="position:relative;width:24px;height:24px;border-radius:8px;background:rgba(99,102,241,.12)">
+            <div style="position:absolute;top:-3px;right:-3px;width:14px;height:14px;border-radius:999px;background:#6366f1;font-size:9px;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center">3</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- App body -->
+      <div class="mockup-body">
+        <!-- Sidebar: Mi Día -->
+        <div class="mockup-sidebar">
+          <div class="a-label">Mi Día</div>
+          <div class="a-day">Jueves 17</div>
+          <div class="a-daysub">3 eventos · 2 tareas</div>
+
+          <div class="a-brief">
+            <span class="material-symbols-outlined mi-fill" style="color:#b45309">wb_twilight</span>
+            <span><strong>Morning Brief</strong> — Tu pico es a las 10 AM. Protege esa franja para lo que más importa.</span>
+          </div>
+
+          <div class="a-event" style="background:#eff6ff;border:1px solid #dbeafe">
+            <div class="a-dot" style="background:#3b82f6"><span class="material-symbols-outlined">groups</span></div>
+            <div>
+              <div class="a-event-title">Reunión con equipo</div>
+              <div class="a-event-time">10:00 – 11:00</div>
+            </div>
+          </div>
+
+          <div class="a-event" style="background:#f5f3ff;border:1px solid #ede9fe">
+            <div class="a-dot" style="background:#7c3aed"><span class="material-symbols-outlined">fitness_center</span></div>
+            <div>
+              <div class="a-event-title">Gym</div>
+              <div class="a-event-time">18:00 – 19:30</div>
+            </div>
+          </div>
+
+          <div class="a-event" style="background:#f0fdf4;border:1px solid #bbf7d0">
+            <div class="a-dot" style="background:#10b981"><span class="material-symbols-outlined">restaurant</span></div>
+            <div>
+              <div class="a-event-title">Cena con Ana</div>
+              <div class="a-event-time">20:30 – 22:00</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main: Bandeja de Nova -->
+        <div class="mockup-main">
+          <div class="a-label">Bandeja de Nova</div>
+          <div class="a-inbox-title">
+            3 propuestas pendientes
+            <span class="a-badge">3</span>
+          </div>
+
+          <div class="a-proposal">
+            <div class="a-proposal-hd">
+              <div class="a-picon">
+                <span class="material-symbols-outlined mi-fill">auto_awesome</span>
+              </div>
+              <div style="flex:1">
+                <div class="a-ptitle">Mover "Reunión con equipo" → 16:00</div>
+                <div class="a-pdesc">Te libera la franja 14–16h para trabajo profundo. Sin conflictos.</div>
+              </div>
+            </div>
+            <div class="a-pactions">
+              <button class="a-approve">
+                <span class="material-symbols-outlined">check</span>
+                Aprobar
+              </button>
+              <button class="a-reject">Rechazar</button>
+            </div>
+          </div>
+
+          <div class="a-proposal" style="opacity:.55">
+            <div class="a-proposal-hd">
+              <div class="a-picon" style="background:linear-gradient(135deg,#7c3aed,#ec4899)">
+                <span class="material-symbols-outlined mi-fill">add_circle</span>
+              </div>
+              <div style="flex:1">
+                <div class="a-ptitle">Agregar bloque "Foco — Proyecto X"</div>
+                <div class="a-pdesc">Martes 9–11h. Tu mejor franja según tu historial reciente.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ===== STATS ===== -->
+<div class="stats">
+  <div class="stats-grid">
+    <div class="stat-cell reveal">
+      <div class="stat-val">0</div>
+      <div class="stat-lbl">Cambios sin tu<br>aprobación. Siempre.</div>
+    </div>
+    <div class="stat-cell reveal d1">
+      <div class="stat-val">2</div>
+      <div class="stat-lbl">Rituales diarios:<br>Morning Brief + Evening Shutdown</div>
+    </div>
+    <div class="stat-cell reveal d2">
+      <div class="stat-val">100%</div>
+      <div class="stat-lbl">Offline. Tus datos<br>solo son tuyos.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== PROBLEM ===== -->
+<section class="problem" id="problema">
+  <div class="wrap">
+    <div class="problem-hd reveal">
+      <div class="s-label">El problema</div>
+      <h2 class="s-title">Tu agenda sabe qué tenés.<br>No sabe cuándo rendés.</h2>
+      <p class="s-sub">El problema con los calendarios no es que les falten funciones. Es que no entienden que no rendés igual a las 9am que a las 3pm — y que una IA que actúa sola da más miedo que ayuda.</p>
+    </div>
+
+    <div class="pain-grid">
+      <div class="pain-card reveal d1">
+        <div class="pain-emoji">😤</div>
+        <h3>Reuniones en tu hora pico</h3>
+        <p>Tu mejor franja para pensar en profundidad siempre termina ocupada con un standup o una call que podría haber sido un mensaje.</p>
+      </div>
+      <div class="pain-card reveal d2">
+        <div class="pain-emoji">🤖</div>
+        <h3>La IA actúa sin avisarte</h3>
+        <p>Abrís el calendario y encontrás eventos movidos o eliminados sin que lo hayas pedido. Cero control, cero confianza en la herramienta.</p>
+      </div>
+      <div class="pain-card reveal d3">
+        <div class="pain-emoji">🌀</div>
+        <h3>El día termina sin cierre</h3>
+        <p>No sabés qué completaste ni qué quedó pendiente. Sin un ritual de cierre, el cansancio se acumula sin registro y el día siguiente empieza igual.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr>
+
+<!-- ===== SOLUTION ===== -->
+<section class="solution">
+  <div class="wrap">
+    <div class="solution-inner">
+      <div class="reveal">
+        <div class="s-label">La solución</div>
+        <h2 class="s-title">Nova aprende.<br>Propone.<br>Vos aprobás.</h2>
+        <p class="s-sub" style="margin-top:20px">La diferencia no es la IA. Es que la IA trabaja <em>para</em> vos, no <em>en lugar</em> de vos. Cada cambio pasa por tus manos antes de aplicarse.</p>
+      </div>
+
+      <div class="flow reveal d2">
+        <div class="flow-step">
+          <div class="ficon" style="background:linear-gradient(135deg,#3b82f6,#6366f1)">
+            <span class="material-symbols-outlined mi-fill">psychology</span>
+          </div>
+          <div>
+            <h3>Nova observa tu ritmo real</h3>
+            <p>Analiza cuándo completás tareas, cuándo cancelás eventos y cuándo tu energía rinde mejor. No te pregunta — aprende observando.</p>
+          </div>
+        </div>
+
+        <div class="flow-join">después</div>
+
+        <div class="flow-step">
+          <div class="ficon" style="background:linear-gradient(135deg,#7c3aed,#a855f7)">
+            <span class="material-symbols-outlined mi-fill">auto_awesome</span>
+          </div>
+          <div>
+            <h3>Propone cambios con razones</h3>
+            <p>Cuando ve una oportunidad, la encola en tu bandeja con una explicación clara. Nunca ejecuta sin que vos lo veas primero.</p>
+          </div>
+        </div>
+
+        <div class="flow-join">y entonces</div>
+
+        <div class="flow-step">
+          <div class="ficon" style="background:linear-gradient(135deg,#10b981,#34d399)">
+            <span class="material-symbols-outlined mi-fill">thumb_up</span>
+          </div>
+          <div>
+            <h3>Vos decidís qué aplicar</h3>
+            <p>Un tap para aprobar, otro para rechazar. Lo que rechazás lo aprende Nova para no proponerlo de nuevo.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ===== FEATURES ===== -->
+<section class="features" id="funciones">
+  <div class="wrap">
+    <div class="features-hd reveal">
+      <div class="s-label">Funciones</div>
+      <h2 class="s-title">Todo lo que le faltaba<br>a tu calendario.</h2>
+      <p class="s-sub">No es un calendario más con IA pegada encima. Es un sistema diseñado desde cero alrededor de cómo vos realmente trabajás.</p>
+    </div>
+
+    <div class="features-grid">
+      <!-- Feature 1 -->
+      <div class="card feat-card reveal">
+        <div class="feat-label-row">
+          <div class="ibox" style="background:linear-gradient(135deg,#6366f1,#7c3aed,#ec4899)">
+            <span class="material-symbols-outlined mi-fill">auto_awesome</span>
+          </div>
+          <span class="s-label" style="margin-bottom:0">IA conversacional</span>
+        </div>
+        <h3>Nova nunca toca sin permiso</h3>
+        <p>Escribís en lenguaje natural — texto, voz o foto. Nova entiende, analiza y propone. Jamás modifica tu agenda sin aprobación explícita.</p>
+        <div class="feat-tags">
+          <span class="feat-tag"><span class="material-symbols-outlined">mic</span>Voz en español</span>
+          <span class="feat-tag"><span class="material-symbols-outlined">photo_camera</span>Fotos</span>
+          <span class="feat-tag">Cmd+K</span>
+        </div>
+      </div>
+
+      <!-- Feature 2 -->
+      <div class="card feat-card reveal d1">
+        <div class="feat-label-row">
+          <div class="ibox" style="background:linear-gradient(135deg,#fbbf24,#f97316)">
+            <span class="material-symbols-outlined mi-fill">wb_twilight</span>
+          </div>
+          <span class="s-label" style="margin-bottom:0">Rituales diarios</span>
+        </div>
+        <h3>Morning Brief + Evening Shutdown</h3>
+        <p>Arrancás el día con un resumen hablado de tu agenda. Lo cerrás con una revisión de 90 segundos. La consistencia viene del hábito, no de la voluntad.</p>
+        <div class="feat-tags">
+          <span class="feat-tag"><span class="material-symbols-outlined">volume_up</span>Texto a voz</span>
+          <span class="feat-tag">Automático</span>
+        </div>
+      </div>
+
+      <!-- Feature 3 -->
+      <div class="card feat-card reveal d2">
+        <div class="feat-label-row">
+          <div class="ibox" style="background:linear-gradient(135deg,#34d399,#10b981)">
+            <span class="material-symbols-outlined mi-fill">bolt</span>
+          </div>
+          <span class="s-label" style="margin-bottom:0">Cronotipo + rendimiento</span>
+        </div>
+        <h3>Tu calendario aprende cuándo rendés</h3>
+        <p>Focus detecta tu hora pico real observando cuándo completás más tareas. Protege esas franjas y te avisa cuando hay reuniones que interrumpen tu mejor momento.</p>
+        <div class="feat-tags">
+          <span class="feat-tag">Matutino</span>
+          <span class="feat-tag">Vespertino</span>
+          <span class="feat-tag">Nocturno</span>
+        </div>
+      </div>
+
+      <!-- Feature 4 -->
+      <div class="card feat-card reveal d3">
+        <div class="feat-label-row">
+          <div class="ibox" style="background:linear-gradient(135deg,#64748b,#334155)">
+            <span class="material-symbols-outlined mi-fill">shield</span>
+          </div>
+          <span class="s-label" style="margin-bottom:0">Privacidad real</span>
+        </div>
+        <h3>Tuyo. Sin cuenta para empezar.</h3>
+        <p>Todo queda en tu dispositivo. Sin ads, sin tracking. Si querés sincronizar en varios dispositivos, creás una cuenta después — nunca antes.</p>
+        <div class="feat-tags">
+          <span class="feat-tag"><span class="material-symbols-outlined">cloud_off</span>100% offline</span>
+          <span class="feat-tag">Sin ads</span>
+          <span class="feat-tag">Sin tracking</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ===== HOW IT WORKS ===== -->
+<section class="how" id="como">
+  <div class="wrap">
+    <div class="how-hd reveal">
+      <div class="s-label">Cómo funciona</div>
+      <h2 class="s-title">Listo en 3 pasos.</h2>
+      <p class="s-sub">Sin registro previo. Sin configuración compleja. En 30 segundos ya estás usando la app.</p>
+    </div>
+
+    <div class="steps-grid">
+      <div class="step-cell reveal">
+        <div class="step-num">Paso 01</div>
+        <div>
+          <div class="ibox" style="background:linear-gradient(135deg,#3b82f6,#6366f1);width:48px;height:48px;border-radius:16px;margin-bottom:16px">
+            <span class="material-symbols-outlined mi-fill" style="font-size:22px">install_mobile</span>
+          </div>
+          <h3>Instalás en 30 segundos</h3>
+          <p>Abrís el link desde tu teléfono o escritorio. En Android aparece sola la opción de instalar. En iPhone: compartir → añadir a pantalla de inicio.</p>
+        </div>
+      </div>
+
+      <div class="step-cell reveal d1">
+        <div class="step-num">Paso 02</div>
+        <div>
+          <div class="ibox" style="background:linear-gradient(135deg,#7c3aed,#a855f7);width:48px;height:48px;border-radius:16px;margin-bottom:16px">
+            <span class="material-symbols-outlined mi-fill" style="font-size:22px">tune</span>
+          </div>
+          <h3>Contás tu ritmo</h3>
+          <p>Dos preguntas: cuándo rendés mejor y qué describe tu rol. Focus usa eso como punto de partida — después lo ajusta observando tus patrones reales.</p>
+        </div>
+      </div>
+
+      <div class="step-cell reveal d2">
+        <div class="step-num">Paso 03</div>
+        <div>
+          <div class="ibox" style="background:linear-gradient(135deg,#10b981,#34d399);width:48px;height:48px;border-radius:16px;margin-bottom:16px">
+            <span class="material-symbols-outlined mi-fill" style="font-size:22px">thumb_up</span>
+          </div>
+          <h3>Nova propone, vos aprobás</h3>
+          <p>Pedile cambios con lenguaje natural o dejá que Nova los detecte sola. Cada propuesta llega a tu bandeja. Un tap para aprobar, otro para rechazar.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ===== DEMO ===== -->
+<section class="demo" id="demo">
+  <div class="wrap">
+    <div class="demo-hd reveal">
+      <div class="s-label">Demo en vivo</div>
+      <h2 class="s-title">Mirá cómo funciona.</h2>
+      <p class="s-sub">El flujo completo: pedís un cambio → Nova analiza → propone → vos aprobás → el evento se mueve.</p>
+    </div>
+
+    <div class="demo-stage reveal" aria-label="Demostración animada de Focus">
+      <div class="demo-screen">
+        <!-- Sidebar -->
+        <div class="demo-sidebar">
+          <div class="d-eyebrow">Mi Día</div>
+          <div class="d-day">Jueves 17</div>
+          <div class="d-daysub">3 eventos</div>
+
+          <div class="d-event" style="background:#f5f3ff;border:1px solid #ede9fe">
+            <div class="d-eicon" style="background:#7c3aed"><span class="material-symbols-outlined">groups</span></div>
+            <div>
+              <div class="d-etitle">Standup</div>
+              <div class="d-etime">09:00 – 09:30</div>
+            </div>
+          </div>
+
+          <div class="d-event d-event-moving">
+            <div class="d-eicon" style="background:#6366f1"><span class="material-symbols-outlined">videocam</span></div>
+            <div>
+              <div class="d-etitle">Reunión con equipo</div>
+              <div class="d-etime">15:00 – 16:00</div>
+            </div>
+          </div>
+
+          <div class="d-event" style="background:#f0fdf4;border:1px solid #bbf7d0">
+            <div class="d-eicon" style="background:#10b981"><span class="material-symbols-outlined">restaurant</span></div>
+            <div>
+              <div class="d-etitle">Cena con Ana</div>
+              <div class="d-etime">20:30 – 22:00</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main -->
+        <div class="demo-main">
+          <div class="d-eyebrow">Nova</div>
+
+          <div class="d-chat">
+            <div class="d-avatar">M</div>
+            <div class="d-bubble">Libérame la tarde para trabajo profundo.</div>
+          </div>
+
+          <div class="d-nova-thinking">
+            <div class="d-nova-av">
+              <span class="material-symbols-outlined mi-fill">auto_awesome</span>
+            </div>
+            <div class="d-typing"><span></span><span></span><span></span></div>
+          </div>
+
+          <div class="d-proposal">
+            <div class="d-phd">
+              <div class="d-picon">
+                <span class="material-symbols-outlined mi-fill">auto_awesome</span>
+              </div>
+              <div style="flex:1">
+                <div class="d-ptitle">Mover "Reunión con equipo" → 16:00</div>
+                <div class="d-pdesc">Te libera la franja 14–16h para foco profundo. No hay conflictos.</div>
+              </div>
+            </div>
+            <div class="d-pactions">
+              <button class="d-approve">
+                <span class="material-symbols-outlined">check</span>
+                <span class="lbl">Aprobar</span>
+              </button>
+              <button class="d-reject">Rechazar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Toast -->
+        <div class="d-toast">
+          <span class="material-symbols-outlined">check_circle</span>
+          Cambio aplicado
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ===== INSTALL ===== -->
+<section class="install" id="instalar">
+  <div class="wrap">
+    <div class="install-hd reveal">
+      <div class="s-label">Instalación</div>
+      <h2 class="s-title">En cualquier dispositivo.<br>Sin tienda de apps.</h2>
+      <p class="s-sub">Focus es una Progressive Web App. No ocupa espacio extra, no necesita actualizaciones manuales y queda en tu pantalla de inicio como cualquier app nativa.</p>
+    </div>
+
+    <div class="install-grid">
+      <div class="card install-card reveal">
+        <div class="install-plat">
+          <div class="install-icon" style="background:linear-gradient(135deg,#34d399,#16a34a)">
+            <span class="material-symbols-outlined">android</span>
+          </div>
+          <div>
+            <h3>Android</h3>
+            <div style="font-size:11.5px;color:var(--text-3);font-weight:500;margin-top:2px">Chrome · Edge · Samsung Browser</div>
+          </div>
+        </div>
+        <p>Al abrir la app en Android aparece automáticamente una card para instalar. Un toque y queda en tu pantalla de inicio.</p>
+        <a href="https://proyecto-calendario-app.vercel.app" class="install-link">
+          Abrir e instalar
+          <span class="material-symbols-outlined">arrow_forward</span>
+        </a>
+      </div>
+
+      <div class="card install-card reveal d1">
+        <div class="install-plat">
+          <div class="install-icon" style="background:linear-gradient(135deg,#94a3b8,#475569)">
+            <span class="material-symbols-outlined">phone_iphone</span>
+          </div>
+          <div>
+            <h3>iPhone / iPad</h3>
+            <div style="font-size:11.5px;color:var(--text-3);font-weight:500;margin-top:2px">Safari</div>
+          </div>
+        </div>
+        <ul class="install-steps">
+          <li class="install-step">
+            <span class="step-n">1</span>
+            Abrí Focus en Safari
+          </li>
+          <li class="install-step">
+            <span class="step-n">2</span>
+            Tocá el botón compartir (cuadrado con flecha)
+          </li>
+          <li class="install-step">
+            <span class="step-n">3</span>
+            Seleccioná "Añadir a pantalla de inicio"
+          </li>
+        </ul>
+        <a href="https://proyecto-calendario-app.vercel.app" class="install-link">
+          Abrir en Safari
+          <span class="material-symbols-outlined">arrow_forward</span>
+        </a>
+      </div>
+
+      <div class="card install-card reveal d2">
+        <div class="install-plat">
+          <div class="install-icon" style="background:linear-gradient(135deg,#60a5fa,#4f46e5)">
+            <span class="material-symbols-outlined">desktop_windows</span>
+          </div>
+          <div>
+            <h3>Mac / Windows</h3>
+            <div style="font-size:11.5px;color:var(--text-3);font-weight:500;margin-top:2px">Chrome · Edge · Brave</div>
+          </div>
+        </div>
+        <p>Buscá el ícono de instalación en la barra de URL. Queda como app independiente en tu escritorio y Dock.</p>
+        <a href="https://proyecto-calendario-app.vercel.app" class="install-link">
+          Abrir en escritorio
+          <span class="material-symbols-outlined">arrow_forward</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ===== FAQ ===== -->
+<section class="faq" id="faq">
+  <div class="faq-inner">
+    <div class="faq-hd reveal">
+      <div class="s-label">Preguntas frecuentes</div>
+      <h2 class="s-title">Respuestas directas.</h2>
+    </div>
+
+    <div class="faq-list">
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          ¿Nova puede borrar o mover mis eventos sin que yo lo sepa?
+          <span class="faq-toggle"><span class="material-symbols-outlined">add</span></span>
+        </button>
+        <div class="faq-a" aria-hidden="true">
+          <p>No. Nunca. Esta es la promesa central de Focus. Nova encola todas sus sugerencias en una bandeja de propuestas. Ves exactamente qué propone y por qué antes de que se aplique cualquier cambio. Sin excepciones.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          ¿Necesito una cuenta para usar Focus?
+          <span class="faq-toggle"><span class="material-symbols-outlined">add</span></span>
+        </button>
+        <div class="faq-a" aria-hidden="true">
+          <p>No. Abrís la app y funciona de entrada. Todo se guarda localmente en tu dispositivo. Si después querés sincronizar entre varios dispositivos, podés crear una cuenta. Es opcional, no obligatorio.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          ¿Qué pasa con mi privacidad? ¿A dónde van mis datos?
+          <span class="faq-toggle"><span class="material-symbols-outlined">add</span></span>
+        </button>
+        <div class="faq-a" aria-hidden="true">
+          <p>Sin cuenta, todo queda en tu dispositivo. No hay telemetría, no hay ads, no hay tracking. El modelo de comportamiento que usa Nova se deriva y almacena localmente. Nada sale de tu dispositivo sin tu permiso explícito.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          ¿Funciona con Google Calendar o Apple Calendar?
+          <span class="faq-toggle"><span class="material-symbols-outlined">add</span></span>
+        </button>
+        <div class="faq-a" aria-hidden="true">
+          <p>Focus maneja su propio calendario. Podés exportar tus eventos en formato ICS para importarlos en Google Calendar, Apple Calendar o cualquier app compatible. La importación desde otros calendarios también está disponible.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          ¿Focus funciona sin conexión a internet?
+          <span class="faq-toggle"><span class="material-symbols-outlined">add</span></span>
+        </button>
+        <div class="faq-a" aria-hidden="true">
+          <p>Sí. Focus es una PWA con soporte offline completo. Podés ver tu agenda, agregar eventos y marcar tareas sin internet. Nova necesita conexión para procesar lenguaje natural, pero todo lo demás funciona offline.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          ¿Es realmente gratis? ¿Cuál es el modelo de negocio?
+          <span class="faq-toggle"><span class="material-symbols-outlined">add</span></span>
+        </button>
+        <div class="faq-a" aria-hidden="true">
+          <p>Focus es gratis en su versión actual. No hay modelo freemium oculto ni funcionalidades bloqueadas. Es un proyecto en desarrollo activo. Si en el futuro hay una versión paga, la experiencia de los usuarios existentes no se va a degradar.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ===== FINAL CTA ===== -->
+<section class="cta-final">
+  <div class="cta-inner reveal">
+    <div class="cta-mark">
+      <span class="material-symbols-outlined mi-fill">brightness_high</span>
+    </div>
+
+    <h2>Empezá hoy.<br><span class="grad">Gratis.</span></h2>
+
+    <p class="lead">Sin cuenta. Sin tarjeta. Sin configuración compleja.<br>Abrís Focus y en 30 segundos ya estás usando la app.</p>
+
+    <a href="https://proyecto-calendario-app.vercel.app" class="btn-primary">
+      Abrir Focus ahora
+      <span class="material-symbols-outlined" style="font-size:18px">arrow_forward</span>
+    </a>
+
+    <p class="cta-micro">Funciona en iOS · Android · Mac · Windows</p>
+  </div>
+</section>
+
+
+<!-- ===== FOOTER ===== -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="f-brand">
+      <span class="logo-mark" style="width:24px;height:24px;border-radius:7px;box-shadow:none">
+        <span class="material-symbols-outlined mi-fill" style="font-size:12px;color:#fff">brightness_high</span>
+      </span>
+      Focus
+    </div>
+
+    <nav class="f-nav">
+      <a href="#funciones">Funciones</a>
+      <a href="#como">Cómo funciona</a>
+      <a href="#instalar">Instalar</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://proyecto-calendario-app.vercel.app">Abrir app</a>
+    </nav>
+
+    <div class="f-copy">© 2026 Focus · Hecho con <span style="color:#f43f5e">♥</span></div>
+  </div>
+</footer>
+
+
+<script>
+// Scroll reveal
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); }
+  });
+}, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+// Header scroll
+const hdr = document.getElementById('header');
+window.addEventListener('scroll', () => {
+  hdr.classList.toggle('scrolled', window.scrollY > 12);
+}, { passive: true });
+
+// FAQ accordion
+document.querySelectorAll('.faq-q').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const item = btn.closest('.faq-item');
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item.open').forEach(i => {
+      i.classList.remove('open');
+      i.querySelector('.faq-q').setAttribute('aria-expanded','false');
+      i.querySelector('.faq-a').setAttribute('aria-hidden','true');
+    });
+    if (!isOpen) {
+      item.classList.add('open');
+      btn.setAttribute('aria-expanded','true');
+      item.querySelector('.faq-a').setAttribute('aria-hidden','false');
+    }
+  });
+});
+</script>
+
+</body>
+</html>
