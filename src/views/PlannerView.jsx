@@ -358,7 +358,16 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
   // Heurística "Google Calendar": recordatorios como eventos cortos anidados (UI-only)
   const displayBlocks = (() => {
     const arrRaw = Array.isArray(blocks) ? blocks : []
-    const arr = arrRaw.map((b, originalIndex) => ({ ...b, _orig: originalIndex, _h: parseTimeToDecimal(b?.time) }))
+    // Ocultar eventos ya pasados (con hora válida y < ahora). Se mantienen
+    // sugerencias y bloques sin hora. Se vuelve a evaluar cada minuto vía tick.
+    const arrFiltered = arrRaw.filter((b) => {
+      if (!b) return false
+      if (b.type === 'suggestion') return true
+      const h = parseTimeToDecimal(b.time)
+      if (h === null) return true
+      return h >= now - 0.0167 // ~1 min de gracia
+    })
+    const arr = arrFiltered.map((b, originalIndex) => ({ ...b, _orig: originalIndex, _h: parseTimeToDecimal(b?.time) }))
       .sort((a, b) => {
         const ah = a._h ?? Number.POSITIVE_INFINITY
         const bh = b._h ?? Number.POSITIVE_INFINITY
