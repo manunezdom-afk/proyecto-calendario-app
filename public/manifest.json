@@ -4,6 +4,7 @@
   "description": "Tu calendario con Nova, la IA que propone y nunca cambia nada sin tu aprobación.",
   "start_url": "/",
   "scope": "/",
+  "id": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
@@ -13,20 +14,22 @@
   "lang": "es",
   "icons": [
     {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "/icons/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml"
-    },
-    {
-      "src": "/icons/icon.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml"
     }
   ],
   "shortcuts": [
@@ -34,19 +37,19 @@
       "name": "Mi día",
       "short_name": "Mi día",
       "url": "/?view=planner",
-      "icons": [{ "src": "/icons/icon.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Calendario",
       "short_name": "Calendario",
       "url": "/?view=calendar",
-      "icons": [{ "src": "/icons/icon.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Tareas",
       "short_name": "Tareas",
       "url": "/?view=tasks",
-      "icons": [{ "src": "/icons/icon.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }
