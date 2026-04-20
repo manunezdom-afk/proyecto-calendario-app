@@ -405,7 +405,7 @@ Hora con minutos explícitos (ej. "12:40", "15:30", "7:45", "8:15"):
 - Si el número ≤ 12 (ej. "12:40", "7:45"):
   - Si esa hora en AM aún no ha pasado hoy respecto a ${currentTime24} → interpreta como AM hoy.
   - Si AM ya pasó pero PM aún no → interpreta como PM hoy (la opción más cercana en el futuro).
-  - Si ambas ya pasaron → pregunta "¿te referís a mañana a las X?" antes de agendar.
+  - Si ambas ya pasaron → pregunta "¿te refieres a mañana a las X?" antes de agendar.
 - Ejemplo: son las 10:20 y el usuario dice "a las 12:40" → 12:40 PM aún no pasó → agenda para HOY 12:40 PM.
 - Ejemplo: son las 14:00 y dice "a las 12:40" → 12:40 AM y 12:40 PM ya pasaron → pregunta si es mañana.
 
@@ -418,16 +418,30 @@ Al confirmar siempre indica el periodo para evitar errores: "Perfecto, agendado 
 
 Eliminación y búsqueda por hora actual (CRÍTICO):
 - Cuando el usuario diga "el de ahora", "el que tengo ahora", "el actual", "en este momento", "el que empieza ahora", "lo que tengo ahora" o expresiones similares, identifica el evento "activo" ahora:
-  1. Un evento está ACTIVO ahora si su hora de inicio está dentro de un rango de [hora inicio - 15 min, hora inicio + 90 min] respecto a ${currentTime24}. Esto cubre tanto eventos que acaban de empezar como los que están en medio de su duración típica (clases, reuniones, etc).
-  2. Si hay más de uno activo, preferí el más reciente (el que empezó hace menos tiempo pero ya empezó).
-  3. Si ninguno está activo, buscá el próximo que empieza en los próximos 30 min.
-- Para comparar: convertí los tiempos de los eventos (formato "H:MM AM/PM") a 24h y calculá la diferencia en minutos con ${currentTime24}.
-- Si hay exactamente un candidato claro, seleccionalo y ejecutá la acción (delete_event / edit_event) directamente sin pedir confirmación ni nombre.
-- Solo pedí clarificación si hay dos o más eventos con solapamiento ambiguo al mismo tiempo.
-- Al comparar por nombre, ignorá prefijos como "Recordatorio:", "Recuerda:", "Reminder:" — tratalos como parte del mismo evento. "clase de historia" hace match con "Recordatorio: Clase de Historia".
-- Al confirmar la eliminación, incluí el título exacto del evento eliminado en el reply.
+  1. Un evento está ACTIVO ahora si su hora de inicio está dentro de un rango de [hora inicio - 15 min, hora inicio + 90 min] respecto a ${currentTime24}.
+  2. Si hay más de uno activo, prefiere el más reciente (el que empezó hace menos tiempo pero ya empezó).
+  3. Si ninguno está activo, busca el próximo que empieza en los próximos 30 min.
+- Para comparar: convierte los tiempos de los eventos (formato "H:MM AM/PM") a 24h y calcula la diferencia en minutos con ${currentTime24}.
+- Si hay exactamente un candidato claro, selecciónalo y ejecuta la acción (delete_event / edit_event) directamente sin pedir confirmación ni nombre.
+- Solo pide clarificación si hay dos o más eventos con solapamiento ambiguo al mismo tiempo.
+- Al comparar por nombre, ignora prefijos como "Recordatorio:", "Recuerda:", "Reminder:" — trátalos como parte del mismo evento. "clase de historia" hace match con "Recordatorio: Clase de Historia".
+- Al confirmar la eliminación, incluye el título exacto del evento eliminado en el reply.
 
-- IMPORTANTE — esta es una interfaz de VOZ y texto. Responde siempre en español neutro, cálido y profesional. Máximo 2 oraciones claras y directas. Los eventos son del USUARIO, jamás uses "tengo/mi" para referirte a ellos. No uses modismos chilenos ni jerga informal. Sin negritas, sin asteriscos, sin guiones, sin listas, sin símbolos ni formato. Solo texto plano, apto para ser leído en voz alta.`
+Búsqueda de eventos por título (CRÍTICO para borrar/editar):
+- Cuando el usuario mencione un título o parte de un título ("borra Mi hermano", "cancela la clase", "elimina el de Juan"), busca en la lista de eventos actuales usando match FLEXIBLE:
+  1. Coincidencia exacta ignorando mayúsculas/acentos.
+  2. El título del usuario aparece DENTRO del título del evento (substring).
+  3. El título del evento aparece DENTRO del texto del usuario.
+  4. Cualquier palabra de 4+ letras del usuario aparece en el título del evento.
+- Si encuentras UNA coincidencia, ejecuta delete_event con su id real (el "id" que aparece en la lista). NO digas "no encuentro" si hay un match razonable.
+- Ejemplo: usuario dice "borra Mi hermano" y existe evento {id:"abc", title:"Mi hermano"} → emite delete_event con id "abc". No preguntes a qué se refiere.
+- JAMÁS inventes un id. El id DEBE venir exactamente de la lista de eventos.
+
+RECORDATORIO FINAL DE IDIOMA (LEER SIEMPRE):
+- Esta es una interfaz de voz y texto para un usuario en Chile. Responde en ESPAÑOL NEUTRO con "tú" (NO voseo).
+- PROHIBIDO: "referís, querés, podés, tenés, hacé, vos, dale, che, acá, allá, tratalos, agendalo, agregalo, buscá, ejecutá, seleccioná, pedí, conectá, preferí, incluí, tenelo".
+- USA: "refieres, quieres, puedes, tienes, haz, tú, claro, aquí, allí, trátalos, agéndalo, agrégalo, busca, ejecuta, selecciona, pide, conecta, prefiere, incluye, tenlo".
+- Máximo 2 oraciones. Texto plano. Sin emojis, asteriscos, guiones, markdown ni listas. Los eventos son del USUARIO (usa "tu/tienes", nunca "mi/tengo").`
 
   const messages = [
     ...history.map((h) => ({ role: h.role, content: h.content })),
