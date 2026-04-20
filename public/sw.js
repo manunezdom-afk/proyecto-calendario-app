@@ -5,7 +5,7 @@
 //   - Recursos estáticos (JS/CSS/imágenes): stale-while-revalidate
 //   - Llamadas a /api/: siempre red (no se cachean)
 
-const VERSION = 'v4'
+const VERSION = 'v5'
 const STATIC_CACHE = `focus-static-${VERSION}`
 const RUNTIME_CACHE = `focus-runtime-${VERSION}`
 
@@ -136,14 +136,17 @@ self.addEventListener('notificationclick', (event) => {
   const action = event.action
   const targetUrl = event.notification.data?.url || '/'
 
-  // Snooze: avisar al backend que reprograme +10min
+  // Snooze: avisar al backend que reprograme +10min. El cron firmó un
+  // snoozeToken HMAC por notificación que el endpoint verifica para
+  // confirmar que el pedido es legítimo (sin ese token cualquiera podía
+  // silenciar notifs de otros usuarios).
   if (action === 'snooze') {
     event.waitUntil(
       fetch('/api/push-snooze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          eventId: event.notification.data?.eventId,
+          snoozeToken: event.notification.data?.snoozeToken,
           minutes: 10,
         }),
       }).catch(() => {})

@@ -16,6 +16,7 @@
 
 import webpush from 'web-push'
 import { getSupabaseAdmin } from './_supabaseAdmin.js'
+import { signSnoozeToken } from './_shared/snoozeToken.mjs'
 
 const OFFSETS = [10, 30, 60] // minutos antes del evento
 const WINDOW_MIN = 2.5 // tolerancia: ±2.5 min alrededor del objetivo
@@ -159,7 +160,12 @@ export default async function handler(req, res) {
         continue
       }
 
-      // Build payload
+      // Build payload. snoozeToken firma (user_id, event_id) para que el SW
+      // pueda llamar /api/push-snooze sin depender del JWT del usuario.
+      let snoozeToken = null
+      try { snoozeToken = signSnoozeToken({ userId: ev.user_id, eventId: ev.id }) }
+      catch (e) { console.warn('[cron] snooze_secret missing, no snooze token', e?.message) }
+
       const payload = {
         title: `En ${offset} min: ${ev.title}`,
         body: `${ev.time}${ev.section ? ` · ${ev.section}` : ''}`,
@@ -167,7 +173,7 @@ export default async function handler(req, res) {
         tag: `reminder-${ev.id}-${offset}`,
         icon: '/icons/icon-192.png',
         badge: '/icons/icon-192.png',
-        data: { eventId: ev.id, offset, kind: 'event_reminder' },
+        data: { eventId: ev.id, offset, kind: 'event_reminder', snoozeToken },
       }
 
       const { sent, failed } = await sendPushToUser(admin, ev.user_id, payload)

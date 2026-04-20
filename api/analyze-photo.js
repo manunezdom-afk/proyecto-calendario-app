@@ -1,19 +1,7 @@
 // Handler Vercel — delega la lógica a api/_shared/analyzePhotoCore.mjs.
 
 import { analyzePhotoCore, AnalyzePhotoError } from './_shared/analyzePhotoCore.mjs'
-
-// Rate limit in-memory (20 req/min por IP). Nota: no es global entre
-// instancias serverless — para producción real ver api/_shared/rateLimit.mjs
-// o migrar a Redis/Upstash.
-const _rl = new Map()
-function rateLimited(ip) {
-  const now = Date.now()
-  const e = _rl.get(ip)
-  if (!e || now > e.reset) { _rl.set(ip, { count: 1, reset: now + 60_000 }); return false }
-  if (e.count >= 20) return true
-  e.count++
-  return false
-}
+import { enforceRateLimit, RateLimitError, clientIP } from './_shared/rateLimit.mjs'
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -22,9 +10,23 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
 
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown'
-  if (rateLimited(ip)) {
-    return res.status(429).json({ error: 'rate_limit', message: 'Demasiadas solicitudes. Espera un momento.' })
+  // Rate limit global (respaldado por Supabase) en reemplazo del Map in-memory
+  // que no escalaba entre instancias serverless. 20 req/min por IP.
+  try {
+    await enforceRateLimit({
+      key: `analyze-photo:ip-${clientIP(req)}`,
+      windowSeconds: 60,
+      maxCount: 20,
+    })
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      return res.status(429).json({
+        error: 'rate_limit',
+        message: 'Demasiadas solicitudes. Espera un momento.',
+        resetAt: err.resetAt,
+      })
+    }
+    throw err
   }
 
   try {

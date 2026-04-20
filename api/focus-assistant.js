@@ -1,29 +1,37 @@
 // Handler Vercel — delega la lógica a api/_shared/focusAssistantCore.mjs.
 
 import { runFocusAssistant, FocusAssistantError } from './_shared/focusAssistantCore.mjs'
-
-// Rate limit in-memory (30 req/min por IP). Nota: no es global entre
-// instancias serverless — para producción real migrar a Redis/Upstash.
-const _rl = new Map()
-function rateLimited(ip) {
-  const now = Date.now()
-  const e = _rl.get(ip)
-  if (!e || now > e.reset) { _rl.set(ip, { count: 1, reset: now + 60_000 }); return false }
-  if (e.count >= 30) return true
-  e.count++
-  return false
-}
+import { enforceRateLimit, RateLimitError, clientIP } from './_shared/rateLimit.mjs'
+import { getUserIdFromAuth } from './_supabaseAdmin.js'
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
 
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown'
-  if (rateLimited(ip)) {
-    return res.status(429).json({ error: 'rate_limit', message: 'Demasiadas solicitudes. Espera un momento.' })
+  // Rate limit global via Supabase. Si el user está autenticado usamos su
+  // user_id (limita el abuso de cuentas compartiendo IP); si no, IP a secas.
+  const userId = await getUserIdFromAuth(req).catch(() => null)
+  const limitKey = userId
+    ? `focus-assistant:user-${userId}`
+    : `focus-assistant:ip-${clientIP(req)}`
+  try {
+    await enforceRateLimit({
+      key: limitKey,
+      windowSeconds: 60,
+      maxCount: 30,
+    })
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      return res.status(429).json({
+        error: 'rate_limit',
+        message: 'Demasiadas solicitudes. Espera un momento.',
+        resetAt: err.resetAt,
+      })
+    }
+    throw err
   }
 
   try {

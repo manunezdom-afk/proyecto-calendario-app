@@ -262,3 +262,86 @@ AS $$
 $$;
 REVOKE EXECUTE ON FUNCTION public.increment_feed_read(TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.increment_feed_read(TEXT) FROM anon, authenticated;
+
+-- ── api_rate_limits: rate limiter global para endpoints serverless ─────────
+-- Reemplaza el contador in-memory que no escalaba entre instancias.
+CREATE TABLE IF NOT EXISTS public.api_rate_limits (
+  key          TEXT         NOT NULL,
+  window_start TIMESTAMPTZ  NOT NULL,
+  count        INTEGER      NOT NULL DEFAULT 0,
+  PRIMARY KEY (key, window_start)
+);
+ALTER TABLE public.api_rate_limits ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.increment_rate_limit(
+  p_key             TEXT,
+  p_window_seconds  INTEGER,
+  p_max_count       INTEGER
+)
+RETURNS TABLE (allowed BOOLEAN, count INTEGER, remaining INTEGER, reset_at TIMESTAMPTZ)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_bucket_epoch BIGINT;
+  v_window_start TIMESTAMPTZ;
+  v_count        INTEGER;
+BEGIN
+  v_bucket_epoch := (EXTRACT(EPOCH FROM NOW())::BIGINT / p_window_seconds) * p_window_seconds;
+  v_window_start := TO_TIMESTAMP(v_bucket_epoch);
+  INSERT INTO public.api_rate_limits (key, window_start, count)
+  VALUES (p_key, v_window_start, 1)
+  ON CONFLICT (key, window_start)
+  DO UPDATE SET count = public.api_rate_limits.count + 1
+  RETURNING public.api_rate_limits.count INTO v_count;
+  allowed   := v_count <= p_max_count;
+  count     := v_count;
+  remaining := GREATEST(0, p_max_count - v_count);
+  reset_at  := v_window_start + (p_window_seconds * INTERVAL '1 second');
+  RETURN NEXT;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.increment_rate_limit(TEXT, INTEGER, INTEGER) FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.cleanup_rate_limits()
+RETURNS VOID LANGUAGE SQL SECURITY DEFINER SET search_path = public AS $$
+  DELETE FROM public.api_rate_limits WHERE window_start < NOW() - INTERVAL '24 hours';
+$$;
+REVOKE EXECUTE ON FUNCTION public.cleanup_rate_limits() FROM PUBLIC, anon, authenticated;
+
+-- ── tts_usage: tope de costo diario TTS por usuario ────────────────────────
+CREATE TABLE IF NOT EXISTS public.tts_usage (
+  user_id     UUID     NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  day         DATE     NOT NULL,
+  char_count  INTEGER  NOT NULL DEFAULT 0,
+  updated_at  TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, day)
+);
+ALTER TABLE public.tts_usage ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users read own tts usage"
+  ON public.tts_usage FOR SELECT USING (auth.uid() = user_id);
+
+CREATE OR REPLACE FUNCTION public.increment_tts_usage(
+  p_user_id      UUID,
+  p_chars        INTEGER,
+  p_daily_limit  INTEGER
+)
+RETURNS TABLE (allowed BOOLEAN, used INTEGER, remaining INTEGER)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_used INTEGER;
+BEGIN
+  INSERT INTO public.tts_usage (user_id, day, char_count)
+  VALUES (p_user_id, CURRENT_DATE, p_chars)
+  ON CONFLICT (user_id, day)
+  DO UPDATE SET
+    char_count = public.tts_usage.char_count + p_chars,
+    updated_at = NOW()
+  RETURNING public.tts_usage.char_count INTO v_used;
+  allowed   := v_used <= p_daily_limit;
+  used      := v_used;
+  remaining := GREATEST(0, p_daily_limit - v_used);
+  RETURN NEXT;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.increment_tts_usage(UUID, INTEGER, INTEGER) FROM PUBLIC, anon, authenticated;

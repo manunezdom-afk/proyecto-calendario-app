@@ -105,19 +105,32 @@ Agrupado por resultado, no por tiempo. Avanza en orden, cada tarea desbloquea la
 
 ## Bloque 6 — Seguridad mínima
 
-Estado al 2026-04-19 (auditoría `claude/app-review-improvements-n6gri`):
+Estado al 2026-04-20 (auditoría `claude/app-review-improvements-n6gri`):
 
-- [x] Rate limiting in-memory en `/api/focus-assistant` y `/api/analyze-photo` (20-30 req/min por IP). **Limitación**: al ser in-memory no es global entre instancias serverless — migrar a Redis/Upstash sigue pendiente.
+- [x] Rate limiting global en `/api/focus-assistant`, `/api/analyze-photo`, `/api/tts` — respaldado por tabla Supabase `api_rate_limits` + RPC `increment_rate_limit`. Escala entre instancias serverless.
 - [ ] Rate limiting en `/api/calendar-feeds` (pendiente)
 - [ ] Validar inputs con Zod en todos los endpoints del API
 - [ ] Instalar Sentry para tracking de errores (plan gratis hasta 5k errors/mes)
 - [ ] Activar 2FA en Vercel, Supabase, GitHub y Stripe
-- [ ] Revisar que no haya `console.log` con datos sensibles — pendiente: `api/tts.js:41` loguea el prefijo de la API key
-- [ ] `/api/push-snooze` acepta requests sin JWT — falta `getUserIdFromAuth` + filtro por `user_id` (flagged en auditoría)
-- [ ] Tope de costo diario para `/api/tts` (OpenAI TTS $0.015/1K chars)
+- [x] `console.log` de prefijo de OpenAI key en `api/tts.js` eliminado.
+- [x] `/api/push-snooze` ahora requiere token HMAC firmado por el cron (`SNOOZE_SECRET` o fallback a `CRON_SECRET`). El token se embebe por-notificación, expira en 25h, y filtra el UPDATE por user_id + event_id del claim — imposible silenciar notifs ajenas.
+- [x] Tope de costo diario para `/api/tts` — tabla `tts_usage` + RPC `increment_tts_usage`, default 25000 chars/día por usuario (≈ $0.375 max). Requiere login (sin JWT cae a Web Speech API local). Header `x-openai-key` del cliente removido.
 - [ ] Configurar `Content-Security-Policy` en `vercel.json`
 - [x] RLS policies de Supabase restrictivas por `auth.uid()` (verificado en schema)
 - [x] VAPID public key en cliente, private solo en server; ICS con token aleatorio (no expone user_id)
+
+### Env vars nuevas (agregar en Vercel → Settings → Environment Variables)
+
+| Var | Valor | Notas |
+|---|---|---|
+| `SNOOZE_SECRET` | `openssl rand -hex 32` | Firma los tokens HMAC de push-snooze. Si falta, cae a `CRON_SECRET`. |
+| `TTS_DAILY_CHAR_LIMIT` | `25000` (opcional) | Chars TTS por usuario por día. Default 25000 ≈ 5 min audio ≈ $0.375. |
+
+### Migraciones Supabase nuevas
+
+Ejecutá `supabase/migrations/0002_rate_limits_and_tts_usage.sql` en el SQL editor (idempotente). Crea:
+- `api_rate_limits` + RPC `increment_rate_limit` / `cleanup_rate_limits`
+- `tts_usage` + RPC `increment_tts_usage`
 
 ---
 

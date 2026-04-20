@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useUserMemories } from '../hooks/useUserMemories'
+import { supabase } from '../lib/supabase'
 
 const SR = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
@@ -104,27 +105,35 @@ function speakWebSpeech(text) {
 
 /**
  * TTS principal:
- * 1. Intenta /api/tts (OpenAI TTS — voz seleccionada por el usuario)
- * 2. Si no hay key o falla → Web Speech API con mejor voz disponible
+ * 1. Intenta /api/tts (OpenAI TTS — requiere login; respaldado por
+ *    tope diario de caracteres por usuario en Supabase para evitar
+ *    abuso de costos)
+ * 2. Si no hay sesión, el endpoint falla, o el usuario pasó el tope
+ *    → Web Speech API con la mejor voz disponible del sistema
  */
 async function speak({ text, voice, stopAudio, audioElRef, audioUrlRef }) {
   stopAudio?.()
   const selectedVoice = String(voice || getVoice() || 'nova').toLowerCase()
   try {
-    const openaiKey = getOpenAIKey()
-    const headers = { 'Content-Type': 'application/json' }
-    if (openaiKey) headers['x-openai-key'] = openaiKey
+    // JWT de la sesión activa — requerido por /api/tts para asignar uso
+    // al usuario y aplicar el cap diario. Sin sesión, caemos a Web Speech.
+    const token = (await supabase?.auth.getSession())?.data?.session?.access_token
+    if (!token) {
+      // No autenticado → Web Speech directo (más rápido que pegar al server
+      // solo para que devuelva 401).
+      return speakWebSpeech(text)
+    }
 
     // Timeout compatible con iOS Safari (sin AbortSignal.timeout)
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 9000)
 
-    // Debug/tracking
-    console.log('Voz actual enviada:', selectedVoice)
-
     const res = await fetch('/api/tts', {
       method: 'POST',
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({ text, voice: selectedVoice }),
       signal: controller.signal,
     }).finally(() => clearTimeout(timer))
