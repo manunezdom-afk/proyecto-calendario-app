@@ -78,7 +78,6 @@ export default function NovaWidget({
 
   const inputRef    = useRef(null)
   const srRef       = useRef(null)
-  const pressTimer  = useRef(null)
   const historyRef  = useRef([])
   const responseRef = useRef(null)  // scroll anchor
 
@@ -93,7 +92,8 @@ export default function NovaWidget({
     }, () => {})
   }, [])
 
-  // Atajo global Cmd/Ctrl+K
+  // Atajo global Cmd/Ctrl+K (solo desktop — en iOS el focus diferido no
+  // abre el teclado, así que el usuario toca el input directamente)
   useEffect(() => {
     function onKeyDown(e) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -107,11 +107,6 @@ export default function NovaWidget({
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [isOpen])
-
-  // Foco automático al abrir
-  useEffect(() => {
-    if (isOpen) setTimeout(() => inputRef.current?.focus(), 80)
   }, [isOpen])
 
   // Seguir el teclado en iOS PWA: sin esto, el panel queda tapado porque los
@@ -167,29 +162,12 @@ export default function NovaWidget({
     setIsListening(false)
   }
 
-  // Long press en la pastilla: tap = toggle, hold 500ms = voz
-  function onPillPointerDown(e) {
-    if (e.button && e.button !== 0) return
-    pressTimer.current = setTimeout(() => {
-      pressTimer.current = null
-      setIsOpen(true)
-      setTimeout(() => startVoice(), 150)
-    }, 500)
-  }
-
-  function onPillPointerUp() {
-    if (pressTimer.current) {
-      clearTimeout(pressTimer.current)
-      pressTimer.current = null
-      setIsOpen(prev => {
-        if (!prev) setTimeout(() => inputRef.current?.focus(), 60)
-        return !prev
-      })
-    }
-  }
-
-  function onPillPointerLeave() {
-    if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null }
+  // Tap en la pastilla = abrir panel. (Antes usábamos long-press para activar
+  // voz, pero en iOS un tap normal > 500ms disparaba el micrófono y
+  // deshabilitaba el input — el usuario no podía escribir. Ahora el
+  // micrófono se activa desde el botón dentro del panel.)
+  function onPillTap() {
+    setIsOpen(prev => !prev)
   }
 
   // Ejecutar acciones y mostrar chips
@@ -510,9 +488,7 @@ export default function NovaWidget({
             animate={{ opacity: 1, scale: 1 }}
             exit={{    opacity: 0, scale: 0.7 }}
             transition={{ type: 'spring', damping: 18, stiffness: 300 }}
-            onPointerDown={onPillPointerDown}
-            onPointerUp={onPillPointerUp}
-            onPointerLeave={onPillPointerLeave}
+            onClick={onPillTap}
             className="flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-2xl text-white text-[13px] font-semibold select-none active:scale-95 transition-transform"
             style={{
               background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)',
