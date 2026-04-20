@@ -4,6 +4,7 @@ import { parseICS }           from '../utils/icsImport'
 import { parseEvent }         from '../utils/parseEvent'
 import { googleCalendarUrl }  from '../utils/googleCalendarUrl'
 import { supabase }           from '../lib/supabase'
+import { uid }                from '../utils/uid'
 
 const TABS = [
   { id: 'export',    label: 'Exportar',    icon: 'ios_share' },
@@ -644,7 +645,7 @@ function TextTab({ onImport }) {
     const parsed = lines.map((line) => {
       const result = parseEvent(line)
       return {
-        id:          `evt-txt-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        id:          uid('evt-txt'),
         title:       result.title,
         time:        result.time,
         description: result.date !== 'Hoy' ? result.date : '',
@@ -801,7 +802,7 @@ function PhotoTab({ onImport }) {
     else if (/cumpleanos|fiesta|celebracion/.test(t))                     icon = 'cake'
     else if (/viaje|vuelo|aeropuerto/.test(t))                            icon = 'flight'
     return {
-      id: `evt-ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: uid('evt-ai'),
       title: title.trim(), time: displayTime, date, section, featured: false, icon,
       dotColor: section === 'evening' ? 'bg-secondary-container' : '',
       description: endTime ? `Hasta las ${endTime}` : '',

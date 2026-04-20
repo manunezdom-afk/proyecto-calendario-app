@@ -5,6 +5,7 @@ import FocusBar          from '../components/FocusBar'
 import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { isInPeak, parseEventHour, peakRangeLabel } from '../utils/peakZone'
+import { uid } from '../utils/uid'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
@@ -313,7 +314,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
   function handleModalSave(formData) {
     if (onAddEvent) onAddEvent(formData)
     setBlocks((prev) => [...prev, {
-      id: `blk-${Date.now()}`,
+      id: uid('blk'),
       time: formData.time || '—',
       type: 'confirmed',
       title: formData.title,
@@ -440,7 +441,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
         : (looksLikeReminderTitle(b?.title) ? 'Subtarea' : 'Recordatorio')
 
       const sub = {
-        id: b?.id || `sub-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        id: b?.id || uid('sub'),
         label,
         text: (b?.description || '').trim() || String(b?.title || '').trim(),
       }
@@ -457,7 +458,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
   })()
 
   return (
-    <div className="bg-surface font-body text-on-surface min-h-screen pb-52 dark:bg-slate-900 dark:text-slate-100">
+    <div className="bg-surface font-body text-on-surface min-h-screen pb-nav-bottom-lg dark:bg-slate-900 dark:text-slate-100">
 
       {/* Setup card legacy — reemplazado por OnboardingTour animado.
           El sistema de user_signals aprende el cronotipo solo, sin preguntar. */}

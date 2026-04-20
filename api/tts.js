@@ -2,23 +2,21 @@
  * Vercel Serverless Function: tts
  *
  * Text-to-Speech usando OpenAI TTS (voz "nova" — la misma que ChatGPT).
- * Requiere OPENAI_API_KEY en variables de entorno de Vercel,
- * o el header x-openai-key enviado desde el cliente.
+ * Requiere OPENAI_API_KEY en variables de entorno del servidor.
+ * (Antes se aceptaba un header x-openai-key desde el cliente — retirado por
+ * seguridad: cualquiera podía inyectar una key arbitraria.)
  *
  * Si no hay key → 503, el cliente hace fallback a Web Speech API.
  */
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-openai-key')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
   if (req.method === 'OPTIONS') return res.status(200).end()
-  if (req.method !== 'POST') return res.status(405).end()
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
 
-  const headerKeyRaw = req.headers['x-openai-key']
-  const headerKey = Array.isArray(headerKeyRaw) ? headerKeyRaw[0] : headerKeyRaw
-  const apiKey =
-    (process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || headerKey || '').trim()
+  const apiKey = (process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || '').trim()
   if (!apiKey) return res.status(503).json({ error: 'no_key' })
 
   /** @type {{ text?: string, voice?: string }} */
@@ -38,7 +36,6 @@ export default async function handler(req, res) {
   if (!text?.trim()) return res.status(400).json({ error: 'no_text' })
 
   try {
-    console.log('[tts] key_present:', true, 'key_prefix:', apiKey.slice(0, 7), 'voice:', selectedVoice)
     const response = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: {

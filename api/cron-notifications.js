@@ -14,11 +14,23 @@
  * 4. Registra en sent_notifications
  */
 
+import { createHmac } from 'node:crypto'
 import webpush from 'web-push'
 import { getSupabaseAdmin } from './_supabaseAdmin.js'
 
 const OFFSETS = [10, 30, 60] // minutos antes del evento
 const WINDOW_MIN = 2.5 // tolerancia: ±2.5 min alrededor del objetivo
+const SNOOZE_TOKEN_TTL_MS = 2 * 60 * 60 * 1000 // 2h
+
+function signSnoozeToken(userId, eventId) {
+  const secret = process.env.CRON_SECRET
+  if (!secret) return null
+  const payload = Buffer.from(
+    JSON.stringify({ u: userId, e: eventId, exp: Date.now() + SNOOZE_TOKEN_TTL_MS }),
+  ).toString('base64url')
+  const sig = createHmac('sha256', secret).update(payload).digest('base64url')
+  return `${payload}.${sig}`
+}
 
 function configureWebPush() {
   const pub = process.env.VAPID_PUBLIC_KEY
@@ -149,7 +161,12 @@ export default async function handler(req, res) {
         tag: `reminder-${ev.id}-${offset}`,
         icon: '/icons/icon-192.png',
         badge: '/icons/icon-192.png',
-        data: { eventId: ev.id, offset, kind: 'event_reminder' },
+        data: {
+          eventId: ev.id,
+          offset,
+          kind: 'event_reminder',
+          snoozeToken: signSnoozeToken(ev.user_id, ev.id),
+        },
       }
 
       const { sent, failed } = await sendPushToUser(admin, ev.user_id, payload)

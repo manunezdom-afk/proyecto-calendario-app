@@ -66,6 +66,11 @@ export default {
         body: ['Inter', 'sans-serif'],
         label: ['Inter', 'sans-serif'],
       },
+      spacing: {
+        'safe-bottom': 'calc(1.5rem + env(safe-area-inset-bottom))',
+        'nav-bottom': 'calc(7rem + env(safe-area-inset-bottom))',
+        'nav-bottom-lg': 'calc(13rem + env(safe-area-inset-bottom))',
+      },
     },
   },
   plugins: [],

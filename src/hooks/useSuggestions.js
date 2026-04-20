@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
+import { uid } from '../utils/uid'
 
 // ── useSuggestions ──────────────────────────────────────────────────────────
 // Gestiona la bandeja de sugerencias que Nova genera en "modo propuesta".
@@ -38,7 +39,7 @@ export function useSuggestions() {
   const addSuggestion = useCallback(
     (suggestion) => {
       const full = {
-        id: suggestion.id || `sug-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: suggestion.id || uid('sug'),
         status: 'pending',
         createdAt: new Date().toISOString(),
         resolvedAt: null,

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "build:landing": "tailwindcss -c ./landing/tailwind.config.js -i ./landing/input.css -o ./public/landing/styles.css --minify",
     "build:og": "node scripts/build-og.mjs",
-    "build:icons": "node scripts/build-icons.mjs"
+    "build:icons": "node scripts/build-icons.mjs",
+    "build:splash": "node scripts/build-splash.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.89.0",

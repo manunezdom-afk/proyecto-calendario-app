@@ -244,3 +244,34 @@ CREATE POLICY "Users manage own feeds"
   ON public.calendar_feeds FOR ALL USING (auth.uid() = user_id);
 CREATE INDEX IF NOT EXISTS calendar_feeds_user_idx
   ON public.calendar_feeds (user_id, created_at DESC);
+
+-- ── auto-create user_profiles on signup ──────────────────────────────────────
+-- Antes, fetchProfile() devolvía null tras el primer login y Nova arrancaba sin
+-- contexto. Este trigger inserta una fila por defecto cuando se crea el usuario.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  INSERT INTO public.user_profiles (id) VALUES (NEW.id)
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ── api_rate_limit: contador persistente por IP/endpoint ─────────────────────
+-- Reemplaza el Map en memoria de api/analyze-photo.js que se reseteaba en cada
+-- cold start de Vercel, haciendo el rate-limit inefectivo.
+CREATE TABLE IF NOT EXISTS public.api_rate_limit (
+  id          BIGSERIAL PRIMARY KEY,
+  bucket_key  TEXT NOT NULL,                 -- ej: "analyze-photo:1.2.3.4"
+  window_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  count       INTEGER NOT NULL DEFAULT 1,
+  UNIQUE (bucket_key, window_start)
+);
+CREATE INDEX IF NOT EXISTS api_rate_limit_key_idx
+  ON public.api_rate_limit (bucket_key, window_start DESC);
+-- No RLS: solo accedido por el service role.

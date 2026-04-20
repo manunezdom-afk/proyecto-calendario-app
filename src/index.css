@@ -6,11 +6,24 @@
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   font-family: 'Inter', sans-serif;
   min-height: max(884px, 100dvh);
   background-color: #fcf8fb;
   color: #1b1b1d;
+}
+
+/* iOS Safari ≤ 15px inputs fuerzan zoom al enfocar. 16px lo evita. */
+input, textarea, select {
+  font-size: 16px;
+}
+
+button, a, [role="button"] {
+  touch-action: manipulation;
 }
 
 h1, h2, h3 {

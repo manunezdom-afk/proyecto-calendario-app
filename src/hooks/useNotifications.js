@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { parseEventTime } from '../utils/parseEventTime'
 import { subscribeToPush, unsubscribeFromPush, getPushStatus } from '../lib/pushSubscription'
+import { uid } from '../utils/uid'
 
 const LOG_KEY    = 'focus_notif_log'
 const FIRED_KEY  = 'focus_notif_fired'
@@ -124,7 +125,7 @@ export function useNotifications({ events = [] } = {}) {
 
         // Append to in-app log
         const entry = {
-          id: `notif-${Date.now()}-${event.id}`,
+          id: uid(`notif-${event.id}`),
           eventId: event.id,
           title,
           body,

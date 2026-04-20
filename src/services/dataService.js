@@ -137,6 +137,7 @@ function memoryFromDb(row) {
 // ── Offline sync queue ────────────────────────────────────────────────────────
 
 const QUEUE_KEY = 'focus_sync_queue'
+const QUEUE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000 // 30 días
 
 function enqueue(op) {
   const q = cacheGet(QUEUE_KEY, [])
@@ -325,8 +326,16 @@ export const dataService = {
 
   async flushQueue() {
     if (!supabase || !navigator.onLine) return
-    const q = cacheGet(QUEUE_KEY, [])
-    if (q.length === 0) return
+    const rawQ = cacheGet(QUEUE_KEY, [])
+    const cutoff = Date.now() - QUEUE_MAX_AGE_MS
+    // Descarta operaciones más viejas que 30 días: es casi seguro que ya no
+    // son relevantes (evento borrado, dispositivo olvidado, etc.) y evita
+    // "resurrecciones" de datos antiguos al volver online tras mucho tiempo.
+    const q = rawQ.filter(op => !op.ts || op.ts > cutoff)
+    if (q.length === 0) {
+      if (rawQ.length > 0) cacheSet(QUEUE_KEY, [])
+      return
+    }
     const failed = []
     for (const op of q) {
       try { await executeOp(op) } catch { failed.push(op) }

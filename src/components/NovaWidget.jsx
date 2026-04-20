@@ -4,6 +4,7 @@ import { useUserProfile } from '../hooks/useUserProfile'
 import { useUserMemories } from '../hooks/useUserMemories'
 import { logSignal } from '../services/signalsService'
 import { getCachedBehavior } from '../services/behaviorAnalysis'
+import { uid } from '../utils/uid'
 
 const SR =
   typeof window !== 'undefined' &&
@@ -169,7 +170,7 @@ export default function NovaWidget({
   // Ejecutar acciones y mostrar chips
   const executeAction = useCallback((action) => {
     if (!action?.type) return
-    const id = `${Date.now()}-${Math.random()}`
+    const id = uid()
 
     const chipDefs = {
       add_event:      { icon: 'add_circle',  label: `Creando "${action.event?.title || ''}"` },
@@ -257,7 +258,7 @@ export default function NovaWidget({
             mark_task_done: 'task_alt',
           }
           return {
-            id: `${Date.now()}-${Math.random()}`,
+            id: uid(),
             icon: iconMap[action.type] || 'auto_awesome',
             label: labelMap[action.type] || 'Propuesta',
             done: true, // propuesta ya encolada

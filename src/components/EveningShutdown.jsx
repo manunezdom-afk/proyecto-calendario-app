@@ -322,7 +322,7 @@ export default function EveningShutdown({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[200] flex items-end"
+      className="fixed inset-0 z-[210] flex items-end"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose?.() }}
     >

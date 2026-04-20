@@ -15,6 +15,8 @@
  *   - Línea fecha+evento: "Lunes 9:00 Gym" → fecha=lunes, hora=9:00, título=Gym
  */
 
+import { uid } from './uid'
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function toISO(date) {
@@ -288,7 +290,7 @@ export function parseScheduleText(rawText) {
     const section = h24 !== null && h24 >= 14 ? 'evening' : 'focus'
 
     events.push({
-      id:          `evt-sch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id:          uid('evt-sch'),
       title:       capitalize(rawTitle),
       time:        timeResult?.displayStr ?? '',
       date:        currentDateISO,

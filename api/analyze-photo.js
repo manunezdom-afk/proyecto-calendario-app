@@ -1,12 +1,47 @@
-// ─── Rate limiting en memoria (20 req/min por IP) ────────────────────────────
-const _rl = new Map()
-function rateLimited(ip) {
+// ─── Rate limiting persistente (20 req/min por IP) ───────────────────────────
+// Se almacena en public.api_rate_limit (Supabase) para sobrevivir a cold starts
+// del serverless. Si Supabase no está disponible, fallback a memoria local.
+import { getSupabaseAdmin } from './_supabaseAdmin.js'
+
+const WINDOW_MS = 60_000
+const MAX_REQ = 20
+const _rlMem = new Map()
+
+function memLimited(ip) {
   const now = Date.now()
-  const e = _rl.get(ip)
-  if (!e || now > e.reset) { _rl.set(ip, { count: 1, reset: now + 60_000 }); return false }
-  if (e.count >= 20) return true
+  const e = _rlMem.get(ip)
+  if (!e || now > e.reset) { _rlMem.set(ip, { count: 1, reset: now + WINDOW_MS }); return false }
+  if (e.count >= MAX_REQ) return true
   e.count++
   return false
+}
+
+async function rateLimited(ip) {
+  const admin = getSupabaseAdmin()
+  if (!admin) return memLimited(ip)
+  const bucketKey = `analyze-photo:${ip}`
+  const windowStart = new Date(Math.floor(Date.now() / WINDOW_MS) * WINDOW_MS).toISOString()
+  try {
+    const { data, error } = await admin
+      .from('api_rate_limit')
+      .select('count')
+      .eq('bucket_key', bucketKey)
+      .eq('window_start', windowStart)
+      .maybeSingle()
+    if (error) return memLimited(ip)
+    if (data && data.count >= MAX_REQ) return true
+    if (data) {
+      await admin.from('api_rate_limit')
+        .update({ count: data.count + 1 })
+        .eq('bucket_key', bucketKey)
+        .eq('window_start', windowStart)
+    } else {
+      await admin.from('api_rate_limit').insert({ bucket_key: bucketKey, window_start: windowStart, count: 1 })
+    }
+    return false
+  } catch {
+    return memLimited(ip)
+  }
 }
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages'
@@ -24,7 +59,7 @@ export default async function handler(req, res) {
   }
 
   const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown'
-  if (rateLimited(ip)) {
+  if (await rateLimited(ip)) {
     return res.status(429).json({ error: 'rate_limit', message: 'Demasiadas solicitudes. Espera un momento.' })
   }
 

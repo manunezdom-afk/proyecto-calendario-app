@@ -8,6 +8,8 @@
  *   DTSTART;VALUE=DATE:20260414       (all-day date)
  */
 
+import { uid } from './uid'
+
 // Format 12h time string from a Date
 function to12h(date) {
   const h = date.getHours()
@@ -115,7 +117,7 @@ export function parseICS(icsText) {
       inEvent = false
       if (current.title) {
         const ev = {
-          id:          `evt-imp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          id:          uid('evt-imp'),
           title:       current.title,
           time:        current.time   || '',
           description: current.desc   || '',

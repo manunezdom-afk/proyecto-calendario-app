@@ -69,7 +69,7 @@ export function eventsToICS(events) {
     if (ev.description) lines.push(`DESCRIPTION:${escapeICS(ev.description)}`)
 
     // Stamp (required by RFC 5545)
-    lines.push(`DTSTAMP:${fmtDT(new Date())}`)
+    lines.push(`DTSTAMP:${fmtDTZ(new Date())}`)
     lines.push('END:VEVENT')
   })
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
+import { uid } from '../utils/uid'
 
 const DEFAULT_TASKS = [
   { id: 'tsk-001', label: 'Revisar Roadmap del Q4', done: false, priority: 'Alta', category: 'hoy' },
@@ -33,7 +34,7 @@ export function useTasks() {
   }, [tasks])
 
   function addTask({ label, priority = 'Media', category = 'hoy' }) {
-    const t = { id: `tsk-${Date.now()}`, label, done: false, priority, category }
+    const t = { id: uid('tsk'), label, done: false, priority, category }
     console.log(`[Focus] ➕ addTask: "${label}"`)
     setTasks(prev => [...prev, t])
     if (user) dataService.upsertTask(t, user.id).catch(console.warn)
