@@ -202,12 +202,23 @@ export default function FocusBar({
             ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onFocus={() => setIsFocused(true)}
+            onFocus={() => {
+              setIsFocused(true)
+              // iOS PWA a veces no desplaza el input al abrir el teclado.
+              // Esperamos ~280 ms (tiempo aproximado de animación del teclado)
+              // y lo forzamos para que no quede tapado.
+              setTimeout(() => {
+                inputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+              }, 280)
+            }}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && hasText && handleSend()}
             placeholder="Habla con Nova..."
             disabled={isThinking}
-            className="flex-1 bg-transparent text-[14px] text-on-surface outline-none placeholder:text-outline/50 disabled:opacity-50"
+            enterKeyHint="send"
+            autoComplete="off"
+            autoCorrect="off"
+            className="flex-1 bg-transparent text-[16px] text-on-surface outline-none placeholder:text-outline/50 disabled:opacity-50"
           />
 
           <AnimatePresence>
@@ -328,12 +339,23 @@ export default function FocusBar({
             ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onFocus={() => setIsFocused(true)}
+            onFocus={() => {
+              setIsFocused(true)
+              // iOS PWA a veces no desplaza el input al abrir el teclado.
+              // Esperamos ~280 ms (tiempo aproximado de animación del teclado)
+              // y lo forzamos para que no quede tapado.
+              setTimeout(() => {
+                inputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+              }, 280)
+            }}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && hasText && handleSend()}
             placeholder="Habla con Nova..."
             disabled={isThinking}
-            className="flex-1 bg-transparent text-[14px] text-white outline-none placeholder:text-white/25 disabled:opacity-50"
+            enterKeyHint="send"
+            autoComplete="off"
+            autoCorrect="off"
+            className="flex-1 bg-transparent text-[16px] text-white outline-none placeholder:text-white/25 disabled:opacity-50"
           />
 
           <AnimatePresence>

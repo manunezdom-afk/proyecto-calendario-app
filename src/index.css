@@ -17,9 +17,14 @@ body {
   color: #1b1b1d;
 }
 
-/* iOS Safari ≤ 15px inputs fuerzan zoom al enfocar. 16px lo evita. */
-input, textarea, select {
-  font-size: 16px;
+/* iOS Safari ≤ 15px inputs fuerzan zoom al enfocar. 16px lo evita.
+ * Usamos @layer utilities + !important porque Tailwind arbitrary values
+ * (ej. text-[14px]) tienen mayor especificidad que una regla de elemento
+ * plana, y en iOS ese zoom automático rompe el layout de la PWA. */
+@layer utilities {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
 }
 
 button, a, [role="button"] {
