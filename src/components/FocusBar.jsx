@@ -5,11 +5,18 @@ import { useUserMemories } from '../hooks/useUserMemories'
 const SR = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
 
-async function callFocusAssistant({ message, events, memories }) {
+async function callFocusAssistant({ message, events, memories, history }) {
   const res = await fetch('/api/focus-assistant', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, events, history: [], memories }),
+    body: JSON.stringify({
+      message,
+      events,
+      history,
+      memories,
+      clientNow: Date.now(),
+      clientTimezone: (typeof Intl !== 'undefined' && Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC',
+    }),
   })
 
   if (!res.ok) {
@@ -39,6 +46,22 @@ export default function FocusBar({
   const silenceRef = useRef(null)
   const doneRef    = useRef(false)
   const photoInputRef = useRef(null)
+  const historyRef = useRef([])
+
+  // Rehidratar historial persistido (compartido con NovaWidget via sessionStorage)
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('nova_history')
+      if (raw) {
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr)) {
+          historyRef.current = arr.filter(
+            h => h && typeof h === 'object' && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string',
+          )
+        }
+      }
+    } catch {}
+  }, [])
 
   useEffect(() => {
     if (!SR) return
@@ -70,8 +93,15 @@ export default function FocusBar({
 
     setIsThinking(true)
 
+    historyRef.current = [...historyRef.current, { role: 'user', content: msg }]
+
     try {
-      const result = await callFocusAssistant({ message: msg, events, memories })
+      const result = await callFocusAssistant({
+        message: msg,
+        events,
+        memories,
+        history: historyRef.current.slice(0, -1).slice(-20),
+      })
       const { reply: replyText, actions = [] } = result
 
       // Ejecutar acciones en el calendario y memorias
@@ -86,6 +116,11 @@ export default function FocusBar({
           addMemory?.(action.memory)
         }
       }
+
+      historyRef.current = [...historyRef.current, { role: 'assistant', content: replyText || '' }]
+      try {
+        sessionStorage.setItem('nova_history', JSON.stringify(historyRef.current.slice(-40)))
+      } catch {}
 
       setReply({ content: replyText, actions })
     } catch (err) {
