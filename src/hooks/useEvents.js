@@ -34,12 +34,15 @@ export function useEvents() {
   useEffect(() => {
     if (!user) return
 
+    // Al cambiar de usuario, partimos de cache propio (no del global compartido)
+    setEvents(dataService.getCachedEvents(user.id))
+
     const refetch = (tag = '') => {
       dataService.fetchEvents(user.id)
         .then(cloudEvents => {
           setEvents(cloudEvents)
-          dataService.setCachedEvents(cloudEvents)
-          console.log(`[Focus] ☁️ ${cloudEvents.length} eventos cargados desde Supabase ${tag}`)
+          dataService.setCachedEvents(cloudEvents, user.id)
+          console.log(`[Focus] ☁️ ${cloudEvents.length} eventos cargados desde Supabase ${tag} (user=${user.id.slice(0,8)})`)
         })
         .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar eventos de Supabase', err))
     }
@@ -67,10 +70,10 @@ export function useEvents() {
     }
   }, [user?.id])
 
-  // Mantiene el cache local sincronizado
+  // Mantiene el cache local sincronizado (scoped por user)
   useEffect(() => {
-    dataService.setCachedEvents(events)
-  }, [events])
+    dataService.setCachedEvents(events, user?.id)
+  }, [events, user?.id])
 
   function addEvent({ title, time, description = '', section = 'focus', icon = 'event', dotColor = 'bg-secondary-container', date = null }) {
     const newEvent = {

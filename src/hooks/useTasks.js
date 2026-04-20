@@ -20,20 +20,25 @@ export function useTasks() {
   useEffect(() => {
     if (!user) return
 
-    const refetch = () => {
+    // Partimos del cache propio del usuario (evita que tareas de otra cuenta
+    // queden visibles si el dispositivo alternó entre sesiones)
+    setTasks(dataService.getCachedTasks(DEFAULT_TASKS, user.id))
+
+    const refetch = (tag = '') => {
       dataService.fetchTasks(user.id)
         .then(cloudTasks => {
           if (!cloudTasks) return
           const result = cloudTasks.length > 0 ? cloudTasks : DEFAULT_TASKS
           setTasks(result)
-          dataService.setCachedTasks(result)
+          dataService.setCachedTasks(result, user.id)
+          console.log(`[Focus] ☁️ ${cloudTasks.length} tareas cargadas desde Supabase ${tag} (user=${user.id.slice(0,8)})`)
         })
         .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar tareas de Supabase', err))
     }
 
-    refetch()
+    refetch('(init)')
 
-    const onVisibility = () => { if (!document.hidden) refetch() }
+    const onVisibility = () => { if (!document.hidden) refetch('(visibilitychange)') }
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('focus', onVisibility)
 
@@ -41,7 +46,7 @@ export function useTasks() {
       .channel(`tasks-${user.id}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` },
-        () => refetch(),
+        () => refetch('(realtime)'),
       )
       .subscribe()
 
@@ -53,8 +58,8 @@ export function useTasks() {
   }, [user?.id])
 
   useEffect(() => {
-    dataService.setCachedTasks(tasks)
-  }, [tasks])
+    dataService.setCachedTasks(tasks, user?.id)
+  }, [tasks, user?.id])
 
   function addTask({ label, priority = 'Media', category = 'hoy' }) {
     const t = { id: `tsk-${Date.now()}`, label, done: false, priority, category }

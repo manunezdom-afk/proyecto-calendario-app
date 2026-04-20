@@ -162,8 +162,16 @@ export const dataService = {
 
   // ── Events ─────────────────────────────────────────────────────────────────
 
-  getCachedEvents() { return cacheGet('focus_events', []) },
-  setCachedEvents(events) { cacheSet('focus_events', events) },
+  // Cache por usuario para evitar que datos de otra cuenta queden "pegados"
+  // cuando el mismo dispositivo alterna entre sesiones.
+  getCachedEvents(userId) {
+    if (userId) return cacheGet(`focus_events_${userId}`, [])
+    return cacheGet('focus_events', [])
+  },
+  setCachedEvents(events, userId) {
+    if (userId) cacheSet(`focus_events_${userId}`, events)
+    else cacheSet('focus_events', events)
+  },
 
   async fetchEvents(userId) {
     if (!supabase) return this.getCachedEvents()
@@ -191,8 +199,14 @@ export const dataService = {
 
   // ── Tasks ───────────────────────────────────────────────────────────────────
 
-  getCachedTasks(fallback) { return cacheGet('focus_tasks', fallback) },
-  setCachedTasks(tasks) { cacheSet('focus_tasks', tasks) },
+  getCachedTasks(fallback, userId) {
+    if (userId) return cacheGet(`focus_tasks_${userId}`, fallback)
+    return cacheGet('focus_tasks', fallback)
+  },
+  setCachedTasks(tasks, userId) {
+    if (userId) cacheSet(`focus_tasks_${userId}`, tasks)
+    else cacheSet('focus_tasks', tasks)
+  },
 
   async fetchTasks(userId) {
     if (!supabase) return null
