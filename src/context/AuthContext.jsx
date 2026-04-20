@@ -50,8 +50,10 @@ export function AuthProvider({ children }) {
 
   const signInWithEmail = useCallback(async (email) => {
     if (!supabase) throw new Error('Supabase no configurado')
-    // Pedimos OTP + magic link. En mobile (sobre todo iOS PWA) usamos el
-    // código de 6 dígitos. En desktop podés usar cualquiera de los 2.
+    // Pedimos OTP + magic link. En mobile (sobre todo iOS PWA) el usuario
+    // pega el código numérico; en desktop puede usar el link del email.
+    // La longitud del código depende del setting OTP Length del proyecto
+    // Supabase (Project Settings → Auth → OTP Length, 6-10 dígitos).
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -64,8 +66,11 @@ export function AuthProvider({ children }) {
 
   const verifyOtp = useCallback(async (email, token) => {
     if (!supabase) throw new Error('Supabase no configurado')
-    const clean = String(token || '').replace(/\D/g, '').slice(0, 6)
-    if (clean.length !== 6) throw new Error('El código debe tener 6 dígitos')
+    // Solo filtramos no-dígitos y limitamos al máximo soportado por Supabase
+    // (10). Antes truncábamos a 6 de forma dura, lo cual rompía cuando el
+    // proyecto estaba configurado con OTPs de 7-10 dígitos.
+    const clean = String(token || '').replace(/\D/g, '').slice(0, 10)
+    if (clean.length < 6) throw new Error('El código debe tener al menos 6 dígitos')
     const { data, error } = await supabase.auth.verifyOtp({
       email, token: clean, type: 'email',
     })
