@@ -1,6 +1,6 @@
-// Lógica compartida entre /api/focus-assistant.js (Vercel) y
-// /netlify/functions/focus-assistant.js (Netlify). Ambos handlers son
-// adapters finos sobre este core.
+// Núcleo de /api/focus-assistant.js. Separado del handler para aislar el
+// prompt + la llamada a Anthropic del ciclo request/response de la función
+// serverless.
 //
 // Contrato: runFocusAssistant({...}) devuelve { reply, actions } o lanza
 // FocusAssistantError con { status, code }.

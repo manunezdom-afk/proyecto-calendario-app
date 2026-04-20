@@ -1,6 +1,4 @@
-// Adapter Vercel — la lógica vive en api/_shared/analyzePhotoCore.mjs
-// (misma base usada por /netlify/functions/analyze-photo.js para mantener
-// ambas plataformas sincronizadas).
+// Handler Vercel — delega la lógica a api/_shared/analyzePhotoCore.mjs.
 
 import { analyzePhotoCore, AnalyzePhotoError } from './_shared/analyzePhotoCore.mjs'
 

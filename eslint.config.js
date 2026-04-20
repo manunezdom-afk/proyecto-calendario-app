@@ -62,7 +62,7 @@ export default [
   },
   // Backend (serverless) + shared
   {
-    files: ['api/**/*.{js,mjs}', 'netlify/functions/**/*.js'],
+    files: ['api/**/*.{js,mjs}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

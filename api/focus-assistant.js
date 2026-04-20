@@ -1,6 +1,4 @@
-// Adapter Vercel — toda la lógica vive en api/_shared/focusAssistantCore.mjs
-// (misma base usada por /netlify/functions/focus-assistant.js para mantener
-// ambas plataformas sincronizadas).
+// Handler Vercel — delega la lógica a api/_shared/focusAssistantCore.mjs.
 
 import { runFocusAssistant, FocusAssistantError } from './_shared/focusAssistantCore.mjs'
 

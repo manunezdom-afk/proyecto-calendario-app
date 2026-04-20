@@ -1,7 +1,6 @@
-// Lógica compartida entre /api/analyze-photo.js (Vercel) y
-// /netlify/functions/analyze-photo.js (Netlify). Ambos handlers son
-// adapters finos sobre este core para que el comportamiento y los prompts
-// estén sincronizados siempre.
+// Núcleo de /api/analyze-photo.js. Separado del handler para aislar la
+// lógica de prompt + llamada a Anthropic del ciclo request/response de
+// la función serverless.
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages'
 
