@@ -121,7 +121,6 @@ self.addEventListener('push', (event) => {
       tag,
       renotify: true,
       requireInteraction: false,
-      vibrate: [100, 50, 100],
       data: { url, ...data },
       actions: actions.length > 0 ? actions : [
         { action: 'open',   title: 'Abrir' },

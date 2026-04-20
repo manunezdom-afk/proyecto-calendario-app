@@ -1,20 +1,26 @@
+import { isIOSNotInstalled } from '../lib/pushSubscription'
+
 export default function NotificationPermissionCard({ onAllow, onDismiss }) {
+  const iosNotInstalled = isIOSNotInstalled()
+
   return (
     <div className="mx-6 mt-3 mb-1 p-4 rounded-[20px] bg-primary/5 border border-primary/15 flex items-start gap-4">
-      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-content-center flex-shrink-0 mt-0.5">
         <span
           className="material-symbols-outlined text-primary text-[22px]"
           style={{ fontVariationSettings: "'FILL' 1" }}
         >
-          notifications
+          {iosNotInstalled ? 'install_mobile' : 'notifications'}
         </span>
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-headline font-bold text-on-surface text-sm mb-0.5">
-          ¿Activar recordatorios?
+          {iosNotInstalled ? 'Instala la app para recibir avisos' : '¿Activar recordatorios?'}
         </p>
         <p className="text-xs text-on-surface-variant font-medium leading-relaxed mb-3">
-          Focus puede avisarte antes de que empieces tus eventos. Sin interrupciones innecesarias.
+          {iosNotInstalled
+            ? 'En iPhone, las notificaciones solo funcionan con la app instalada. Toca Compartir → "Añadir a pantalla de inicio".'
+            : 'Focus puede avisarte antes de que empieces tus eventos. Sin interrupciones innecesarias.'}
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -23,12 +29,14 @@ export default function NotificationPermissionCard({ onAllow, onDismiss }) {
           >
             Ahora no
           </button>
-          <button
-            onClick={onAllow}
-            className="text-xs font-bold text-white bg-primary rounded-full px-4 py-1.5 shadow-sm shadow-primary/20 active:scale-95 transition-all"
-          >
-            Activar
-          </button>
+          {!iosNotInstalled && (
+            <button
+              onClick={onAllow}
+              className="text-xs font-bold text-white bg-primary rounded-full px-4 py-1.5 shadow-sm shadow-primary/20 active:scale-95 transition-all"
+            >
+              Activar
+            </button>
+          )}
         </div>
       </div>
       <button

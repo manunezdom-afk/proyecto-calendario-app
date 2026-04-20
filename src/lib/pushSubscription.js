@@ -23,13 +23,31 @@ function urlBase64ToUint8Array(base64) {
   return out
 }
 
+function isIOS() {
+  if (typeof navigator === 'undefined') return false
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+}
+
+function isStandalone() {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia?.('(display-mode: standalone)').matches ||
+    window.navigator?.standalone === true
+}
+
 export function isPushSupported() {
-  return (
-    typeof window !== 'undefined' &&
-    'serviceWorker' in navigator &&
-    'PushManager' in window &&
-    'Notification' in window
-  )
+  if (typeof window === 'undefined') return false
+  if (!('serviceWorker' in navigator)) return false
+  if (!('PushManager' in window)) return false
+  if (!('Notification' in window)) return false
+  // En iOS, Web Push solo funciona cuando la app está instalada (standalone)
+  if (isIOS() && !isStandalone()) return false
+  return true
+}
+
+/** Devuelve true si estamos en iOS pero NO instalada — para mostrar aviso */
+export function isIOSNotInstalled() {
+  return isIOS() && !isStandalone()
 }
 
 /** Lee el estado actual: permission + subscription local */
