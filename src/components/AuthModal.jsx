@@ -49,8 +49,8 @@ export default function AuthModal({ isOpen, onClose }) {
 
   async function handleVerify(e) {
     e.preventDefault()
-    if (code.length !== 6) {
-      setError('El código debe tener 6 dígitos')
+    if (code.length < 6) {
+      setError('El código debe tener al menos 6 dígitos')
       return
     }
     setLoading(true)
@@ -142,7 +142,7 @@ export default function AuthModal({ isOpen, onClose }) {
                 <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-2xl mb-5">
                   <span className="material-symbols-outlined text-primary text-[20px]">mark_email_read</span>
                   <p className="text-[12px] text-slate-600 leading-snug">
-                    Buscá el código de <b>6 dígitos</b> en tu email (revisá spam si no llega).
+                    Buscá el código en tu email (revisá spam si no llega).
                     Pegalo acá abajo.
                   </p>
                 </div>
@@ -155,15 +155,15 @@ export default function AuthModal({ isOpen, onClose }) {
                     pattern="[0-9]*"
                     autoComplete="one-time-code"
                     value={code}
-                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     placeholder="123456"
-                    maxLength={6}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-center text-2xl font-mono tracking-[0.3em] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    maxLength={10}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-center text-2xl font-mono tracking-[0.25em] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                   {error && <p className="text-red-500 text-xs mb-3 text-center">{error}</p>}
                   <button
                     type="submit"
-                    disabled={loading || code.length !== 6}
+                    disabled={loading || code.length < 6}
                     className="w-full py-3 bg-primary text-white rounded-2xl text-sm font-bold disabled:opacity-40 transition-opacity"
                   >
                     {loading ? 'Verificando…' : 'Entrar'}
@@ -229,7 +229,7 @@ export default function AuthModal({ isOpen, onClose }) {
                 </form>
 
                 <p className="mt-3 text-[10.5px] text-center text-slate-400">
-                  Te enviamos un código de 6 dígitos por email. Sin contraseñas.
+                  Te enviamos un código por email. Sin contraseñas.
                 </p>
               </>
             )}
