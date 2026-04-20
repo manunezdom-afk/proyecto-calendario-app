@@ -5,6 +5,40 @@ import { useUserMemories } from '../hooks/useUserMemories'
 const SR = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
 
+// Busca el evento que Nova intentó borrar cuando manda un id que no existe.
+// Extrae título/hora del texto del reply y matchea contra los eventos reales.
+function resolveEventIdFromReply(events, replyText, action) {
+  if (!Array.isArray(events) || events.length === 0) return null
+  const text = String(replyText || '').toLowerCase()
+
+  // 1. Match por título mencionado entre comillas en el reply
+  const quoted = text.match(/['"]([^'"]{3,80})['"]/)
+  if (quoted) {
+    const needle = quoted[1].toLowerCase().trim()
+    const hit = events.find(e => (e.title || '').toLowerCase().includes(needle) || needle.includes((e.title || '').toLowerCase()))
+    if (hit) return hit.id
+  }
+
+  // 2. Match por hora mencionada ("a las 2:15 PM", "14:15")
+  const timeMatch = text.match(/(\d{1,2})[:.](\d{2})\s*(am|pm)?/)
+  if (timeMatch) {
+    let h = parseInt(timeMatch[1], 10)
+    const m = timeMatch[2]
+    const period = timeMatch[3]
+    if (period === 'pm' && h < 12) h += 12
+    if (period === 'am' && h === 12) h = 0
+    const hh24 = String(h).padStart(2, '0')
+    const targets = [`${hh24}:${m}`, `${h}:${m} ${period?.toUpperCase() || 'PM'}`]
+    const hit = events.find(e => {
+      const t = String(e.time || '').toLowerCase().replace(/\s+/g, '')
+      return targets.some(tt => t === tt.toLowerCase().replace(/\s+/g, ''))
+    })
+    if (hit) return hit.id
+  }
+
+  return null
+}
+
 async function callFocusAssistant({ message, events, memories, history }) {
   const res = await fetch('/api/focus-assistant', {
     method: 'POST',
@@ -109,9 +143,16 @@ export default function FocusBar({
         if (action.type === 'add_event' && action.event) {
           onAddEvent?.(action.event)
         } else if (action.type === 'edit_event' && action.id) {
-          onEditEvent?.(action.id, action.updates ?? {})
+          const realId = events.some(e => e.id === action.id)
+            ? action.id
+            : (events.find(e => e.title === action.updates?.title || e.time === action.updates?.time)?.id || null)
+          if (realId) onEditEvent?.(realId, action.updates ?? {})
         } else if (action.type === 'delete_event' && action.id) {
-          onDeleteEvent?.(action.id)
+          const realId = events.some(e => e.id === action.id)
+            ? action.id
+            : resolveEventIdFromReply(events, replyText, action)
+          if (realId) onDeleteEvent?.(realId)
+          else console.warn('[Nova] delete_event con id no encontrado:', action.id)
         } else if (action.type === 'remember' && action.memory) {
           addMemory?.(action.memory)
         }
