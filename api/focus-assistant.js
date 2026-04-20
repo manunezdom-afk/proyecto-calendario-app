@@ -76,6 +76,11 @@ export default async function handler(req, res) {
     .filter(m => m && typeof m === 'object' && typeof m.content === 'string')
     .slice(0, 100)
 
+  const rawTasks = Array.isArray(body.tasks) ? body.tasks : []
+  const tasks = rawTasks
+    .filter(t => t && typeof t === 'object' && typeof t.label === 'string' && t.label.trim())
+    .slice(0, 200)
+
   if (!message?.trim()) {
     return res.status(400).json({ error: 'no_message' })
   }
@@ -273,20 +278,27 @@ REGLAS DE ESTILO (LEER PRIMERO, SON CRÍTICAS):
 10. SIN FORMATO: texto plano. Sin emojis, asteriscos, guiones, markdown ni listas.
 
 Tienes acceso completo a:
-- La agenda y eventos del usuario
+- La agenda y eventos del usuario (sección "Calendario" / "Mi Día")
+- La lista de TAREAS del usuario (sección "Tareas")
 - Su ubicación y clima en tiempo real
 - Sus contactos
 - La fecha y hora actual
 - Su perfil cronobiológico y zona de rendimiento
 
 Puedes:
-- Agregar eventos nuevos
-- Mover o editar eventos existentes (cambiar hora, fecha, título)
-- Eliminar eventos
-- Responder preguntas sobre la agenda
+- Agregar, editar o eliminar eventos de calendario
+- Agregar, marcar como hechas o eliminar TAREAS de la lista de tareas
+- Responder preguntas sobre la agenda o las tareas
 - Informar sobre el clima actual y pronóstico
 - Usar los contactos del usuario para personalizar eventos
 - Responder preguntas generales de forma breve y útil
+
+DIFERENCIA CRÍTICA EVENTO vs TAREA (la app las separa):
+- EVENTO: tiene HORA específica y va en el calendario/Mi Día (ej: "Reunión 3 PM", "Fútbol a las 8", "Clase 9 AM"). Usa add_event.
+- TAREA: es un pendiente SIN hora específica, va en la pestaña Tareas (ej: "Estudiar Cálculo", "Comprar pan", "Tarea de Teorías", "Leer capítulo 3"). Usa add_task.
+- Si el usuario dice "tarea de X" o "pendiente de X" o "tengo que X" sin mencionar hora → TAREA (add_task).
+- Si menciona HORA clara → EVENTO (add_event).
+- Si el usuario pide algo con hora Y lo llama "tarea" (ej: "tarea de Teorías a las 2:30 PM") → crea AMBOS: un add_event a esa hora + un add_task con el mismo label (así queda visible en Mi Día y en la sección Tareas).
 
 REGLA ABSOLUTA: Responde SOLO con un objeto JSON válido. Sin markdown, sin bloques de código, sin texto fuera del JSON.
 FORMATO ESTRICTO (CRÍTICO):
@@ -304,7 +316,7 @@ Formato de respuesta:
 
 Acciones disponibles:
 
-Agregar evento:
+Agregar evento (con hora, va al calendario y Mi Día):
 { "type": "add_event", "event": { "title": string, "time": string, "date": string|null, "section": "focus"|"evening", "icon": string } }
 
 Editar/mover evento:
@@ -312,6 +324,18 @@ Editar/mover evento:
 
 Eliminar evento:
 { "type": "delete_event", "id": "id-del-evento" }
+
+Agregar tarea (sin hora, va a la pestaña Tareas):
+{ "type": "add_task", "task": { "label": string, "priority": "Alta"|"Media"|"Baja", "category": "hoy"|"semana"|"algún día" } }
+- priority por defecto: "Media". category por defecto: "hoy".
+- Usa "Alta" si el usuario dice urgente, importante, hoy sí o sí.
+- category "semana" si es para esta semana; "algún día" si es sin plazo.
+
+Marcar tarea como hecha:
+{ "type": "toggle_task", "id": "id-de-la-tarea" }
+
+Eliminar tarea:
+{ "type": "delete_task", "id": "id-de-la-tarea" }
 
 Guardar memoria sobre el usuario (CRÍTICO para personalización):
 { "type": "remember", "memory": { "category": "fact|relationship|preference|goal|pain|routine|context", "subject": "pareja|jefe|proyecto-X|etc", "content": "texto del hecho en tercera persona", "confidence": "high|medium|low" } }
@@ -362,6 +386,23 @@ ${
         2,
       )
     : 'Sin eventos aún.'
+}
+
+Tareas actuales del usuario (pestaña Tareas):
+${
+  tasks.length > 0
+    ? JSON.stringify(
+        tasks.map((t) => ({
+          id: t.id,
+          label: t.label,
+          priority: t.priority || 'Media',
+          category: t.category || 'hoy',
+          done: !!t.done,
+        })),
+        null,
+        2,
+      )
+    : 'Sin tareas aún.'
 }
 
 ${weatherContext}
@@ -499,6 +540,12 @@ RECORDATORIO FINAL DE IDIOMA (LEER SIEMPRE):
       [/\bche\b/gi, ''],
       [/\bacá\b/gi, 'aquí'],
       [/\ballá\b/gi, 'allí'],
+      // perspectiva: eventos son del usuario, no de la asistente
+      [/\bno tengo un evento\b/gi, 'no tienes un evento'],
+      [/\bno tengo ningún evento\b/gi, 'no tienes ningún evento'],
+      [/\btengo un evento\b/gi, 'tienes un evento'],
+      [/\btengo una? (clase|reunión|tarea|cita|llamada)\b/gi, 'tienes una $1'],
+      [/\bmi (clase|reunión|tarea|cita|llamada|agenda|calendario)\b/gi, 'tu $1'],
     ]
     let out = text
     for (const [re, rep] of pairs) out = out.replace(re, rep)

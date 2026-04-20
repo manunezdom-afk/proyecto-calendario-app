@@ -160,6 +160,9 @@ export default function App() {
     onAddEvent:        addEvent,
     onEditEvent:       editEvent,
     onDeleteEvent:     deleteEvent,
+    onAddTask:         addTask,
+    onToggleTask:      toggleTask,
+    onDeleteTask:      deleteTask,
     onEveningShutdown: () => setShowEveningShutdown(true),
     morningBrief: (showMorningBrief && !showWelcome) ? {
       events,

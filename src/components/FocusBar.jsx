@@ -39,13 +39,14 @@ function resolveEventIdFromReply(events, replyText, action) {
   return null
 }
 
-async function callFocusAssistant({ message, events, memories, history }) {
+async function callFocusAssistant({ message, events, tasks, memories, history }) {
   const res = await fetch('/api/focus-assistant', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       message,
       events,
+      tasks,
       history,
       memories,
       clientNow: Date.now(),
@@ -64,7 +65,11 @@ export default function FocusBar({
   onAddEvent,
   onEditEvent,
   onDeleteEvent,
+  onAddTask,
+  onToggleTask,
+  onDeleteTask,
   events = [],
+  tasks = [],
   inline = false,
 }) {
   const { memories, addMemory } = useUserMemories()
@@ -133,12 +138,13 @@ export default function FocusBar({
       const result = await callFocusAssistant({
         message: msg,
         events,
+        tasks,
         memories,
         history: historyRef.current.slice(0, -1).slice(-20),
       })
       const { reply: replyText, actions = [] } = result
 
-      // Ejecutar acciones en el calendario y memorias
+      // Ejecutar acciones en el calendario, tareas y memorias
       for (const action of actions) {
         if (action.type === 'add_event' && action.event) {
           onAddEvent?.(action.event)
@@ -153,6 +159,18 @@ export default function FocusBar({
             : resolveEventIdFromReply(events, replyText, action)
           if (realId) onDeleteEvent?.(realId)
           else console.warn('[Nova] delete_event con id no encontrado:', action.id)
+        } else if (action.type === 'add_task' && action.task) {
+          onAddTask?.(action.task)
+        } else if (action.type === 'toggle_task' && action.id) {
+          const realId = tasks.some(t => t.id === action.id)
+            ? action.id
+            : (tasks.find(t => (t.label || '').toLowerCase() === String(action.label || '').toLowerCase())?.id || null)
+          if (realId) onToggleTask?.(realId)
+        } else if (action.type === 'delete_task' && action.id) {
+          const realId = tasks.some(t => t.id === action.id)
+            ? action.id
+            : (tasks.find(t => (t.label || '').toLowerCase() === String(action.label || '').toLowerCase())?.id || null)
+          if (realId) onDeleteTask?.(realId)
         } else if (action.type === 'remember' && action.memory) {
           addMemory?.(action.memory)
         }

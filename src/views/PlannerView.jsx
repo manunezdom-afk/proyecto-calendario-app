@@ -250,7 +250,7 @@ function buildInsights(events, profile) {
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────
-export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, events = [], tasks = [], onOpenAssistant, onEveningShutdown, isDesktop = false, morningBrief = null }) {
+export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, onAddTask, onToggleTask, onDeleteTask, events = [], tasks = [], onOpenAssistant, onEveningShutdown, isDesktop = false, morningBrief = null }) {
   const [blocks, setBlocks] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -494,7 +494,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, ev
               onAddEvent={onAddEvent}
               onEditEvent={onEditEvent}
               onDeleteEvent={onDeleteEvent}
+              onAddTask={onAddTask}
+              onToggleTask={onToggleTask}
+              onDeleteTask={onDeleteTask}
               events={events}
+              tasks={tasks}
               inline
             />
 
