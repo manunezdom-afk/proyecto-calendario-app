@@ -254,13 +254,8 @@ export default function MorningBrief({
         transition={{ duration: 0.25, ease: 'easeOut' }}
         className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-xl p-6 relative"
       >
-        {/* Mute toggle */}
-        <div className="absolute top-4 right-4 flex items-center gap-2">
-          {SR && (
-            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-              Escuchando
-            </span>
-          )}
+        {/* Mute toggle — la escucha por voz fue removida; solo queda el control de audio */}
+        <div className="absolute top-4 right-4">
           <button
             onClick={() => { setMuted(m => !m); stopSpeech() }}
             className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
@@ -271,8 +266,8 @@ export default function MorningBrief({
           </button>
         </div>
 
-        {/* Nova badge */}
-        <div className="flex items-center gap-2 mb-5">
+        {/* Nova badge — pr-12 para no chocar con el botón absoluto de la esquina */}
+        <div className="flex items-center gap-2 mb-5 pr-12">
           <motion.span
             className="material-symbols-outlined text-[14px] text-primary"
             style={{ fontVariationSettings: "'FILL' 1" }}
