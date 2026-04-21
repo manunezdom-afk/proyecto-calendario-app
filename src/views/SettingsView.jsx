@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { getPushStatus, subscribeToPush } from '../lib/pushSubscription'
 
 function SectionCard({ title, children }) {
   return (
@@ -38,6 +40,70 @@ function Row({ icon, label, sub, children, onClick, danger = false }) {
       </div>
       {children}
     </Tag>
+  )
+}
+
+function PushDiagnostic() {
+  const [status, setStatus] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  async function runTest() {
+    setLoading(true)
+    setStatus(null)
+    try {
+      const s = await getPushStatus()
+      if (!s.supported) { setStatus({ ok: false, msg: 'Este dispositivo no soporta notificaciones push.' }); return }
+      if (s.permission === 'denied') { setStatus({ ok: false, msg: 'Permiso de notificaciones bloqueado. Habilitalo en Ajustes del iPhone → Focus.' }); return }
+      if (s.permission !== 'granted') { setStatus({ ok: false, msg: 'Permiso no concedido. Activá las notificaciones desde la pantalla principal.' }); return }
+
+      if (s.subscribed) {
+        // Ya hay suscripción — intentamos subirla al backend igual por si no estaba guardada
+        const r = await subscribeToPush()
+        if (r.ok && r.reason !== 'saved_locally_no_session') {
+          setStatus({ ok: true, msg: '✅ Suscripción activa y guardada en el servidor. Las notificaciones deberían llegar.' })
+        } else if (r.reason === 'saved_locally_no_session') {
+          setStatus({ ok: false, msg: 'Suscripción creada pero no se pudo guardar — no hay sesión activa. Cerrá sesión y volvé a entrar.' })
+        } else {
+          setStatus({ ok: false, msg: `Error al guardar: ${r.reason} ${r.error || ''}` })
+        }
+      } else {
+        const r = await subscribeToPush()
+        if (r.ok && r.reason !== 'saved_locally_no_session') {
+          setStatus({ ok: true, msg: '✅ Suscripción creada y guardada. Las notificaciones van a funcionar.' })
+        } else if (r.reason === 'saved_locally_no_session') {
+          setStatus({ ok: false, msg: 'Creada localmente pero sin sesión para guardar en el servidor. Cerrá sesión y volvé a entrar.' })
+        } else if (r.reason === 'no_vapid_key') {
+          setStatus({ ok: false, msg: 'Falta configurar VITE_VAPID_PUBLIC_KEY en Vercel.' })
+        } else if (r.reason === 'subscribe_failed') {
+          setStatus({ ok: false, msg: `iOS rechazó la suscripción: ${r.error}` })
+        } else {
+          setStatus({ ok: false, msg: `Error: ${r.reason} — ${r.error || ''}` })
+        }
+      }
+    } catch (e) {
+      setStatus({ ok: false, msg: `Error inesperado: ${e.message}` })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="px-5 py-4 border-t border-slate-50 space-y-3">
+      <button
+        onClick={runTest}
+        disabled={loading}
+        className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-[13px] font-semibold disabled:opacity-50 active:scale-95 transition-transform"
+      >
+        {loading ? 'Verificando…' : 'Verificar notificaciones push'}
+      </button>
+      {status && (
+        <p className={`text-[12.5px] leading-snug font-medium rounded-xl px-3 py-2.5 ${
+          status.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+        }`}>
+          {status.msg}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -114,6 +180,18 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
         >
           <span className="text-[12px] font-semibold text-slate-400">Focus</span>
         </Row>
+      </SectionCard>
+
+      {/* ── Notificaciones ───────────────────────────────────────────────── */}
+      <SectionCard title="Notificaciones">
+        <Row
+          icon="notifications"
+          label="Recordatorios de eventos"
+          sub="Recibís un aviso 10, 30 y 60 min antes de cada evento"
+        >
+          <span className="material-symbols-outlined text-[16px] text-emerald-400">check_circle</span>
+        </Row>
+        <PushDiagnostic />
       </SectionCard>
 
       {/* ── Datos ────────────────────────────────────────────────────────── */}
