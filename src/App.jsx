@@ -118,8 +118,11 @@ export default function App() {
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10)
     const last  = localStorage.getItem(LAST_OPENED_KEY)
-    if (last !== today) {
-      // Small delay so the app renders first
+    const hour  = new Date().getHours()
+    // Solo mostrar el brief matutino si es realmente la mañana (5 AM – 12 PM).
+    // Abrir la app a las 21:00 no tiene por qué dispararlo con "¿Arrancamos?".
+    const isMorning = hour >= 5 && hour < 12
+    if (last !== today && isMorning) {
       const timer = setTimeout(() => setShowMorningBrief(true), 600)
       localStorage.setItem(LAST_OPENED_KEY, today)
       return () => clearTimeout(timer)
@@ -274,7 +277,7 @@ export default function App() {
               )}
 
               {activeView === 'task-detail' && (
-                <TaskDetailView event={selectedEvent} onBack={goBack} onSave={handleSaveTask} />
+                <TaskDetailView event={selectedEvent} onBack={goBack} onSave={handleSaveTask} onDelete={deleteEvent} />
               )}
 
               {activeView === 'settings' && (

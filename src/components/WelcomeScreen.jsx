@@ -38,13 +38,15 @@ export default function WelcomeScreen({ onEnter, userName }) {
         }}
       />
 
-      {/* Botón cerrar */}
+      {/* Botón cerrar — SVG inline para evitar FOIT del font Material Symbols */}
       <button
         onClick={onEnter}
         aria-label="Cerrar"
         className="absolute top-5 right-5 z-10 flex h-10 w-10 items-center justify-center rounded-full text-white/30 hover:text-white/60 transition-colors"
       >
-        <span className="material-symbols-outlined text-[20px]">close</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+          <path d="M6 6L18 18M6 18L18 6"/>
+        </svg>
       </button>
 
       {/* Contenido */}
@@ -64,12 +66,12 @@ export default function WelcomeScreen({ onEnter, userName }) {
               boxShadow: '0 8px 32px rgba(99,102,241,0.45)',
             }}
           >
-            <span
-              className="material-symbols-outlined text-[34px] text-white"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              brightness_high
-            </span>
+            {/* SVG inline (sparkle) — evita que el splash renderice "brightness_high"
+                como texto cuando el font Material Symbols aún no cargó */}
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+              <path d="M12 2L13.8 8.2L20 10L13.8 11.8L12 18L10.2 11.8L4 10L10.2 8.2L12 2Z"/>
+              <path d="M19 15L19.8 17.2L22 18L19.8 18.8L19 21L18.2 18.8L16 18L18.2 17.2L19 15Z" opacity="0.7"/>
+            </svg>
           </div>
         </motion.div>
 

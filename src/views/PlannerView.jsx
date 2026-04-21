@@ -354,19 +354,41 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     }
   }, [ghostsDismissed, hasAnyRealContent])
 
-  // Sincroniza "Mi Día" (timeline) con eventos de HOY para reflejar cambios inmediatos
+  // Sincroniza "Mi Día" (timeline) con eventos de HOY.
+  // Antes solo AÑADÍA blocks — por eso cuando Nova decía "eliminé tus eventos"
+  // los blocks quedaban zombies en localStorage. Ahora también los elimina
+  // cuando el evento correspondiente deja de existir, y actualiza título/hora
+  // si cambiaron. Los blocks manuales (sin eventId) no se tocan.
   useEffect(() => {
     const todayISO = todayISODate()
     const todayEvents = (events || []).filter((e) => !e.date || e.date === todayISO)
+    const eventById = new Map(todayEvents.map(e => [e.id, e]))
+
     setBlocks((prev) => {
       const prevArr = Array.isArray(prev) ? prev : []
-      const hasEvent = new Set(prevArr.map((b) => b?.eventId).filter(Boolean))
-      const nextBlocksToAdd = []
+      const synced = []
+      const usedEventIds = new Set()
+
+      for (const b of prevArr) {
+        if (!b) continue
+        if (b.eventId) {
+          const ev = eventById.get(b.eventId)
+          if (!ev) continue // evento borrado → block también desaparece
+          synced.push({
+            ...b,
+            time: eventTimeToBlockTime(ev.time),
+            title: ev.title,
+            description: ev.description || null,
+          })
+          usedEventIds.add(b.eventId)
+        } else {
+          synced.push(b) // block manual (sin eventId) → preservar
+        }
+      }
 
       for (const ev of todayEvents) {
-        if (!ev?.id) continue
-        if (hasEvent.has(ev.id)) continue
-        nextBlocksToAdd.push({
+        if (!ev?.id || usedEventIds.has(ev.id)) continue
+        synced.push({
           id: `blk-ev-${ev.id}`,
           eventId: ev.id,
           time: eventTimeToBlockTime(ev.time),
@@ -376,8 +398,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
         })
       }
 
-      if (nextBlocksToAdd.length === 0) return prevArr
-      return [...prevArr, ...nextBlocksToAdd]
+      return synced
     })
   }, [events])
 
@@ -439,15 +460,10 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     const arrRaw = showGhosts
       ? GHOST_BLOCKS
       : (Array.isArray(blocks) ? blocks : [])
-    // Ocultar eventos ya pasados (con hora válida y < ahora). Se mantienen
-    // sugerencias y bloques sin hora. Se vuelve a evaluar cada minuto vía tick.
-    const arrFiltered = arrRaw.filter((b) => {
-      if (!b) return false
-      if (b.type === 'suggestion' || b.type === 'ghost') return true
-      const h = parseTimeToDecimal(b.time)
-      if (h === null) return true
-      return h >= now - 0.0167 // ~1 min de gracia
-    })
+    // NO ocultamos eventos pasados: si el usuario crea "fútbol 5 PM" a las 9 PM
+    // debe verlo en Mi Día como confirmación. El estilo "pasado" se aplica en
+    // el render (opacity/tachado), no filtrando.
+    const arrFiltered = arrRaw.filter(Boolean)
     const arr = arrFiltered.map((b, originalIndex) => ({ ...b, _orig: originalIndex, _h: parseTimeToDecimal(b?.time) }))
       .sort((a, b) => {
         const ah = a._h ?? Number.POSITIVE_INFINITY
@@ -735,14 +751,24 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                             ))}
                           </div>
                         )}
-
-                        {description && (
-                          <p className={`text-sm leading-relaxed ${isSuggestion || isGhost ? 'italic text-on-surface-variant/70' : 'text-on-surface-variant'}`}>
-                            {description}
-                          </p>
-                        )}
                       </div>
                       </SwipeableCard>
+
+                      {/* Nota/recordatorio adjunto — sticky note pegada debajo del bloque.
+                          Filtramos descripciones que son solo una fecha ISO (YYYY-MM-DD) —
+                          data vieja generada por QuickAddSheet cuando stuffing date en
+                          description. Si el evento está en Mi Día ya es obvio que es hoy. */}
+                      {description && !_asReminderOnly && !isSuggestion && !/^\d{4}-\d{2}-\d{2}$/.test(String(description).trim()) && (
+                        <div
+                          className="mt-1.5 ml-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2"
+                          style={{ maxWidth: 'calc(100% - 12px)' }}
+                        >
+                          <span className="material-symbols-outlined text-amber-600 text-[14px] mt-0.5 flex-shrink-0">sticky_note_2</span>
+                          <p className="text-[12px] leading-snug text-amber-900/80 flex-1 break-words">
+                            {description}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )

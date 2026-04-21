@@ -42,7 +42,8 @@ export default function QuickAddSheet({ onSave, onCancel, targetDateLabel }) {
     onSave({
       title: parsed.title,
       time: parsed.time,
-      description: parsed.date !== 'Hoy' ? parsed.date : '',
+      date: parsed.date,         // YYYY-MM-DD — va al campo date, no a description
+      description: '',           // notas del usuario: vacío al crear
       section: parsed.section,
       icon: parsed.icon,
       dotColor: parsed.dotColor,

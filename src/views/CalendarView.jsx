@@ -6,10 +6,12 @@ import { resolveEventDate } from '../utils/resolveEventDate'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { peakRangeLabel } from '../utils/peakZone'
 
-const AVATAR_1 =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuDfqPz-Xtp1DOlxyZ6qdBoqCnCTvLoTN7uCnDpKv7pQispXp8jMGm8VmAnGlq6fGljfeaM_FGgWpLdB3Ig6ImleJTb6h-TmrJg7wLQJBUNd1LSQiUrTmFaLHcku_b2IBR1b9-gtC7bCqoZTvugBoGNiE9EjBbxP2zP0nkLkJF5KXZxYSvNqigG3jSpyBQawu9fkiHNp1vQfAtrXoJyYILEZm_q5bSNPNATYmsirJUZFcSzFA1bGsAuK0G16fJNQgGEjyI-ErT5OZNRs'
-const AVATAR_2 =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuAGg2kzu3h6K4U-DHUHwAcgSd0y0SQIx6Duljc3apyQXiGDGaDJCJvmLXpH77eOXyP37Jc5UNLSd9hKH2_0BJqXhvtFuctuO1RWkTcExCM32YxUKV29rG8VZAro5LQQwBA75PSIOuScBv5k-ndaqFgJQNTRZRbvVa2ZXHve9TGmRIQetPC53lRJACf2mkMMFoX7yAwVHQpsMXQh-0XpdV1WYDlQF6dKony_nEBC2Jfhnzj8ftnPxl5-e5v_Kgn6dm-qDn9tw02nNGYd'
+// Descripción útil: no mostramos cuando es solo una fecha ISO (YYYY-MM-DD) —
+// data vieja generada por QuickAddSheet cuando stuffing date en description.
+function hasMeaningfulNote(desc) {
+  if (!desc) return false
+  return !/^\d{4}-\d{2}-\d{2}$/.test(String(desc).trim())
+}
 
 const DAY_ABBR_ES    = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const MONTH_NAMES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -74,7 +76,7 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
   return (
     <div
       className="col-span-2 bg-surface-container-lowest p-6 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.04)] space-y-4 cursor-pointer hover:shadow-md transition-shadow"
-      onClick={onOpen}
+      onClick={() => onOpen?.(event)}
     >
       <div className="flex justify-between items-start">
         <div className="p-2 bg-primary-fixed-dim/30 rounded-lg text-primary">
@@ -89,7 +91,7 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
       </div>
       <div>
         <h3 className="text-lg font-bold text-on-surface">{event.title}</h3>
-        {event.description && (
+        {hasMeaningfulNote(event.description) && (
           <div style={{ marginTop: '6px', padding: '5px 10px', background: '#f1f5f9', borderRadius: '6px', borderLeft: '2px solid #cbd5e1' }}>
             <p style={{ fontSize: '11px', color: '#64748b', lineHeight: '1.4' }}>{event.description}</p>
           </div>
@@ -101,18 +103,6 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
             <span className="material-symbols-outlined text-[18px] text-outline">schedule</span>
             <span className="text-xs font-semibold text-on-surface">{event.time}</span>
           </div>
-          <div className="flex -space-x-2">
-            <img
-              alt="Avatar"
-              className="w-6 h-6 rounded-full border-2 border-surface-container-lowest object-cover"
-              src={AVATAR_1}
-            />
-            <img
-              alt="Avatar"
-              className="w-6 h-6 rounded-full border-2 border-surface-container-lowest object-cover"
-              src={AVATAR_2}
-            />
-          </div>
         </div>
       )}
     </div>
@@ -120,9 +110,12 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
 }
 
 // ─── Small card (secondary items in "Enfoque de Hoy") ────────────────────────
-function SmallEventCard({ event, onDelete }) {
+function SmallEventCard({ event, onDelete, onOpen }) {
   return (
-    <div className="bg-surface-container-low p-5 rounded-xl space-y-2 relative group">
+    <div
+      className="bg-surface-container-low p-5 rounded-xl space-y-2 relative group cursor-pointer hover:bg-surface-container transition-colors"
+      onClick={() => onOpen?.(event)}
+    >
       <div className="flex justify-between items-start">
         <span className="material-symbols-outlined text-secondary">
           {event.icon || 'event'}
@@ -143,9 +136,9 @@ function SmallEventCard({ event, onDelete }) {
 }
 
 // ─── Evening row card ─────────────────────────────────────────────────────────
-function EveningEventCard({ event, onDelete }) {
+function EveningEventCard({ event, onDelete, onOpen }) {
   return (
-    <div className="flex gap-4 items-center group">
+    <div className="flex gap-4 items-center group cursor-pointer" onClick={() => onOpen?.(event)}>
       {event.time && (
         <div className="w-16 text-right flex-shrink-0">
           <span className="text-xs font-bold text-outline">{event.time}</span>
@@ -156,7 +149,7 @@ function EveningEventCard({ event, onDelete }) {
           <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${event.dotColor || 'bg-outline'}`} />
           <div className="flex-1 min-w-0">
             <span className="font-bold text-sm text-on-surface">{event.title}</span>
-            {event.description && (
+            {hasMeaningfulNote(event.description) && (
               <div style={{ marginTop: '4px', padding: '4px 8px', background: '#f1f5f9', borderRadius: '5px', borderLeft: '2px solid #cbd5e1' }}>
                 <p style={{ fontSize: '10px', color: '#64748b', lineHeight: '1.4' }}>{event.description}</p>
               </div>
@@ -375,7 +368,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                     />
                   )}
                   {smallEvents.map((ev) => (
-                    <SmallEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} />
+                    <SmallEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} onOpen={onOpenTask} />
                   ))}
                 </div>
               )}
@@ -404,7 +397,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
               ) : (
                 <div className="space-y-2">
                   {eveningEvents.map((ev) => (
-                    <EveningEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} />
+                    <EveningEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} onOpen={onOpenTask} />
                   ))}
                 </div>
               )}
