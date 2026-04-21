@@ -21,8 +21,9 @@ import MorningBrief                from './components/MorningBrief'
 import EveningShutdown             from './components/EveningShutdown'
 import SuggestionsInbox            from './components/SuggestionsInbox'
 import WelcomeScreen, { useWelcomeGate } from './components/WelcomeScreen'
-import OnboardingTour, { useOnboardingTour } from './components/OnboardingTour'
+import OnboardingTour              from './components/OnboardingTour'
 import InstallAppCard              from './components/InstallAppCard'
+import { useFirstRunSequence }     from './hooks/useFirstRunSequence'
 
 import CalendarView    from './views/CalendarView'
 import TaskDetailView  from './views/TaskDetailView'
@@ -44,14 +45,31 @@ export default function App() {
   const { authModal, setAuthModal, user } = useAuth()
   const { profile }                 = useUserProfile()
   const { show: showWelcome, dismiss: dismissWelcome } = useWelcomeGate()
-  const { show: showTour,    complete: completeTour }  = useOnboardingTour()
 
   // Nombre para saludo personalizado (si existe email, usamos la parte antes de @)
   const userName = user?.email ? user.email.split('@')[0].split('.')[0] : null
 
-  const initialView = () => 'planner'
+  const VALID_VIEWS = ['planner', 'calendar', 'tasks', 'settings']
+  const initialView = () => {
+    try {
+      const v = new URLSearchParams(window.location.search).get('view')
+      return VALID_VIEWS.includes(v) ? v : 'planner'
+    } catch {
+      return 'planner'
+    }
+  }
   const [activeView, setActiveView]     = useState(initialView)
   const [previousView, setPreviousView] = useState('planner')
+
+  useEffect(() => {
+    function onPop() {
+      const v = new URLSearchParams(window.location.search).get('view')
+      setActiveView(VALID_VIEWS.includes(v) ? v : 'planner')
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window !== 'undefined' && window.innerWidth >= 1024,
   )
@@ -130,7 +148,15 @@ export default function App() {
   }, [])
 
   // ── Navigation ────────────────────────────────────────────────────────────
-  function navigate(view) { setActiveView(view) }
+  function navigate(view) {
+    setActiveView(view)
+    try {
+      const url = new URL(window.location.href)
+      if (VALID_VIEWS.includes(view) && view !== 'planner') url.searchParams.set('view', view)
+      else url.searchParams.delete('view')
+      window.history.pushState({ view }, '', url.toString())
+    } catch {}
+  }
 
   function openTaskDetail(event = null) {
     setSelectedEvent(event)
@@ -151,10 +177,11 @@ export default function App() {
   const isSubView = isDetail || activeView === 'memory' || activeView === 'nova-knows'
   const navView  = isSubView ? (previousView || 'settings') : activeView
 
-  const showPermCard =
-    permissionState === 'default' &&
-    !permissionDismissed &&
-    (activeView === 'planner' || activeView === 'tasks' || activeView === 'calendar')
+  const firstRun = useFirstRunSequence({ permissionState, permissionDismissed })
+  const inMainView = activeView === 'planner' || activeView === 'tasks' || activeView === 'calendar'
+  const showPermCard = firstRun.step === 'permission' && inMainView && !showWelcome
+  const showInstallCard = firstRun.step === 'install' && !showWelcome
+  const showTourGate = firstRun.step === 'tour' && !showWelcome
 
   // ── Shared PlannerView props ──────────────────────────────────────────────
   const plannerProps = {
@@ -181,13 +208,9 @@ export default function App() {
   // al primer evento próximo (si existe) para que el usuario vea al toque
   // con qué empezar.
   function handleStartDay() {
-    setActiveView('planner')
-    // Pequeño delay para que la animación de cierre del modal termine y el
-    // planner ya esté visible antes de hacer el scroll
+    navigate('planner')
     setTimeout(() => {
-      // Buscamos el próximo evento del día (dentro de la próxima hora),
-      // o el primero pendiente, y lo scrolleamos al centro con highlight
-      const nextEvent = document.querySelector('[data-next-event], [data-event-card]')
+      const nextEvent = document.querySelector('[data-next-event]')
       if (nextEvent) {
         nextEvent.scrollIntoView({ behavior: 'smooth', block: 'center' })
         nextEvent.classList.add('ring-2', 'ring-primary', 'ring-offset-2')
@@ -195,7 +218,6 @@ export default function App() {
           nextEvent.classList.remove('ring-2', 'ring-primary', 'ring-offset-2')
         }, 2000)
       } else {
-        // Sin eventos → scroll suave al top del main
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     }, 400)
@@ -374,13 +396,13 @@ export default function App() {
 
       {/* ── Onboarding tour animado (una vez por navegador) ──────────────── */}
       <AnimatePresence>
-        {showTour && !showWelcome && (
-          <OnboardingTour onDone={completeTour} />
+        {showTourGate && (
+          <OnboardingTour onDone={firstRun.completeTour} />
         )}
       </AnimatePresence>
 
-      {/* ── Invitación a instalar la app (no aparece si ya está instalada) ── */}
-      {!showWelcome && !showTour && <InstallAppCard />}
+      {/* ── Invitación a instalar la app (secuencial, no apilado) ──────── */}
+      {showInstallCard && <InstallAppCard onDismissed={firstRun.dismissInstall} />}
 
       {/* ── Evening Shutdown ─────────────────────────────────────────────── */}
       <AnimatePresence>

@@ -919,6 +919,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     onLongPress={() => { if (window.confirm(`¿Eliminar "${activeBlock.title}"?`)) { dismissBlock(activeBlock.id); if (activeBlock.eventId) onDeleteEvent?.(activeBlock.eventId) } }}
                     className="py-1"
                     title="Mantén apretado para eliminar"
+                    data-next-event
                   >
                     <p className="text-xs font-semibold text-outline uppercase tracking-wider mb-1">{activeBlock.time}</p>
                     <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{activeBlock.title}</p>
@@ -934,6 +935,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     onLongPress={() => { if (window.confirm(`¿Eliminar "${nextBlock.title}"?`)) { dismissBlock(nextBlock.id); if (nextBlock.eventId) onDeleteEvent?.(nextBlock.eventId) } }}
                     className="py-1"
                     title="Mantén apretado para eliminar"
+                    data-next-event
                   >
                     <p className="text-xs font-semibold text-outline uppercase tracking-wider mb-1">{nextBlock.time}</p>
                     <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{nextBlock.title}</p>

@@ -14,7 +14,7 @@ function isIOS() {
 // - En Android/Chrome/Edge: usa el evento beforeinstallprompt (instalación 1 tap)
 // - En iOS Safari: muestra instrucciones (Compartir → Añadir a pantalla)
 // - Se oculta si ya está instalado o si el usuario la descartó
-export default function InstallAppCard() {
+export default function InstallAppCard({ onDismissed }) {
   const [available, setAvailable] = useState(canInstall())
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem(DISMISSED_KEY) === 'true' } catch { return false }
@@ -34,6 +34,7 @@ export default function InstallAppCard() {
   function handleDismiss() {
     try { localStorage.setItem(DISMISSED_KEY, 'true') } catch {}
     setDismissed(true)
+    onDismissed?.()
   }
 
   async function handleInstall() {
