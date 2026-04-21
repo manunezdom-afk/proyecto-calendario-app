@@ -4,33 +4,22 @@ import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 
-const DEFAULT_TASKS = [
-  { id: 'tsk-001', label: 'Revisar Roadmap del Q4', done: false, priority: 'Alta', category: 'hoy' },
-  { id: 'tsk-002', label: 'Preparar diapositivas de presentación', done: false, priority: 'Media', category: 'hoy' },
-  { id: 'tsk-003', label: 'Responder emails pendientes', done: false, priority: 'Baja', category: 'hoy' },
-  { id: 'tsk-004', label: 'Revisar métricas de producto', done: false, priority: 'Media', category: 'semana' },
-  { id: 'tsk-005', label: 'Documentar API nueva', done: false, priority: 'Baja', category: 'algún día' },
-]
-
 export function useTasks() {
   const { user } = useAuth()
 
-  const [tasks, setTasks] = useState(() => dataService.getCachedTasks(DEFAULT_TASKS))
+  const [tasks, setTasks] = useState(() => dataService.getCachedTasks([]))
 
   useEffect(() => {
     if (!user) return
 
-    // Partimos del cache propio del usuario (evita que tareas de otra cuenta
-    // queden visibles si el dispositivo alternó entre sesiones)
-    setTasks(dataService.getCachedTasks(DEFAULT_TASKS, user.id))
+    setTasks(dataService.getCachedTasks([], user.id))
 
     const refetch = (tag = '') => {
       dataService.fetchTasks(user.id)
         .then(cloudTasks => {
           if (!cloudTasks) return
-          const result = cloudTasks.length > 0 ? cloudTasks : DEFAULT_TASKS
-          setTasks(result)
-          dataService.setCachedTasks(result, user.id)
+          setTasks(cloudTasks)
+          dataService.setCachedTasks(cloudTasks, user.id)
           console.log(`[Focus] ☁️ ${cloudTasks.length} tareas cargadas desde Supabase ${tag} (user=${user.id.slice(0,8)})`)
         })
         .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar tareas de Supabase', err))
