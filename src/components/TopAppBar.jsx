@@ -33,7 +33,7 @@ export default function TopAppBar({
           >
             brightness_high
           </span>
-          <span className="text-lg font-extrabold text-slate-900 dark:text-slate-100 tracking-tight font-headline">
+          <span className="text-lg font-extrabold text-slate-900 dark:text-slate-100 font-headline">
             Focus
           </span>
         </div>

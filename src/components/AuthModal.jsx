@@ -158,7 +158,7 @@ export default function AuthModal({ isOpen, onClose }) {
                     onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     placeholder="123456"
                     maxLength={10}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-center text-2xl font-mono tracking-[0.25em] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-center text-2xl font-mono mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                   {error && <p className="text-red-500 text-xs mb-3 text-center">{error}</p>}
                   <button

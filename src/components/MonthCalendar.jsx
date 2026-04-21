@@ -96,7 +96,7 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent, profi
       {/* ── Day-of-week headers ────────────────────────────────────────── */}
       <div className="grid grid-cols-7 gap-1">
         {DAY_HEADERS.map((h) => (
-          <div key={h} className="text-center text-[10px] font-bold text-outline uppercase py-1">
+          <div key={h} className="text-center text-[10px] font-bold text-outline py-1">
             {h}
           </div>
         ))}

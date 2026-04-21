@@ -60,7 +60,7 @@ export default function FocusTimerOverlay({ block, onClose, onComplete }) {
       </button>
 
       {/* Block title */}
-      <p className="text-xs font-bold text-outline uppercase tracking-widest mb-8">
+      <p className="text-xs font-bold text-outline mb-8">
         {block?.title ?? 'Bloque de foco'}
       </p>
 

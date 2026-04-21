@@ -29,7 +29,7 @@ function MemoryCard({ memory, onPin, onEdit, onDelete }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <span className="text-[10px] font-bold text-slate-400">
             {cat.label}
           </span>
           {memory.subject && (
@@ -109,7 +109,7 @@ function EditDialog({ memory, onClose, onSave }) {
         </p>
 
         <label className="block mb-4">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-2">Categoría</span>
+          <span className="text-[11px] font-bold text-slate-500 block mb-2">Categoría</span>
           <div className="grid grid-cols-3 gap-1.5">
             {CATEGORIES.map(c => (
               <button
@@ -131,7 +131,7 @@ function EditDialog({ memory, onClose, onSave }) {
         </label>
 
         <label className="block mb-4">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-2">Sujeto (opcional)</span>
+          <span className="text-[11px] font-bold text-slate-500 block mb-2">Sujeto (opcional)</span>
           <input
             type="text"
             value={subject}
@@ -142,7 +142,7 @@ function EditDialog({ memory, onClose, onSave }) {
         </label>
 
         <label className="block mb-5">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-2">Memoria</span>
+          <span className="text-[11px] font-bold text-slate-500 block mb-2">Memoria</span>
           <textarea
             value={content}
             onChange={e => setContent(e.target.value)}
@@ -213,7 +213,7 @@ export default function MemoryView() {
     <div className="max-w-lg lg:max-w-2xl mx-auto px-4 py-6 space-y-4 pb-32">
       <div className="px-1 mb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Lo que Nova sabe de ti</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">Lo que Nova sabe de ti</h1>
           <p className="text-[12.5px] text-slate-500 mt-1">
             Memorias que Nova aprende en tus conversaciones para personalizar sus respuestas.
           </p>

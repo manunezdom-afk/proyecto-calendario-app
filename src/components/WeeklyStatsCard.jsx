@@ -53,15 +53,15 @@ export default function WeeklyStatsCard({ tasks }) {
       <div className="flex gap-3">
         <div className="flex-1 bg-white/60 dark:bg-slate-800/60 rounded-2xl p-3 text-center">
           <p className="text-xl font-black text-primary tabular-nums">{totalDone}</p>
-          <p className="text-[10px] font-bold text-outline uppercase tracking-wide mt-0.5">completadas</p>
+          <p className="text-[10px] font-bold text-outline mt-0.5">completadas</p>
         </div>
         <div className="flex-1 bg-white/60 dark:bg-slate-800/60 rounded-2xl p-3 text-center">
           <p className="text-xl font-black text-secondary tabular-nums">{pct}%</p>
-          <p className="text-[10px] font-bold text-outline uppercase tracking-wide mt-0.5">progreso</p>
+          <p className="text-[10px] font-bold text-outline mt-0.5">progreso</p>
         </div>
         <div className="flex-1 bg-white/60 dark:bg-slate-800/60 rounded-2xl p-3 text-center">
           <p className="text-xl font-black text-amber-500 tabular-nums">{activeDays}</p>
-          <p className="text-[10px] font-bold text-outline uppercase tracking-wide mt-0.5">días activos</p>
+          <p className="text-[10px] font-bold text-outline mt-0.5">días activos</p>
         </div>
       </div>
 
@@ -87,7 +87,7 @@ export default function WeeklyStatsCard({ tasks }) {
                 }`}
                 style={{ height: `${barH}px` }}
               />
-              <span className={`text-[9px] font-bold uppercase ${isToday ? 'text-primary' : 'text-outline/60'}`}>
+              <span className={`text-[9px] font-bold ${isToday ? 'text-primary' : 'text-outline/60'}`}>
                 {DAY_ABBR[i]}
               </span>
             </div>

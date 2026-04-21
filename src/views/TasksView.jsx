@@ -49,7 +49,7 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
         {/* ── Header + Progress + Weekly Stats (grid en desktop) ─────────── */}
         <header className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[1fr_1fr_1fr] lg:gap-5 lg:items-stretch">
           <div className="lg:col-span-3 lg:mb-2">
-            <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-on-surface dark:text-slate-100">Tareas</h1>
+            <h1 className="text-4xl lg:text-5xl font-extrabold text-on-surface dark:text-slate-100">Tareas</h1>
           </div>
 
           <div className="bg-surface-container-lowest p-5 rounded-[24px] border border-outline-variant/20 lg:col-span-2">
@@ -90,7 +90,7 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
                 emoji_events
               </span>
               <h2 className="font-headline font-bold text-on-surface">Las 3 Victorias de Hoy</h2>
-              <span className="ml-auto text-[10px] text-outline font-bold uppercase tracking-wider">Método MIT</span>
+              <span className="ml-auto text-[10px] text-outline font-bold">Método MIT</span>
             </div>
 
             {topThree.map(({ id, label, priority }, i) => {
@@ -109,7 +109,7 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-on-surface text-sm truncate">{label}</p>
-                    <span className={`text-[10px] font-bold uppercase tracking-wider ${cfg.color}`}>Prioridad {priority}</span>
+                    <span className={`text-[10px] font-bold ${cfg.color}`}>Prioridad {priority}</span>
                   </div>
                   <span className="material-symbols-outlined text-outline-variant text-[20px]">radio_button_unchecked</span>
                 </button>
@@ -251,7 +251,7 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
             <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
               tips_and_updates
             </span>
-            <span className="text-xs font-bold text-primary uppercase tracking-wider">Patrón de Éxito · Método MIT</span>
+            <span className="text-xs font-bold text-primary">Patrón de Éxito · Método MIT</span>
           </div>
           <p className="text-sm text-on-surface-variant font-medium leading-relaxed">
             Identifica tu <span className="text-on-surface font-bold">tarea más importante</span> del día y

@@ -195,10 +195,10 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
         <header>
           <div className="flex justify-between items-end">
             <div>
-              <p className="text-sm font-semibold text-primary uppercase tracking-wider mb-1">
+              <p className="text-sm font-semibold text-primary mb-1">
                 {currentMonthLabel}
               </p>
-              <h1 className="text-4xl font-extrabold text-on-surface tracking-tight">
+              <h1 className="text-4xl font-extrabold text-on-surface">
                 Calendario
               </h1>
             </div>
@@ -266,7 +266,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                     title={tooltip}
                     className="flex flex-col items-center gap-2 focus:outline-none"
                   >
-                    <span className={`text-[10px] font-bold uppercase ${isActive ? 'text-primary' : 'text-outline'}`}>
+                    <span className={`text-[10px] font-bold ${isActive ? 'text-primary' : 'text-outline'}`}>
                       {day}
                     </span>
                     {isActive ? (
@@ -335,7 +335,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
             {/* Enfoque del día seleccionado */}
             <section className="space-y-4">
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold tracking-tight text-on-surface">
+                <h2 className="text-xl font-bold text-on-surface">
                   {(() => {
                     const DAY_FULL = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
                     const activeDate = new Date(activeDayISO + 'T00:00:00')
@@ -377,7 +377,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
             {/* Tarde/Noche */}
             <section className="space-y-4">
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold tracking-tight text-on-surface">Tarde/Noche</h2>
+                <h2 className="text-xl font-bold text-on-surface">Tarde/Noche</h2>
                 <button
                   onClick={() => setShowModal(true)}
                   className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"

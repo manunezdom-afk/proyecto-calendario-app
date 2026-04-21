@@ -1,5 +1,15 @@
-import { useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useMemo, useRef } from 'react'
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion'
+
+const SWIPE_THRESHOLD = 96
+const HAPTIC_APPROVE  = 12
+const HAPTIC_REJECT   = 8
+
+function haptic(ms) {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try { navigator.vibrate(ms) } catch {}
+  }
+}
 
 function formatTimeAgo(iso) {
   if (!iso) return ''
@@ -26,16 +36,66 @@ function SuggestionCard({ suggestion, onApprove, onReject }) {
     ? { label: 'Rechazada', className: 'bg-slate-100 text-slate-500' }
     : null
 
+  const x = useMotionValue(0)
+  const crossed = useRef(0)
+  const approveOpacity = useTransform(x, [0, SWIPE_THRESHOLD], [0, 1])
+  const rejectOpacity  = useTransform(x, [-SWIPE_THRESHOLD, 0], [1, 0])
+  const scale          = useTransform(x, [-SWIPE_THRESHOLD, 0, SWIPE_THRESHOLD], [0.98, 1, 0.98])
+
+  function handleDrag(_, info) {
+    const sign = Math.sign(info.offset.x)
+    if (sign !== crossed.current && Math.abs(info.offset.x) > SWIPE_THRESHOLD) {
+      crossed.current = sign
+      haptic(sign > 0 ? HAPTIC_APPROVE : HAPTIC_REJECT)
+    } else if (Math.abs(info.offset.x) < SWIPE_THRESHOLD) {
+      crossed.current = 0
+    }
+  }
+
+  function handleDragEnd(_, info) {
+    if (info.offset.x > SWIPE_THRESHOLD && isPending) {
+      onApprove(suggestion.id)
+    } else if (info.offset.x < -SWIPE_THRESHOLD && isPending) {
+      onReject(suggestion.id)
+    }
+  }
+
   return (
+    <motion.div layout className="relative">
+      {isPending && (
+        <>
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 flex items-center justify-end rounded-2xl bg-gradient-to-l from-emerald-500 to-emerald-400 pr-6 text-white"
+            style={{ opacity: approveOpacity }}
+          >
+            <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+            <span className="ml-2 font-semibold">Aprobar</span>
+          </motion.div>
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 flex items-center justify-start rounded-2xl bg-gradient-to-r from-slate-500 to-slate-400 pl-6 text-white"
+            style={{ opacity: rejectOpacity }}
+          >
+            <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>close</span>
+            <span className="ml-2 font-semibold">Rechazar</span>
+          </motion.div>
+        </>
+      )}
     <motion.div
-      layout
+      drag={isPending ? 'x' : false}
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.35}
+      onDrag={handleDrag}
+      onDragEnd={handleDragEnd}
+      style={{ x, scale }}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ type: 'spring', damping: 22, stiffness: 300 }}
-      className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${
+      className={`relative rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${
         !isPending ? 'opacity-70' : ''
-      }`}
+      } ${isPending ? 'cursor-grab active:cursor-grabbing' : ''}`}
     >
       <div className="flex items-start gap-3">
         <div
@@ -52,7 +112,7 @@ function SuggestionCard({ suggestion, onApprove, onReject }) {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-[13.5px] font-semibold text-slate-800">
+            <p className="truncate font-nova text-[14px] font-semibold text-slate-800">
               {suggestion.previewTitle}
             </p>
             {statusChip && (
@@ -69,7 +129,7 @@ function SuggestionCard({ suggestion, onApprove, onReject }) {
           )}
 
           {suggestion.reason && (
-            <p className="mt-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-[11.5px] italic leading-snug text-slate-600">
+            <p className="mt-2 font-nova rounded-lg bg-slate-50 px-2.5 py-1.5 text-[12px] italic leading-snug text-slate-600">
               “{suggestion.reason}”
             </p>
           )}
@@ -97,8 +157,14 @@ function SuggestionCard({ suggestion, onApprove, onReject }) {
               </div>
             )}
           </div>
+          {isPending && (
+            <p className="mt-1.5 text-[10.5px] text-slate-400">
+              Desliza → aprobar · ← rechazar
+            </p>
+          )}
         </div>
       </div>
+    </motion.div>
     </motion.div>
   )
 }
@@ -191,7 +257,7 @@ export default function SuggestionsInbox({
                 <div className="space-y-3">
                   {pending.length > 0 && (
                     <>
-                      <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      <p className="px-1 text-[11px] font-semibold text-slate-400">
                         Pendientes
                       </p>
                       <AnimatePresence initial={false}>
@@ -210,7 +276,7 @@ export default function SuggestionsInbox({
                   {resolved.length > 0 && (
                     <>
                       <div className="flex items-center justify-between pt-3">
-                        <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        <p className="px-1 text-[11px] font-semibold text-slate-400">
                           Recientes
                         </p>
                         <button

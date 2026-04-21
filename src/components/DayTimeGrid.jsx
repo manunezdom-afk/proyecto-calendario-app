@@ -1,3 +1,4 @@
+import { LayoutGroup, motion } from 'framer-motion'
 import { parseEventHour, peakRangeLabel } from '../utils/peakZone'
 
 const START_H = 8
@@ -54,7 +55,7 @@ export default function DayTimeGrid({ events = [], peakStart, peakEnd, onAdd, on
             style={{ top: peakTop, height: peakHeight }}
             title={`Zona de rendimiento · ${peakRangeLabel(peakStart, peakEnd)}`}
           >
-            <span className="absolute top-1 right-2 text-[9px] font-bold text-emerald-700 uppercase tracking-wider">Zona de rendimiento</span>
+            <span className="absolute top-1 right-2 text-[9px] font-bold text-emerald-700">Zona de rendimiento</span>
           </div>
         )}
 
@@ -71,18 +72,24 @@ export default function DayTimeGrid({ events = [], peakStart, peakEnd, onAdd, on
           </div>
         ))}
 
-        {positioned.map(({ ev, top, height }) => (
-          <button
-            key={ev.id}
-            type="button"
-            onClick={() => onOpenTask?.(ev)}
-            className="absolute left-14 right-2 bg-primary/10 hover:bg-primary/20 border-l-4 border-primary rounded-r-lg px-2 py-1 text-left transition-colors overflow-hidden"
-            style={{ top: top + 1, height }}
-          >
-            <p className="text-xs font-bold text-primary truncate">{ev.title}</p>
-            {ev.time && <p className="text-[10px] text-primary/70 truncate">{ev.time}</p>}
-          </button>
-        ))}
+        <LayoutGroup>
+          {positioned.map(({ ev, top, height }) => (
+            <motion.button
+              key={ev.id}
+              layoutId={`event-${ev.id}`}
+              layout
+              type="button"
+              onClick={() => onOpenTask?.(ev)}
+              className="absolute left-14 right-2 bg-primary/10 hover:bg-primary/20 border-l-4 border-primary rounded-r-lg px-2 py-1 text-left transition-colors overflow-hidden"
+              initial={false}
+              animate={{ top: top + 1, height }}
+              transition={{ type: 'spring', damping: 14, stiffness: 180 }}
+            >
+              <p className="text-xs font-bold text-primary truncate">{ev.title}</p>
+              {ev.time && <p className="text-[10px] text-primary/70 truncate">{ev.time}</p>}
+            </motion.button>
+          ))}
+        </LayoutGroup>
       </div>
     </section>
   )

@@ -93,7 +93,7 @@ export default function NotificationPanel({ isOpen, onClose, notifLog, onMarkAll
             <div className="py-2">
               {groups.map(({ label, entries }) => (
                 <div key={label}>
-                  <p className="text-[10px] font-bold text-outline uppercase tracking-widest px-6 py-3">
+                  <p className="text-[10px] font-bold text-outline px-6 py-3">
                     {label}
                   </p>
                   {entries.map((n) => (

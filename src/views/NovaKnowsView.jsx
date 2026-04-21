@@ -143,8 +143,8 @@ function InsightCard({ icon, gradient, title, body, delay = 0 }) {
 function StatTile({ label, value, hint }) {
   return (
     <div className="flex-1 min-w-[140px] bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3">
-      <p className="text-[10.5px] font-bold uppercase tracking-widest text-slate-400">{label}</p>
-      <p className="text-2xl font-extrabold text-slate-900 mt-1 font-headline tracking-tight">{value}</p>
+      <p className="text-[10.5px] font-bold text-slate-400">{label}</p>
+      <p className="text-2xl font-extrabold text-slate-900 mt-1 font-headline">{value}</p>
       {hint && <p className="text-[11px] text-slate-400 mt-0.5">{hint}</p>}
     </div>
   )
@@ -202,7 +202,7 @@ export default function NovaKnowsView({ onBack }) {
             Volver
           </button>
         )}
-        <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-headline">
+        <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 font-headline">
           Lo que Nova sabe de vos
         </h1>
         <p className="text-[13.5px] text-slate-500 mt-1 leading-snug">
@@ -282,7 +282,7 @@ export default function NovaKnowsView({ onBack }) {
               transition={{ delay: 0.2 }}
               className="bg-white rounded-[20px] border border-slate-100 shadow-sm p-5"
             >
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+              <p className="text-[11px] font-bold text-slate-500 mb-3">
                 Tareas completadas por día
               </p>
               <div className="flex items-end gap-2 h-24">

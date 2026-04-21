@@ -57,7 +57,7 @@ export default function AddEventModal({ onSave, onCancel }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Title */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-outline uppercase tracking-wider">
+            <label className="text-xs font-bold text-outline">
               Nombre del evento *
             </label>
             <input
@@ -75,7 +75,7 @@ export default function AddEventModal({ onSave, onCancel }) {
 
           {/* Time */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-outline uppercase tracking-wider">
+            <label className="text-xs font-bold text-outline">
               Horario
             </label>
             <input
@@ -89,7 +89,7 @@ export default function AddEventModal({ onSave, onCancel }) {
 
           {/* Description */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-outline uppercase tracking-wider">
+            <label className="text-xs font-bold text-outline">
               Descripción
             </label>
             <input
@@ -103,7 +103,7 @@ export default function AddEventModal({ onSave, onCancel }) {
 
           {/* Section */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-outline uppercase tracking-wider">
+            <label className="text-xs font-bold text-outline">
               Sección
             </label>
             <div className="flex gap-2">
@@ -130,7 +130,7 @@ export default function AddEventModal({ onSave, onCancel }) {
           {/* Icon (only for focus section) */}
           {section === 'focus' && (
             <div className="space-y-1">
-              <label className="text-xs font-bold text-outline uppercase tracking-wider">
+              <label className="text-xs font-bold text-outline">
                 Icono
               </label>
               <div className="flex gap-2 flex-wrap">
@@ -156,7 +156,7 @@ export default function AddEventModal({ onSave, onCancel }) {
           {/* Dot color (only for evening section) */}
           {section === 'evening' && (
             <div className="space-y-1">
-              <label className="text-xs font-bold text-outline uppercase tracking-wider">
+              <label className="text-xs font-bold text-outline">
                 Color del indicador
               </label>
               <div className="flex gap-2">

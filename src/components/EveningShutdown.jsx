@@ -3,6 +3,8 @@ import { analyzeBehavior } from '../services/behaviorAnalysis'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useAuth } from '../context/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
+import AuroraBackground from './AuroraBackground'
+import NovaOrb from './NovaOrb'
 
 const PHASES = ['review', 'move', 'tomorrow']
 const PHASE_LABELS = { review: 'Revisión', move: 'Pendientes', tomorrow: 'Mañana' }
@@ -58,7 +60,7 @@ function PhaseReview({ tasks, todayEvents, onNext }) {
       {/* Progress ring substitute — bar */}
       <div>
         <div className="flex justify-between mb-2">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Progreso del día</span>
+          <span className="text-xs font-bold text-slate-500">Progreso del día</span>
           <span className="text-xs font-bold text-slate-700">{donePercent}%</span>
         </div>
         <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -74,7 +76,7 @@ function PhaseReview({ tasks, todayEvents, onNext }) {
       {/* Done tasks list (top 4) */}
       {doneTasks.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Completadas hoy</p>
+          <p className="text-[11px] font-bold text-slate-400">Completadas hoy</p>
           {doneTasks.slice(0, 4).map(t => (
             <div key={t.id} className="flex items-center gap-2.5 px-3 py-2 bg-emerald-50/60 rounded-xl">
               <span className="material-symbols-outlined text-emerald-500 text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>
@@ -135,7 +137,7 @@ function PhaseMove({ tasks, todayEvents, onMoveEvent, onNext }) {
     >
       {pendingTasks.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+          <p className="text-[11px] font-bold text-slate-400">
             Tareas sin completar
           </p>
           {pendingTasks.map(t => (
@@ -150,7 +152,7 @@ function PhaseMove({ tasks, todayEvents, onMoveEvent, onNext }) {
 
       {undecided.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+          <p className="text-[11px] font-bold text-slate-400">
             Eventos pendientes — ¿mover a mañana?
           </p>
           {undecided.map(e => (
@@ -217,7 +219,7 @@ function PhaseTomorrow({ tomorrowEvents, tasks, onClose }) {
       className="flex-1 overflow-y-auto space-y-4"
     >
       <div>
-        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+        <p className="text-[11px] font-bold text-slate-400 mb-3">
           {formatTomorrowDate()}
         </p>
 
@@ -248,7 +250,7 @@ function PhaseTomorrow({ tomorrowEvents, tasks, onClose }) {
 
       {pendingWeek.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+          <p className="text-[11px] font-bold text-slate-400">
             Tareas de esta semana
           </p>
           {pendingWeek.slice(0, 3).map(t => (
@@ -321,64 +323,70 @@ export default function EveningShutdown({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
       className="fixed inset-0 z-[200] flex items-end"
-      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose?.() }}
+      style={{ background: 'radial-gradient(ellipse at 50% 80%, #0f1a2e 0%, #05060a 70%)' }}
     >
+      <AuroraBackground variant="threshold" intensity={0.5} />
       <motion.div
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={0.2}
+        onDragEnd={(_, info) => {
+          if (info.offset.y > 160 || info.velocity.y > 600) onClose?.()
+        }}
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-        className="w-full max-h-[85vh] flex flex-col rounded-t-[28px] bg-white overflow-hidden"
+        className="relative z-10 w-full max-h-[90vh] flex flex-col rounded-t-[28px] bg-white/5 backdrop-blur-2xl border-t border-white/10 overflow-hidden"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.5rem)' }}
       >
+        {/* Grip handle */}
+        <div className="flex justify-center pt-3 flex-shrink-0">
+          <div className="w-10 h-1 rounded-full bg-white/25" aria-hidden />
+        </div>
+
         {/* Timer bar */}
-        <div className="h-1 bg-slate-100">
+        <div className="mx-6 mt-3 h-0.5 bg-white/10 rounded-full overflow-hidden">
           <motion.div
-            className="h-full bg-blue-400"
+            className="h-full bg-nova-soft"
             animate={{ width: `${timerPct}%` }}
             transition={{ duration: 0.5 }}
           />
         </div>
 
-        {/* Header */}
+        {/* Header ceremonial */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 flex-shrink-0">
-          <div>
-            <h2 className="text-[17px] font-bold text-slate-800">Cerrar el día</h2>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              {MAX_SECONDS - elapsed}s restantes
-            </p>
+          <div className="flex items-center gap-3">
+            <NovaOrb size={36} ambient={false} />
+            <div>
+              <h2 className="font-nova text-[17px] font-medium text-white/90">Cerrar el día</h2>
+              <p className="text-[11px] text-white/40 mt-0.5">
+                {MAX_SECONDS - elapsed}s restantes
+              </p>
+            </div>
           </div>
 
-          {/* Phase stepper */}
           <div className="flex items-center gap-1.5">
             {PHASES.map((p, i) => (
               <div
                 key={p}
                 className={`rounded-full transition-all duration-300 ${
                   i === phaseIdx
-                    ? 'w-5 h-1.5 bg-slate-800'
+                    ? 'w-5 h-1.5 bg-nova-soft'
                     : i < phaseIdx
-                    ? 'w-1.5 h-1.5 bg-slate-400'
-                    : 'w-1.5 h-1.5 bg-slate-200'
+                    ? 'w-1.5 h-1.5 bg-white/40'
+                    : 'w-1.5 h-1.5 bg-white/10'
                 }`}
               />
             ))}
           </div>
-
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 transition-colors"
-          >
-            <span className="material-symbols-outlined text-[16px]">close</span>
-          </button>
         </div>
 
         {/* Phase label */}
         <div className="px-6 pb-3 flex-shrink-0">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+          <p className="text-[11px] text-white/40">
             {PHASE_LABELS[currentPhase]}
           </p>
         </div>

@@ -70,6 +70,7 @@ export default {
         headline: ['Manrope', 'sans-serif'],
         body: ['Inter', 'sans-serif'],
         label: ['Inter', 'sans-serif'],
+        nova: ['Manrope', 'sans-serif'],
       },
       spacing: {
         'safe-top': 'env(safe-area-inset-top, 0px)',

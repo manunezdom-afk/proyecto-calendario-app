@@ -5,7 +5,7 @@ import { getPushStatus, subscribeToPush } from '../lib/pushSubscription'
 function SectionCard({ title, children }) {
   return (
     <section className="bg-white rounded-[20px] border border-slate-100 shadow-sm overflow-hidden">
-      <p className="px-5 pt-4 pb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+      <p className="px-5 pt-4 pb-2 text-[11px] font-bold text-slate-400">
         {title}
       </p>
       {children}
@@ -115,7 +115,7 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
 
       {/* Título */}
       <div className="px-1 mb-2">
-        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Ajustes</h1>
+        <h1 className="text-2xl font-extrabold text-slate-900">Ajustes</h1>
       </div>
 
       {/* ── Perfil ──────────────────────────────────────────────────────── */}

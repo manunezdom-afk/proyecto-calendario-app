@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { todayISO as getTodayISO, parseTimeToDecimal } from '../utils/time'
+import AuroraBackground from './AuroraBackground'
+import NovaOrb from './NovaOrb'
 
 const SR =
   typeof window !== 'undefined' &&
@@ -71,23 +73,25 @@ function generateBrief({ events, tasks, profile }) {
   return { text, peakConflicts, meetingCount, pendingTasks }
 }
 
-function useTypewriter(text, msPerWord = 38) {
+function useTypewriter(text, msPerChar = 28) {
   const [shown, setShown] = useState('')
   useEffect(() => {
     if (!text) { setShown(''); return }
     setShown('')
-    const words = text.split(' ')
     let i = 0
     let timer
     function next() {
-      if (i >= words.length) return
-      setShown(words.slice(0, i + 1).join(' '))
+      if (i >= text.length) return
       i++
-      timer = setTimeout(next, msPerWord)
+      setShown(text.slice(0, i))
+      // pausa un poco más larga tras puntuación
+      const last = text[i - 1]
+      const extra = /[.!?]/.test(last) ? 220 : /[,;]/.test(last) ? 120 : 0
+      timer = setTimeout(next, msPerChar + extra)
     }
     timer = setTimeout(next, 500)
     return () => clearTimeout(timer)
-  }, [text, msPerWord])
+  }, [text, msPerChar])
   return shown
 }
 
@@ -173,7 +177,7 @@ export default function MorningBrief({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Nova · Brief del día</span>
+            <span className="text-[10px] font-bold text-primary">Nova · Brief del día</span>
           </div>
           <button
             onClick={handleDismiss}
@@ -191,13 +195,13 @@ export default function MorningBrief({
             {brief.meetingCount > 0 && (
               <div className="flex items-baseline gap-1.5">
                 <span className="text-xl font-bold text-slate-900 tabular-nums">{brief.meetingCount}</span>
-                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">reunion{brief.meetingCount > 1 ? 'es' : ''}</span>
+                <span className="text-[10px] font-bold text-slate-500">reunion{brief.meetingCount > 1 ? 'es' : ''}</span>
               </div>
             )}
             {brief.pendingTasks > 0 && (
               <div className="flex items-baseline gap-1.5">
                 <span className="text-xl font-bold text-slate-900 tabular-nums">{brief.pendingTasks}</span>
-                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">tareas</span>
+                <span className="text-[10px] font-bold text-slate-500">tareas</span>
               </div>
             )}
           </div>
@@ -221,62 +225,62 @@ export default function MorningBrief({
     )
   }
 
-  // ─── Modal variant: mobile — fondo opaco claro, card blanca ──────────────
+  // ─── Modal variant: ceremonia matinal — fondo oscuro con aurora ──────────
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.25 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-5 bg-slate-50"
+      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      className="fixed inset-0 z-[200] flex items-center justify-center p-5"
+      style={{ background: 'radial-gradient(ellipse at 50% 30%, #14121f 0%, #0a0a0f 70%)' }}
     >
+      <AuroraBackground variant="threshold" intensity={0.7} />
       <motion.div
-        initial={{ scale: 0.96, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.25, ease: 'easeOut' }}
-        className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-xl p-6 relative"
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={0.25}
+        onDragEnd={(_, info) => {
+          if (info.offset.y > 140 || info.velocity.y > 600) handleDismiss()
+        }}
+        initial={{ scale: 0.96, opacity: 0, y: 10 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        className="relative z-10 w-full max-w-md"
       >
-        {/* Mute toggle — la escucha por voz fue removida; solo queda el control de audio */}
-        <div className="absolute top-4 right-4">
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-10 h-1 rounded-full bg-white/20 mb-6" aria-hidden />
+          <NovaOrb size={56} ambient />
+          <p className="mt-4 font-nova text-[11px] text-white/50">
+            {new Date().toLocaleDateString('es-ES', {
+              weekday: 'long', day: 'numeric', month: 'long',
+            })}
+          </p>
+        </div>
+
+        <div className="absolute top-0 right-0 pt-1">
           <button
             onClick={() => { setMuted(m => !m); stopSpeech() }}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            aria-label={muted ? 'Activar voz' : 'Silenciar voz'}
+            className="w-9 h-9 flex items-center justify-center rounded-full text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors"
           >
-            <span className="material-symbols-outlined text-[16px]">
+            <span className="material-symbols-outlined text-[18px]">
               {muted ? 'volume_off' : 'volume_up'}
             </span>
           </button>
         </div>
 
-        {/* Nova badge — pr-12 para no chocar con el botón absoluto de la esquina */}
-        <div className="flex items-center gap-2 mb-5 pr-12">
-          <motion.span
-            className="material-symbols-outlined text-[14px] text-primary"
-            style={{ fontVariationSettings: "'FILL' 1" }}
-            animate={speaking ? { opacity: [0.5, 1, 0.5] } : { opacity: 1 }}
-            transition={speaking ? { duration: 1.4, repeat: Infinity } : {}}
-          >
-            auto_awesome
-          </motion.span>
-          <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-primary">
-            Nova ·{' '}
-            {new Date().toLocaleDateString('es-ES', {
-              weekday: 'long', day: 'numeric', month: 'long',
-            })}
-          </span>
-        </div>
-
         {/* Brief / Conflicts */}
         <AnimatePresence mode="wait">
           {phase === 'brief' ? (
-            <motion.div key="brief" className="mb-5">
-              <p className="text-[18px] font-medium leading-relaxed text-slate-800 tracking-tight">
+            <motion.div key="brief" className="mb-6 text-center">
+              <p className="font-nova text-[20px] font-medium leading-relaxed text-white/90">
                 {displayText}
                 {!typingDone && (
                   <motion.span
                     animate={{ opacity: [1, 0] }}
                     transition={{ duration: 0.5, repeat: Infinity }}
-                    className="inline-block w-0.5 h-5 bg-primary ml-1 align-middle rounded-full"
+                    className="inline-block w-0.5 h-5 bg-nova ml-1 align-middle rounded-full"
                   />
                 )}
               </p>
@@ -288,21 +292,21 @@ export default function MorningBrief({
               animate={{ opacity: 1, y: 0 }}
               className="space-y-3 mb-5"
             >
-              <p className="text-[12px] text-slate-500 mb-2">
+              <p className="text-[12px] text-white/60 mb-2">
                 Reuniones en tu zona pico
               </p>
               {brief.peakConflicts.map(e => (
                 <div
                   key={e.id}
-                  className="flex items-center justify-between rounded-xl px-4 py-3 bg-slate-50 border border-slate-200"
+                  className="flex items-center justify-between rounded-xl px-4 py-3 bg-white/5 border border-white/10"
                 >
                   <div>
-                    <p className="text-[13px] text-slate-800 font-semibold">{e.title}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{e.time}</p>
+                    <p className="text-[13px] text-white/90 font-semibold">{e.title}</p>
+                    <p className="text-[11px] text-white/50 mt-0.5">{e.time}</p>
                   </div>
                   <button
                     onClick={() => onMoveEvent?.(e.id, { section: 'evening' })}
-                    className="text-[11px] font-bold text-primary border border-primary/30 px-3 py-1.5 rounded-full hover:bg-primary/10 transition-colors"
+                    className="text-[11px] font-bold text-nova-soft border border-nova/40 px-3 py-1.5 rounded-full hover:bg-nova/10 transition-colors"
                   >
                     Mover
                   </button>
@@ -310,7 +314,7 @@ export default function MorningBrief({
               ))}
               <button
                 onClick={handleStart}
-                className="w-full text-[12px] text-slate-500 py-2 hover:text-slate-700 transition-colors"
+                className="w-full text-[12px] text-white/60 py-2 hover:text-white/80 transition-colors"
               >
                 Listo, continuar →
               </button>
@@ -324,27 +328,27 @@ export default function MorningBrief({
             initial={{ opacity: 0 }}
             animate={{ opacity: typingDone ? 1 : 0 }}
             transition={{ duration: 0.5 }}
-            className="flex items-center gap-6 mb-5"
+            className="flex items-center justify-center gap-8 mb-6"
           >
             {brief.meetingCount > 0 && (
-              <div>
-                <p className="text-2xl font-bold text-slate-900 tabular-nums leading-none">
+              <div className="text-center">
+                <p className="text-3xl font-headline font-semibold text-white tabular-nums leading-none">
                   {brief.meetingCount}
                 </p>
-                <p className="text-[9px] text-slate-500 uppercase tracking-wider mt-1 font-bold">
+                <p className="text-[11px] text-white/50 mt-1.5">
                   reuniones
                 </p>
               </div>
             )}
             {brief.meetingCount > 0 && brief.pendingTasks > 0 && (
-              <div className="w-px h-8 bg-slate-200" />
+              <div className="w-px h-10 bg-white/15" />
             )}
             {brief.pendingTasks > 0 && (
-              <div>
-                <p className="text-2xl font-bold text-slate-900 tabular-nums leading-none">
+              <div className="text-center">
+                <p className="text-3xl font-headline font-semibold text-white tabular-nums leading-none">
                   {brief.pendingTasks}
                 </p>
-                <p className="text-[9px] text-slate-500 uppercase tracking-wider mt-1 font-bold">
+                <p className="text-[11px] text-white/50 mt-1.5">
                   tareas
                 </p>
               </div>
@@ -362,7 +366,7 @@ export default function MorningBrief({
           >
             <button
               onClick={handleStart}
-              className="w-full py-3.5 rounded-xl font-bold text-[15px] text-white bg-primary hover:bg-primary/90 transition-colors active:scale-[0.98]"
+              className="w-full py-3.5 rounded-2xl font-semibold text-[15px] text-white bg-nova hover:bg-nova/90 transition-colors active:scale-[0.98] shadow-lg shadow-nova/30"
             >
               Sí, arrancamos
             </button>
@@ -370,18 +374,21 @@ export default function MorningBrief({
               {brief.peakConflicts.length > 0 && (
                 <button
                   onClick={handleModify}
-                  className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
+                  className="flex-1 py-2.5 rounded-2xl text-[13px] font-semibold text-white/80 border border-white/15 hover:bg-white/5 transition-colors"
                 >
                   Modificar
                 </button>
               )}
               <button
                 onClick={handleDismiss}
-                className="flex-1 py-2.5 rounded-xl text-[13px] font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors"
+                className="flex-1 py-2.5 rounded-2xl text-[13px] font-medium text-white/60 hover:text-white/80 hover:bg-white/5 transition-colors"
               >
                 Más tarde
               </button>
             </div>
+            <p className="mt-1 text-center text-[11px] text-white/30">
+              Desliza hacia abajo para cerrar
+            </p>
           </motion.div>
         )}
       </motion.div>

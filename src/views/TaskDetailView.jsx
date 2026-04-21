@@ -52,7 +52,7 @@ export default function TaskDetailView({ event, onBack, onSave, onDelete }) {
 
           {/* Title */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-outline uppercase tracking-wider">Título</label>
+            <label className="text-xs font-bold text-outline">Título</label>
             <input
               type="text"
               value={title}
@@ -65,7 +65,7 @@ export default function TaskDetailView({ event, onBack, onSave, onDelete }) {
           {/* Time + Date */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-outline uppercase tracking-wider">Hora</label>
+              <label className="text-xs font-bold text-outline">Hora</label>
               <input
                 type="text"
                 value={time}
@@ -75,7 +75,7 @@ export default function TaskDetailView({ event, onBack, onSave, onDelete }) {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-outline uppercase tracking-wider">Fecha</label>
+              <label className="text-xs font-bold text-outline">Fecha</label>
               <input
                 type="date"
                 value={date || ''}
@@ -87,7 +87,7 @@ export default function TaskDetailView({ event, onBack, onSave, onDelete }) {
 
           {/* Section toggle */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-outline uppercase tracking-wider">Sección</label>
+            <label className="text-xs font-bold text-outline">Sección</label>
             <div className="flex p-1 bg-surface-container-low rounded-xl">
               {[
                 { id: 'focus',   label: 'Mañana / Foco' },
@@ -111,7 +111,7 @@ export default function TaskDetailView({ event, onBack, onSave, onDelete }) {
 
           {/* Description */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-outline uppercase tracking-wider">Notas</label>
+            <label className="text-xs font-bold text-outline">Notas</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}

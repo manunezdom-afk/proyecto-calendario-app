@@ -105,7 +105,7 @@ function ExportTab({ events }) {
 
       {/* ── Filtros ─────────────────────────────────────────────────────── */}
       <div className="p-4 bg-surface-container-lowest rounded-2xl border border-outline-variant/20 space-y-3">
-        <p className="text-[11px] font-bold text-on-surface uppercase tracking-wider">Qué exportar</p>
+        <p className="text-[11px] font-bold text-on-surface">Qué exportar</p>
 
         {/* Rango de fechas */}
         <div>
@@ -177,7 +177,7 @@ function ExportTab({ events }) {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">1</span>
-          <p className="text-xs font-bold text-on-surface uppercase tracking-wider">Google Calendar — un clic por evento</p>
+          <p className="text-xs font-bold text-on-surface">Google Calendar — un clic por evento</p>
         </div>
         <p className="text-xs text-on-surface-variant pl-7">Sin descargar nada. Se abre directamente en Google Calendar con la hora y fecha correctas.</p>
 
@@ -213,7 +213,7 @@ function ExportTab({ events }) {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">2</span>
-          <p className="text-xs font-bold text-on-surface uppercase tracking-wider">Archivo .ics — Apple Calendar · Outlook · otros</p>
+          <p className="text-xs font-bold text-on-surface">Archivo .ics — Apple Calendar · Outlook · otros</p>
         </div>
         <p className="text-xs text-on-surface-variant pl-7">
           Descarga el archivo y ábrelo en tu app de calendario. Los horarios se exportan en UTC para que aparezcan a la hora correcta en cualquier zona horaria.
@@ -395,7 +395,7 @@ function SubscribeTab() {
       {/* Crear nuevo feed */}
       {feeds.length === 0 && (
         <div className="space-y-3 p-4 bg-surface-container-lowest rounded-2xl border border-outline-variant/20">
-          <p className="text-[12px] font-bold text-on-surface uppercase tracking-wider">Crear tu primer feed</p>
+          <p className="text-[12px] font-bold text-on-surface">Crear tu primer feed</p>
           <input
             type="text"
             value={newLabel}
@@ -466,7 +466,7 @@ function SubscribeTab() {
 
             {/* Instrucciones por app */}
             <div className="pt-1 space-y-2">
-              <p className="text-[11px] font-bold text-on-surface uppercase tracking-wider">Cómo suscribirse</p>
+              <p className="text-[11px] font-bold text-on-surface">Cómo suscribirse</p>
               {[
                 { label: 'Google Calendar', desc: 'calendar.google.com → ⚙ Configuración → "Agregar calendario" → "A partir de URL" → pegar el URL' },
                 { label: 'Apple Calendar (iPhone)', desc: 'Ajustes → Calendario → Cuentas → Añadir cuenta → Otras → Añadir calendario suscrito → pegar URL' },
@@ -575,7 +575,7 @@ function ImportICSTab({ onImport }) {
       {/* Cómo exportar instrucciones */}
       {preview.length === 0 && !error && (
         <div className="space-y-2">
-          <p className="text-xs font-bold text-outline uppercase tracking-wider">Cómo obtener el .ics</p>
+          <p className="text-xs font-bold text-outline">Cómo obtener el .ics</p>
           {[
             { icon: 'phone_iphone', label: 'iPhone / Mac', desc: 'Apple Calendar → selecciona un calendario → Archivo → Exportar → .ics' },
             { icon: 'language',     label: 'Google Calendar', desc: 'calendar.google.com → Configuración → Exportar calendarios' },

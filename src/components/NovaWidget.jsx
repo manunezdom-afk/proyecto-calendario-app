@@ -506,7 +506,7 @@ export default function NovaWidget({
                   animate={{ opacity: 1, y: 0 }}
                   className="flex justify-start"
                 >
-                  <div className="max-w-[85%] px-3 py-2 rounded-2xl rounded-bl-[6px] bg-slate-100 text-[13px] text-slate-700 leading-relaxed">
+                  <div className="max-w-[85%] font-nova px-3 py-2 rounded-2xl rounded-bl-[6px] bg-slate-100 text-[13.5px] text-slate-700 leading-relaxed">
                     {displayedText ? (
                       <>
                         {displayedText}

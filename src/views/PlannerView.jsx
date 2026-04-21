@@ -272,9 +272,11 @@ function LongPressZone({ onLongPress, onClick, className, style, title, children
   const timer     = useRef(null)
   const startPos  = useRef({ x: 0, y: 0 })
   const fired     = useRef(false)
+  const [pressed, setPressed] = useState(false)
 
   function cancel() {
     if (timer.current) { clearTimeout(timer.current); timer.current = null }
+    setPressed(false)
   }
 
   function start(e) {
@@ -282,15 +284,16 @@ function LongPressZone({ onLongPress, onClick, className, style, title, children
     const p = e.touches?.[0] || e
     startPos.current = { x: p.clientX ?? 0, y: p.clientY ?? 0 }
     cancel()
+    setPressed(true)
     timer.current = setTimeout(() => {
       fired.current = true
       timer.current = null
-      // Vibración corta en dispositivos que lo soporten (iOS no lo hace, Android sí)
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        try { navigator.vibrate(40) } catch {}
+        try { navigator.vibrate(10) } catch {}
       }
       onLongPress?.()
-    }, 550)
+      setPressed(false)
+    }, 500)
   }
 
   function move(e) {
@@ -309,13 +312,14 @@ function LongPressZone({ onLongPress, onClick, className, style, title, children
     }
   }
 
-  // En iOS Safari hay que bloquear el menú contextual nativo que aparece al
-  // mantener apretado; si no, el OS interrumpe nuestro timer con "copiar/pegar".
   const mergedStyle = {
     ...style,
     WebkitTouchCallout: 'none',
     WebkitUserSelect:   'none',
     userSelect:         'none',
+    transform: pressed ? 'scale(1.02)' : 'scale(1)',
+    boxShadow: pressed ? '0 12px 32px -10px rgba(124, 107, 255, 0.35)' : undefined,
+    transition: 'transform 180ms var(--ease, cubic-bezier(0.22,1,0.36,1)), box-shadow 180ms var(--ease, cubic-bezier(0.22,1,0.36,1))',
   }
 
   return (
@@ -653,7 +657,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
               </div>
             )}
             <header className="mb-10">
-              <p className="text-primary font-semibold tracking-wider text-xs uppercase mb-2">
+              <p className="text-primary font-semibold text-xs mb-2">
                 {formatToday()}
               </p>
               <h2 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface">
@@ -688,7 +692,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 <div className="mb-5 bg-amber-50 border border-amber-200 rounded-2xl p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="material-symbols-outlined text-amber-600 text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
-                    <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Zona de Rendimiento en riesgo</p>
+                    <p className="text-[10px] font-bold text-amber-700">Zona de Rendimiento en riesgo</p>
                   </div>
                   <p className="text-sm text-amber-800 leading-snug mb-2">
                     {intruders.length === 1
@@ -825,7 +829,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                                   borderLeft: '2px solid #e2e8f0',
                                 }}
                               >
-                                <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', marginBottom: '1px' }}>
+                                <p style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', marginBottom: '1px' }}>
                                   {s.label}
                                 </p>
                                 <p style={{ fontSize: '11px', lineHeight: '1.4', color: '#64748b' }}>
@@ -906,7 +910,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   </h4>
                 </div>
                 {activeBlock && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary uppercase tracking-wider">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                     ACTIVO
                   </span>
                 )}
@@ -921,7 +925,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     title="Mantén apretado para eliminar"
                     data-next-event
                   >
-                    <p className="text-xs font-semibold text-outline uppercase tracking-wider mb-1">{activeBlock.time}</p>
+                    <p className="text-xs font-semibold text-outline mb-1">{activeBlock.time}</p>
                     <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{activeBlock.title}</p>
                     <div className="flex items-baseline gap-1">
                       <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{Math.round(minsElapsed)}</span>
@@ -937,7 +941,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     title="Mantén apretado para eliminar"
                     data-next-event
                   >
-                    <p className="text-xs font-semibold text-outline uppercase tracking-wider mb-1">{nextBlock.time}</p>
+                    <p className="text-xs font-semibold text-outline mb-1">{nextBlock.time}</p>
                     <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{nextBlock.title}</p>
                     <div className="flex items-baseline gap-1">
                       <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{formatMinutes(minsToNext)}</span>
@@ -960,7 +964,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
               {totalBlocks > 0 && (
                 <div>
                   <div className="flex justify-between mb-1.5">
-                    <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Bloques completados</span>
+                    <span className="text-[10px] font-bold text-outline">Bloques completados</span>
                     <span className="text-[10px] font-bold text-outline tabular-nums">{completedCount}/{totalBlocks} · {Math.round(blockProgress * 100)}%</span>
                   </div>
                   <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
@@ -979,7 +983,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
             <div className="bg-surface-container-high/40 backdrop-blur-sm rounded-[24px] p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="font-headline font-bold text-on-surface">Tu Día</h4>
-                <span className="text-[10px] font-bold text-outline uppercase tracking-wider">HOY</span>
+                <span className="text-[10px] font-bold text-outline">HOY</span>
               </div>
 
               {totalBlocks === 0 ? (
@@ -1020,7 +1024,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   {/* Barra de bloques completados */}
                   <div>
                     <div className="flex justify-between mb-1.5">
-                      <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Bloques completados</span>
+                      <span className="text-[10px] font-bold text-outline">Bloques completados</span>
                       <span className="text-[10px] font-bold text-outline tabular-nums">{completedCount}/{totalBlocks}</span>
                     </div>
                     <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
@@ -1041,7 +1045,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       className={`material-symbols-outlined ${topInsight.color} text-[18px]`}
                       style={{ fontVariationSettings: "'FILL' 1" }}
                     >{topInsight.icon}</span>
-                    <p className={`text-[10px] font-bold ${topInsight.color} uppercase tracking-widest`}>{topInsight.label}</p>
+                    <p className={`text-[12px] font-semibold ${topInsight.color}`}>{topInsight.label}</p>
                   </div>
                   <p className="text-sm text-on-surface-variant font-medium leading-snug">{topInsight.text}</p>
                 </div>
