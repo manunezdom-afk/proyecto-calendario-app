@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { dataService } from '../services/dataService'
 import { setSignalsUserId, flushSignalsQueue } from '../services/signalsService'
 import { fetchBehavior } from '../services/behaviorAnalysis'
+import { flushPendingSubscription, subscribeToPush, getPushStatus } from '../lib/pushSubscription'
 
 const AuthContext = createContext(null)
 
@@ -32,6 +33,14 @@ export function AuthProvider({ children }) {
           await dataService.flushQueue()
           await flushSignalsQueue()
           await fetchBehavior(newUser.id).catch(() => {})
+          // Subir suscripción push pendiente (guardada localmente antes de login)
+          await flushPendingSubscription().catch(() => {})
+          // Si el permiso está granted pero no hay suscripción en el browser, crear una nueva
+          getPushStatus().then(async s => {
+            if (s.supported && s.permission === 'granted' && !s.subscribed) {
+              await subscribeToPush().catch(() => {})
+            }
+          }).catch(() => {})
         }
       }
     )

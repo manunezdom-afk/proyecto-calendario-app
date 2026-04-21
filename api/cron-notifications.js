@@ -88,14 +88,18 @@ async function sendPushToUser(admin, userId, payload) {
       keys: { p256dh: row.p256dh, auth: row.auth },
     }
     try {
-      await webpush.sendNotification(sub, JSON.stringify(payload))
+      await webpush.sendNotification(sub, JSON.stringify(payload), {
+        TTL: 3600,
+        urgency: 'high',
+        contentEncoding: 'aes128gcm',
+      })
       sent++
     } catch (err) {
       // 404/410 = suscripción muerta, la borramos
       if (err?.statusCode === 404 || err?.statusCode === 410) {
         deadEndpoints.push(row.endpoint)
       } else {
-        console.warn('[cron] push failed', row.endpoint, err?.statusCode)
+        console.warn('[cron] push failed', row.endpoint, err?.statusCode, err?.body)
       }
       failed++
     }

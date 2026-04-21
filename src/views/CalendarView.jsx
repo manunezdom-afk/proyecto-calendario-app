@@ -57,13 +57,14 @@ function DeleteButton({ onClick }) {
   return (
     <button
       onClick={(e) => {
-        e.stopPropagation() // don't bubble to card's onClick
+        e.stopPropagation()
         onClick()
       }}
       title="Eliminar evento"
-      className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-outline hover:bg-error/10 hover:text-error transition-all active:scale-90"
+      style={{ touchAction: 'manipulation' }}
+      className="flex-shrink-0 w-11 h-11 flex items-center justify-center rounded-full text-outline hover:bg-error/10 hover:text-error transition-all active:scale-90"
     >
-      <span className="material-symbols-outlined text-[17px]">delete</span>
+      <span className="material-symbols-outlined text-[18px]">delete</span>
     </button>
   )
 }

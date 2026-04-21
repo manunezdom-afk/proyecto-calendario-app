@@ -203,10 +203,11 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent, profi
                     )}
                   </div>
                   <button
-                    onClick={() => onDeleteEvent(ev.id)}
-                    className="w-7 h-7 flex items-center justify-center rounded-full text-outline hover:bg-error/10 hover:text-error transition-all active:scale-90 flex-shrink-0"
+                    onClick={(e) => { e.stopPropagation(); onDeleteEvent(ev.id) }}
+                    className="w-11 h-11 flex items-center justify-center rounded-full text-outline hover:bg-error/10 hover:text-error transition-all active:scale-90 flex-shrink-0"
+                    style={{ touchAction: 'manipulation' }}
                   >
-                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
                   </button>
                 </div>
               ))}

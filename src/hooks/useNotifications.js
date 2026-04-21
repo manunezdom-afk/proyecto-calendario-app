@@ -53,7 +53,23 @@ export function useNotifications({ events = [] } = {}) {
   const [pushSubscribed, setPushSubscribed] = useState(false)
 
   useEffect(() => {
-    getPushStatus().then(s => setPushSubscribed(!!s.subscribed)).catch(() => {})
+    // Esperar a que el SW esté listo antes de verificar/crear suscripción push,
+    // especialmente importante en iOS PWA donde el SW puede tardar en activarse.
+    const check = async () => {
+      if ('serviceWorker' in navigator) {
+        await navigator.serviceWorker.ready.catch(() => {})
+      }
+      const s = await getPushStatus().catch(() => null)
+      if (!s) return
+      setPushSubscribed(!!s.subscribed)
+      // Si el permiso ya está dado pero no hay suscripción activa (ej: app instalada
+      // como PWA después de haberla usado en el navegador), re-suscribir silenciosamente.
+      if (s.supported && s.permission === 'granted' && !s.subscribed) {
+        const r = await subscribeToPush().catch(() => null)
+        if (r?.ok) setPushSubscribed(true)
+      }
+    }
+    check()
   }, [])
 
   const requestPermission = useCallback(async () => {
@@ -134,16 +150,25 @@ export function useNotifications({ events = [] } = {}) {
         }
         setNotifLog((prev) => [entry, ...prev].slice(0, 50)) // cap at 50
 
-        // Fire native notification if permitted
+        // Fire native notification if permitted.
+        // iOS Safari no soporta `new Notification()` — se debe usar
+        // registration.showNotification() via el Service Worker.
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          try {
-            new Notification(title, {
-              body,
-              icon: '/icons/icon-192.png',
-              badge: '/icons/icon-192.png',
-              tag: firedKey, // deduplicates across same-event notifications
-            })
-          } catch (_) {}
+          const notifOptions = {
+            body,
+            icon: '/icons/icon-192.png',
+            badge: '/icons/icon-192.png',
+            tag: firedKey,
+          }
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready
+              .then(reg => reg.showNotification(title, notifOptions))
+              .catch(() => {
+                try { new Notification(title, notifOptions) } catch (_) {}
+              })
+          } else {
+            try { new Notification(title, notifOptions) } catch (_) {}
+          }
         }
 
         console.log(`[Focus] 🔔 Notification fired: "${title}"`)

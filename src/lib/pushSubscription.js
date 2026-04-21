@@ -118,7 +118,7 @@ export async function subscribeToPush() {
   try {
     const token = (await supabase?.auth.getSession())?.data?.session?.access_token
     if (!token) {
-      // Sin sesión, guardamos local para reintentar al loguearse
+      console.warn('[Focus] push subscription sin sesión — guardada localmente, se subirá al hacer login')
       localStorage.setItem('focus_pending_push_sub', JSON.stringify(subJson))
       return { ok: true, subscription: subJson, reason: 'saved_locally_no_session' }
     }
@@ -136,11 +136,14 @@ export async function subscribeToPush() {
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
+      console.error('[Focus] push-subscribe failed:', res.status, data)
       return { ok: false, reason: 'backend_error', error: data.error || `status ${res.status}` }
     }
+    console.log('[Focus] ✅ push subscription guardada en Supabase, endpoint:', subJson.endpoint?.slice(0, 60))
     localStorage.removeItem('focus_pending_push_sub')
     return { ok: true, subscription: subJson }
   } catch (err) {
+    console.error('[Focus] push-subscribe network error:', err)
     return { ok: false, reason: 'sync_failed', error: String(err) }
   }
 }

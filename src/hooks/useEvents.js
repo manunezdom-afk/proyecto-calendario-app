@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
@@ -17,6 +17,10 @@ const LEGACY_KEY = 'sanctuary_events'
 
 export function useEvents() {
   const { user } = useAuth()
+  // IDs de eventos cuyo DELETE está en vuelo — evita que un refetch previo a la
+  // confirmación de Supabase restaure el evento en el estado local (race condition
+  // especialmente común en iOS donde visibilitychange dispara refetch en cada tap).
+  const pendingDeletesRef = useRef(new Set())
 
   const [events, setEvents] = useState(() => {
     try {
@@ -40,9 +44,14 @@ export function useEvents() {
     const refetch = (tag = '') => {
       dataService.fetchEvents(user.id)
         .then(cloudEvents => {
-          setEvents(cloudEvents)
-          dataService.setCachedEvents(cloudEvents, user.id)
-          console.log(`[Focus] ☁️ ${cloudEvents.length} eventos cargados desde Supabase ${tag} (user=${user.id.slice(0,8)})`)
+          // Filtramos eventos cuyo DELETE está en vuelo para no restaurarlos
+          const pending = pendingDeletesRef.current
+          const filtered = pending.size > 0
+            ? cloudEvents.filter(e => !pending.has(e.id))
+            : cloudEvents
+          setEvents(filtered)
+          dataService.setCachedEvents(filtered, user.id)
+          console.log(`[Focus] ☁️ ${filtered.length} eventos cargados desde Supabase ${tag} (user=${user.id.slice(0,8)})`)
         })
         .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar eventos de Supabase', err))
     }
@@ -94,6 +103,7 @@ export function useEvents() {
 
   function deleteEvent(id) {
     console.log(`[Focus] 🗑️ deleteEvent: "${id}"`)
+    pendingDeletesRef.current.add(id)
     setEvents(prev => {
       const removed = prev.find(e => e.id === id)
       if (removed) {
@@ -101,7 +111,13 @@ export function useEvents() {
       }
       return prev.filter(e => e.id !== id)
     })
-    if (user) dataService.deleteEvent(id, user.id).catch(console.warn)
+    if (user) {
+      dataService.deleteEvent(id, user.id)
+        .catch(console.warn)
+        .finally(() => pendingDeletesRef.current.delete(id))
+    } else {
+      pendingDeletesRef.current.delete(id)
+    }
   }
 
   function editEvent(id, updates) {

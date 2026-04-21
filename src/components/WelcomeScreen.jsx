@@ -41,8 +41,6 @@ export default function WelcomeScreen({ onEnter, userName }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.4 }}
       className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-[#0a0a0f]"
@@ -279,24 +277,18 @@ function LogoOrb() {
 
 // ── Hook helper para decidir cuándo mostrar el welcome ─────────────────────
 export function useWelcomeGate() {
-  const [show, setShow] = useState(false)
-
-  useEffect(() => {
+  const [show, setShow] = useState(() => {
     try {
       const today = new Date().toISOString().slice(0, 10)
-      const last = localStorage.getItem(WELCOME_KEY)
-      if (last !== today) {
-        setShow(true)
-      }
+      return localStorage.getItem(WELCOME_KEY) !== today
     } catch {
-      // noop
+      return false
     }
-  }, [])
+  })
 
   function dismiss() {
     try {
-      const today = new Date().toISOString().slice(0, 10)
-      localStorage.setItem(WELCOME_KEY, today)
+      localStorage.setItem(WELCOME_KEY, new Date().toISOString().slice(0, 10))
     } catch {}
     setShow(false)
   }
