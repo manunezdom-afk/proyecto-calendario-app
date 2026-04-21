@@ -12,16 +12,12 @@ export function registerServiceWorker() {
       .then((reg) => {
         console.log('[Focus] 🛰️ Service Worker registrado', reg.scope)
 
-        // Si ya hay un SW esperando al cargar (instalado pero no activo), actívalo YA
-        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' })
-
         reg.addEventListener('updatefound', () => {
           const newSW = reg.installing
           if (!newSW) return
           newSW.addEventListener('statechange', () => {
             if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-              // Auto-skip para que la nueva versión tome control sin intervención del usuario
-              newSW.postMessage({ type: 'SKIP_WAITING' })
+              // Nueva versión lista — se activará en la próxima apertura de la app
               window.dispatchEvent(new CustomEvent('focus:sw-update-available'))
             }
           })
@@ -36,21 +32,6 @@ export function registerServiceWorker() {
         window.addEventListener('focus', checkForUpdates)
       })
       .catch((err) => console.warn('[Focus] ⚠️ SW registration failed', err))
-
-    // El SW avisa cuando activó una nueva versión → recargamos para aplicarla
-    navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data?.type === 'SW_UPDATED') {
-        window.location.reload()
-      }
-    })
-
-    // Si el controller cambia (nuevo SW tomó el mando), recargar para usar los assets nuevos
-    let refreshing = false
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshing) return
-      refreshing = true
-      window.location.reload()
-    })
   })
 }
 
