@@ -5,7 +5,7 @@
 //   - Recursos estáticos (JS/CSS/imágenes): stale-while-revalidate
 //   - Llamadas a /api/: siempre red (no se cachean)
 
-const VERSION = 'v6'
+const VERSION = 'v7'
 const STATIC_CACHE = `focus-static-${VERSION}`
 const RUNTIME_CACHE = `focus-runtime-${VERSION}`
 
