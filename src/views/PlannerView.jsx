@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import QuickAddSheet     from '../components/QuickAddSheet'
-import FocusTimerOverlay from '../components/FocusTimerOverlay'
 import FocusBar          from '../components/FocusBar'
 import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
@@ -159,7 +158,7 @@ function buildInsights(events, profile) {
       bg: 'bg-amber-50 dark:bg-amber-900/20',
       icon: 'groups',
       label: 'REUNIONES',
-      text: `${meetingCount} reuniones hoy. Bloquea al menos 30 min de recuperación entre ellas para mantener el foco.`,
+      text: `${meetingCount} reuniones hoy. Deja al menos 30 min de recuperación entre ellas.`,
     })
   } else if (meetingCount > 0) {
     insights.push({
@@ -189,7 +188,7 @@ function buildInsights(events, profile) {
       bg: 'bg-primary/5',
       icon: 'spa',
       label: 'ESPACIO LIBRE',
-      text: `Sin eventos agendados. Día ideal para ${roleLabel} profundo sin interrupciones. Usa Time Blocking.`,
+      text: `Sin eventos agendados. Día ideal para ${roleLabel} sin interrupciones. Usa Time Blocking.`,
     })
   } else if (todayEvents.length <= 2) {
     insights.push({
@@ -197,7 +196,7 @@ function buildInsights(events, profile) {
       bg: 'bg-primary/5',
       icon: 'self_improvement',
       label: 'AGENDA LIGERA',
-      text: `Pocos eventos hoy. Aprovecha los bloques libres para ${roleLabel} con máxima concentración.`,
+      text: `Pocos eventos hoy. Aprovecha el tiempo libre para ${roleLabel} con calma.`,
     })
   }
 
@@ -220,24 +219,14 @@ function buildInsights(events, profile) {
     })
   }
 
-  // Insight 5: tip según rol
-  if (role === 'student') {
-    insights.push({
-      color: 'text-secondary',
-      bg: 'bg-secondary/5',
-      icon: 'timer',
-      label: 'TÉCNICA',
-      text: 'Pomodoro activo: 25 min de estudio sin distracciones → 5 min de descanso. La ciencia lo respalda.',
-    })
-  } else {
-    insights.push({
-      color: 'text-primary',
-      bg: 'bg-primary/5',
-      icon: 'tips_and_updates',
-      label: 'TIME BLOCKING',
-      text: 'Divide tu día en bloques dedicados. Los estudios muestran hasta un 80% más de productividad frente a listas de tareas.',
-    })
-  }
+  // Insight 5: tip de planificación general
+  insights.push({
+    color: 'text-primary',
+    bg: 'bg-primary/5',
+    icon: 'tips_and_updates',
+    label: 'TIME BLOCKING',
+    text: 'Divide tu día en bloques dedicados. Los estudios muestran hasta un 80% más de productividad frente a listas de tareas.',
+  })
 
   // Devolver los 2 más relevantes (los primeros que se acumularon)
   return insights.slice(0, 2)
@@ -380,7 +369,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     return []
   })
   const [showModal, setShowModal]         = useState(false)
-  const [activeTimerBlock, setActiveTimerBlock] = useState(null)
   const [, setTick] = useState(0)
 
   useEffect(() => {
@@ -687,7 +675,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   <p className="text-sm text-amber-800 leading-snug mb-2">
                     {intruders.length === 1
                       ? <><strong>"{intruders[0].title}"</strong> está en tu zona de rendimiento ({peakRangeLabel(profile.peakStart, profile.peakEnd)}). Considera moverlo fuera de ese horario.</>
-                      : <><strong>{intruders.length} eventos</strong> interrumpen tu zona de rendimiento ({peakRangeLabel(profile.peakStart, profile.peakEnd)}). Protege ese tiempo para trabajo profundo.</>
+                      : <><strong>{intruders.length} eventos</strong> interrumpen tu zona de rendimiento ({peakRangeLabel(profile.peakStart, profile.peakEnd)}). Considera moverlos fuera de ese horario.</>
                     }
                   </p>
                   {onOpenAssistant && (
@@ -752,11 +740,10 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       >
                       <LongPressZone
                         onLongPress={!isSuggestion && !isGhost && !_asReminderOnly ? handleLongPressDelete : undefined}
-                        onClick={!isSuggestion && !isGhost && !_asReminderOnly && type !== 'done' ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
                         className={`rounded-xl ${
                           isSuggestion
                             ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
-                            : `bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 ${!isGhost && type !== 'done' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''} ${
+                            : `bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 ${
                                 type === 'done' ? 'border-emerald-400 opacity-60'
                                   : inPeak === true ? 'border-emerald-500'
                                   : inPeak === false ? 'border-amber-400'
@@ -772,9 +759,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                               style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {title || '(sin título)'}
                             </h3>
-                            {!isSuggestion && !isGhost && !_asReminderOnly && type !== 'done' && (
-                              <span className="material-symbols-outlined text-outline/40 text-[16px]" style={{ flexShrink: 0 }}>timer</span>
-                            )}
                           </div>
                           {isGhost ? (
                             <span
@@ -1087,14 +1071,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
       {showModal && (
         <QuickAddSheet onSave={handleModalSave} onCancel={() => setShowModal(false)} />
-      )}
-
-      {activeTimerBlock && (
-        <FocusTimerOverlay
-          block={activeTimerBlock}
-          onClose={() => setActiveTimerBlock(null)}
-          onComplete={() => { dismissBlock(activeTimerBlock.id); setActiveTimerBlock(null) }}
-        />
       )}
     </div>
   )

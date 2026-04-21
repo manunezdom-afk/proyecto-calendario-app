@@ -365,7 +365,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                   <p className="text-xs font-bold text-emerald-800">
                     Zona de rendimiento · {peakRangeLabel(profile.peakStart, profile.peakEnd)}
                   </p>
-                  <p className="text-[10px] text-emerald-600 leading-tight">Reserva este horario para trabajo profundo</p>
+                  <p className="text-[10px] text-emerald-600 leading-tight">Tu franja de máxima energía</p>
                 </div>
               </div>
             )}

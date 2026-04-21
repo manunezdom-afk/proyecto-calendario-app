@@ -114,10 +114,10 @@ function SlideIllustrationPlanner() {
   return (
     <div className="relative flex h-[220px] w-full items-center justify-center px-4">
       <div className="w-full max-w-[300px] space-y-2">
-        <PlannerCard time="09:00"  title="Deep work — propuesta"  color="#7c6bff" delay={0.05} />
-        <PlannerCard time="11:30" title="Reunión con Ana"         color="#3b82f6" delay={0.18} />
-        <PlannerCard time="14:00" title="Tarea: Informe Q2"       color="#ec4899" delay={0.31} />
-        <PlannerCard time="16:00" title="Foco — 25 min"           color="#7c6bff" delay={0.44} />
+        <PlannerCard time="09:00" title="Revisar informe Q2"     color="#7c6bff" delay={0.05} />
+        <PlannerCard time="11:30" title="Reunión con Ana"        color="#3b82f6" delay={0.18} />
+        <PlannerCard time="14:00" title="Tarea: enviar propuesta" color="#ec4899" delay={0.31} />
+        <PlannerCard time="16:00" title="Clase de español"       color="#7c6bff" delay={0.44} />
       </div>
     </div>
   )
@@ -166,10 +166,9 @@ function SlideIllustrationTasksEvents() {
           background: 'linear-gradient(90deg, transparent, rgba(124,107,255,0.5), transparent)',
         }}
       />
-      <Pill icon="check_box"   label="Tareas"  color="#ec4899" delay={0.1} x={-95} y={-42} />
-      <Pill icon="event"       label="Eventos" color="#3b82f6" delay={0.25} x={95}  y={-42} />
-      <Pill icon="alarm"       label="Recordatorios" color="#7c6bff" delay={0.45} x={-70} y={48} />
-      <Pill icon="bolt"        label="Foco"    color="#f59e0b" delay={0.6}  x={70}  y={48} />
+      <Pill icon="check_box"   label="Tareas"        color="#ec4899" delay={0.1}  x={-95} y={-42} />
+      <Pill icon="event"       label="Eventos"       color="#3b82f6" delay={0.25} x={95}  y={-42} />
+      <Pill icon="alarm"       label="Recordatorios" color="#7c6bff" delay={0.45} x={0}   y={48} />
       {/* Orbe pequeño al centro */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
         <motion.div
@@ -211,7 +210,7 @@ function SlideIllustrationNova() {
           Nova propone
         </div>
         <div className="text-[12.5px] leading-snug text-white/90">
-          Tu reunión pisa el foco de las 11. ¿La muevo a las 15?
+          Tu reunión pisa el evento de las 11. ¿La muevo a las 15?
         </div>
         <div className="mt-2 flex items-center gap-1.5">
           <motion.div
@@ -296,7 +295,7 @@ const SLIDES = [
     illustration: <SlideIllustrationPlanner />,
     eyebrow: 'El planner',
     title: 'Tu día en una sola vista.',
-    body: 'Eventos, tareas y bloques de foco en la misma línea de tiempo. Ves qué sigue y qué puedes mover.',
+    body: 'Eventos y tareas en la misma línea de tiempo. Ves qué sigue y qué puedes mover.',
   },
   {
     id: 'tasks',
@@ -317,7 +316,7 @@ const SLIDES = [
     illustration: <SlideIllustrationStart />,
     eyebrow: 'Listo',
     title: 'Armamos tu primer día.',
-    body: 'Añade una tarea o evento, o pídele a Nova que proponga un bloque de foco. Tu día arranca aquí.',
+    body: 'Añade una tarea o evento, o pídele a Nova que organice tu día. Tu día arranca aquí.',
     cta: 'Empezar',
   },
 ]

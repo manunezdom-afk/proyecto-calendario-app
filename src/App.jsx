@@ -458,7 +458,7 @@ export default function App() {
           id="empty-day-v1"
           delayMs={1400}
         >
-          Tu día está en blanco. Puedo proponer un bloque de foco de 25 min cuando quieras — solo pídemelo.
+          Tu día está en blanco. Dime qué quieres agendar y lo agrego.
         </NovaHint>
       )}
       {!gatesBlocking && !hasNovaEmptyHint && hasNovaConflictHint && (

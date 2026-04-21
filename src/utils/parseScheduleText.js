@@ -10,7 +10,7 @@
  *   - Rangos:           "9:00-10:00", "9:00 - 10:00", "9:00–10:00" (usa inicio)
  *   - Coloquial:        "a las 5 de la tarde", "a las 9"
  *   - Encabezados fecha: "Lunes", "Lunes 14 de abril", "14/04", "14 de abril"
- *   - Líneas mixtas:    "14:00 Dentista", "Gym 07:30", "09:00: Trabajo profundo"
+ *   - Líneas mixtas:    "14:00 Dentista", "Gym 07:30", "09:00: Revisión semanal"
  *   - Separador |:      "09:00 | Gym" (tablas de horario)
  *   - Línea fecha+evento: "Lunes 9:00 Gym" → fecha=lunes, hora=9:00, título=Gym
  */

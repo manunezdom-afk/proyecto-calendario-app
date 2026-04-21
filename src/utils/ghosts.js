@@ -29,7 +29,7 @@ export function buildGhostEvents() {
   return [
     {
       id: 'ghost-ev-1',
-      title: 'Sesión de trabajo profundo',
+      title: 'Revisar informe semanal',
       time: '9:00 AM',
       date,
       section: 'focus',
@@ -74,7 +74,7 @@ export function buildGhostBlocks() {
       id: 'ghost-1',
       time: '09:00',
       type: 'confirmed',
-      title: 'Sesión de trabajo profundo',
+      title: 'Revisar informe semanal',
       description: 'Así se verán tus eventos en Mi Día.',
       isGhost: true,
     },

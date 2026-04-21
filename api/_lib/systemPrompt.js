@@ -35,11 +35,10 @@ function buildProfileContext(profile) {
 - Cronotipo: ${CHRONO_LABELS[profile.chronotype] ?? profile.chronotype ?? 'no definido'} (${ROLE_LABELS[profile.role] ?? profile.role ?? 'rol no definido'})
 - Zona de rendimiento (máxima energía cognitiva): ${fmtHour(profile.peakStart)}–${fmtHour(profile.peakEnd)}
 
-INSTRUCCIÓN CRÍTICA sobre la zona de rendimiento:
-- Cuando el usuario pida agendar trabajo profundo, deep work, estudio, foco o concentración: SIEMPRE propón un horario dentro de ${fmtHour(profile.peakStart)}–${fmtHour(profile.peakEnd)} si ese bloque está libre.
-- Si el usuario no especifica hora para este tipo de actividades, sugiere automáticamente ese rango.
+INSTRUCCIÓN sobre la zona de rendimiento:
 - Si hay eventos que interrumpen la zona de rendimiento (reuniones, llamadas, clases), menciona el conflicto y ofrece moverlos.
-- Cuando propongas mover un evento fuera de la zona de rendimiento, da una hora concreta alternativa.`
+- Cuando propongas mover un evento fuera de la zona de rendimiento, da una hora concreta alternativa.
+- NUNCA propongas ni sugieras "bloques de foco", "sesiones de foco", "pomodoros", "deep work" ni agendar tiempo genérico de concentración. Agrega únicamente lo que el usuario pida explícitamente.`
 }
 
 function buildBehaviorContext(b) {
@@ -53,7 +52,7 @@ function buildBehaviorContext(b) {
       ? ` (el usuario DECLARÓ ${b.profile_peak.start}–${b.profile_peak.end}h en su perfil${start !== b.profile_peak.start ? ' — hay un desfase' : ''})`
       : ''
     lines.push(`- PICO REAL observado de productividad: ${start}–${end}h${profileBit}.`)
-    lines.push(`  → Prioriza estas horas reales sobre las declaradas al proponer foco/trabajo profundo.`)
+    lines.push(`  → Prioriza estas horas reales sobre las declaradas al sugerir movimientos en la agenda.`)
   } else if (b.real_peak_hour != null) {
     lines.push(`- Hora más productiva observada: ${b.real_peak_hour}h.`)
   }

@@ -289,7 +289,7 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
           </div>
           <p className="text-sm text-on-surface-variant font-medium leading-relaxed">
             Identifica tu <span className="text-on-surface font-bold">tarea más importante</span> del día y
-            complétala antes de revisar correos o mensajes. Un solo foco profundo vale más que diez tareas superficiales.
+            complétala antes de revisar correos o mensajes. Una tarea terminada vale más que diez empezadas.
           </p>
         </div>
 
