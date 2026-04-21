@@ -75,7 +75,12 @@ export function AuthProvider({ children }) {
     if (!supabase) throw new Error('Supabase no configurado')
     const cleanEmail = String(email || '').trim().toLowerCase()
     const cleanToken = String(token || '').replace(/\D/g, '').slice(0, 6)
-    if (cleanToken.length !== 6) throw new Error('El código debe tener 6 dígitos')
+    // TEMP LOG: confirmar qué llega a Supabase. Remover tras validar.
+    // eslint-disable-next-line no-console
+    console.log('[OTP supabase]', { cleanEmail, cleanToken, len: cleanToken.length })
+    // La validación de longitud vive en el UI (AuthModal). Acá solo pasamos
+    // a Supabase el valor limpio — si viniera corto, Supabase retorna su
+    // propio error de token inválido, que humanizeAuthError ya mapea.
     const { data, error } = await supabase.auth.verifyOtp({
       email: cleanEmail,
       token: cleanToken,

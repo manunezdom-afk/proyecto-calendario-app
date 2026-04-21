@@ -156,15 +156,22 @@ export default function AuthModal({ isOpen, onClose }) {
     // Puede invocarse desde el submit del form (event) o desde el auto-submit
     // pasando el código directo (evita leer `code` de una closure vieja mientras
     // setState todavía no aplicó).
-    let codeToVerify
+    let cleanCode
     if (typeof eOrCode === 'string') {
-      codeToVerify = eOrCode
+      cleanCode = String(eOrCode).replace(/\D/g, '').slice(0, 6)
     } else {
       eOrCode?.preventDefault?.()
-      codeToVerify = code
+      // Releemos del input real y limpiamos: si el click llega antes de que
+      // setCode aplique, el valor del DOM es más fresco que el del estado.
+      const raw = codeInputRef.current?.value ?? code
+      cleanCode = String(raw).replace(/\D/g, '').slice(0, 6)
     }
+    // TEMP LOG: verificar en DevTools que el valor enviado es idéntico al
+    // mostrado. Remover tras confirmar el fix en producción.
+    // eslint-disable-next-line no-console
+    console.log('[OTP verify]', { cleanCode, len: cleanCode.length, valid: /^\d{6}$/.test(cleanCode) })
     if (submitLock.current || loading) return
-    if (!/^\d{6}$/.test(codeToVerify)) {
+    if (!/^\d{6}$/.test(cleanCode)) {
       setError('El código debe tener 6 dígitos.')
       return
     }
@@ -172,7 +179,7 @@ export default function AuthModal({ isOpen, onClose }) {
     setLoading(true)
     setError(null)
     try {
-      await verifyOtp(email, codeToVerify)
+      await verifyOtp(email, cleanCode)
       clearPending()
       // handleClose resetea estado local
       handleClose()
@@ -218,17 +225,20 @@ export default function AuthModal({ isOpen, onClose }) {
     if (error) setError(null)
   }
 
-  function handleCodeChange(value) {
-    const digits = value.replace(/\D/g, '').slice(0, 6)
-    setCode(digits)
+  function handleCodeChange(rawValue) {
+    const cleanCode = String(rawValue).replace(/\D/g, '').slice(0, 6)
+    // TEMP LOG: confirmar que limpiamos bien el valor del input.
+    // eslint-disable-next-line no-console
+    console.log('[OTP change]', { raw: rawValue, cleanCode, len: cleanCode.length })
+    setCode(cleanCode)
     if (error) setError(null)
     // Auto-submit cuando el usuario pega o termina de tipear los 6 dígitos.
     // Evita el tap extra en mobile y cumple con la expectativa del input
     // autoComplete="one-time-code" en iOS.
-    if (digits.length === 6 && !submitLock.current && !loading) {
-      // Pasamos los dígitos directo: el setCode de arriba todavía no aplicó,
+    if (cleanCode.length === 6 && !submitLock.current && !loading) {
+      // Pasamos el string directo: el setCode de arriba todavía no aplicó,
       // así que `code` del estado sigue desactualizado cuando corre el timeout.
-      setTimeout(() => handleVerify(digits), 0)
+      setTimeout(() => handleVerify(cleanCode), 0)
     }
   }
 
