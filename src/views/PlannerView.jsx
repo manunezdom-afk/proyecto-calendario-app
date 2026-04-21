@@ -325,19 +325,41 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     localStorage.setItem(STORAGE_KEY, JSON.stringify(blocks))
   }, [blocks])
 
-  // Sincroniza "Mi Día" (timeline) con eventos de HOY para reflejar cambios inmediatos
+  // Sincroniza "Mi Día" (timeline) con eventos de HOY.
+  // Antes solo AÑADÍA blocks — por eso cuando Nova decía "eliminé tus eventos"
+  // los blocks quedaban zombies en localStorage. Ahora también los elimina
+  // cuando el evento correspondiente deja de existir, y actualiza título/hora
+  // si cambiaron. Los blocks manuales (sin eventId) no se tocan.
   useEffect(() => {
     const todayISO = todayISODate()
     const todayEvents = (events || []).filter((e) => !e.date || e.date === todayISO)
+    const eventById = new Map(todayEvents.map(e => [e.id, e]))
+
     setBlocks((prev) => {
       const prevArr = Array.isArray(prev) ? prev : []
-      const hasEvent = new Set(prevArr.map((b) => b?.eventId).filter(Boolean))
-      const nextBlocksToAdd = []
+      const synced = []
+      const usedEventIds = new Set()
+
+      for (const b of prevArr) {
+        if (!b) continue
+        if (b.eventId) {
+          const ev = eventById.get(b.eventId)
+          if (!ev) continue // evento borrado → block también desaparece
+          synced.push({
+            ...b,
+            time: eventTimeToBlockTime(ev.time),
+            title: ev.title,
+            description: ev.description || null,
+          })
+          usedEventIds.add(b.eventId)
+        } else {
+          synced.push(b) // block manual (sin eventId) → preservar
+        }
+      }
 
       for (const ev of todayEvents) {
-        if (!ev?.id) continue
-        if (hasEvent.has(ev.id)) continue
-        nextBlocksToAdd.push({
+        if (!ev?.id || usedEventIds.has(ev.id)) continue
+        synced.push({
           id: `blk-ev-${ev.id}`,
           eventId: ev.id,
           time: eventTimeToBlockTime(ev.time),
@@ -347,8 +369,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
         })
       }
 
-      if (nextBlocksToAdd.length === 0) return prevArr
-      return [...prevArr, ...nextBlocksToAdd]
+      return synced
     })
   }, [events])
 
