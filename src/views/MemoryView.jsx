@@ -210,7 +210,7 @@ export default function MemoryView() {
   }
 
   return (
-    <div className="max-w-lg lg:max-w-2xl mx-auto px-4 py-6 space-y-4 pb-32">
+    <div className="max-w-lg lg:max-w-2xl mx-auto px-4 py-6 space-y-4 pb-40">
       <div className="px-1 mb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-extrabold text-slate-900">Lo que Nova sabe de ti</h1>

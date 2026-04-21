@@ -469,6 +469,12 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     setBlocks((prev) => prev.filter((b) => b.id !== id))
   }
 
+  // Marca el bloque como completado (HECHO ✓): no lo borra. El bloque sigue
+  // visible, atenuado, para que "Bloques completados" refleje la realidad.
+  function completeBlock(id) {
+    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, type: 'done' } : b)))
+  }
+
   function handleModalSave(formData) {
     if (onAddEvent) onAddEvent(formData)
     setBlocks((prev) => [...prev, {
@@ -486,7 +492,10 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   const suggestionCount = blocks.filter((b) => b.type === 'suggestion').length
   const completedCount  = blocks.filter((b) => b.type === 'done').length
   const totalBlocks     = blocks.length
-  const blockProgress   = totalBlocks > 0 ? completedCount / totalBlocks : 0
+  // Progreso del día = cuántos bloques confirmados del día ya se cerraron.
+  // Las sugerencias aún no son parte del día, así que no cuentan en el denominador.
+  const scheduledBlocks = confirmedCount + completedCount
+  const blockProgress   = scheduledBlocks > 0 ? completedCount / scheduledBlocks : 0
 
   const topInsight = buildInsights(events, profile)[0] ?? null
 
@@ -622,7 +631,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   })()
 
   return (
-    <div className="bg-surface font-body text-on-surface min-h-screen pb-52 dark:bg-slate-900 dark:text-slate-100">
+    <div className="bg-surface font-body text-on-surface min-h-screen pb-56 dark:bg-slate-900 dark:text-slate-100">
 
       {/* Setup card legacy — reemplazado por OnboardingTour animado.
           El sistema de user_signals aprende el cronotipo solo, sin preguntar. */}
@@ -743,12 +752,13 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       >
                       <LongPressZone
                         onLongPress={!isSuggestion && !isGhost && !_asReminderOnly ? handleLongPressDelete : undefined}
-                        onClick={!isSuggestion && !isGhost && !_asReminderOnly ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
+                        onClick={!isSuggestion && !isGhost && !_asReminderOnly && type !== 'done' ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
                         className={`rounded-xl ${
                           isSuggestion
                             ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
-                            : `bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 ${!isGhost ? 'cursor-pointer hover:shadow-md transition-shadow' : ''} ${
-                                inPeak === true ? 'border-emerald-500'
+                            : `bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 ${!isGhost && type !== 'done' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''} ${
+                                type === 'done' ? 'border-emerald-400 opacity-60'
+                                  : inPeak === true ? 'border-emerald-500'
                                   : inPeak === false ? 'border-amber-400'
                                   : 'border-primary'
                               }`
@@ -758,11 +768,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       >
                         <div className="flex justify-between items-start gap-2" style={{ marginBottom: '2px' }}>
                           <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0 }}>
-                            <h3 className={`font-bold ${isSuggestion ? 'text-secondary' : 'text-on-surface'}`}
+                            <h3 className={`font-bold ${isSuggestion ? 'text-secondary' : 'text-on-surface'} ${type === 'done' ? 'line-through decoration-emerald-400/60' : ''}`}
                               style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {title}
+                              {title || '(sin título)'}
                             </h3>
-                            {!isSuggestion && !isGhost && !_asReminderOnly && (
+                            {!isSuggestion && !isGhost && !_asReminderOnly && type !== 'done' && (
                               <span className="material-symbols-outlined text-outline/40 text-[16px]" style={{ flexShrink: 0 }}>timer</span>
                             )}
                           </div>
@@ -781,10 +791,17 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                             >
                               ACEPTAR
                             </button>
-                          ) : _asReminderOnly ? null : (
+                          ) : _asReminderOnly ? null : type === 'done' ? (
+                            <span
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600"
+                              style={{ flexShrink: 0, letterSpacing: '0.04em' }}
+                            >
+                              ✓ HECHO
+                            </span>
+                          ) : (
                             <button
-                              onClick={(e) => { e.stopPropagation(); dismissBlock(id) }}
-                              className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-error/10 hover:text-error transition-colors"
+                              onClick={(e) => { e.stopPropagation(); completeBlock(id) }}
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-emerald-100 hover:text-emerald-600 transition-colors"
                               style={{ flexShrink: 0 }}
                             >
                               HECHO ✓
@@ -905,7 +922,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     data-next-event
                   >
                     <p className="text-xs font-semibold text-outline mb-1">{activeBlock.time}</p>
-                    <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{activeBlock.title}</p>
+                    <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3 break-words">{activeBlock.title || '(sin título)'}</p>
                     <div className="flex items-baseline gap-1">
                       <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{Math.round(minsElapsed)}</span>
                       <span className="text-sm font-semibold text-outline">min transcurridos</span>
@@ -921,7 +938,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     data-next-event
                   >
                     <p className="text-xs font-semibold text-outline mb-1">{nextBlock.time}</p>
-                    <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{nextBlock.title}</p>
+                    <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3 break-words">{nextBlock.title || '(sin título)'}</p>
                     <div className="flex items-baseline gap-1">
                       <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{formatMinutes(minsToNext)}</span>
                       {minsToNext >= 1 && <span className="text-sm font-semibold text-outline">para empezar</span>}
@@ -939,12 +956,12 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 </div>
               )}
 
-              {/* Barra de bloques completados */}
-              {totalBlocks > 0 && (
+              {/* Barra de progreso del día */}
+              {scheduledBlocks > 0 && (
                 <div>
                   <div className="flex justify-between mb-1.5">
-                    <span className="text-[10px] font-bold text-outline">Bloques completados</span>
-                    <span className="text-[10px] font-bold text-outline tabular-nums">{completedCount}/{totalBlocks} · {Math.round(blockProgress * 100)}%</span>
+                    <span className="text-[10px] font-bold text-outline">Progreso del día</span>
+                    <span className="text-[10px] font-bold text-outline tabular-nums">{completedCount}/{scheduledBlocks} · {Math.round(blockProgress * 100)}%</span>
                   </div>
                   <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
                     <div
@@ -1000,19 +1017,21 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     </div>
                   </div>
 
-                  {/* Barra de bloques completados */}
-                  <div>
-                    <div className="flex justify-between mb-1.5">
-                      <span className="text-[10px] font-bold text-outline">Bloques completados</span>
-                      <span className="text-[10px] font-bold text-outline tabular-nums">{completedCount}/{totalBlocks}</span>
+                  {/* Barra de progreso del día */}
+                  {scheduledBlocks > 0 && (
+                    <div>
+                      <div className="flex justify-between mb-1.5">
+                        <span className="text-[10px] font-bold text-outline">Progreso del día</span>
+                        <span className="text-[10px] font-bold text-outline tabular-nums">{completedCount}/{scheduledBlocks}</span>
+                      </div>
+                      <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-secondary rounded-full transition-all duration-500"
+                          style={{ width: `${blockProgress * 100}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-secondary rounded-full transition-all duration-500"
-                        style={{ width: `${blockProgress * 100}%` }}
-                      />
-                    </div>
-                  </div>
+                  )}
                 </>
               )}
 
@@ -1052,11 +1071,14 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
         </div>
       </main>
 
-      {/* FAB — solo visible cuando hay bloques y en mobile */}
+      {/* FAB — solo visible cuando hay bloques y en mobile.
+          Bottom calculado para que jamás pise el bottom nav:
+          safe-area + 20 (nav offset) + ~80 (alto nav) + 16 (gap) ≈ 116 + safe. */}
       {blocks.length > 0 && !isDesktop && (
         <button
           onClick={() => setShowModal(true)}
-          className="fixed bottom-[148px] right-6 w-14 h-14 bg-primary text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-105 active:scale-90 transition-transform z-40"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 116px)' }}
+          className="fixed right-6 w-14 h-14 bg-primary text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-105 active:scale-90 transition-transform z-40"
           title="Añadir bloque"
         >
           <span className="material-symbols-outlined text-3xl">add</span>

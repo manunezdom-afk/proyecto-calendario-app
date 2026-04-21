@@ -80,7 +80,17 @@ function ExportTab({ events }) {
     return selectedSections.has(ev.section)
   }
 
-  const filteredEvents = (events || []).filter(e => inRange(e) && inSection(e))
+  // Orden cronológico ascendente (fecha → hora). Eventos sin fecha al final.
+  function eventSortKey(ev) {
+    const d = ev.date ? String(ev.date) : '9999-12-31'
+    const t = ev.time ? String(ev.time).split('-')[0].trim() : '99:99'
+    return `${d}T${t}`
+  }
+
+  const filteredEvents = (events || [])
+    .filter(e => inRange(e) && inSection(e))
+    .slice()
+    .sort((a, b) => eventSortKey(a).localeCompare(eventSortKey(b)))
 
   function toggleSection(section) {
     setSelectedSections(prev => {

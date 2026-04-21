@@ -15,7 +15,7 @@ function hasMeaningfulNote(desc) {
 }
 
 const DAY_ABBR_ES    = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-const MONTH_NAMES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+const MONTH_NAMES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 
 // Build the current week (Mon → Sun) from today — incluye ISO date para filtrar eventos
 function getCurrentWeek() {
@@ -53,7 +53,9 @@ const CALENDAR_DAYS     = getCurrentWeek()
 const todayNum          = new Date().getDate()
 const todayEntry        = CALENDAR_DAYS.find((d) => d.isToday)
 const todayISOStr       = todayEntry?.iso ?? CALENDAR_DAYS[0].iso
-const currentMonthLabel = `${MONTH_NAMES_ES[new Date().getMonth()]} ${new Date().getFullYear()}`
+// Mes en mayúscula inicial cuando va como título independiente (ej. "Abril 2026")
+const currentMonthNameLc = MONTH_NAMES_ES[new Date().getMonth()]
+const currentMonthLabel  = `${currentMonthNameLc.charAt(0).toUpperCase()}${currentMonthNameLc.slice(1)} ${new Date().getFullYear()}`
 
 // ─── Small delete button ──────────────────────────────────────────────────────
 function DeleteButton({ onClick }) {
@@ -81,7 +83,7 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
     >
       <div className="flex justify-between items-start">
         <div className="p-2 bg-primary-fixed-dim/30 rounded-lg text-primary">
-          <span className="material-symbols-outlined">{event.icon || 'auto_awesome'}</span>
+          <span className="material-symbols-outlined">{event.icon || 'event'}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
@@ -219,7 +221,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
   }
 
   return (
-    <div className="bg-surface text-on-surface min-h-screen pb-32">
+    <div className="bg-surface text-on-surface min-h-screen pb-44">
 
       <main className={isDesktop ? "max-w-4xl mx-auto px-6 pt-4 space-y-6" : "max-w-md mx-auto px-6 pt-4 space-y-8"}>
 
@@ -436,12 +438,16 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
             </section>
             </>)}
 
-            {/* FAB — oculto en desktop y en empty state mobile */}
+            {/* FAB — oculto en desktop y en empty state mobile.
+                bottom dinámico: nunca pisa el bottom nav ni el safe-area. */}
             {!isDesktop && focusEvents.length > 0 && (
-            <div className="fixed bottom-[148px] left-1/2 -translate-x-1/2 z-[60]">
+            <div
+              className="fixed right-6 z-[60]"
+              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 116px)' }}
+            >
               <button
                 onClick={() => setShowModal(true)}
-                className="w-16 h-16 rounded-full bg-gradient-to-tr from-primary to-primary-container text-white shadow-[0_16px_32px_rgba(0,88,188,0.3)] flex items-center justify-center active:scale-90 transition-transform duration-300"
+                className="w-14 h-14 rounded-2xl bg-primary text-white shadow-2xl flex items-center justify-center active:scale-90 transition-transform duration-300"
                 title="Añadir evento"
               >
                 <span className="material-symbols-outlined text-3xl">add</span>

@@ -59,7 +59,7 @@ export default function QuickAddSheet({ onSave, onCancel, targetDateLabel }) {
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onCancel} />
 
       {/* Sheet */}
-      <div className="relative w-full max-w-lg bg-surface rounded-t-[32px] px-6 pt-5 pb-10 shadow-2xl z-10">
+      <div className="relative w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-surface rounded-t-[32px] px-6 pt-5 pb-10 shadow-2xl z-10">
 
         {/* Handle bar */}
         <div className="w-10 h-1 bg-outline-variant rounded-full mx-auto mb-6" />
@@ -71,7 +71,7 @@ export default function QuickAddSheet({ onSave, onCancel, targetDateLabel }) {
           {targetDateLabel ? (
             <div className="flex items-center gap-1.5 mt-1">
               <span className="material-symbols-outlined text-primary text-[14px]">calendar_today</span>
-              <p className="text-sm font-semibold text-primary capitalize">{targetDateLabel}</p>
+              <p className="text-sm font-semibold text-primary first-letter:uppercase">{targetDateLabel}</p>
             </div>
           ) : (
             <p className="text-sm text-outline mt-1">

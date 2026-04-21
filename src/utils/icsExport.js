@@ -27,6 +27,17 @@ function escapeICS(str) {
     .replace(/\n/g, '\\n')
 }
 
+// Clave cronológica estable para ordenar: fecha (YYYY-MM-DD) + hora de inicio.
+// Devolvemos un string comparable lexicográficamente. Eventos sin fecha van al
+// final (prefijo 'zzz') en vez de al principio en orden arbitrario.
+function sortKey(ev) {
+  const date = resolveEventDate(ev) || null
+  if (!date) return 'zzz'
+  const m = String(ev.time || '').match(/^(\d{1,2}):(\d{2})/)
+  const hhmm = m ? `${pad(m[1])}:${m[2]}` : '00:00'
+  return `${date}T${hhmm}`
+}
+
 /**
  * Convert the events array from useEvents into an ICS calendar string.
  * @param {Array} events
@@ -43,7 +54,13 @@ export function eventsToICS(events) {
     'X-WR-TIMEZONE:local',
   ]
 
-  events.forEach((ev) => {
+  // Ordenamos cronológicamente — los clientes de calendario suelen respetar el
+  // orden de inserción en la vista "agenda".
+  const sorted = [...(events || [])].sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
+
+  const stamp = fmtDTZ(new Date())
+
+  sorted.forEach((ev) => {
     // Resolvemos la fecha correctamente para cualquier formato guardado
     const dateStr = resolveEventDate(ev)
     const start   = parseEventTime(ev.time, dateStr)
@@ -69,7 +86,7 @@ export function eventsToICS(events) {
     if (ev.description) lines.push(`DESCRIPTION:${escapeICS(ev.description)}`)
 
     // Stamp (required by RFC 5545)
-    lines.push(`DTSTAMP:${fmtDT(new Date())}`)
+    lines.push(`DTSTAMP:${stamp}`)
     lines.push('END:VEVENT')
   })
 

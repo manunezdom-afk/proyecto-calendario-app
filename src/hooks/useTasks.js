@@ -1,29 +1,39 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { useCoalescedRefetch } from './useCoalescedRefetch'
 
 export function useTasks() {
   const { user } = useAuth()
+  // Mismo patrón que useEvents: si el usuario borra y un refetch llega antes
+  // de que Supabase confirme el DELETE, ignoramos la tarea "resucitada".
+  const pendingDeletesRef = useRef(new Set())
 
   const [tasks, setTasks] = useState(() => dataService.getCachedTasks([]))
+
+  const refetch = useCoalescedRefetch(async (tag = '') => {
+    if (!user) return
+    try {
+      const cloudTasks = await dataService.fetchTasks(user.id)
+      if (!cloudTasks) return
+      const pending = pendingDeletesRef.current
+      const filtered = pending.size > 0
+        ? cloudTasks.filter(t => !pending.has(t.id))
+        : cloudTasks
+      setTasks(filtered)
+      dataService.setCachedTasks(filtered, user.id)
+      console.log(`[Focus] ☁️ ${filtered.length} tareas cargadas ${tag} (user=${user.id.slice(0,8)})`)
+    } catch (err) {
+      console.warn('[Focus] ⚠️ No se pudo cargar tareas de Supabase', err)
+    }
+  })
 
   useEffect(() => {
     if (!user) return
 
     setTasks(dataService.getCachedTasks([], user.id))
-
-    const refetch = (tag = '') => {
-      dataService.fetchTasks(user.id)
-        .then(cloudTasks => {
-          if (!cloudTasks) return
-          setTasks(cloudTasks)
-          dataService.setCachedTasks(cloudTasks, user.id)
-          console.log(`[Focus] ☁️ ${cloudTasks.length} tareas cargadas desde Supabase ${tag} (user=${user.id.slice(0,8)})`)
-        })
-        .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar tareas de Supabase', err))
-    }
 
     refetch('(init)')
 
@@ -44,7 +54,7 @@ export function useTasks() {
       window.removeEventListener('focus', onVisibility)
       supabase.removeChannel(channel)
     }
-  }, [user?.id])
+  }, [user?.id, refetch])
 
   useEffect(() => {
     dataService.setCachedTasks(tasks, user?.id)
@@ -83,8 +93,15 @@ export function useTasks() {
   }
 
   function deleteTask(id) {
+    pendingDeletesRef.current.add(id)
     setTasks(prev => prev.filter(t => t.id !== id))
-    if (user) dataService.deleteTask(id, user.id).catch(console.warn)
+    if (user) {
+      dataService.deleteTask(id, user.id)
+        .catch(console.warn)
+        .finally(() => pendingDeletesRef.current.delete(id))
+    } else {
+      pendingDeletesRef.current.delete(id)
+    }
   }
 
   function updateTask(id, updates) {

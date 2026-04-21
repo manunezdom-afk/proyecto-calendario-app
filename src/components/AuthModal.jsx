@@ -53,9 +53,22 @@ export default function AuthModal({ isOpen, onClose }) {
   // submitLock evita dobles envíos incluso en el mismo tick (antes de re-render)
   const submitLock = useRef(false)
   const codeInputRef = useRef(null)
+  // historyPushedRef: evita apilar múltiples entries al abrir/cerrar varias veces.
+  const historyPushedRef = useRef(false)
 
   const emailValid = isValidEmail(email)
   const codeValid  = /^\d{6}$/.test(code)
+
+  // Si el usuario verifica con éxito mientras el modal está abierto, cerramos
+  // automáticamente — evita que quede atascado en el paso 'code' si el auth
+  // context resolvió la sesión (p. ej. desde otra pestaña).
+  useEffect(() => {
+    if (isOpen && user && step === 'code') {
+      clearPending()
+      handleClose()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, isOpen, step])
 
   // Autofocus código cuando entramos al paso 'code'.
   useEffect(() => {
@@ -76,8 +89,11 @@ export default function AuthModal({ isOpen, onClose }) {
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
-    // Empujamos un entry al history para que pop cierre el modal.
-    try { window.history.pushState({ focusAuthModal: true }, '') } catch {}
+    // Empujamos un entry al history solo una vez por apertura.
+    if (!historyPushedRef.current) {
+      try { window.history.pushState({ focusAuthModal: true }, '') } catch {}
+      historyPushedRef.current = true
+    }
     function onPop() { handleClose() }
     function onKey(e) { if (e.key === 'Escape') handleClose() }
     window.addEventListener('popstate', onPop)
@@ -95,6 +111,15 @@ export default function AuthModal({ isOpen, onClose }) {
     setCode('')
     setError(null)
     submitLock.current = false
+    // Si hay una entry en el history que empujamos nosotros, la quitamos
+    // haciendo history.back — pero solo si la entry está activa. Si el close
+    // vino por popstate (back), el browser ya la consumió.
+    if (historyPushedRef.current) {
+      historyPushedRef.current = false
+      try {
+        if (window.history.state?.focusAuthModal) window.history.back()
+      } catch {}
+    }
     // Solo reseteamos email+step si el flujo terminó (usuario logueado o manual cancel).
     // Si hay pending, preservamos para que reopen continúe.
     if (!readPending()) {
@@ -143,7 +168,11 @@ export default function AuthModal({ isOpen, onClose }) {
       // handleClose resetea estado local
       handleClose()
     } catch (err) {
+      // Limpiamos el código: el usuario debe reingresarlo (evita reenviar el
+      // mismo código inválido al tocar "Entrar" otra vez).
+      setCode('')
       setError(humanizeAuthError(err))
+      setTimeout(() => codeInputRef.current?.focus(), 50)
     } finally {
       setLoading(false)
       submitLock.current = false
@@ -184,6 +213,12 @@ export default function AuthModal({ isOpen, onClose }) {
     const digits = value.replace(/\D/g, '').slice(0, 6)
     setCode(digits)
     if (error) setError(null)
+    // Auto-submit cuando el usuario pega o termina de tipear los 6 dígitos.
+    // Evita el tap extra en mobile y cumple con la expectativa del input
+    // autoComplete="one-time-code" en iOS.
+    if (digits.length === 6 && !submitLock.current && !loading) {
+      setTimeout(() => handleVerify(), 0)
+    }
   }
 
   return (

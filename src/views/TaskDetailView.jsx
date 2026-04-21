@@ -33,7 +33,7 @@ export default function TaskDetailView({ event, onBack, onSave, onDelete }) {
   }
 
   return (
-    <div className="bg-surface min-h-screen pb-32">
+    <div className="bg-surface min-h-screen pb-40">
       <main className="max-w-xl mx-auto px-6 pt-6">
 
         {/* Header con volver */}

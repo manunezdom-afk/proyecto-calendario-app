@@ -190,7 +190,7 @@ export default function NovaKnowsView({ onBack }) {
     : null
 
   return (
-    <div className="max-w-lg lg:max-w-3xl mx-auto px-4 py-6 space-y-5 pb-32">
+    <div className="max-w-lg lg:max-w-3xl mx-auto px-4 py-6 space-y-5 pb-40">
       {/* Header */}
       <div className="px-1">
         {onBack && (

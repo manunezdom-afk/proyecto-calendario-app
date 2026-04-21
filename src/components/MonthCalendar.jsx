@@ -166,7 +166,7 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent, profi
       {selectedDate && (
         <div className="bg-surface-container-lowest rounded-[24px] p-5 space-y-4 border border-outline-variant/20">
           <div className="flex justify-between items-center">
-            <h3 className="font-headline font-bold text-on-surface text-base capitalize">
+            <h3 className="font-headline font-bold text-on-surface text-base first-letter:uppercase">
               {formatLabel(selectedDate)}
             </h3>
             <button

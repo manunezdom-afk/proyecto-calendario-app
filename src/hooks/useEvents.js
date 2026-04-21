@@ -3,6 +3,7 @@ import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { useCoalescedRefetch } from './useCoalescedRefetch'
 
 // Extrae la hora (0-23) de un string "HH:MM" o "HH:MM – HH:MM"
 function parseEventHour(time) {
@@ -34,31 +35,33 @@ export function useEvents() {
     return dataService.getCachedEvents()
   })
 
+  const refetch = useCoalescedRefetch(async (tag = '') => {
+    if (!user) return
+    try {
+      const cloudEvents = await dataService.fetchEvents(user.id)
+      const pending = pendingDeletesRef.current
+      const filtered = pending.size > 0
+        ? cloudEvents.filter(e => !pending.has(e.id))
+        : cloudEvents
+      setEvents(filtered)
+      dataService.setCachedEvents(filtered, user.id)
+      console.log(`[Focus] ☁️ ${filtered.length} eventos cargados ${tag} (user=${user.id.slice(0,8)})`)
+    } catch (err) {
+      console.warn('[Focus] ⚠️ No se pudo cargar eventos de Supabase', err)
+    }
+  })
+
   // Carga desde Supabase cuando el usuario inicia sesión
   useEffect(() => {
     if (!user) return
 
-    // Al cambiar de usuario, partimos de cache propio (no del global compartido)
+    // Al cambiar de usuario, partimos del cache propio (no del global compartido)
     setEvents(dataService.getCachedEvents(user.id))
-
-    const refetch = (tag = '') => {
-      dataService.fetchEvents(user.id)
-        .then(cloudEvents => {
-          // Filtramos eventos cuyo DELETE está en vuelo para no restaurarlos
-          const pending = pendingDeletesRef.current
-          const filtered = pending.size > 0
-            ? cloudEvents.filter(e => !pending.has(e.id))
-            : cloudEvents
-          setEvents(filtered)
-          dataService.setCachedEvents(filtered, user.id)
-          console.log(`[Focus] ☁️ ${filtered.length} eventos cargados desde Supabase ${tag} (user=${user.id.slice(0,8)})`)
-        })
-        .catch(err => console.warn('[Focus] ⚠️ No se pudo cargar eventos de Supabase', err))
-    }
 
     refetch('(init)')
 
-    // Sync al volver a la pestaña
+    // Sync al volver a la pestaña. visibilitychange y focus suelen disparar a
+    // la vez en iOS: el helper coalesced dedupea la ráfaga.
     const onVisibility = () => { if (!document.hidden) refetch('(visibilitychange)') }
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('focus', onVisibility)
@@ -77,7 +80,7 @@ export function useEvents() {
       window.removeEventListener('focus', onVisibility)
       supabase.removeChannel(channel)
     }
-  }, [user?.id])
+  }, [user?.id, refetch])
 
   // Mantiene el cache local sincronizado (scoped por user)
   useEffect(() => {

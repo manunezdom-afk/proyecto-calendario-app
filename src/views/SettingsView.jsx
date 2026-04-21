@@ -33,10 +33,10 @@ function Row({ icon, label, sub, children, onClick, danger = false }) {
         {icon}
       </span>
       <div className="flex-1 min-w-0 text-left">
-        <p className={`text-[13.5px] font-semibold leading-tight ${danger ? 'text-red-500' : 'text-slate-800'}`}>
+        <p className={`text-[13.5px] font-semibold leading-tight truncate ${danger ? 'text-red-500' : 'text-slate-800'}`}>
           {label}
         </p>
-        {sub && <p className="text-[11.5px] text-slate-400 mt-0.5 leading-tight">{sub}</p>}
+        {sub && <p className="text-[11.5px] text-slate-400 mt-0.5 leading-tight truncate">{sub}</p>}
       </div>
       {children}
     </Tag>
@@ -111,7 +111,7 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
   const { user, setAuthModal, signOut } = useAuth()
 
   return (
-    <div className="max-w-lg lg:max-w-2xl mx-auto px-4 py-6 space-y-4 pb-32">
+    <div className="max-w-lg lg:max-w-2xl mx-auto px-4 py-6 space-y-4 pb-40">
 
       {/* Título */}
       <div className="px-1 mb-2">
