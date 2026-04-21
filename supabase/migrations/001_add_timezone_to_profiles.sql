@@ -9,6 +9,6 @@
 ALTER TABLE public.user_profiles
   ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'UTC';
 
--- Si tenés usuarios ya creados, podés dejarlos en 'UTC' o correr este UPDATE
+-- Si tienes usuarios ya creados, puedes dejarlos en 'UTC' o correr este UPDATE
 -- para llenarlos con un default razonable (por ejemplo Chile):
 -- UPDATE public.user_profiles SET timezone = 'America/Santiago' WHERE timezone IS NULL OR timezone = 'UTC';

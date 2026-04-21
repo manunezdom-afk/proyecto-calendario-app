@@ -355,7 +355,7 @@ export default function NovaWidget({
       const events = data?.events ?? []
 
       if (events.length === 0) {
-        setReply('No encontré eventos claros en la foto. Podés describirlos con texto.')
+        setReply('No encontré eventos claros en la foto. Puedes describirlos con texto.')
       } else {
         const names = events.map(ev => `"${ev.title}"`).join(', ')
         const msg = events.length === 1
@@ -380,7 +380,7 @@ export default function NovaWidget({
         })))
       }
     } catch {
-      setReply('No pude analizar la foto. Intentá de nuevo.')
+      setReply('No pude analizar la foto. Intenta de nuevo.')
     } finally {
       setIsAnalyzingPhoto(false)
       URL.revokeObjectURL(preview)
@@ -410,7 +410,7 @@ export default function NovaWidget({
     const msg = (text ?? input).trim()
     if (!msg || isLoading || isListening) return
     if (msg.length > 4000) {
-      setReply('El mensaje es demasiado largo. Acortalo por favor.')
+      setReply('El mensaje es demasiado largo. Acórtalo por favor.')
       return
     }
 
@@ -450,13 +450,13 @@ export default function NovaWidget({
         const data = await res.json().catch(() => ({}))
         const code = data?.error
         const statusMsg = {
-          rate_limit:           'Muchos mensajes seguidos. Esperá unos segundos.',
-          upstream_rate_limit:  'Muchos mensajes seguidos. Esperá unos segundos.',
-          upstream_overloaded:  'El servicio está sobrecargado. Reintentá.',
+          rate_limit:           'Muchos mensajes seguidos. Espera unos segundos.',
+          upstream_rate_limit:  'Muchos mensajes seguidos. Espera unos segundos.',
+          upstream_overloaded:  'El servicio está sobrecargado. Reintenta.',
           invalid_api_key:      'Servicio no disponible en este momento.',
           no_api_key:           'Servicio no disponible en este momento.',
           message_too_long:     'Mensaje demasiado largo.',
-          llm_bad_output:       'No pude procesarlo. Repetí por favor.',
+          llm_bad_output:       'No pude procesarlo. Repite por favor.',
         }[code] || data?.message || `Error ${res.status}`
         throw new Error(statusMsg)
       }

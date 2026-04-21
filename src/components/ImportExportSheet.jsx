@@ -318,7 +318,7 @@ function SubscribeTab() {
     setError('')
     try {
       const token = await getToken()
-      if (!token) throw new Error('Necesitás iniciar sesión')
+      if (!token) throw new Error('Necesitas iniciar sesión')
       const res = await fetch('/api/calendar-feeds', {
         method: 'POST',
         headers: {
@@ -378,10 +378,10 @@ function SubscribeTab() {
           <span className="material-symbols-outlined text-primary text-[26px]">account_circle</span>
         </div>
         <div>
-          <p className="font-bold text-on-surface text-sm">Iniciá sesión para crear feeds</p>
+          <p className="font-bold text-on-surface text-sm">Inicia sesión para crear feeds</p>
           <p className="text-xs text-outline mt-1.5 leading-snug">
             La suscripción en vivo necesita una cuenta para asociar tu calendario a un URL privado.
-            Podés seguir usando la exportación clásica (archivo .ics) sin cuenta.
+            Puedes seguir usando la exportación clásica (archivo .ics) sin cuenta.
           </p>
         </div>
       </div>
@@ -397,7 +397,7 @@ function SubscribeTab() {
           <p className="text-[13px] font-bold text-on-surface">Sincronización automática</p>
         </div>
         <p className="text-[12px] text-on-surface-variant leading-snug">
-          Generá un URL privado y suscribí tu Google Calendar / Apple Calendar a él.
+          Genera un URL privado y suscribe tu Google Calendar / Apple Calendar a él.
           <b> Cada cambio que hagas en Focus se reflejará solo en tus otros calendarios</b>, sin re-exportar nada.
         </p>
       </div>
@@ -491,7 +491,7 @@ function SubscribeTab() {
             </div>
 
             <p className="text-[10.5px] text-outline leading-snug pt-1">
-              💡 Los calendarios se actualizan cada 1-24 h según la app. Si revocás este feed, todos los calendarios suscritos dejan de ver tus eventos.
+              💡 Los calendarios se actualizan cada 1-24 h según la app. Si revocas este feed, todos los calendarios suscritos dejan de ver tus eventos.
             </p>
           </div>
         )

@@ -156,7 +156,7 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.user_memories
 
 -- ── user_signals: implicit behavioral events for learning ────────────────────
 -- Cada interacción relevante (task done, event created, sug aprobada/rechazada,
--- mensaje a Nova) se loguea acá. analyzeBehavior() las agrega en un modelo.
+-- mensaje a Nova) se loguea aquí. analyzeBehavior() las agrega en un modelo.
 CREATE TABLE IF NOT EXISTS public.user_signals (
   id         BIGSERIAL PRIMARY KEY,
   user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -209,7 +209,7 @@ CREATE POLICY "Users manage own push subscriptions"
 CREATE INDEX IF NOT EXISTS push_subs_user_idx ON public.push_subscriptions (user_id);
 
 -- ── sent_notifications: dedup para no mandar la misma push 2 veces ───────────
--- El cron scheduler registra acá cada push enviado (user_id + event_id + offset)
+-- El cron scheduler registra aquí cada push enviado (user_id + event_id + offset)
 CREATE TABLE IF NOT EXISTS public.sent_notifications (
   id         BIGSERIAL PRIMARY KEY,
   user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,

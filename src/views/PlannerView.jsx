@@ -244,7 +244,7 @@ function buildInsights(events, profile) {
 }
 
 // ── Swipe-to-delete card ────────────────────────────────────────────────────
-// Deslizá hacia la izquierda para revelar el basurero y eliminar el evento.
+// Desliza hacia la izquierda para revelar el basurero y eliminar el evento.
 // Long-press: mantener apretada la tarjeta ~600ms → dispara acción.
 // Se cancela si el usuario se mueve (drag/scroll) o levanta el dedo antes.
 // onClickCapture intercepta el click sintético que viene después del

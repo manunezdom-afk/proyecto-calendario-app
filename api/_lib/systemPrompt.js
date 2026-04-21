@@ -65,7 +65,7 @@ function buildBehaviorContext(b) {
     lines.push(`- Tasa de aprobación de sugerencias: ${pct}% (${b.approved_count} aprobadas / ${b.rejected_count} rechazadas).`)
   }
   if (b.top_approved_kind) {
-    lines.push(`- Tipo de sugerencia que MÁS aprueba: "${b.top_approved_kind}" — seguí proponiendo estas.`)
+    lines.push(`- Tipo de sugerencia que MÁS aprueba: "${b.top_approved_kind}" — sigue proponiendo estas.`)
   }
   if (b.avoid_kinds && b.avoid_kinds.length > 0) {
     lines.push(`- EVITÁ sugerir (rechazadas 3+ veces): ${b.avoid_kinds.join(', ')}.`)

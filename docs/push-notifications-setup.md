@@ -34,7 +34,7 @@ Notificaciones push que llegan aunque la app esté cerrada (incluso con el celu 
 
 ### 1. Generar VAPID keys
 
-En cualquier máquina con Node instalado, corré:
+En cualquier máquina con Node instalado, ejecuta:
 
 ```bash
 npx web-push generate-vapid-keys
@@ -50,11 +50,11 @@ kL...........
 =======================================
 ```
 
-Guardá las dos (no subas la private a GitHub).
+Guarda las dos (no subas la private a GitHub).
 
 ### 2. Correr el SQL en Supabase
 
-Copiá y ejecutá esto en el SQL Editor de Supabase:
+Copia y ejecuta esto en el SQL Editor de Supabase:
 
 ```sql
 CREATE TABLE IF NOT EXISTS public.push_subscriptions (
@@ -101,7 +101,7 @@ Agregar las siguientes (todas con "All Environments" marcado):
 | `VAPID_EMAIL` | `mailto:tuemail@gmail.com` | identificación para los push servers |
 | `SUPABASE_SERVICE_ROLE_KEY` | El service_role key de Supabase | Supabase → Settings → API → "service_role" (secreto) |
 | `SUPABASE_URL` | URL del proyecto Supabase | ya existe como `VITE_SUPABASE_URL`, pero el backend lee sin el prefijo |
-| `CRON_SECRET` | Un string aleatorio largo (ej. `openssl rand -hex 32`) | generá uno vos |
+| `CRON_SECRET` | Un string aleatorio largo (ej. `openssl rand -hex 32`) | genera uno tú |
 
 ### 4. Configurar GitHub Secrets
 
@@ -114,13 +114,13 @@ GitHub → tu repo `proyecto-calendario-app` → Settings → Secrets and variab
 
 ### 5. Redeploy en Vercel
 
-Deployments → último → ⋯ → Redeploy → **desmarcá "Use existing Build Cache"** → Confirm.
+Deployments → último → ⋯ → Redeploy → **desmarca "Use existing Build Cache"** → Confirm.
 
 ### 6. Verificar
 
-- Abrí la app en mobile/desktop, inicia sesión, aceptá permisos de notificación.
-- Creá un evento para dentro de 15 minutos.
-- Esperá.
+- Abre la app en mobile/desktop, inicia sesión, acepta permisos de notificación.
+- Crea un evento para dentro de 15 minutos.
+- Espera.
 - Llega el push a los 10 min antes aunque cierres la app.
 
 ---

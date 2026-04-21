@@ -16,7 +16,7 @@ function getGreeting() {
 function getSubline({ hasEvents, hasFirstTime }) {
   if (hasFirstTime) return 'Empecemos por hoy.'
   if (hasEvents)    return 'Revisé tu día.'
-  return 'Estás acá.'
+  return 'Estás aquí.'
 }
 
 /**

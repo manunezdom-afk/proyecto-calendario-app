@@ -133,7 +133,7 @@ export default function AuthModal({ isOpen, onClose }) {
     e?.preventDefault?.()
     if (submitLock.current || loading) return
     if (!emailValid) {
-      setError('Ingresá un email válido.')
+      setError('Ingresa un email válido.')
       return
     }
     submitLock.current = true
@@ -272,7 +272,7 @@ export default function AuthModal({ isOpen, onClose }) {
                   <div className="flex items-start justify-between gap-3 mb-5">
                     <div className="min-w-0 flex-1">
                       <h2 className="text-[20px] sm:text-[22px] font-bold text-slate-900 leading-tight">
-                        Revisá tu correo
+                        Revisa tu correo
                       </h2>
                       <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
                         Te enviamos un código a{' '}
@@ -292,7 +292,7 @@ export default function AuthModal({ isOpen, onClose }) {
                   <div className="flex items-start gap-2 p-3 bg-primary/5 rounded-2xl mb-5">
                     <span className="material-symbols-outlined text-primary text-[20px] flex-shrink-0 mt-0.5">mark_email_read</span>
                     <p className="text-[12px] text-slate-600 leading-snug">
-                      Buscá el código de 6 dígitos en tu bandeja (revisá spam si no aparece en 1 minuto).
+                      Busca el código de 6 dígitos en tu bandeja (revisa spam si no aparece en 1 minuto).
                     </p>
                   </div>
 
@@ -350,7 +350,7 @@ export default function AuthModal({ isOpen, onClose }) {
                   <div className="flex items-start justify-between gap-3 mb-5">
                     <div className="min-w-0 flex-1">
                       <h2 className="text-[20px] sm:text-[22px] font-bold text-slate-900 leading-tight">
-                        Iniciá sesión
+                        Inicia sesión
                       </h2>
                       <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
                         Sin contraseña. Te enviamos un código de 6 dígitos por email.
@@ -368,7 +368,7 @@ export default function AuthModal({ isOpen, onClose }) {
 
                   <div className="grid grid-cols-3 gap-2 mb-5">
                     {[
-                      { icon: 'sync',       label: 'Sincronizá tus datos' },
+                      { icon: 'sync',       label: 'Sincroniza tus datos' },
                       { icon: 'cloud_done', label: 'Respaldo en la nube' },
                       { icon: 'devices',    label: 'Desde cualquier lugar' },
                     ].map(({ icon, label }) => (
@@ -411,7 +411,7 @@ export default function AuthModal({ isOpen, onClose }) {
                   </form>
 
                   <p className="mt-3 text-[11px] text-center text-slate-400 leading-snug">
-                    Al continuar aceptás que usemos tu email solo para autenticación.
+                    Al continuar aceptas que usemos tu email solo para autenticación.
                   </p>
                 </>
               )}

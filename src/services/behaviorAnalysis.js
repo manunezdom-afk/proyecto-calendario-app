@@ -5,7 +5,7 @@
  * de los últimos 30 días, las agrega en patrones interpretables, y guarda
  * el resultado en `user_behavior`. Ese modelo se inyecta en el system prompt
  * de Nova (para decisiones en tiempo real) y se muestra en la vista
- * "Lo que Nova sabe de vos" (para transparencia).
+ * "Lo que Nova sabe de ti" (para transparencia).
  *
  * Principio: todas las métricas son derivadas, no se guarda data bruta en el
  * modelo. El usuario siempre puede borrar las señales y el modelo se regenera.
@@ -262,11 +262,11 @@ export function modelToPrompt(model) {
   }
 
   if (model.top_approved_kind) {
-    lines.push(`- Tipo de sugerencia que más aprueba: "${model.top_approved_kind}" — seguí proponiendo estas.`)
+    lines.push(`- Tipo de sugerencia que más aprueba: "${model.top_approved_kind}" — sigue proponiendo estas.`)
   }
 
   if (model.avoid_kinds && model.avoid_kinds.length > 0) {
-    lines.push(`- EVITÁ sugerir estos tipos (el usuario los rechazó repetidamente): ${model.avoid_kinds.join(', ')}.`)
+    lines.push(`- EVITA sugerir estos tipos (el usuario los rechazó repetidamente): ${model.avoid_kinds.join(', ')}.`)
   }
 
   if (model.top_categories && model.top_categories.length > 0) {

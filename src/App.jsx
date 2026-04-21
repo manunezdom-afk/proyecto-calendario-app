@@ -458,7 +458,7 @@ export default function App() {
           id="empty-day-v1"
           delayMs={1400}
         >
-          Tu día está en blanco. Puedo proponer un bloque de foco de 25 min cuando quieras — solo pedímelo.
+          Tu día está en blanco. Puedo proponer un bloque de foco de 25 min cuando quieras — solo pídemelo.
         </NovaHint>
       )}
       {!gatesBlocking && !hasNovaEmptyHint && hasNovaConflictHint && (
@@ -468,7 +468,7 @@ export default function App() {
           actionLabel="Ver bandeja"
           onAction={() => setInboxOpen(true)}
         >
-          Si querés, reviso tu día y te mando propuestas a la bandeja. Nunca toco nada sin tu aprobación.
+          Si quieres, reviso tu día y te envío propuestas a la bandeja. Nunca toco nada sin tu aprobación.
         </NovaHint>
       )}
 

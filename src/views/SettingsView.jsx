@@ -54,7 +54,7 @@ function PushDiagnostic() {
       const s = await getPushStatus()
       if (!s.supported) { setStatus({ ok: false, msg: 'Este dispositivo no soporta notificaciones push.' }); return }
       if (s.permission === 'denied') { setStatus({ ok: false, msg: 'Permiso de notificaciones bloqueado. Habilitalo en Ajustes del iPhone → Focus.' }); return }
-      if (s.permission !== 'granted') { setStatus({ ok: false, msg: 'Permiso no concedido. Activá las notificaciones desde la pantalla principal.' }); return }
+      if (s.permission !== 'granted') { setStatus({ ok: false, msg: 'Permiso no concedido. Activa las notificaciones desde la pantalla principal.' }); return }
 
       if (s.subscribed) {
         // Ya hay suscripción — intentamos subirla al backend igual por si no estaba guardada
@@ -62,7 +62,7 @@ function PushDiagnostic() {
         if (r.ok && r.reason !== 'saved_locally_no_session') {
           setStatus({ ok: true, msg: '✅ Suscripción activa y guardada en el servidor. Las notificaciones deberían llegar.' })
         } else if (r.reason === 'saved_locally_no_session') {
-          setStatus({ ok: false, msg: 'Suscripción creada pero no se pudo guardar — no hay sesión activa. Cerrá sesión y volvé a entrar.' })
+          setStatus({ ok: false, msg: 'Suscripción creada pero no se pudo guardar — no hay sesión activa. Cierra sesión y vuelve a entrar.' })
         } else {
           setStatus({ ok: false, msg: `Error al guardar: ${r.reason} ${r.error || ''}` })
         }
@@ -71,7 +71,7 @@ function PushDiagnostic() {
         if (r.ok && r.reason !== 'saved_locally_no_session') {
           setStatus({ ok: true, msg: '✅ Suscripción creada y guardada. Las notificaciones van a funcionar.' })
         } else if (r.reason === 'saved_locally_no_session') {
-          setStatus({ ok: false, msg: 'Creada localmente pero sin sesión para guardar en el servidor. Cerrá sesión y volvé a entrar.' })
+          setStatus({ ok: false, msg: 'Creada localmente pero sin sesión para guardar en el servidor. Cierra sesión y vuelve a entrar.' })
         } else if (r.reason === 'no_vapid_key') {
           setStatus({ ok: false, msg: 'Falta configurar VITE_VAPID_PUBLIC_KEY en Vercel.' })
         } else if (r.reason === 'subscribe_failed') {
@@ -188,7 +188,7 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
         <Row
           icon="notifications"
           label="Recordatorios de eventos"
-          sub="Recibís un aviso 10, 30 y 60 min antes de cada evento"
+          sub="Recibes un aviso 10, 30 y 60 min antes de cada evento"
         >
           <span className="material-symbols-outlined text-[16px] text-emerald-400">check_circle</span>
         </Row>
