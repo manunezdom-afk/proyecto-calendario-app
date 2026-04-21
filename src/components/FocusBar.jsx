@@ -535,16 +535,18 @@ export default function FocusBar({
           }`}
         >
           <button
+            type="button"
             onClick={() => photoInputRef.current?.click()}
             disabled={isThinking || isAnalyzingPhoto}
             aria-label="Enviar foto"
-            className="flex h-10 w-10 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl bg-surface-container text-outline hover:bg-surface-container-high hover:text-on-surface transition-colors disabled:opacity-40"
+            className="flex h-10 w-10 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl bg-surface-container text-outline hover:bg-surface-container-high hover:text-on-surface transition-colors disabled:opacity-40 select-none"
             style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
           >
             <motion.span
               className="material-symbols-outlined text-[1.2rem] lg:text-[1.05rem]"
               animate={isAnalyzingPhoto ? { rotate: 360 } : { rotate: 0 }}
               transition={isAnalyzingPhoto ? { duration: 1.2, repeat: Infinity, ease: 'linear' } : {}}
+              style={{ pointerEvents: 'none' }}
             >
               {isAnalyzingPhoto ? 'progress_activity' : 'add_a_photo'}
             </motion.span>
@@ -569,7 +571,11 @@ export default function FocusBar({
             className="flex-1 min-w-0 bg-transparent text-[14px] text-on-surface outline-none placeholder:text-outline/50 disabled:opacity-50"
           />
 
-          {/* Mic — acción primaria de voz, jerarquía fuerte en mobile. */}
+          {/* Mic — acción primaria de voz, jerarquía fuerte en mobile.
+              Nota: usamos <button> nativo con motion.span interno para la
+              animación. motion.button con animate corriendo perdía taps
+              en iOS Safari (el nodo se reconciliaba y el onClick quedaba
+              huérfano al re-render). Así el botón DOM es estable. */}
           <div className="relative flex-shrink-0">
             {isListening && (
               <motion.span
@@ -581,13 +587,13 @@ export default function FocusBar({
                 style={{ pointerEvents: 'none' }}
               />
             )}
-            <motion.button
+            <button
+              type="button"
               onClick={toggleMic}
+              disabled={!SR || isThinking}
               aria-label={isListening ? 'Detener dictado' : 'Dictar con voz'}
               aria-pressed={isListening}
-              animate={isListening ? { scale: [1, 1.12, 1] } : { scale: 1 }}
-              transition={{ duration: 0.9, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
-              className={`relative flex h-12 w-12 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-all ${
+              className={`relative z-[1] flex h-12 w-12 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-all select-none disabled:opacity-50 ${
                 isListening
                   ? 'bg-red-500 text-white shadow-lg shadow-red-500/40 ring-4 ring-red-200/70 lg:shadow-none lg:ring-2 lg:ring-red-200 lg:bg-red-50 lg:text-red-500'
                   : 'text-white shadow-md shadow-blue-500/30 lg:shadow-none lg:text-outline lg:bg-surface-container lg:hover:bg-surface-container-high lg:hover:text-on-surface'
@@ -595,37 +601,47 @@ export default function FocusBar({
               style={{
                 touchAction: 'manipulation',
                 WebkitTapHighlightColor: 'transparent',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
                 ...(!isListening
                   ? { background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)' }
                   : {}),
               }}
             >
-              <span
-                className="material-symbols-outlined text-[1.35rem] lg:text-[1.05rem]"
-                style={{ fontVariationSettings: "'FILL' 1" }}
+              <motion.span
+                className="flex items-center justify-center"
+                animate={isListening ? { scale: [1, 1.12, 1] } : { scale: 1 }}
+                transition={{ duration: 0.9, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
+                style={{ pointerEvents: 'none' }}
               >
-                {isListening ? 'stop' : 'mic'}
-              </span>
-            </motion.button>
+                <span
+                  className="material-symbols-outlined text-[1.35rem] lg:text-[1.05rem]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  {isListening ? 'stop' : 'mic'}
+                </span>
+              </motion.span>
+            </button>
           </div>
 
           <AnimatePresence>
             {isActive && (
               <motion.button
+                type="button"
                 initial={{ opacity: 0, scale: 0.7 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.7 }}
                 transition={{ duration: 0.15 }}
                 onClick={() => hasText && handleSend()}
                 disabled={isThinking || !hasText}
-                className={`flex h-10 w-10 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
+                className={`flex h-10 w-10 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors select-none ${
                   hasText && !isThinking
                     ? 'bg-slate-900 text-white hover:bg-slate-800'
                     : 'bg-surface-container text-outline/40'
                 }`}
                 style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
               >
-                <span className="material-symbols-outlined text-[1.2rem] lg:text-[1.05rem]">arrow_upward</span>
+                <span className="material-symbols-outlined text-[1.2rem] lg:text-[1.05rem]" style={{ pointerEvents: 'none' }}>arrow_upward</span>
               </motion.button>
             )}
           </AnimatePresence>
@@ -709,18 +725,22 @@ export default function FocusBar({
           transition={{ duration: 0.2 }}
           className="flex items-center gap-2 rounded-2xl border border-white/[0.09] bg-slate-800/80 px-2 py-2 backdrop-blur-2xl"
         >
-          {/* [cam] [input] [MIC] [send] — mismo orden que el modo inline. */}
+          {/* [cam] [input] [MIC] [send] — mismo orden que el modo inline.
+              Mismo patrón <button>+motion.span que inline para evitar
+              que iOS Safari pierda taps cuando motion.button re-renderiza. */}
           <button
+            type="button"
             onClick={() => photoInputRef.current?.click()}
             disabled={isThinking || isAnalyzingPhoto}
             aria-label="Enviar foto"
-            className="flex h-10 w-10 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white/60 transition-colors disabled:opacity-40"
+            className="flex h-10 w-10 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white/60 transition-colors disabled:opacity-40 select-none"
             style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
           >
             <motion.span
               className="material-symbols-outlined text-[1.2rem] lg:text-[1.05rem]"
               animate={isAnalyzingPhoto ? { rotate: 360 } : { rotate: 0 }}
               transition={isAnalyzingPhoto ? { duration: 1.2, repeat: Infinity, ease: 'linear' } : {}}
+              style={{ pointerEvents: 'none' }}
             >
               {isAnalyzingPhoto ? 'progress_activity' : 'add_a_photo'}
             </motion.span>
@@ -756,13 +776,13 @@ export default function FocusBar({
                 style={{ pointerEvents: 'none' }}
               />
             )}
-            <motion.button
+            <button
+              type="button"
               onClick={toggleMic}
+              disabled={!SR || isThinking}
               aria-label={isListening ? 'Detener dictado' : 'Dictar con voz'}
               aria-pressed={isListening}
-              animate={isListening ? { scale: [1, 1.12, 1] } : { scale: 1 }}
-              transition={{ duration: 0.9, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
-              className={`relative flex h-12 w-12 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-all ${
+              className={`relative z-[1] flex h-12 w-12 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-all select-none disabled:opacity-50 ${
                 isListening
                   ? 'bg-red-500 text-white shadow-lg shadow-red-500/40 ring-4 ring-red-200/70 lg:shadow-none lg:ring-0 lg:bg-indigo-500/25 lg:text-indigo-300'
                   : 'text-white shadow-md shadow-blue-500/30 lg:shadow-none lg:text-white/40 lg:bg-white/[0.06] lg:hover:bg-white/10 lg:hover:text-white/60'
@@ -770,37 +790,47 @@ export default function FocusBar({
               style={{
                 touchAction: 'manipulation',
                 WebkitTapHighlightColor: 'transparent',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
                 ...(!isListening
                   ? { background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)' }
                   : {}),
               }}
             >
-              <span
-                className="material-symbols-outlined text-[1.35rem] lg:text-[1.05rem]"
-                style={{ fontVariationSettings: "'FILL' 1" }}
+              <motion.span
+                className="flex items-center justify-center"
+                animate={isListening ? { scale: [1, 1.12, 1] } : { scale: 1 }}
+                transition={{ duration: 0.9, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
+                style={{ pointerEvents: 'none' }}
               >
-                {isListening ? 'stop' : 'mic'}
-              </span>
-            </motion.button>
+                <span
+                  className="material-symbols-outlined text-[1.35rem] lg:text-[1.05rem]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  {isListening ? 'stop' : 'mic'}
+                </span>
+              </motion.span>
+            </button>
           </div>
 
           <AnimatePresence>
             {isActive && (
               <motion.button
+                type="button"
                 initial={{ opacity: 0, scale: 0.7 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.7 }}
                 transition={{ duration: 0.15 }}
                 onClick={() => hasText && handleSend()}
                 disabled={isThinking || !hasText}
-                className={`flex h-10 w-10 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
+                className={`flex h-10 w-10 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors select-none ${
                   hasText && !isThinking
                     ? 'bg-white text-slate-900 hover:bg-white/90'
                     : 'bg-white/[0.06] text-white/20'
                 }`}
                 style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
               >
-                <span className="material-symbols-outlined text-[1.2rem] lg:text-[1.05rem]">arrow_upward</span>
+                <span className="material-symbols-outlined text-[1.2rem] lg:text-[1.05rem]" style={{ pointerEvents: 'none' }}>arrow_upward</span>
               </motion.button>
             )}
           </AnimatePresence>
