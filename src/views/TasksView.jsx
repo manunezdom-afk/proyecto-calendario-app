@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import WeeklyStatsCard from '../components/WeeklyStatsCard'
+import { buildGhostTasks, ghostsDismissed, dismissGhosts } from '../utils/ghosts'
 
 const PRIORITY_CFG = {
   Alta:      { color: 'text-error',     bg: 'bg-error/10',     dot: 'bg-error',     ring: 'ring-error/30' },
@@ -18,13 +19,33 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
   const [newPriority, setNewPriority] = useState('Media')
   const [collapsed, setCollapsed]     = useState({})
 
+  // ── Ghost tasks — demo visual para usuarios nuevos ─────────────────────
+  const [ghostsOff, setGhostsOff] = useState(() => ghostsDismissed())
+  const showGhosts = !ghostsOff && tasks.length === 0
+  useEffect(() => {
+    if (!ghostsOff && tasks.length > 0) {
+      dismissGhosts()
+      setGhostsOff(true)
+    }
+  }, [ghostsOff, tasks.length])
+  const effectiveTasks = showGhosts ? buildGhostTasks() : tasks
+
+  const handleToggle = (id) => {
+    if (String(id).startsWith('ghost-')) return
+    toggleTask(id)
+  }
+  const handleDelete = (id) => {
+    if (String(id).startsWith('ghost-')) return
+    deleteTask(id)
+  }
+
   // ── Stats ──────────────────────────────────────────────────────────────────
-  const todayTasks = tasks.filter((t) => t.category === 'hoy')
+  const todayTasks = effectiveTasks.filter((t) => t.category === 'hoy')
   const doneCount  = todayTasks.filter((t) => t.done).length
   const progress   = todayTasks.length > 0 ? Math.round((doneCount / todayTasks.length) * 100) : 0
 
   // MIT: top 3 undone today tasks sorted by priority
-  const topThree = tasks
+  const topThree = effectiveTasks
     .filter((t) => !t.done && t.category === 'hoy')
     .sort((a, b) => ({ Alta: 0, Media: 1, Baja: 2 }[a.priority] - { Alta: 0, Media: 1, Baja: 2 }[b.priority]))
     .slice(0, 3)
@@ -93,13 +114,13 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
               <span className="ml-auto text-[10px] text-outline font-bold">Método MIT</span>
             </div>
 
-            {topThree.map(({ id, label, priority }, i) => {
+            {topThree.map(({ id, label, priority, isGhost }, i) => {
               const cfg = PRIORITY_CFG[priority]
               const isTop = i === 0
               return (
                 <button
                   key={id}
-                  onClick={() => toggleTask(id)}
+                  onClick={() => handleToggle(id)}
                   className={`w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-[0.98] ${
                     isTop ? 'bg-primary/8 ring-1 ring-primary/25' : 'bg-surface-container-lowest ring-1 ring-outline-variant/15'
                   }`}
@@ -111,7 +132,13 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
                     <p className="font-semibold text-on-surface text-sm truncate">{label}</p>
                     <span className={`text-[10px] font-bold ${cfg.color}`}>Prioridad {priority}</span>
                   </div>
-                  <span className="material-symbols-outlined text-outline-variant text-[20px]">radio_button_unchecked</span>
+                  {isGhost ? (
+                    <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full" style={{ letterSpacing: '0.08em' }}>
+                      EJEMPLO
+                    </span>
+                  ) : (
+                    <span className="material-symbols-outlined text-outline-variant text-[20px]">radio_button_unchecked</span>
+                  )}
                 </button>
               )
             })}
@@ -121,7 +148,7 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
         {/* ── Tareas agrupadas por categoría (kanban 3-col en desktop) ──── */}
         <section className="space-y-5 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-5 lg:items-start">
           {CATEGORIES.map((cat) => {
-            const catTasks = tasks.filter((t) => t.category === cat)
+            const catTasks = effectiveTasks.filter((t) => t.category === cat)
             const pending  = catTasks.filter((t) => !t.done).length
             const isOpen   = !collapsed[cat]
             return (
@@ -155,7 +182,7 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
                       <p className="text-xs text-outline/50 pl-5 py-1">Sin tareas. Pulsa + para añadir.</p>
                     )}
 
-                    {catTasks.map(({ id, label, done, priority }) => {
+                    {catTasks.map(({ id, label, done, priority, isGhost }) => {
                       const cfg = PRIORITY_CFG[priority]
                       return (
                         <div
@@ -166,7 +193,7 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
                               : 'border-outline-variant/20 bg-surface-container-lowest'
                           }`}
                         >
-                          <button onClick={() => toggleTask(id)} className="flex-shrink-0 active:scale-90 transition-transform">
+                          <button onClick={() => handleToggle(id)} className="flex-shrink-0 active:scale-90 transition-transform">
                             <span
                               className={`material-symbols-outlined text-[18px] transition-colors ${done ? 'text-primary' : 'text-outline-variant hover:text-primary'}`}
                               style={done ? { fontVariationSettings: "'FILL' 1" } : {}}
@@ -184,17 +211,24 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
                             {priority}
                           </span>
 
-                          {/* Drag handle — decorativo */}
-                          <span className="material-symbols-outlined text-[14px] text-outline/30 flex-shrink-0 cursor-grab">
-                            drag_indicator
-                          </span>
-
-                          <button
-                            onClick={() => deleteTask(id)}
-                            className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-outline/40 hover:bg-error/10 hover:text-error transition-all active:scale-90"
-                          >
-                            <span className="material-symbols-outlined text-[13px]">close</span>
-                          </button>
+                          {isGhost ? (
+                            <span className="text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ letterSpacing: '0.08em' }}>
+                              EJEMPLO
+                            </span>
+                          ) : (
+                            <>
+                              {/* Drag handle — decorativo */}
+                              <span className="material-symbols-outlined text-[14px] text-outline/30 flex-shrink-0 cursor-grab">
+                                drag_indicator
+                              </span>
+                              <button
+                                onClick={() => handleDelete(id)}
+                                className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-outline/40 hover:bg-error/10 hover:text-error transition-all active:scale-90"
+                              >
+                                <span className="material-symbols-outlined text-[13px]">close</span>
+                              </button>
+                            </>
+                          )}
                         </div>
                       )
                     })}

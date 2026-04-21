@@ -7,6 +7,7 @@ import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { isInPeak, parseEventHour, peakRangeLabel } from '../utils/peakZone'
 import { todayISO as todayISODate, parseTimeToDecimal } from '../utils/time'
+import { buildGhostBlocks } from '../utils/ghosts'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
@@ -132,29 +133,9 @@ const GHOST_KEY   = 'focus_ghosts_dismissed'
 
 // Eventos fantasma — se muestran solo a usuarios nuevos como demo visual
 // de cómo luce Mi Día. Desaparecen en cuanto el usuario crea su primer
-// evento, tarea o bloque.
-const GHOST_BLOCKS = [
-  {
-    id: 'ghost-1',
-    time: '09:00',
-    type: 'ghost',
-    title: 'Sesión de trabajo profundo',
-    description: 'Así se verán tus eventos en Mi Día.',
-  },
-  {
-    id: 'ghost-2',
-    time: '12:30',
-    type: 'ghost',
-    title: 'Almuerzo sin pantallas',
-    description: 'Agrega tu primer evento y estos ejemplos se borran solos.',
-  },
-  {
-    id: 'ghost-3',
-    time: '16:00',
-    type: 'ghost',
-    title: 'Revisar tareas de la semana',
-  },
-]
+// evento, tarea o bloque. Definidos en utils/ghosts.js para que
+// Calendario y Tareas compartan el mismo flag de dismissal.
+const GHOST_BLOCKS = buildGhostBlocks()
 
 // ── Lógica de insights personalizados ─────────────────────────────────────
 function buildInsights(events, profile) {
@@ -714,9 +695,9 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
             })()}
 
             <div className="relative space-y-2">
-              {displayBlocks.map(({ id, eventId, time, type, title, description, subtasks = [], _asReminderOnly }) => {
+              {displayBlocks.map(({ id, eventId, time, type, title, description, subtasks = [], _asReminderOnly, isGhost: isGhostFlag }) => {
                 const isSuggestion = type === 'suggestion'
-                const isGhost = type === 'ghost'
+                const isGhost = !!isGhostFlag
                 const inPeak = !isSuggestion && !isGhost && profile.peakStart != null
                   ? isInPeak(time, profile.peakStart, profile.peakEnd)
                   : null
@@ -746,7 +727,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     <div style={{ flexShrink: 0, width: '52px', paddingTop: '8px', textAlign: 'right', overflow: 'visible' }}>
                       <span
                         style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
-                        className={`text-[13px] font-semibold ${isSuggestion || isGhost ? 'text-outline/40 italic' : 'text-outline'}`}
+                        className={`text-[13px] font-semibold ${isSuggestion ? 'text-outline/40 italic' : 'text-outline'}`}
                       >
                         {time}
                       </span>
@@ -754,7 +735,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
                     {/* Columna de tarjeta */}
                     <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingBottom: '32px' }}>
-                      <div className={`absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : isGhost ? 'bg-outline/30' : 'bg-primary'}`}
+                      <div className={`absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : 'bg-primary'}`}
                         style={{ left: '-21px', zIndex: 1 }} />
                       <SwipeableCard
                         onDelete={!isSuggestion && !isGhost && !_asReminderOnly ? handleDeleteBlock : undefined}
@@ -764,11 +745,9 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                         onLongPress={!isSuggestion && !isGhost && !_asReminderOnly ? handleLongPressDelete : undefined}
                         onClick={!isSuggestion && !isGhost && !_asReminderOnly ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
                         className={`rounded-xl ${
-                          isGhost
-                            ? 'bg-surface-container-low/40 border border-dashed border-outline/25 opacity-70'
-                            : isSuggestion
+                          isSuggestion
                             ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
-                            : `bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 cursor-pointer hover:shadow-md transition-shadow ${
+                            : `bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 ${!isGhost ? 'cursor-pointer hover:shadow-md transition-shadow' : ''} ${
                                 inPeak === true ? 'border-emerald-500'
                                   : inPeak === false ? 'border-amber-400'
                                   : 'border-primary'
@@ -779,7 +758,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       >
                         <div className="flex justify-between items-start gap-2" style={{ marginBottom: '2px' }}>
                           <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0 }}>
-                            <h3 className={`font-bold ${isSuggestion ? 'text-secondary' : isGhost ? 'text-outline/80' : 'text-on-surface'}`}
+                            <h3 className={`font-bold ${isSuggestion ? 'text-secondary' : 'text-on-surface'}`}
                               style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {title}
                             </h3>
@@ -789,8 +768,8 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                           </div>
                           {isGhost ? (
                             <span
-                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-outline/10 text-outline/60 tracking-wider"
-                              style={{ flexShrink: 0 }}
+                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary"
+                              style={{ flexShrink: 0, letterSpacing: '0.08em' }}
                             >
                               EJEMPLO
                             </span>

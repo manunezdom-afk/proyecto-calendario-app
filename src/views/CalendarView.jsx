@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import DayTimeGrid from '../components/DayTimeGrid'
 import QuickAddSheet from '../components/QuickAddSheet'
 import MonthCalendar from '../components/MonthCalendar'
 import { resolveEventDate } from '../utils/resolveEventDate'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { peakRangeLabel } from '../utils/peakZone'
+import { buildGhostEvents, ghostsDismissed, dismissGhosts } from '../utils/ghosts'
 
 // Descripción útil: no mostramos cuando es solo una fecha ISO (YYYY-MM-DD) —
 // data vieja generada por QuickAddSheet cuando stuffing date en description.
@@ -84,9 +85,9 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
-            A Continuación
+            {event.isGhost ? 'Ejemplo' : 'A Continuación'}
           </span>
-          <DeleteButton onClick={() => onDelete(event.id)} />
+          {!event.isGhost && <DeleteButton onClick={() => onDelete(event.id)} />}
         </div>
       </div>
       <div>
@@ -120,7 +121,13 @@ function SmallEventCard({ event, onDelete, onOpen }) {
         <span className="material-symbols-outlined text-secondary">
           {event.icon || 'event'}
         </span>
-        <DeleteButton onClick={() => onDelete(event.id)} />
+        {event.isGhost ? (
+          <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full" style={{ letterSpacing: '0.08em' }}>
+            EJEMPLO
+          </span>
+        ) : (
+          <DeleteButton onClick={() => onDelete(event.id)} />
+        )}
       </div>
       <h3 className="text-sm font-bold text-on-surface">{event.title}</h3>
       {event.time && (
@@ -156,7 +163,13 @@ function EveningEventCard({ event, onDelete, onOpen }) {
             )}
           </div>
         </div>
-        <DeleteButton onClick={() => onDelete(event.id)} />
+        {event.isGhost ? (
+          <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full flex-shrink-0" style={{ letterSpacing: '0.08em' }}>
+            EJEMPLO
+          </span>
+        ) : (
+          <DeleteButton onClick={() => onDelete(event.id)} />
+        )}
       </div>
     </div>
   )
@@ -169,13 +182,32 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('semana')         // 'mes' | 'semana'
 
+  // ── Ghost events — demo visual para usuarios nuevos ─────────────────────
+  // Se muestran como eventos reales (colores, tiempo, sombra) con un pill
+  // "EJEMPLO". Desaparecen en cuanto hay al menos un evento real.
+  const [ghostsOff, setGhostsOff] = useState(() => ghostsDismissed())
+  const showGhosts = !ghostsOff && (events?.length ?? 0) === 0
+  useEffect(() => {
+    if (!ghostsOff && (events?.length ?? 0) > 0) {
+      dismissGhosts()
+      setGhostsOff(true)
+    }
+  }, [ghostsOff, events?.length])
+  const effectiveEvents = showGhosts ? buildGhostEvents() : events
+
   // ISO del día seleccionado en la vista semana
   const activeDayISO = CALENDAR_DAYS.find((d) => d.num === activeDay)?.iso ?? todayISOStr
 
   // Filtramos eventos por día seleccionado (resolviendo cualquier formato de fecha)
-  const dayEvents = events.filter((e) => resolveEventDate(e) === activeDayISO)
+  const dayEvents = effectiveEvents.filter((e) => resolveEventDate(e) === activeDayISO)
   const focusEvents   = dayEvents.filter((e) => e.section === 'focus')
   const eveningEvents = dayEvents.filter((e) => e.section === 'evening')
+
+  // Handler que ignora deletes sobre ghost events (no existen en DB)
+  const handleDeleteEvent = (id) => {
+    if (String(id).startsWith('ghost-')) return
+    onDeleteEvent?.(id)
+  }
 
   // First focus event becomes the featured card (if any)
   const [featuredEvent, ...smallEvents] = focusEvents
@@ -236,9 +268,9 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
         {/* ── VISTA MES ────────────────────────────────────────────────── */}
         {calView === 'mes' && (
           <MonthCalendar
-            events={events}
+            events={effectiveEvents}
             onAddEvent={onAddEvent}
-            onDeleteEvent={onDeleteEvent}
+            onDeleteEvent={handleDeleteEvent}
             profile={profile}
           />
         )}
@@ -250,7 +282,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
             <div className="grid grid-cols-7 gap-2">
               {CALENDAR_DAYS.map(({ day, num, iso }) => {
                 const isActive  = num === activeDay
-                const dayEvts   = events.filter((e) => resolveEventDate(e) === iso)
+                const dayEvts   = effectiveEvents.filter((e) => resolveEventDate(e) === iso)
                 const hasEvts   = dayEvts.length > 0
                 const highLoad  = dayEvts.length >= 3
                 const categorized = dayEvts.map(categorizeEvent)
@@ -363,12 +395,12 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                   {featuredEvent && (
                     <FeaturedEventCard
                       event={featuredEvent}
-                      onDelete={onDeleteEvent}
+                      onDelete={handleDeleteEvent}
                       onOpen={onOpenTask}
                     />
                   )}
                   {smallEvents.map((ev) => (
-                    <SmallEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} onOpen={onOpenTask} />
+                    <SmallEventCard key={ev.id} event={ev} onDelete={handleDeleteEvent} onOpen={onOpenTask} />
                   ))}
                 </div>
               )}
@@ -397,7 +429,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
               ) : (
                 <div className="space-y-2">
                   {eveningEvents.map((ev) => (
-                    <EveningEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} onOpen={onOpenTask} />
+                    <EveningEventCard key={ev.id} event={ev} onDelete={handleDeleteEvent} onOpen={onOpenTask} />
                   ))}
                 </div>
               )}
