@@ -6,6 +6,7 @@ import FocusBar          from '../components/FocusBar'
 import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { isInPeak, parseEventHour, peakRangeLabel } from '../utils/peakZone'
+import { todayISO as todayISODate, parseTimeToDecimal } from '../utils/time'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
@@ -21,24 +22,12 @@ function currentHour() {
   return d.getHours() + d.getMinutes() / 60
 }
 
-function parseTimeToDecimal(timeStr) {
-  if (!timeStr || timeStr === '—') return null
-  const [h, m] = timeStr.split(':').map(Number)
-  if (isNaN(h)) return null
-  return h + m / 60
-}
-
 function formatMinutes(totalMinutes) {
   if (totalMinutes < 1) return 'ahora'
   if (totalMinutes < 60) return `${Math.round(totalMinutes)} min`
   const h = Math.floor(totalMinutes / 60)
   const m = Math.round(totalMinutes % 60)
   return m > 0 ? `${h}h ${m}m` : `${h}h`
-}
-
-function todayISODate() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function eventTimeToBlockTime(timeStr) {
@@ -139,14 +128,37 @@ function looksLikeReminderTitle(title) {
 }
 
 const STORAGE_KEY = 'focus_planner_blocks'
+const GHOST_KEY   = 'focus_ghosts_dismissed'
+
+// Eventos fantasma — se muestran solo a usuarios nuevos como demo visual
+// de cómo luce Mi Día. Desaparecen en cuanto el usuario crea su primer
+// evento, tarea o bloque.
+const GHOST_BLOCKS = [
+  {
+    id: 'ghost-1',
+    time: '09:00',
+    type: 'ghost',
+    title: 'Sesión de trabajo profundo',
+    description: 'Así se verán tus eventos en Mi Día.',
+  },
+  {
+    id: 'ghost-2',
+    time: '12:30',
+    type: 'ghost',
+    title: 'Almuerzo sin pantallas',
+    description: 'Agrega tu primer evento y estos ejemplos se borran solos.',
+  },
+  {
+    id: 'ghost-3',
+    time: '16:00',
+    type: 'ghost',
+    title: 'Revisar tareas de la semana',
+  },
+]
 
 // ── Lógica de insights personalizados ─────────────────────────────────────
 function buildInsights(events, profile) {
-  const todayISO = (() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-  })()
-
+  const todayISO = todayISODate()
   const todayEvents = events.filter((e) => !e.date || e.date === todayISO)
   const eveningCount = todayEvents.filter((e) => e.section === 'evening').length
   const meetingCount = todayEvents.filter((e) =>
@@ -325,6 +337,23 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     localStorage.setItem(STORAGE_KEY, JSON.stringify(blocks))
   }, [blocks])
 
+  // ── Eventos fantasma (onboarding) ──────────────────────────────────────
+  const [ghostsDismissed, setGhostsDismissed] = useState(() => {
+    try { return localStorage.getItem(GHOST_KEY) === '1' } catch { return false }
+  })
+  const hasAnyRealContent =
+    (events?.length ?? 0) > 0 ||
+    (tasks?.length ?? 0) > 0 ||
+    (Array.isArray(blocks) && blocks.length > 0)
+  const showGhosts = !ghostsDismissed && !hasAnyRealContent
+
+  useEffect(() => {
+    if (!ghostsDismissed && hasAnyRealContent) {
+      try { localStorage.setItem(GHOST_KEY, '1') } catch {}
+      setGhostsDismissed(true)
+    }
+  }, [ghostsDismissed, hasAnyRealContent])
+
   // Sincroniza "Mi Día" (timeline) con eventos de HOY para reflejar cambios inmediatos
   useEffect(() => {
     const todayISO = todayISODate()
@@ -407,12 +436,14 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
   // Heurística "Google Calendar": recordatorios como eventos cortos anidados (UI-only)
   const displayBlocks = (() => {
-    const arrRaw = Array.isArray(blocks) ? blocks : []
+    const arrRaw = showGhosts
+      ? GHOST_BLOCKS
+      : (Array.isArray(blocks) ? blocks : [])
     // Ocultar eventos ya pasados (con hora válida y < ahora). Se mantienen
     // sugerencias y bloques sin hora. Se vuelve a evaluar cada minuto vía tick.
     const arrFiltered = arrRaw.filter((b) => {
       if (!b) return false
-      if (b.type === 'suggestion') return true
+      if (b.type === 'suggestion' || b.type === 'ghost') return true
       const h = parseTimeToDecimal(b.time)
       if (h === null) return true
       return h >= now - 0.0167 // ~1 min de gracia
@@ -591,16 +622,25 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
             <div className="relative space-y-2">
               {displayBlocks.map(({ id, time, type, title, description, subtasks = [], _asReminderOnly }) => {
                 const isSuggestion = type === 'suggestion'
-                const inPeak = !isSuggestion && profile.peakStart != null
+                const isGhost = type === 'ghost'
+                const inPeak = !isSuggestion && !isGhost && profile.peakStart != null
                   ? isInPeak(time, profile.peakStart, profile.peakEnd)
                   : null
+                const isActive = activeBlock?.id === id
+                const isNext = !activeBlock && nextBlock?.id === id
                 return (
-                  <div key={id} style={{ display: 'flex', gap: '24px', overflow: 'visible' }} className="group">
+                  <div
+                    key={id}
+                    data-event-card
+                    data-next-event={isActive || isNext ? '' : undefined}
+                    style={{ display: 'flex', gap: '24px', overflow: 'visible' }}
+                    className="group"
+                  >
                     {/* Columna de hora — nunca se comprime */}
                     <div style={{ flexShrink: 0, width: '52px', paddingTop: '8px', textAlign: 'right', overflow: 'visible' }}>
                       <span
                         style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
-                        className={`text-[13px] font-semibold ${isSuggestion ? 'text-outline/40 italic' : 'text-outline'}`}
+                        className={`text-[13px] font-semibold ${isSuggestion || isGhost ? 'text-outline/40 italic' : 'text-outline'}`}
                       >
                         {time}
                       </span>
@@ -608,18 +648,20 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
                     {/* Columna de tarjeta */}
                     <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingBottom: '32px' }}>
-                      <div className={`absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : 'bg-primary'}`}
+                      <div className={`absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : isGhost ? 'bg-outline/30' : 'bg-primary'}`}
                         style={{ left: '-21px', zIndex: 1 }} />
                       <SwipeableCard
-                        onDelete={!isSuggestion && !_asReminderOnly ? () => {
+                        onDelete={!isSuggestion && !isGhost && !_asReminderOnly ? () => {
                           dismissBlock(id)
                           onDeleteEvent?.(id)
                         } : undefined}
-                        disabled={isSuggestion || _asReminderOnly}
+                        disabled={isSuggestion || isGhost || _asReminderOnly}
                       >
                       <div
                         className={`rounded-xl ${
-                          isSuggestion
+                          isGhost
+                            ? 'bg-surface-container-low/40 border border-dashed border-outline/25 opacity-70'
+                            : isSuggestion
                             ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
                             : `bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 cursor-pointer hover:shadow-md transition-shadow ${
                                 inPeak === true ? 'border-emerald-500'
@@ -628,20 +670,27 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                               }`
                         }`}
                         style={{ padding: '14px 16px 14px 14px', overflow: 'visible' }}
-                        title={inPeak === true ? 'En tu zona de rendimiento' : inPeak === false ? 'Fuera de tu zona de rendimiento' : undefined}
-                        onClick={!isSuggestion && !_asReminderOnly ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
+                        title={isGhost ? 'Ejemplo — desaparecerá cuando agregues tu primer evento' : inPeak === true ? 'En tu zona de rendimiento' : inPeak === false ? 'Fuera de tu zona de rendimiento' : undefined}
+                        onClick={!isSuggestion && !isGhost && !_asReminderOnly ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
                       >
                         <div className="flex justify-between items-start gap-2" style={{ marginBottom: '2px' }}>
                           <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0 }}>
-                            <h3 className={`font-bold ${isSuggestion ? 'text-secondary' : 'text-on-surface'}`}
+                            <h3 className={`font-bold ${isSuggestion ? 'text-secondary' : isGhost ? 'text-outline/80' : 'text-on-surface'}`}
                               style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {title}
                             </h3>
-                            {!isSuggestion && !_asReminderOnly && (
+                            {!isSuggestion && !isGhost && !_asReminderOnly && (
                               <span className="material-symbols-outlined text-outline/40 text-[16px]" style={{ flexShrink: 0 }}>timer</span>
                             )}
                           </div>
-                          {isSuggestion ? (
+                          {isGhost ? (
+                            <span
+                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-outline/10 text-outline/60 tracking-wider"
+                              style={{ flexShrink: 0 }}
+                            >
+                              EJEMPLO
+                            </span>
+                          ) : isSuggestion ? (
                             <button
                               onClick={(e) => { e.stopPropagation(); acceptSuggestion(id) }}
                               className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-secondary/20 hover:bg-secondary/10 text-secondary transition-colors"
@@ -688,7 +737,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                         )}
 
                         {description && (
-                          <p className={`text-sm leading-relaxed ${isSuggestion ? 'italic text-on-surface-variant/70' : 'text-on-surface-variant'}`}>
+                          <p className={`text-sm leading-relaxed ${isSuggestion || isGhost ? 'italic text-on-surface-variant/70' : 'text-on-surface-variant'}`}>
                             {description}
                           </p>
                         )}
@@ -699,7 +748,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 )
               })}
 
-              {blocks.length === 0 && (() => {
+              {blocks.length === 0 && !showGhosts && (() => {
                 const pendingTotal = semanaCount + algoDiaCount
                 return (
                   <div className="flex gap-6">
