@@ -277,7 +277,7 @@ export default function App() {
               )}
 
               {activeView === 'task-detail' && (
-                <TaskDetailView event={selectedEvent} onBack={goBack} onSave={handleSaveTask} />
+                <TaskDetailView event={selectedEvent} onBack={goBack} onSave={handleSaveTask} onDelete={deleteEvent} />
               )}
 
               {activeView === 'settings' && (
