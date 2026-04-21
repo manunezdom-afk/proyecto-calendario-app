@@ -57,6 +57,12 @@
       html.ms-loaded .material-symbols-outlined {
         font-size: inherit;
       }
+      /* Continuidad landing→app: si llegamos con el flag en sessionStorage,
+         el body arranca oscuro para que no haya flash blanco entre la
+         landing dark y el threshold scene dark. Se remueve al terminar. */
+      html.focus-continuity, html.focus-continuity body {
+        background: #0a0a0f !important;
+      }
     </style>
     <script>
       (function () {
@@ -66,12 +72,17 @@
         if (typeof document !== 'undefined' && document.fonts && document.fonts.load) {
           document.fonts.load('24px "Material Symbols Outlined"')
             .then(reveal).catch(reveal);
-          // Fallback: no esperar más de 1.5s. Si la fuente no cargó,
-          // mejor mostrar algo (aunque sea texto) que dejar la UI muda.
           setTimeout(reveal, 1500);
         } else {
           reveal();
         }
+        try {
+          var raw = sessionStorage.getItem('focus_aurora_continuity');
+          if (!raw) return;
+          var data = JSON.parse(raw);
+          if (!data || !data.t || Date.now() - data.t > 4000) return;
+          document.documentElement.classList.add('focus-continuity');
+        } catch (_) {}
       })();
     </script>
   </head>

@@ -295,8 +295,11 @@
     .features-grid{grid-template-columns:1fr;gap:12px;margin-top:40px}
     .steps-grid{grid-template-columns:1fr;gap:32px;margin-top:48px}
     .install-grid{grid-template-columns:1fr;gap:12px;margin-top:40px}
+    /* Mobile mock: ocultamos la bandeja derecha para no stackear dos paneles.
+       Dejamos solo Mi Día — más limpio, más legible, foco en el calendario real. */
     .mock-body{grid-template-columns:1fr;min-height:auto}
-    .mock-pane-left{border-right:0;border-bottom:1px solid #f1f5f9}
+    .mock-pane-left{border-right:0;border-bottom:0;padding:18px}
+    .mock-pane-right{display:none}
     .mock{margin-top:48px}
     .hero-checks{margin-top:40px;gap:10px 20px}
     .footer-inner{padding:32px 20px;flex-direction:column;text-align:center}
@@ -681,6 +684,33 @@
     <div>© 2026 · Hecho con <span style="color:#f43f5e">♥</span></div>
   </div>
 </footer>
+
+<script>
+  // Continuidad landing → app.
+  // Al hacer click en cualquier CTA que lleve a la app, guardamos un flag en
+  // sessionStorage (live ~4s) para que la app monte con aurora visible desde
+  // el primer frame, sin flash blanco.
+  (function () {
+    const APP_HOST_HINT = 'proyecto-calendario-app';
+    function isAppLink(href) {
+      if (!href) return false;
+      return href.includes(APP_HOST_HINT) || href.startsWith('/app') || href === '/';
+    }
+    function markContinuity() {
+      try {
+        sessionStorage.setItem('focus_aurora_continuity', JSON.stringify({
+          t: Date.now(),
+          from: 'landing',
+        }));
+      } catch (_) {}
+    }
+    document.addEventListener('click', function (e) {
+      const a = e.target && e.target.closest && e.target.closest('a[href]');
+      if (!a) return;
+      if (isAppLink(a.getAttribute('href'))) markContinuity();
+    }, { capture: true });
+  })();
+</script>
 
 </body>
 </html>

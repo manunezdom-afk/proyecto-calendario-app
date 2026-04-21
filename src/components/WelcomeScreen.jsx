@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import NovaOrb from './NovaOrb'
+import AuroraBackground, { readContinuity } from './AuroraBackground'
 
 const WELCOME_KEY = 'focus_welcome_last'
 
@@ -11,117 +13,122 @@ function getGreeting() {
   return 'Buenas noches'
 }
 
-export default function WelcomeScreen({ onEnter, userName }) {
+function getSubline({ hasEvents, hasFirstTime }) {
+  if (hasFirstTime) return 'Empecemos por hoy.'
+  if (hasEvents)    return 'Revisé tu día.'
+  return 'Estás acá.'
+}
+
+/**
+ * Threshold Scene — la pantalla-firma de entrada.
+ * 3 frames en ~1500ms, skippable con tap/tecla en cualquier momento.
+ *
+ * Frame A (0-450ms):    orbe Nova breath-in
+ * Frame B (450-1100ms): frase "{greeting}. {subline}"
+ * Frame C (1100-1500ms): fade completo → onEnter
+ *
+ * No hay barra de progreso, no hay label, no hay nombre extraído del email.
+ */
+export default function WelcomeScreen({ onEnter, hasEvents = false, hasFirstTime = false }) {
   const greeting = useMemo(getGreeting, [])
-  const headline = useMemo(
-    () => (userName ? `${greeting}, ${userName}.` : `${greeting}.`),
-    [greeting, userName]
-  )
+  const subline  = useMemo(() => getSubline({ hasEvents, hasFirstTime }), [hasEvents, hasFirstTime])
+  const continuity = useMemo(readContinuity, [])
+  const [phase, setPhase] = useState('in') // 'in' | 'out'
+
+  // Auto-dismiss en 1500ms. Skippable por tap o tecla → dispara fade corto.
+  useEffect(() => {
+    const id = setTimeout(() => setPhase('out'), 1500)
+    return () => clearTimeout(id)
+  }, [])
 
   useEffect(() => {
-    const id = setTimeout(() => onEnter?.(), 2800)
+    if (phase !== 'out') return
+    const id = setTimeout(() => {
+      try { document.documentElement.classList.remove('focus-continuity') } catch {}
+      onEnter?.()
+    }, 280)
     return () => clearTimeout(id)
-  }, [onEnter])
+  }, [phase, onEnter])
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.defaultPrevented) return
+      setPhase('out')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  function skip() { setPhase('out') }
 
   return (
     <motion.div
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.35 }}
+      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      onClick={skip}
+      role="button"
+      tabIndex={-1}
+      aria-label="Saltar bienvenida"
       className="fixed inset-0 z-[100] flex items-center justify-center"
-      style={{ background: 'linear-gradient(160deg, #0d0d1a 0%, #0a0a14 50%, #0c0812 100%)' }}
+      style={{
+        background: continuity ? '#0a0a0f' : 'radial-gradient(ellipse at 50% 45%, #14121f 0%, #0a0a0f 70%)',
+        cursor: 'pointer',
+      }}
     >
-      {/* Glow estático detrás del logo — sin animación, sin blur en movimiento */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(99,102,241,0.18) 0%, transparent 70%)',
-        }}
-      />
-
-      {/* Botón cerrar — SVG inline para evitar FOIT del font Material Symbols */}
-      <button
-        onClick={onEnter}
-        aria-label="Cerrar"
-        className="absolute top-5 right-5 z-10 flex h-10 w-10 items-center justify-center rounded-full text-white/30 hover:text-white/60 transition-colors"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-          <path d="M6 6L18 18M6 18L18 6"/>
-        </svg>
-      </button>
+      {/* Aurora continuidad con landing */}
+      <AuroraBackground variant="threshold" intensity={1} />
 
       {/* Contenido */}
       <div className="relative z-10 flex flex-col items-center px-6 text-center">
+        <AnimatePresence>
+          {phase === 'in' && (
+            <motion.div
+              key="orb"
+              initial={{ scale: 0.78, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 1.05, opacity: 0 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              className="mb-10"
+            >
+              <NovaOrb size={84} ambient />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Logo — spring rápido, sin blur */}
-        <motion.div
-          initial={{ scale: 0.72, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', damping: 20, stiffness: 200, delay: 0.05 }}
-          className="mb-7"
-        >
-          <div
-            className="w-[72px] h-[72px] rounded-[22px] flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%)',
-              boxShadow: '0 8px 32px rgba(99,102,241,0.45)',
-            }}
-          >
-            {/* SVG inline (sparkle) — evita que el splash renderice "brightness_high"
-                como texto cuando el font Material Symbols aún no cargó */}
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="white" aria-hidden="true">
-              <path d="M12 2L13.8 8.2L20 10L13.8 11.8L12 18L10.2 11.8L4 10L10.2 8.2L12 2Z"/>
-              <path d="M19 15L19.8 17.2L22 18L19.8 18.8L19 21L18.2 18.8L16 18L18.2 17.2L19 15Z" opacity="0.7"/>
-            </svg>
-          </div>
-        </motion.div>
-
-        {/* Label */}
-        <motion.p
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.4 }}
-          className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40"
-        >
-          Focus
-        </motion.p>
-
-        {/* Headline */}
-        <motion.h1
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.42, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="mb-3 font-headline text-[38px] font-extrabold leading-[1.08] tracking-tight text-white"
-        >
-          {headline}
-        </motion.h1>
-
-        {/* Tagline */}
-        <motion.p
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.62, duration: 0.45 }}
-          className="mb-10 text-[15px] text-white/50 font-medium"
-        >
-          Menos ruido, más foco.
-        </motion.p>
-
-        {/* Barra de progreso */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.0, duration: 0.4 }}
-          className="h-[2px] w-28 overflow-hidden rounded-full bg-white/8"
-        >
-          <motion.div
-            initial={{ x: '-100%' }}
-            animate={{ x: '100%' }}
-            transition={{ delay: 1.0, duration: 1.6, ease: 'easeInOut' }}
-            className="h-full w-1/2 rounded-full"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.8), transparent)' }}
-          />
-        </motion.div>
-
+        <AnimatePresence>
+          {phase === 'in' && (
+            <motion.h1
+              key="line"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ delay: 0.35, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              className="font-headline font-medium text-white"
+              style={{
+                fontSize: 'clamp(26px, 4.5vw, 34px)',
+                letterSpacing: '-0.02em',
+                lineHeight: 1.15,
+                maxWidth: '20ch',
+              }}
+            >
+              <span style={{ color: 'rgba(255,255,255,0.95)' }}>{greeting}.</span>
+              {' '}
+              <span style={{ color: 'rgba(255,255,255,0.55)' }}>{subline}</span>
+            </motion.h1>
+          )}
+        </AnimatePresence>
       </div>
+
+      {/* Hint de skip — solo visible después del primer momento */}
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: phase === 'in' ? 0.35 : 0 }}
+        transition={{ delay: 1.0, duration: 0.4 }}
+        className="absolute bottom-[calc(env(safe-area-inset-bottom,0px)+28px)] left-0 right-0 text-center text-[11px] text-white/40"
+        style={{ letterSpacing: '0.08em' }}
+      >
+        toca para continuar
+      </motion.p>
     </motion.div>
   )
 }
@@ -136,6 +143,14 @@ export function useWelcomeGate() {
     }
   })
 
+  useEffect(() => {
+    if (!show) {
+      // Si la bienvenida no se va a mostrar, limpiamos el flag de continuidad
+      // para que el body vuelva al color surface sin quedarse negro.
+      try { document.documentElement.classList.remove('focus-continuity') } catch {}
+    }
+  }, [show])
+
   function dismiss() {
     try {
       localStorage.setItem(WELCOME_KEY, new Date().toISOString().slice(0, 10))
@@ -144,17 +159,4 @@ export function useWelcomeGate() {
   }
 
   return { show, dismiss }
-}
-
-export function WelcomeScreenAuto({ onEnter, userName }) {
-  useEffect(() => {
-    function onKey(e) {
-      if (e.defaultPrevented) return
-      onEnter?.()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onEnter])
-
-  return <WelcomeScreen onEnter={onEnter} userName={userName} />
 }

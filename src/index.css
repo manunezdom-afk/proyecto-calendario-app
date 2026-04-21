@@ -7,6 +7,13 @@
   --safe-right:  env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left:   env(safe-area-inset-left, 0px);
+
+  /* Motion: un solo easing para toda la app (ease-out-expo). */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Nova brand — púrpura vivo, distinto del primary azul. */
+  --nova: #7c6bff;
+  --nova-glow: 124, 107, 255;
 }
 
 .material-symbols-outlined {
@@ -62,6 +69,18 @@ h1, h2, h3 {
   from { transform: translateX(100%); opacity: 0; }
   to   { transform: translateX(0);    opacity: 1; }
 }
+
+/* Nova orb: latencia viva — el orbe nunca se detiene.
+   scale 1.0 ↔ 1.04, glow opacity 0.55 ↔ 1.0 cada 3.2s. */
+@keyframes novaBreath {
+  0%, 100% { transform: scale(1);    opacity: 0.55; }
+  50%      { transform: scale(1.04); opacity: 1; }
+}
+
+/* Aurora blobs — drift lento, paridad con landing. */
+@keyframes auroraDrift1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(60px,-40px) scale(1.15); } }
+@keyframes auroraDrift2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-40px,50px) scale(1.2); } }
+@keyframes auroraDrift3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(30px,30px) scale(1.1); } }
 
 /* Dark mode base overrides */
 .dark body {

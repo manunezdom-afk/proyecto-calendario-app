@@ -12,7 +12,6 @@ import TopAppBar                   from './components/TopAppBar'
 import BottomNavBar                from './components/BottomNavBar'
 import DesktopSideBar              from './components/DesktopSideBar'
 import NotificationPanel           from './components/NotificationPanel'
-import NotificationPermissionCard  from './components/NotificationPermissionCard'
 import ImportExportSheet           from './components/ImportExportSheet'
 import GuestBanner                 from './components/GuestBanner'
 import AuthModal                   from './components/AuthModal'
@@ -21,8 +20,9 @@ import MorningBrief                from './components/MorningBrief'
 import EveningShutdown             from './components/EveningShutdown'
 import SuggestionsInbox            from './components/SuggestionsInbox'
 import WelcomeScreen, { useWelcomeGate } from './components/WelcomeScreen'
-import OnboardingTour              from './components/OnboardingTour'
 import InstallAppCard              from './components/InstallAppCard'
+import AuroraBackground            from './components/AuroraBackground'
+import NovaHint                    from './components/NovaHint'
 import { useFirstRunSequence }     from './hooks/useFirstRunSequence'
 
 import CalendarView    from './views/CalendarView'
@@ -42,12 +42,9 @@ const pageVariants = {
 }
 
 export default function App() {
-  const { authModal, setAuthModal, user } = useAuth()
+  const { authModal, setAuthModal } = useAuth()
   const { profile }                 = useUserProfile()
   const { show: showWelcome, dismiss: dismissWelcome } = useWelcomeGate()
-
-  // Nombre para saludo personalizado (si existe email, usamos la parte antes de @)
-  const userName = user?.email ? user.email.split('@')[0].split('.')[0] : null
 
   const VALID_VIEWS = ['planner', 'calendar', 'tasks', 'settings']
   const initialView = () => {
@@ -124,6 +121,16 @@ export default function App() {
     markAllRead, dismiss: dismissNotif,
   } = useNotifications({ events })
 
+  // ── Permission contextual ────────────────────────────────────────────────
+  // En vez de pedir notificaciones en el primer arranque, esperamos a que
+  // exista al menos un evento real. Ese momento = "el usuario quiere que lo
+  // recordemos". Aceptación sube, fricción baja.
+  const contextualPermission =
+    permissionState === 'default' &&
+    !permissionDismissed &&
+    (events?.length ?? 0) > 0 &&
+    !showWelcome
+
   const [notifPanelOpen,      setNotifPanelOpen]      = useState(false)
   const [importExportOpen,    setImportExportOpen]    = useState(false)
   const [importExportInitialTab, setImportExportInitialTab] = useState('export')
@@ -177,11 +184,10 @@ export default function App() {
   const isSubView = isDetail || activeView === 'memory' || activeView === 'nova-knows'
   const navView  = isSubView ? (previousView || 'settings') : activeView
 
-  const firstRun = useFirstRunSequence({ permissionState, permissionDismissed })
-  const inMainView = activeView === 'planner' || activeView === 'tasks' || activeView === 'calendar'
-  const showPermCard = firstRun.step === 'permission' && inMainView && !showWelcome
+  const firstRun = useFirstRunSequence()
   const showInstallCard = firstRun.step === 'install' && !showWelcome
-  const showTourGate = firstRun.step === 'tour' && !showWelcome
+  const hasNovaConflictHint = (events?.length ?? 0) >= 2
+  const hasNovaEmptyHint = (events?.length ?? 0) === 0 && activeView === 'planner'
 
   // ── Shared PlannerView props ──────────────────────────────────────────────
   const plannerProps = {
@@ -225,7 +231,10 @@ export default function App() {
 
   return (
     <LayoutGroup>
-    <div className="min-h-screen bg-slate-50 overflow-hidden">
+    {/* Aurora ambiente — firma de marca, continuidad con landing.
+        Renderizada fuera del wrapper principal para que el bg-surface no la tape. */}
+    <AuroraBackground variant="app" intensity={0.55} />
+    <div className="relative z-[1] min-h-screen overflow-hidden">
       <motion.div
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -250,19 +259,10 @@ export default function App() {
       )}
 
       <main
-        className={isDesktop && !isDetail ? "pb-0 pl-[72px]" : "w-full"}
+        className={`relative z-10 ${isDesktop && !isDetail ? "pb-0 pl-[72px]" : "w-full"}`}
         style={!isDesktop || isDetail ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)' } : undefined}
       >
         {!isDetail && <GuestBanner />}
-
-        {showPermCard && (
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
-            <NotificationPermissionCard
-              onAllow={requestPermission}
-              onDismiss={dismissPermissionCard}
-            />
-          </motion.div>
-        )}
 
         {/* ── Single-view layout: cada botón del sidebar → su propia vista ── */}
         {(
@@ -387,21 +387,51 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* ── Welcome premium (una vez por día) ─────────────────────────────── */}
+      {/* ── Threshold Scene — la pantalla-firma de entrada (una vez por día) ── */}
       <AnimatePresence>
         {showWelcome && (
-          <WelcomeScreen onEnter={dismissWelcome} userName={userName} />
+          <WelcomeScreen
+            onEnter={dismissWelcome}
+            hasEvents={(events?.length ?? 0) > 0}
+            hasFirstTime={(events?.length ?? 0) === 0 && (tasks?.length ?? 0) === 0}
+          />
         )}
       </AnimatePresence>
 
-      {/* ── Onboarding tour animado (una vez por navegador) ──────────────── */}
-      <AnimatePresence>
-        {showTourGate && (
-          <OnboardingTour onDone={firstRun.completeTour} />
-        )}
-      </AnimatePresence>
+      {/* ── Nova hints contextuales (reemplazan el tour modal) ─────────────── */}
+      {!showWelcome && hasNovaEmptyHint && (
+        <NovaHint
+          id="empty-day-v1"
+          delayMs={1800}
+        >
+          Tu día está en blanco. Puedo proponer un bloque de foco de 25 min cuando quieras — solo pedímelo.
+        </NovaHint>
+      )}
+      {!showWelcome && !hasNovaEmptyHint && hasNovaConflictHint && (
+        <NovaHint
+          id="inbox-hint-v1"
+          delayMs={4200}
+          actionLabel="Ver bandeja"
+          onAction={() => setInboxOpen(true)}
+        >
+          Si querés, reviso tu día y te mando propuestas a la bandeja. Nunca toco nada sin tu aprobación.
+        </NovaHint>
+      )}
 
-      {/* ── Invitación a instalar la app (secuencial, no apilado) ──────── */}
+      {/* ── Permiso de notificaciones — contextual, tras crear un evento ── */}
+      {contextualPermission && (
+        <NovaHint
+          id="notif-permission-v1"
+          delayMs={1500}
+          actionLabel="Activar"
+          onAction={requestPermission}
+          onDismiss={dismissPermissionCard}
+        >
+          Puedo avisarte 10 min antes de cada evento. ¿Activamos recordatorios?
+        </NovaHint>
+      )}
+
+      {/* ── Invitación a instalar la app — aparece desde la 3ra sesión ─── */}
       {showInstallCard && <InstallAppCard onDismissed={firstRun.dismissInstall} />}
 
       {/* ── Evening Shutdown ─────────────────────────────────────────────── */}
