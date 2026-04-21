@@ -6,6 +6,13 @@ import { resolveEventDate } from '../utils/resolveEventDate'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { peakRangeLabel } from '../utils/peakZone'
 
+// Descripción útil: no mostramos cuando es solo una fecha ISO (YYYY-MM-DD) —
+// data vieja generada por QuickAddSheet cuando stuffing date en description.
+function hasMeaningfulNote(desc) {
+  if (!desc) return false
+  return !/^\d{4}-\d{2}-\d{2}$/.test(String(desc).trim())
+}
+
 const DAY_ABBR_ES    = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const MONTH_NAMES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
@@ -84,7 +91,7 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
       </div>
       <div>
         <h3 className="text-lg font-bold text-on-surface">{event.title}</h3>
-        {event.description && (
+        {hasMeaningfulNote(event.description) && (
           <div style={{ marginTop: '6px', padding: '5px 10px', background: '#f1f5f9', borderRadius: '6px', borderLeft: '2px solid #cbd5e1' }}>
             <p style={{ fontSize: '11px', color: '#64748b', lineHeight: '1.4' }}>{event.description}</p>
           </div>
@@ -142,7 +149,7 @@ function EveningEventCard({ event, onDelete, onOpen }) {
           <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${event.dotColor || 'bg-outline'}`} />
           <div className="flex-1 min-w-0">
             <span className="font-bold text-sm text-on-surface">{event.title}</span>
-            {event.description && (
+            {hasMeaningfulNote(event.description) && (
               <div style={{ marginTop: '4px', padding: '4px 8px', background: '#f1f5f9', borderRadius: '5px', borderLeft: '2px solid #cbd5e1' }}>
                 <p style={{ fontSize: '10px', color: '#64748b', lineHeight: '1.4' }}>{event.description}</p>
               </div>

@@ -705,8 +705,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       </div>
                       </SwipeableCard>
 
-                      {/* Nota/recordatorio adjunto — sticky note pegada debajo del bloque */}
-                      {description && !_asReminderOnly && !isSuggestion && (
+                      {/* Nota/recordatorio adjunto — sticky note pegada debajo del bloque.
+                          Filtramos descripciones que son solo una fecha ISO (YYYY-MM-DD) —
+                          data vieja generada por QuickAddSheet cuando stuffing date en
+                          description. Si el evento está en Mi Día ya es obvio que es hoy. */}
+                      {description && !_asReminderOnly && !isSuggestion && !/^\d{4}-\d{2}-\d{2}$/.test(String(description).trim()) && (
                         <div
                           className="mt-1.5 ml-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2"
                           style={{ maxWidth: 'calc(100% - 12px)' }}
