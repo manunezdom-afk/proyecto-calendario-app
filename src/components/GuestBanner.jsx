@@ -23,9 +23,9 @@ export default function GuestBanner() {
         <button
           type="button"
           onClick={() => setAuthModal(true)}
-          title="Modo demo. Crear cuenta para sincronizar"
+          title="Modo demo. Inicia sesión para sincronizar"
           className="flex items-center justify-center w-7 h-7 rounded-full bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors"
-          aria-label="Modo demo. Crear cuenta para sincronizar"
+          aria-label="Modo demo. Inicia sesión para sincronizar"
         >
           <span className="material-symbols-outlined text-amber-500 text-[14px]">cloud_off</span>
         </button>
@@ -41,14 +41,14 @@ export default function GuestBanner() {
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className="material-symbols-outlined text-amber-500 text-[18px] flex-shrink-0">cloud_off</span>
-        <p className="text-xs text-amber-800 truncate">Modo demo — solo en este dispositivo</p>
+        <p className="text-xs text-amber-800 truncate">Sin cuenta — solo en este dispositivo</p>
       </div>
       <div className="flex items-center gap-1 ml-3 flex-shrink-0">
         <button
           onClick={() => setAuthModal(true)}
           className="text-xs font-bold text-primary whitespace-nowrap"
         >
-          Crear cuenta
+          Iniciar sesión
         </button>
         <button
           type="button"
