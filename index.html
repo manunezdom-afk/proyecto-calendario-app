@@ -35,11 +35,45 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <!-- Material Symbols: solo los íconos que realmente usamos (baja ~1MB → ~40KB) -->
+    <!-- Material Symbols — se descarga el set completo (display=block para que
+         no se filtre el nombre crudo del icono mientras carga). Antes teníamos
+         un filtro icon_names=... pero era whitelist y rompía cada icono nuevo
+         que agregábamos (ej: view_day del tab Mi Día, add_a_photo del botón de
+         foto) porque no estaban en la lista. Mejor descargar todo una vez y
+         cachear. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1&icon_names=account_balance,account_circle,add,add_circle,add_link,add_photo_alternate,alarm,arrow_back,arrow_forward,arrow_upward,auto_awesome,bedtime,bolt,brightness_high,cake,calendar_month,calendar_today,cancel,celebration,check,check_circle,checklist,chevron_left,chevron_right,circle,close,cloud_off,content_copy,date_range,delete,delete_sweep,done,download,drag_indicator,edit,emoji_events,error,event,event_available,expand_more,favorite,fitness_center,flight,groups,help,hourglass_empty,inbox,info,insights,install_mobile,ios_share,link,local_hospital,lock,login,logout,mark_email_read,menu_book,mic,nights_stay,notifications,notifications_off,person_off,progress_activity,psychology,push_pin,radio_button_unchecked,refresh,restart_alt,restaurant,rss_feed,schedule,search,send,settings,share,shield,shopping_cart,skip_next,star,sticky_note_2,task_alt,timer,tips_and_updates,today,tune,upload_file,visibility,wb_sunny,work&display=block"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1&display=block"
       rel="stylesheet"
     />
+    <style>
+      /* Cinturón de seguridad: mientras Material Symbols no haya cargado,
+         ocultamos el texto del span (font-size:0) para que nunca se filtren
+         los nombres crudos de iconos ("view_day", "add_a_photo", etc).
+         Cuando el JS detecta que la fuente cargó, agrega 'ms-loaded' a <html>
+         y los iconos vuelven a su tamaño normal. */
+      .material-symbols-outlined {
+        font-size: 0;
+      }
+      html.ms-loaded .material-symbols-outlined {
+        font-size: inherit;
+      }
+    </style>
+    <script>
+      (function () {
+        function reveal() {
+          document.documentElement.classList.add('ms-loaded');
+        }
+        if (typeof document !== 'undefined' && document.fonts && document.fonts.load) {
+          document.fonts.load('24px "Material Symbols Outlined"')
+            .then(reveal).catch(reveal);
+          // Fallback: no esperar más de 1.5s. Si la fuente no cargó,
+          // mejor mostrar algo (aunque sea texto) que dejar la UI muda.
+          setTimeout(reveal, 1500);
+        } else {
+          reveal();
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
