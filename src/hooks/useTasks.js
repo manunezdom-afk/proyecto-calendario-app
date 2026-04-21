@@ -4,6 +4,17 @@ import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useCoalescedRefetch } from './useCoalescedRefetch'
+import { getTaskLinks, setTaskLink, clearTaskLink } from '../utils/taskLinks'
+
+// Hidrata tasks con el linkedEventId guardado en localStorage. La columna
+// linked_event_id no existe en Supabase (evitamos migrar), así que mantenemos
+// la asociación tarea↔evento en un mapa local y la superponemos al volver
+// del backend.
+function hydrateTasksWithLinks(rawTasks, userId) {
+  const links = getTaskLinks(userId)
+  if (!rawTasks) return rawTasks
+  return rawTasks.map(t => (links[t.id] ? { ...t, linkedEventId: links[t.id] } : t))
+}
 
 export function useTasks() {
   const { user } = useAuth()
@@ -11,7 +22,7 @@ export function useTasks() {
   // de que Supabase confirme el DELETE, ignoramos la tarea "resucitada".
   const pendingDeletesRef = useRef(new Set())
 
-  const [tasks, setTasks] = useState(() => dataService.getCachedTasks([]))
+  const [tasks, setTasks] = useState(() => hydrateTasksWithLinks(dataService.getCachedTasks([]), user?.id))
 
   const refetch = useCoalescedRefetch(async (tag = '') => {
     if (!user) return
@@ -22,8 +33,9 @@ export function useTasks() {
       const filtered = pending.size > 0
         ? cloudTasks.filter(t => !pending.has(t.id))
         : cloudTasks
-      setTasks(filtered)
-      dataService.setCachedTasks(filtered, user.id)
+      const hydrated = hydrateTasksWithLinks(filtered, user.id)
+      setTasks(hydrated)
+      dataService.setCachedTasks(hydrated, user.id)
       console.log(`[Focus] ☁️ ${filtered.length} tareas cargadas ${tag} (user=${user.id.slice(0,8)})`)
     } catch (err) {
       console.warn('[Focus] ⚠️ No se pudo cargar tareas de Supabase', err)
@@ -33,7 +45,7 @@ export function useTasks() {
   useEffect(() => {
     if (!user) return
 
-    setTasks(dataService.getCachedTasks([], user.id))
+    setTasks(hydrateTasksWithLinks(dataService.getCachedTasks([], user.id), user.id))
 
     refetch('(init)')
 
@@ -60,11 +72,13 @@ export function useTasks() {
     dataService.setCachedTasks(tasks, user?.id)
   }, [tasks, user?.id])
 
-  function addTask({ label, priority = 'Media', category = 'hoy' }) {
+  function addTask({ label, priority = 'Media', category = 'hoy', linkedEventId = null }) {
     const t = { id: `tsk-${Date.now()}`, label, done: false, priority, category }
-    console.log(`[Focus] ➕ addTask: "${label}"`)
+    if (linkedEventId) t.linkedEventId = linkedEventId
+    console.log(`[Focus] ➕ addTask: "${label}"${linkedEventId ? ` (ligada a ${linkedEventId})` : ''}`)
     setTasks(prev => [...prev, t])
     if (user) dataService.upsertTask(t, user.id).catch(console.warn)
+    if (linkedEventId) setTaskLink(t.id, linkedEventId, user?.id)
     return t
   }
 
@@ -95,6 +109,7 @@ export function useTasks() {
   function deleteTask(id) {
     pendingDeletesRef.current.add(id)
     setTasks(prev => prev.filter(t => t.id !== id))
+    clearTaskLink(id, user?.id)
     if (user) {
       dataService.deleteTask(id, user.id)
         .catch(console.warn)

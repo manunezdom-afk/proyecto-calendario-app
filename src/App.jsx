@@ -115,7 +115,9 @@ export default function App() {
     onAddEvent: addEvent,
     onEditEvent: editEvent,
     onDeleteEvent: deleteEvent,
+    onAddTask: addTask,
     onToggleTask: toggleTask,
+    onDeleteTask: deleteTask,
   }
 
   function handleApproveSuggestion(id) {
@@ -379,7 +381,9 @@ export default function App() {
           onAddEvent={addEvent}
           onEditEvent={editEvent}
           onDeleteEvent={deleteEvent}
+          onAddTask={addTask}
           onToggleTask={toggleTask}
+          onDeleteTask={deleteTask}
           onProposeActions={handleProposeActions}
           onOpenInbox={() => setInboxOpen(true)}
           proposeMode={true}
@@ -450,7 +454,7 @@ export default function App() {
           id="welcome-intro-v1"
           delayMs={1400}
         >
-          Soy Nova. Propongo movimientos en tu día, pero nunca toco tu calendario sin tu aprobación. Pedímelo tocando el orbe.
+          Soy Nova. Propongo movimientos en tu día, pero nunca toco tu calendario sin tu confirmación. Háblame tocando el orbe.
         </NovaHint>
       )}
       {!gatesBlocking && hasNovaEmptyHint && (
@@ -468,7 +472,7 @@ export default function App() {
           actionLabel="Ver bandeja"
           onAction={() => setInboxOpen(true)}
         >
-          Si quieres, reviso tu día y te envío propuestas a la bandeja. Nunca toco nada sin tu aprobación.
+          Si quieres, repaso tu día y dejo propuestas en la bandeja. Nunca toco nada sin tu confirmación.
         </NovaHint>
       )}
 

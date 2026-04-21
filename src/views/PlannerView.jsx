@@ -615,6 +615,29 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       }
     }
 
+    // 3) Attach tasks linked to events (Nova las crea con linkedEventId cuando
+    //    provienen de un evento concreto: subtareas de una reunión, checklist
+    //    antes de una llamada, etc.). Buscamos el bloque cuyo eventId coincida
+    //    y las mostramos como subtareas debajo, para que no queden flotando
+    //    sueltas en la pestaña Tareas sin contexto.
+    if (!showGhosts && Array.isArray(tasks) && tasks.length > 0) {
+      const blocksByEventId = new Map()
+      for (const entry of order) {
+        if (entry?.eventId) blocksByEventId.set(entry.eventId, entry)
+      }
+      for (const t of tasks) {
+        if (!t?.linkedEventId || t.done) continue
+        const parent = blocksByEventId.get(t.linkedEventId)
+        if (!parent) continue
+        pushUniqueSubtask(parent, {
+          id: `tsk-sub-${t.id}`,
+          label: t.priority === 'Alta' ? 'Tarea · prioridad alta' : 'Tarea',
+          text: t.label,
+          taskId: t.id,
+        })
+      }
+    }
+
     return order
   })()
 

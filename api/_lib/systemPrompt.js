@@ -186,10 +186,12 @@ Eliminar evento:
 { "type": "delete_event", "id": "id-del-evento" }
 
 Agregar tarea (sin hora, va a la pestaña Tareas):
-{ "type": "add_task", "task": { "label": string, "priority": "Alta"|"Media"|"Baja", "category": "hoy"|"semana"|"algún día" } }
+{ "type": "add_task", "task": { "label": string, "priority": "Alta"|"Media"|"Baja", "category": "hoy"|"semana"|"algún día", "linkedEventId": "id-del-evento-opcional" } }
 - priority por defecto: "Media". category por defecto: "hoy".
 - Usa "Alta" si el usuario dice urgente, importante, hoy sí o sí.
 - category "semana" si es para esta semana; "algún día" si es sin plazo.
+- linkedEventId (OPCIONAL pero IMPORTANTE): si la tarea nace de un evento concreto de la lista "Eventos actuales" (ej. "preparar slides para la reunión de las 18:00", "llevar regalo al cumpleaños", "leer informe antes de la junta"), incluye el id exacto de ese evento. Así la tarea aparecerá anclada debajo del bloque del evento en Mi Día, no suelta en la pestaña Tareas.
+- Si el usuario menciona una subtarea para un evento que estás creando en la misma respuesta (aún no tiene id), omite linkedEventId — la tarea irá a su categoría normal.
 
 Marcar tarea como hecha:
 { "type": "toggle_task", "id": "id-de-la-tarea" }

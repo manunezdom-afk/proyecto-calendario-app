@@ -6,7 +6,10 @@ const ICON_BY_KIND = {
   add_event: 'add_circle',
   edit_event: 'edit_calendar',
   delete_event: 'delete',
+  add_task: 'check_box',
+  toggle_task: 'task_alt',
   mark_task_done: 'task_alt',
+  delete_task: 'delete',
 }
 
 const DAY_NAMES_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
@@ -95,12 +98,41 @@ export function actionToSuggestion(action, { reason, batchId, events = [], tasks
       }
     }
 
-    case 'mark_task_done': {
+    case 'mark_task_done':
+    case 'toggle_task': {
+      const target = tasks.find((t) => t.id === action.id)
+      return {
+        ...base,
+        kind: 'toggle_task',
+        payload: { id: action.id },
+        previewTitle: `Completar tarea: ${target?.label || '—'}`,
+        previewBody: target?.category === 'hoy' ? 'Hoy' : target?.category || '',
+      }
+    }
+
+    case 'add_task': {
+      const t = action.task || {}
+      const linkedEvent = t.linkedEventId
+        ? events.find(e => e.id === t.linkedEventId)
+        : null
+      const bodyParts = []
+      if (t.priority && t.priority !== 'Media') bodyParts.push(`Prioridad ${t.priority}`)
+      if (t.category) bodyParts.push(`Categoría: ${t.category}`)
+      if (linkedEvent) bodyParts.push(`Ligada a "${linkedEvent.title}"${linkedEvent.time ? ` · ${linkedEvent.time}` : ''}`)
+      return {
+        ...base,
+        payload: { task: t },
+        previewTitle: `Crear tarea: ${t.label || 'pendiente'}`,
+        previewBody: bodyParts.join(' · ') || 'Sin detalles adicionales',
+      }
+    }
+
+    case 'delete_task': {
       const target = tasks.find((t) => t.id === action.id)
       return {
         ...base,
         payload: { id: action.id },
-        previewTitle: `Completar tarea: ${target?.label || '—'}`,
+        previewTitle: `Eliminar tarea: ${target?.label || '—'}`,
         previewBody: target?.category === 'hoy' ? 'Hoy' : target?.category || '',
       }
     }
@@ -114,7 +146,10 @@ export function actionToSuggestion(action, { reason, batchId, events = [], tasks
 export function applySuggestion(suggestion, handlers = {}) {
   if (!suggestion) return
   const { kind, payload = {} } = suggestion
-  const { onAddEvent, onEditEvent, onDeleteEvent, onToggleTask } = handlers
+  const {
+    onAddEvent, onEditEvent, onDeleteEvent,
+    onAddTask, onToggleTask, onDeleteTask,
+  } = handlers
 
   switch (kind) {
     case 'add_event':
@@ -127,7 +162,14 @@ export function applySuggestion(suggestion, handlers = {}) {
       onDeleteEvent?.(payload.id)
       break
     case 'mark_task_done':
+    case 'toggle_task':
       onToggleTask?.(payload.id)
+      break
+    case 'add_task':
+      onAddTask?.(payload.task)
+      break
+    case 'delete_task':
+      onDeleteTask?.(payload.id)
       break
     default:
       break

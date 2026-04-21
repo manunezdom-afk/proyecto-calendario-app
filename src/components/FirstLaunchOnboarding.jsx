@@ -241,7 +241,7 @@ function SlideIllustrationNova() {
         transition={{ delay: 1.3, duration: 0.5 }}
         className="absolute bottom-1 left-0 right-0 text-center text-[10.5px] font-medium uppercase tracking-[0.14em] text-white/40"
       >
-        Nunca mueve nada sin tu aprobación
+        Nunca mueve nada sin tu confirmación
       </motion.div>
     </div>
   )

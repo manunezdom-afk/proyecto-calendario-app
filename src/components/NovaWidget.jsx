@@ -56,6 +56,8 @@ export default function NovaWidget({
   onEditEvent,
   onDeleteEvent,
   onToggleTask,
+  onAddTask,
+  onDeleteTask,
   onProposeActions,   // (actions, {reply}) => void — modo propuesta
   proposeMode = true, // si true, Nova no ejecuta directo; encola sugerencias
   onOpenInbox,
@@ -310,6 +312,9 @@ export default function NovaWidget({
       edit_event:     { icon: 'edit',        label: `Actualizando evento` },
       delete_event:   { icon: 'delete',      label: `Eliminando evento` },
       mark_task_done: { icon: 'task_alt',    label: `Completando tarea` },
+      toggle_task:    { icon: 'task_alt',    label: `Completando tarea` },
+      add_task:       { icon: 'check_box',   label: `Añadiendo tarea "${action.task?.label || ''}"` },
+      delete_task:    { icon: 'delete',      label: `Eliminando tarea` },
     }
 
     const def = chipDefs[action.type]
@@ -321,9 +326,11 @@ export default function NovaWidget({
     if (action.type === 'add_event')      onAddEvent?.(action.event)
     else if (action.type === 'edit_event')   onEditEvent?.(action.id, action.updates ?? {})
     else if (action.type === 'delete_event') onDeleteEvent?.(action.id)
-    else if (action.type === 'mark_task_done') onToggleTask?.(action.id)
+    else if (action.type === 'mark_task_done' || action.type === 'toggle_task') onToggleTask?.(action.id)
+    else if (action.type === 'add_task')     onAddTask?.(action.task)
+    else if (action.type === 'delete_task')  onDeleteTask?.(action.id)
     else if (action.type === 'remember')     addMemory?.(action.memory)
-  }, [onAddEvent, onEditEvent, onDeleteEvent, onToggleTask, addMemory])
+  }, [onAddEvent, onEditEvent, onDeleteEvent, onToggleTask, onAddTask, onDeleteTask, addMemory])
 
   async function handlePhoto(e) {
     const file = e.target.files?.[0]
@@ -480,12 +487,18 @@ export default function NovaWidget({
             edit_event:     `Propuesta: actualizar evento`,
             delete_event:   `Propuesta: eliminar evento`,
             mark_task_done: `Propuesta: completar tarea`,
+            toggle_task:    `Propuesta: completar tarea`,
+            add_task:       `Propuesta: añadir tarea "${action.task?.label || 'pendiente'}"`,
+            delete_task:    `Propuesta: eliminar tarea`,
           }
           const iconMap = {
             add_event: 'add_circle',
             edit_event: 'edit_calendar',
             delete_event: 'delete',
             mark_task_done: 'task_alt',
+            toggle_task: 'task_alt',
+            add_task: 'check_box',
+            delete_task: 'delete',
           }
           return {
             id: `${Date.now()}-${Math.random()}`,

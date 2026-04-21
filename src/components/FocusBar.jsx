@@ -39,6 +39,53 @@ function resolveEventIdFromReply(events, replyText, action) {
   return null
 }
 
+// Texto humano para los chips de acción que muestra FocusBar debajo del reply.
+// Antes se caía al valor crudo (`action.type`) para cualquier tipo no mapeado,
+// y por eso en móvil aparecía "add_task" en vez de "Tarea agregada".
+function describeAction(a) {
+  if (!a?.type) return ''
+  switch (a.type) {
+    case 'add_event':    return `Agregado: ${a.event?.title ?? 'evento'}`
+    case 'edit_event':   return 'Evento actualizado'
+    case 'delete_event': return 'Evento eliminado'
+    case 'add_task':     return `Tarea agregada: ${a.task?.label ?? 'pendiente'}`
+    case 'toggle_task':  return 'Tarea completada'
+    case 'delete_task':  return 'Tarea eliminada'
+    case 'remember':     return 'Memoria guardada'
+    default:             return 'Acción aplicada'
+  }
+}
+
+// Normaliza un título para comparar eventos de forma tolerante (sin acentos,
+// mayúsculas ni espacios extra). Lo usamos para asociar tareas detectadas por
+// Nova al evento al que pertenecen cuando solo vino el título, no el id.
+function normalizeTitleForMatch(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function resolveLinkedEventId(events, task) {
+  if (!task || !Array.isArray(events) || events.length === 0) return null
+  if (task.linkedEventId && events.some(e => e.id === task.linkedEventId)) return task.linkedEventId
+  const wantTitle = normalizeTitleForMatch(task.linkedEventTitle)
+  const wantTime  = String(task.linkedEventTime || '').trim().toLowerCase().replace(/\s+/g, '')
+  if (!wantTitle && !wantTime) return null
+  const byTitleAndTime = events.find(e => {
+    const t = normalizeTitleForMatch(e.title)
+    const h = String(e.time || '').trim().toLowerCase().replace(/\s+/g, '')
+    return wantTitle && wantTime && t === wantTitle && h === wantTime
+  })
+  if (byTitleAndTime) return byTitleAndTime.id
+  const byTime = wantTime ? events.find(e => String(e.time || '').trim().toLowerCase().replace(/\s+/g, '') === wantTime) : null
+  if (byTime) return byTime.id
+  const byTitle = wantTitle ? events.find(e => normalizeTitleForMatch(e.title) === wantTitle) : null
+  return byTitle?.id || null
+}
+
 async function callFocusAssistant({ message, events, tasks, memories, history }) {
   const res = await fetch('/api/focus-assistant', {
     method: 'POST',
@@ -160,7 +207,15 @@ export default function FocusBar({
           if (realId) onDeleteEvent?.(realId)
           else console.warn('[Nova] delete_event con id no encontrado:', action.id)
         } else if (action.type === 'add_task' && action.task) {
-          onAddTask?.(action.task)
+          // Si Nova emitió la tarea ligada a un evento (linkedEventId, o
+          // linkedEventTitle/linkedEventTime como fallback), resolvemos el id
+          // real del evento para que la tarea aparezca como subtarea debajo
+          // del bloque correspondiente en Mi Día.
+          const linkedEventId = resolveLinkedEventId(events, action.task)
+          const taskPayload = linkedEventId
+            ? { ...action.task, linkedEventId }
+            : action.task
+          onAddTask?.(taskPayload)
         } else if (action.type === 'toggle_task' && action.id) {
           const realId = tasks.some(t => t.id === action.id)
             ? action.id
@@ -304,9 +359,7 @@ export default function FocusBar({
                               className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary"
                             >
                               <span className="material-symbols-outlined text-[12px]">check_circle</span>
-                              {a.type === 'add_event'    ? `Agregado: ${a.event?.title ?? ''}` :
-                               a.type === 'edit_event'   ? 'Evento actualizado' :
-                               a.type === 'delete_event' ? 'Evento eliminado' : a.type}
+                              {describeAction(a)}
                             </span>
                           ))}
                         </div>
