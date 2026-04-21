@@ -95,8 +95,12 @@ export function AuthProvider({ children }) {
     setUser(null)
     // Limpiamos cualquier OTP pendiente: si quedó un code en sessionStorage
     // de una sesión anterior, al reabrir el login veríamos el paso 'code'
-    // apuntando a un email que ya no corresponde.
-    try { sessionStorage.removeItem('focus_auth_pending') } catch {}
+    // apuntando a un email que ya no corresponde. Limpiamos también el
+    // cooldown por email para no heredarlo en el próximo login.
+    try {
+      sessionStorage.removeItem('focus_auth_pending')
+      sessionStorage.removeItem('focus_auth_resend_until')
+    } catch {}
   }, [])
 
   return (

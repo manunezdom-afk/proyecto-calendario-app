@@ -2,9 +2,13 @@
 // Nunca mostramos el texto crudo del provider. Matching por substring
 // en message/code porque Supabase no garantiza un esquema de error estable.
 
+// Patrón único para rate-limit — se exporta para que la UI aplique un
+// cooldown largo cuando el backend rechaza por límite de emails.
+const RATE_LIMIT_RE = /rate limit|too many requests|email rate|for security purposes|only request this after/i
+
 const PATTERNS = [
   // Rate limiting
-  { match: /rate limit|too many requests|email rate/i,
+  { match: RATE_LIMIT_RE,
     msg: 'Demasiados intentos. Espera unos minutos antes de pedir otro código.' },
 
   // OTP inválido o expirado
@@ -35,6 +39,24 @@ const PATTERNS = [
   { match: /internal server error|5\d\d|server error/i,
     msg: 'Error del servidor. Prueba de nuevo en un minuto.' },
 ]
+
+export function isRateLimitError(err) {
+  if (!err) return false
+  const raw = String(err?.message || err?.error_description || err || '').trim()
+  if (!raw) return false
+  // Supabase también expone status 429 en `err.status`
+  if (Number(err?.status) === 429) return true
+  return RATE_LIMIT_RE.test(raw)
+}
+
+// Intenta extraer segundos de espera de un error tipo
+// "For security purposes, you can only request this after 47 seconds."
+export function extractRetryAfterSec(err) {
+  const raw = String(err?.message || err?.error_description || err || '')
+  const m = raw.match(/after\s+(\d+)\s*seconds?/i)
+  if (m) return Math.min(3600, Math.max(1, parseInt(m[1], 10)))
+  return null
+}
 
 export function humanizeAuthError(err) {
   if (!err) return 'Algo salió mal. Intenta de nuevo.'

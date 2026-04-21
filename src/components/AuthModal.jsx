@@ -1,11 +1,17 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
-import { humanizeAuthError, isValidEmail } from '../utils/authErrors'
+import { humanizeAuthError, isValidEmail, isRateLimitError, extractRetryAfterSec } from '../utils/authErrors'
 
 const PENDING_KEY = 'focus_auth_pending'
+const COOLDOWN_KEY = 'focus_auth_resend_until'
 const PENDING_TTL_MS = 15 * 60 * 1000 // 15 min — tras eso el OTP ya expiró en Supabase
-const RESEND_COOLDOWN_SEC = 30
+// Supabase por defecto acepta 1 OTP por minuto por email. Alineamos la UI
+// a 60s para que el primer reintento no choque con el rate limit del backend.
+const RESEND_COOLDOWN_SEC = 60
+// Cuando Supabase rechaza por rate-limit, aplicamos un cooldown largo en UI
+// para no seguir martillando el endpoint (cada rechazo puede extender el ban).
+const RATE_LIMIT_COOLDOWN_SEC = 5 * 60
 
 function readPending() {
   try {
@@ -29,6 +35,33 @@ function clearPending() {
   try { sessionStorage.removeItem(PENDING_KEY) } catch {}
 }
 
+// Cooldown con timestamp absoluto: sobrevive a cerrar/reabrir modal y a
+// recargas. Sin esto, los useState del AuthModal persisten aunque el JSX se
+// oculte (el componente raíz nunca se desmonta), y eso hace que el contador
+// quede desalineado con la realidad del backend.
+function readCooldownSec() {
+  try {
+    const raw = sessionStorage.getItem(COOLDOWN_KEY)
+    if (!raw) return 0
+    const until = parseInt(raw, 10)
+    if (!Number.isFinite(until)) return 0
+    const rest = Math.ceil((until - Date.now()) / 1000)
+    if (rest <= 0) {
+      sessionStorage.removeItem(COOLDOWN_KEY)
+      return 0
+    }
+    return rest
+  } catch { return 0 }
+}
+
+function writeCooldownSec(secs) {
+  try { sessionStorage.setItem(COOLDOWN_KEY, String(Date.now() + secs * 1000)) } catch {}
+}
+
+function clearCooldown() {
+  try { sessionStorage.removeItem(COOLDOWN_KEY) } catch {}
+}
+
 function Spinner() {
   return (
     <span
@@ -48,7 +81,13 @@ export default function AuthModal({ isOpen, onClose }) {
   const [step, setStep]         = useState(initialPending ? 'code' : 'email')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
-  const [resendCooldown, setResendCooldown] = useState(0)
+  // Hidratamos desde sessionStorage: el componente AuthModal nunca se
+  // desmonta (AnimatePresence solo oculta el JSX), así que sin esto el
+  // cooldown quedaría en 0 tras cerrar y reabrir aunque el backend siga
+  // rate-limitando.
+  const [resendCooldown, setResendCooldown] = useState(() =>
+    typeof window !== 'undefined' ? readCooldownSec() : 0
+  )
 
   // submitLock evita dobles envíos incluso en el mismo tick (antes de re-render)
   const submitLock = useRef(false)
@@ -81,6 +120,25 @@ export default function AuthModal({ isOpen, onClose }) {
     const id = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000)
     return () => clearInterval(id)
   }, [resendCooldown])
+
+  // Al reabrir el modal, re-hidratamos state desde sessionStorage. Sin esto,
+  // si el usuario cerró el modal hace >15 min (TTL del pending ya caducó),
+  // al reabrir veríamos step='code' con email viejo en memoria apuntando a
+  // un OTP ya expirado — y el botón "Reenviar" pegaría al email equivocado.
+  useEffect(() => {
+    if (!isOpen) return
+    const pending = readPending()
+    if (pending) {
+      setEmail(pending.email)
+      setStep('code')
+    } else {
+      setStep('email')
+      setCode('')
+    }
+    setError(null)
+    setResendCooldown(readCooldownSec())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
 
   // Bloqueo de scroll + Escape + interceptar botón atrás del navegador.
   // El back cierra el modal en vez de salir de la app.
@@ -136,15 +194,32 @@ export default function AuthModal({ isOpen, onClose }) {
       setError('Ingresa un email válido.')
       return
     }
+    // Si hay un cooldown activo (p. ej. el usuario recargó la página tras
+    // pedir un OTP), respetarlo sin pegarle al backend.
+    const pendingCd = readCooldownSec()
+    if (pendingCd > 0) {
+      setStep('code')
+      setResendCooldown(pendingCd)
+      return
+    }
     submitLock.current = true
     setLoading(true)
     setError(null)
     try {
       await signInWithEmail(email)
       writePending(email)
+      writeCooldownSec(RESEND_COOLDOWN_SEC)
       setStep('code')
       setResendCooldown(RESEND_COOLDOWN_SEC)
     } catch (err) {
+      if (isRateLimitError(err)) {
+        const secs = extractRetryAfterSec(err) ?? RATE_LIMIT_COOLDOWN_SEC
+        writeCooldownSec(secs)
+        setResendCooldown(secs)
+        // Si el backend ya emitió un OTP, permitir ir a 'code' y esperar.
+        // Si no hay pending previo, quedarse en 'email' para no confundir.
+        if (readPending()) setStep('code')
+      }
       setError(humanizeAuthError(err))
     } finally {
       setLoading(false)
@@ -181,6 +256,7 @@ export default function AuthModal({ isOpen, onClose }) {
     try {
       await verifyOtp(email, cleanCode)
       clearPending()
+      clearCooldown()
       // handleClose resetea estado local
       handleClose()
     } catch (err) {
@@ -196,7 +272,18 @@ export default function AuthModal({ isOpen, onClose }) {
   }
 
   async function handleResend() {
-    if (submitLock.current || loading || resendCooldown > 0) return
+    if (submitLock.current || loading) return
+    // Sincronizamos con sessionStorage antes de decidir: el state local
+    // puede estar desactualizado si el usuario reabrió el modal.
+    const liveCd = readCooldownSec()
+    if (liveCd > 0) {
+      setResendCooldown(liveCd)
+      return
+    }
+    if (!emailValid) {
+      setError('Ingresa un email válido para reenviar el código.')
+      return
+    }
     submitLock.current = true
     setLoading(true)
     setError(null)
@@ -204,8 +291,14 @@ export default function AuthModal({ isOpen, onClose }) {
     try {
       await signInWithEmail(email)
       writePending(email)
+      writeCooldownSec(RESEND_COOLDOWN_SEC)
       setResendCooldown(RESEND_COOLDOWN_SEC)
     } catch (err) {
+      if (isRateLimitError(err)) {
+        const secs = extractRetryAfterSec(err) ?? RATE_LIMIT_COOLDOWN_SEC
+        writeCooldownSec(secs)
+        setResendCooldown(secs)
+      }
       setError(humanizeAuthError(err))
     } finally {
       setLoading(false)
@@ -215,9 +308,13 @@ export default function AuthModal({ isOpen, onClose }) {
 
   function handleChangeEmail() {
     clearPending()
+    // El cooldown aplica al backend (Supabase) para el email que ya pidió
+    // OTP. Si el usuario cambia a otro email, no tiene sentido arrastrarlo.
+    clearCooldown()
     setStep('email')
     setCode('')
     setError(null)
+    setResendCooldown(0)
   }
 
   function handleEmailChange(value) {
