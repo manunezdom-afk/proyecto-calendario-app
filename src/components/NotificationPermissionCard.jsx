@@ -5,7 +5,7 @@ export default function NotificationPermissionCard({ onAllow, onDismiss }) {
 
   return (
     <div className="mx-6 mt-3 mb-1 p-4 rounded-[20px] bg-primary/5 border border-primary/15 flex items-start gap-4">
-      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-content-center flex-shrink-0 mt-0.5">
+      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
         <span
           className="material-symbols-outlined text-primary text-[22px]"
           style={{ fontVariationSettings: "'FILL' 1" }}
