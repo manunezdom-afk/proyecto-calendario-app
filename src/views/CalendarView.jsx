@@ -6,11 +6,6 @@ import { resolveEventDate } from '../utils/resolveEventDate'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { peakRangeLabel } from '../utils/peakZone'
 
-const AVATAR_1 =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuDfqPz-Xtp1DOlxyZ6qdBoqCnCTvLoTN7uCnDpKv7pQispXp8jMGm8VmAnGlq6fGljfeaM_FGgWpLdB3Ig6ImleJTb6h-TmrJg7wLQJBUNd1LSQiUrTmFaLHcku_b2IBR1b9-gtC7bCqoZTvugBoGNiE9EjBbxP2zP0nkLkJF5KXZxYSvNqigG3jSpyBQawu9fkiHNp1vQfAtrXoJyYILEZm_q5bSNPNATYmsirJUZFcSzFA1bGsAuK0G16fJNQgGEjyI-ErT5OZNRs'
-const AVATAR_2 =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuAGg2kzu3h6K4U-DHUHwAcgSd0y0SQIx6Duljc3apyQXiGDGaDJCJvmLXpH77eOXyP37Jc5UNLSd9hKH2_0BJqXhvtFuctuO1RWkTcExCM32YxUKV29rG8VZAro5LQQwBA75PSIOuScBv5k-ndaqFgJQNTRZRbvVa2ZXHve9TGmRIQetPC53lRJACf2mkMMFoX7yAwVHQpsMXQh-0XpdV1WYDlQF6dKony_nEBC2Jfhnzj8ftnPxl5-e5v_Kgn6dm-qDn9tw02nNGYd'
-
 const DAY_ABBR_ES    = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const MONTH_NAMES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
@@ -100,18 +95,6 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
           <div className="flex items-center gap-1.5">
             <span className="material-symbols-outlined text-[18px] text-outline">schedule</span>
             <span className="text-xs font-semibold text-on-surface">{event.time}</span>
-          </div>
-          <div className="flex -space-x-2">
-            <img
-              alt="Avatar"
-              className="w-6 h-6 rounded-full border-2 border-surface-container-lowest object-cover"
-              src={AVATAR_1}
-            />
-            <img
-              alt="Avatar"
-              className="w-6 h-6 rounded-full border-2 border-surface-container-lowest object-cover"
-              src={AVATAR_2}
-            />
           </div>
         </div>
       )}
