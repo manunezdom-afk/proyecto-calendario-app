@@ -130,9 +130,29 @@ export default function FocusBar({
   const inputRef   = useRef(null)
   const srRef      = useRef(null)
   const silenceRef = useRef(null)
-  const doneRef    = useRef(false)
+  const restartTimerRef = useRef(null)
   const photoInputRef = useRef(null)
   const historyRef = useRef([])
+
+  // Sesión de voz: misma lógica que NovaWidget.
+  //   · sessionActiveRef  — intención del usuario ("sigo queriendo dictar").
+  //     Distingue onend natural del engine (auto-relanzamos) de stop() real.
+  //   · sessionStartRef   — timestamp para cortar sesiones que pasen MAX_SESSION_MS.
+  //   · finalTextRef      — acumulador del texto definitivo entre reinicios
+  //     del engine. Se envía al cerrar la sesión.
+  //   · isRunningRef      — estado real del engine; evita start() duplicados.
+  const sessionActiveRef = useRef(false)
+  const sessionStartRef  = useRef(0)
+  const finalTextRef     = useRef('')
+  const isRunningRef     = useRef(false)
+
+  // Silencio tolerante: 1800ms permite pausas para pensar sin cortar.
+  const SILENCE_MS = 1800
+  const MAX_SESSION_MS = 60_000
+
+  // Ref a la última versión de handleSend: el efecto de SR se monta una sola
+  // vez; sin ref llamaríamos al handleSend con props/estado desactualizados.
+  const handleSendRef = useRef(null)
 
   // Rehidratar historial persistido (compartido con NovaWidget via sessionStorage)
   useEffect(() => {
@@ -149,22 +169,105 @@ export default function FocusBar({
     } catch {}
   }, [])
 
+  // Voz:
+  //   · interimResults=true → texto en vivo en el input y reset de silenceTimer
+  //     sobre cada partial (el timer sólo avanza en silencio real).
+  //   · Silencio de corte 1800ms, no los ~10s del setTimeout anterior. Antes
+  //     enviaba al primer onresult (cortaba a mitad de frase); ahora espera
+  //     silencio real para consolidar la frase completa.
+  //   · continuous=false + auto-relanzar en onend → dictado largo sin que
+  //     iOS/Chrome corten solos tras unos segundos.
+  //   · Tope de 60s como guardia final por sesión.
   useEffect(() => {
     if (!SR) return
     const r = new SR()
     r.lang = 'es-ES'
     r.continuous = false
-    r.interimResults = false
-    r.onstart = () => { doneRef.current = false; setIsListening(true) }
+    r.interimResults = true
+
+    r.onstart = () => { setIsListening(true) }
+
     r.onresult = (e) => {
+      let finalAdd = ''
+      let interim  = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const seg = e.results[i][0].transcript
+        if (e.results[i].isFinal) finalAdd += seg
+        else interim += seg
+      }
+      if (finalAdd) {
+        finalTextRef.current = (finalTextRef.current + ' ' + finalAdd).replace(/\s+/g, ' ').trim()
+      }
+      const preview = (finalTextRef.current + ' ' + interim).replace(/\s+/g, ' ').trim()
+      if (preview) setText(preview)
+
       clearTimeout(silenceRef.current)
-      const t = Array.from(e.results).map((res) => res[0].transcript).join(' ').trim()
-      if (t && !doneRef.current) { doneRef.current = true; handleSend(t) }
+      silenceRef.current = setTimeout(() => {
+        sessionActiveRef.current = false
+        try { r.stop() } catch {}
+      }, SILENCE_MS)
     }
-    r.onerror = () => { clearTimeout(silenceRef.current); setIsListening(false) }
-    r.onend   = () => { clearTimeout(silenceRef.current); setIsListening(false) }
+
+    r.onerror = (ev) => {
+      const recoverable = ev?.error === 'no-speech' || ev?.error === 'aborted'
+      if (recoverable && sessionActiveRef.current &&
+          Date.now() - sessionStartRef.current < MAX_SESSION_MS) {
+        return
+      }
+      sessionActiveRef.current = false
+      isRunningRef.current = false
+      clearTimeout(silenceRef.current)
+      clearTimeout(restartTimerRef.current)
+      setIsListening(false)
+    }
+
+    r.onend = () => {
+      isRunningRef.current = false
+
+      // Si el usuario sigue queriendo dictar y no pasamos del tope, relanzamos.
+      if (sessionActiveRef.current &&
+          Date.now() - sessionStartRef.current < MAX_SESSION_MS) {
+        clearTimeout(restartTimerRef.current)
+        restartTimerRef.current = setTimeout(() => {
+          if (!sessionActiveRef.current) return
+          try {
+            r.start()
+            isRunningRef.current = true
+          } catch {
+            setTimeout(() => {
+              if (!sessionActiveRef.current) return
+              try {
+                r.start()
+                isRunningRef.current = true
+              } catch {
+                sessionActiveRef.current = false
+                clearTimeout(silenceRef.current)
+                setIsListening(false)
+                const txt = finalTextRef.current.trim()
+                finalTextRef.current = ''
+                if (txt) handleSendRef.current?.(txt)
+              }
+            }, 140)
+          }
+        }, 70)
+        return
+      }
+
+      // Fin real de sesión: enviar lo acumulado.
+      clearTimeout(silenceRef.current)
+      clearTimeout(restartTimerRef.current)
+      setIsListening(false)
+      const txt = finalTextRef.current.trim()
+      finalTextRef.current = ''
+      if (txt) handleSend(txt)
+    }
+
     srRef.current = r
-    return () => { clearTimeout(silenceRef.current); try { r.abort() } catch {} }
+    return () => {
+      clearTimeout(silenceRef.current)
+      clearTimeout(restartTimerRef.current)
+      try { r.abort() } catch {}
+    }
   }, [])
 
   async function handleSend(input) {
@@ -174,7 +277,10 @@ export default function FocusBar({
     setText('')
     setIsListening(false)
     setReply(null)
+    // Cerrar sesión de voz si estaba abierta — evita que onend auto-relance.
+    sessionActiveRef.current = false
     clearTimeout(silenceRef.current)
+    clearTimeout(restartTimerRef.current)
     try { srRef.current?.stop() } catch {}
 
     setIsThinking(true)
@@ -304,14 +410,48 @@ export default function FocusBar({
     }
   }
 
+  // Mantener la ref a la última versión de handleSend en cada render.
+  useEffect(() => { handleSendRef.current = handleSend })
+
   function toggleMic() {
     if (isThinking) return
-    if (isListening) { clearTimeout(silenceRef.current); srRef.current?.stop(); return }
-    doneRef.current = false
+    const r = srRef.current
+    if (!r) return
+
+    // Si ya está escuchando, el usuario quiere detener: cerramos sesión.
+    if (isListening || isRunningRef.current) {
+      sessionActiveRef.current = false
+      clearTimeout(silenceRef.current)
+      clearTimeout(restartTimerRef.current)
+      try { r.stop() } catch {}
+      return
+    }
+
+    // Arranque de sesión nueva.
+    finalTextRef.current = ''
     setText('')
     setReply(null)
-    try { srRef.current?.start() } catch {}
-    silenceRef.current = setTimeout(() => srRef.current?.stop(), 10000)
+    sessionActiveRef.current = true
+    sessionStartRef.current = Date.now()
+    try {
+      r.start()
+      isRunningRef.current = true
+    } catch {
+      // InvalidStateError por engine aún liberando lock — abort y reintenta.
+      sessionActiveRef.current = false
+      try { r.abort() } catch {}
+      isRunningRef.current = false
+      setTimeout(() => {
+        try {
+          sessionActiveRef.current = true
+          sessionStartRef.current = Date.now()
+          r.start()
+          isRunningRef.current = true
+        } catch {
+          sessionActiveRef.current = false
+        }
+      }, 120)
+    }
   }
 
   const isActive = isFocused || !!text || isListening
@@ -378,7 +518,13 @@ export default function FocusBar({
           )}
         </AnimatePresence>
 
-        {/* Input bar */}
+        {/* Input bar
+            Layout: [cam] [input..............] [MIC] [send]
+            - Cámara a la izquierda (acción secundaria de media).
+            - Mic separado de la cámara por todo el input: acción primaria de
+              voz en la zona del pulgar, con relleno de color y tamaño superior
+              al resto para ganar jerarquía clara.
+            - Desktop conserva tamaños compactos vía lg:*. */}
         <div
           className={`flex items-center gap-2 rounded-2xl border bg-surface-container-lowest px-2 py-2 transition-all duration-200 ${
             isListening
@@ -388,29 +534,15 @@ export default function FocusBar({
               : 'border-outline/15'
           }`}
         >
-          <motion.button
-            onClick={toggleMic}
-            animate={isListening ? { scale: [1, 1.1, 1] } : { scale: 1 }}
-            transition={{ duration: 0.7, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
-            className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
-              isListening
-                ? 'bg-primary/10 text-primary'
-                : 'bg-surface-container text-outline hover:bg-surface-container-high hover:text-on-surface'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[1.05rem]">
-              {isListening ? 'graphic_eq' : 'mic'}
-            </span>
-          </motion.button>
-
           <button
             onClick={() => photoInputRef.current?.click()}
             disabled={isThinking || isAnalyzingPhoto}
             aria-label="Enviar foto"
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-surface-container text-outline hover:bg-surface-container-high hover:text-on-surface transition-colors disabled:opacity-40"
+            className="flex h-10 w-10 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl bg-surface-container text-outline hover:bg-surface-container-high hover:text-on-surface transition-colors disabled:opacity-40"
+            style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
           >
             <motion.span
-              className="material-symbols-outlined text-[1.05rem]"
+              className="material-symbols-outlined text-[1.2rem] lg:text-[1.05rem]"
               animate={isAnalyzingPhoto ? { rotate: 360 } : { rotate: 0 }}
               transition={isAnalyzingPhoto ? { duration: 1.2, repeat: Infinity, ease: 'linear' } : {}}
             >
@@ -432,10 +564,50 @@ export default function FocusBar({
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && hasText && handleSend()}
-            placeholder={isAnalyzingPhoto ? 'Analizando foto…' : 'Habla con Nova...'}
+            placeholder={isAnalyzingPhoto ? 'Analizando foto…' : isListening ? 'Escuchando…' : 'Habla con Nova...'}
             disabled={isThinking || isAnalyzingPhoto}
-            className="flex-1 bg-transparent text-[14px] text-on-surface outline-none placeholder:text-outline/50 disabled:opacity-50"
+            className="flex-1 min-w-0 bg-transparent text-[14px] text-on-surface outline-none placeholder:text-outline/50 disabled:opacity-50"
           />
+
+          {/* Mic — acción primaria de voz, jerarquía fuerte en mobile. */}
+          <div className="relative flex-shrink-0">
+            {isListening && (
+              <motion.span
+                aria-hidden="true"
+                className="absolute inset-0 rounded-xl bg-red-400/45 lg:hidden"
+                initial={{ scale: 1, opacity: 0.55 }}
+                animate={{ scale: 1.45, opacity: 0 }}
+                transition={{ duration: 1.3, repeat: Infinity, ease: 'easeOut' }}
+                style={{ pointerEvents: 'none' }}
+              />
+            )}
+            <motion.button
+              onClick={toggleMic}
+              aria-label={isListening ? 'Detener dictado' : 'Dictar con voz'}
+              aria-pressed={isListening}
+              animate={isListening ? { scale: [1, 1.12, 1] } : { scale: 1 }}
+              transition={{ duration: 0.9, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
+              className={`relative flex h-12 w-12 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-all ${
+                isListening
+                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/40 ring-4 ring-red-200/70 lg:shadow-none lg:ring-2 lg:ring-red-200 lg:bg-red-50 lg:text-red-500'
+                  : 'text-white shadow-md shadow-blue-500/30 lg:shadow-none lg:text-outline lg:bg-surface-container lg:hover:bg-surface-container-high lg:hover:text-on-surface'
+              }`}
+              style={{
+                touchAction: 'manipulation',
+                WebkitTapHighlightColor: 'transparent',
+                ...(!isListening
+                  ? { background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)' }
+                  : {}),
+              }}
+            >
+              <span
+                className="material-symbols-outlined text-[1.35rem] lg:text-[1.05rem]"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                {isListening ? 'stop' : 'mic'}
+              </span>
+            </motion.button>
+          </div>
 
           <AnimatePresence>
             {isActive && (
@@ -446,13 +618,14 @@ export default function FocusBar({
                 transition={{ duration: 0.15 }}
                 onClick={() => hasText && handleSend()}
                 disabled={isThinking || !hasText}
-                className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
+                className={`flex h-10 w-10 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
                   hasText && !isThinking
-                    ? 'bg-primary text-white'
+                    ? 'bg-slate-900 text-white hover:bg-slate-800'
                     : 'bg-surface-container text-outline/40'
                 }`}
+                style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
               >
-                <span className="material-symbols-outlined text-[1.05rem]">arrow_upward</span>
+                <span className="material-symbols-outlined text-[1.2rem] lg:text-[1.05rem]">arrow_upward</span>
               </motion.button>
             )}
           </AnimatePresence>
@@ -536,29 +709,16 @@ export default function FocusBar({
           transition={{ duration: 0.2 }}
           className="flex items-center gap-2 rounded-2xl border border-white/[0.09] bg-slate-800/80 px-2 py-2 backdrop-blur-2xl"
         >
-          <motion.button
-            onClick={toggleMic}
-            animate={isListening ? { scale: [1, 1.1, 1] } : { scale: 1 }}
-            transition={{ duration: 0.7, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
-            className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
-              isListening
-                ? 'bg-indigo-500/25 text-indigo-300'
-                : 'bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white/60'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[1.05rem]">
-              {isListening ? 'graphic_eq' : 'mic'}
-            </span>
-          </motion.button>
-
+          {/* [cam] [input] [MIC] [send] — mismo orden que el modo inline. */}
           <button
             onClick={() => photoInputRef.current?.click()}
             disabled={isThinking || isAnalyzingPhoto}
             aria-label="Enviar foto"
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white/60 transition-colors disabled:opacity-40"
+            className="flex h-10 w-10 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white/60 transition-colors disabled:opacity-40"
+            style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
           >
             <motion.span
-              className="material-symbols-outlined text-[1.05rem]"
+              className="material-symbols-outlined text-[1.2rem] lg:text-[1.05rem]"
               animate={isAnalyzingPhoto ? { rotate: 360 } : { rotate: 0 }}
               transition={isAnalyzingPhoto ? { duration: 1.2, repeat: Infinity, ease: 'linear' } : {}}
             >
@@ -580,10 +740,49 @@ export default function FocusBar({
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && hasText && handleSend()}
-            placeholder={isAnalyzingPhoto ? 'Analizando foto…' : 'Habla con Nova...'}
+            placeholder={isAnalyzingPhoto ? 'Analizando foto…' : isListening ? 'Escuchando…' : 'Habla con Nova...'}
             disabled={isThinking || isAnalyzingPhoto}
-            className="flex-1 bg-transparent text-[14px] text-white outline-none placeholder:text-white/25 disabled:opacity-50"
+            className="flex-1 min-w-0 bg-transparent text-[14px] text-white outline-none placeholder:text-white/25 disabled:opacity-50"
           />
+
+          <div className="relative flex-shrink-0">
+            {isListening && (
+              <motion.span
+                aria-hidden="true"
+                className="absolute inset-0 rounded-xl bg-red-400/45 lg:hidden"
+                initial={{ scale: 1, opacity: 0.55 }}
+                animate={{ scale: 1.45, opacity: 0 }}
+                transition={{ duration: 1.3, repeat: Infinity, ease: 'easeOut' }}
+                style={{ pointerEvents: 'none' }}
+              />
+            )}
+            <motion.button
+              onClick={toggleMic}
+              aria-label={isListening ? 'Detener dictado' : 'Dictar con voz'}
+              aria-pressed={isListening}
+              animate={isListening ? { scale: [1, 1.12, 1] } : { scale: 1 }}
+              transition={{ duration: 0.9, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
+              className={`relative flex h-12 w-12 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-all ${
+                isListening
+                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/40 ring-4 ring-red-200/70 lg:shadow-none lg:ring-0 lg:bg-indigo-500/25 lg:text-indigo-300'
+                  : 'text-white shadow-md shadow-blue-500/30 lg:shadow-none lg:text-white/40 lg:bg-white/[0.06] lg:hover:bg-white/10 lg:hover:text-white/60'
+              }`}
+              style={{
+                touchAction: 'manipulation',
+                WebkitTapHighlightColor: 'transparent',
+                ...(!isListening
+                  ? { background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)' }
+                  : {}),
+              }}
+            >
+              <span
+                className="material-symbols-outlined text-[1.35rem] lg:text-[1.05rem]"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                {isListening ? 'stop' : 'mic'}
+              </span>
+            </motion.button>
+          </div>
 
           <AnimatePresence>
             {isActive && (
@@ -594,13 +793,14 @@ export default function FocusBar({
                 transition={{ duration: 0.15 }}
                 onClick={() => hasText && handleSend()}
                 disabled={isThinking || !hasText}
-                className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
+                className={`flex h-10 w-10 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors ${
                   hasText && !isThinking
-                    ? 'bg-indigo-500 text-white'
+                    ? 'bg-white text-slate-900 hover:bg-white/90'
                     : 'bg-white/[0.06] text-white/20'
                 }`}
+                style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
               >
-                <span className="material-symbols-outlined text-[1.05rem]">arrow_upward</span>
+                <span className="material-symbols-outlined text-[1.2rem] lg:text-[1.05rem]">arrow_upward</span>
               </motion.button>
             )}
           </AnimatePresence>
