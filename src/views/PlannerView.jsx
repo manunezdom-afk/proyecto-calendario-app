@@ -755,23 +755,27 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
               {/* Contenido dinámico */}
               {activeBlock ? (
-                <div>
-                  <p className="text-xs font-semibold text-outline uppercase tracking-wider mb-1">{activeBlock.time}</p>
-                  <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{activeBlock.title}</p>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{Math.round(minsElapsed)}</span>
-                    <span className="text-sm font-semibold text-outline">min transcurridos</span>
+                <SwipeableCard onDelete={() => { dismissBlock(activeBlock.id); onDeleteEvent?.(activeBlock.id) }}>
+                  <div className="py-1">
+                    <p className="text-xs font-semibold text-outline uppercase tracking-wider mb-1">{activeBlock.time}</p>
+                    <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{activeBlock.title}</p>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{Math.round(minsElapsed)}</span>
+                      <span className="text-sm font-semibold text-outline">min transcurridos</span>
+                    </div>
                   </div>
-                </div>
+                </SwipeableCard>
               ) : nextBlock ? (
-                <div>
-                  <p className="text-xs font-semibold text-outline uppercase tracking-wider mb-1">{nextBlock.time}</p>
-                  <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{nextBlock.title}</p>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{formatMinutes(minsToNext)}</span>
-                    {minsToNext >= 1 && <span className="text-sm font-semibold text-outline">para empezar</span>}
+                <SwipeableCard onDelete={() => { dismissBlock(nextBlock.id); onDeleteEvent?.(nextBlock.id) }}>
+                  <div className="py-1">
+                    <p className="text-xs font-semibold text-outline uppercase tracking-wider mb-1">{nextBlock.time}</p>
+                    <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{nextBlock.title}</p>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{formatMinutes(minsToNext)}</span>
+                      {minsToNext >= 1 && <span className="text-sm font-semibold text-outline">para empezar</span>}
+                    </div>
                   </div>
-                </div>
+                </SwipeableCard>
               ) : (
                 <div className="text-center py-2">
                   <span
