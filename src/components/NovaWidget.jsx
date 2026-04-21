@@ -95,19 +95,38 @@ export default function NovaWidget({
   const photoInputRef = useRef(null)
   // Speech recognition internals (ver useEffect de SR más abajo):
   //   · isRunningRef       — guard real del estado del engine (más fiable que
-  //     el state de React para gatillar start/stop desde el onPointerDown/click)
+  //     el state de React para gatillar start/stop desde el click del botón)
+  //   · sessionActiveRef   — intención del usuario: "sigo queriendo dictar".
+  //     Permite distinguir un onend natural del engine (que auto-relanzamos)
+  //     de un stop() explícito por silencio o por botón (que cierra sesión).
+  //   · sessionStartRef    — timestamp de inicio, usado para cortar sesiones
+  //     que superen MAX_SESSION_MS aunque el engine quiera seguir.
   //   · silenceTimerRef    — timer que cortamos/reprogramamos en cada onresult
-  //     para forzar stop() al primer silencio de ~900ms (mucho más rápido que
-  //     el timeout interno del browser, que en iOS ronda los 2-3s).
+  //     (incluidos interim). Al expirar, cerramos la sesión. Antes era 900ms
+  //     — demasiado agresivo, cortaba mini-pausas para pensar. Ahora 1800ms.
+  //   · restartTimerRef    — delay pequeño tras onend para volver a llamar
+  //     start() sin chocar con InvalidStateError (engine aún liberando locks).
   //   · finalTextRef       — acumulador de resultados finales a lo largo de la
-  //     sesión. Se envía a sendMessage cuando onend dispara.
+  //     sesión. Se envía a sendMessage cuando la sesión se cierra de verdad.
   //   · sendMessageRef     — ref a la última versión de sendMessage, porque el
   //     useEffect del SR corre una sola vez y sendMessage depende de muchas
   //     piezas de estado/props.
   const isRunningRef    = useRef(false)
+  const sessionActiveRef = useRef(false)
+  const sessionStartRef  = useRef(0)
   const silenceTimerRef = useRef(null)
+  const restartTimerRef = useRef(null)
   const finalTextRef    = useRef('')
   const sendMessageRef  = useRef(null)
+
+  // Tolerancia a pausas cortas para pensar (el usuario reportó que 900ms
+  // cortaba demasiado rápido). 1800ms permite una pausa natural sin cortar,
+  // pero sigue cerrando rápido cuando el usuario claramente terminó.
+  const SILENCE_MS = 1800
+  // Tope de sesión de dictado — si el engine del browser deja de funcionar
+  // o el usuario se olvidó el mic abierto, cerramos a los 60s. Suficiente
+  // para dictar un evento o tarea larga sin sentirse atado.
+  const MAX_SESSION_MS = 60_000
 
   const displayedText = useSimulatedStream(reply, isLoading)
 
@@ -172,23 +191,24 @@ export default function NovaWidget({
 
   // Speech recognition
   //
-  // Cambios clave respecto al flujo anterior:
-  //   · interimResults=true  → recibimos resultados parciales mientras el
-  //     usuario habla. Permite dos cosas: (1) mostrar live el texto en el input
-  //     para que se sienta responsivo; (2) implementar nuestro propio silence
-  //     detector que corta en ~900ms en vez de esperar los 2-3s del browser.
-  //   · silence timer       → reiniciado en cada onresult. Al expirar, llamamos
-  //     stop(). En iOS/Safari este es el fix clave a "tarda demasiado en
-  //     detectar que terminé de hablar".
-  //   · onspeechend también fuerza stop() — algunos browsers lo disparan antes
-  //     que el silence timer (mejor aprovecharlo).
-  //   · onend es el punto único donde enviamos el texto final a sendMessage.
-  //     Antes se enviaba en onresult (al ser continuous=false funcionaba, pero
-  //     ahora con interim hay múltiples onresult — consolidamos en onend).
+  // Objetivos de esta versión:
+  //   1. Tolerar mini-pausas: el silencio de corte sube a 1800ms (antes 900ms).
+  //   2. Aguantar dictado largo: si el engine termina por su cuenta (iOS Safari
+  //      corta agresivo tras una frase, Chrome tira 'no-speech' a los ~5s),
+  //      reiniciamos automáticamente mientras la sesión siga activa y no
+  //      superemos MAX_SESSION_MS.
+  //   3. Quitamos onspeechend — disparaba stop() inmediato en cuanto el browser
+  //      detectaba una respiración, cortando al usuario mientras pensaba. El
+  //      único criterio de fin es ahora nuestro silenceTimer basado en onresult.
+  //   4. Único punto de flush a sendMessage: al cerrar sesión de verdad
+  //      (sessionActiveRef=false + onend).
   useEffect(() => {
     if (!SR) return
     const r = new SR()
     r.lang = 'es-ES'
+    // continuous=false es más estable cross-browser (iOS ignora continuous=true
+    // y algunos Android tiran errores raros). Para dictado largo, nosotros
+    // auto-relanzamos en onend si la sesión sigue activa.
     r.continuous = false
     r.interimResults = true
 
@@ -206,29 +226,74 @@ export default function NovaWidget({
       const preview = (finalTextRef.current + ' ' + interim).replace(/\s+/g, ' ').trim()
       if (preview) setInput(preview)
 
-      // Reset silence timer: 900ms sin nuevos resultados → cortamos.
+      // Reset silence timer en cada onresult (incluidos interim → el engine
+      // los emite mientras el usuario habla, así que el timer sólo avanza
+      // cuando hay silencio real).
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
+        // Silencio prolongado → cerramos sesión de verdad.
+        sessionActiveRef.current = false
         try { r.stop() } catch {}
-      }, 900)
+      }, SILENCE_MS)
     }
 
-    // Algunos browsers (Chrome desktop, Safari en ciertas versiones) disparan
-    // onspeechend al instante cuando detectan silencio acústico. Lo usamos
-    // como otra señal para cortar rápido.
-    r.onspeechend = () => {
-      try { r.stop() } catch {}
-    }
-
-    r.onerror = () => {
-      clearTimeout(silenceTimerRef.current)
+    r.onerror = (ev) => {
+      // 'no-speech' y 'aborted' son comunes cuando el engine se auto-cierra
+      // sin haber oído nada. Si la sesión sigue activa y bajo el tope, dejamos
+      // que onend decida si relanzar.
+      const recoverable = ev?.error === 'no-speech' || ev?.error === 'aborted'
+      if (recoverable && sessionActiveRef.current &&
+          Date.now() - sessionStartRef.current < MAX_SESSION_MS) {
+        return
+      }
+      sessionActiveRef.current = false
       isRunningRef.current = false
+      clearTimeout(silenceTimerRef.current)
+      clearTimeout(restartTimerRef.current)
       setIsListening(false)
     }
 
     r.onend = () => {
-      clearTimeout(silenceTimerRef.current)
       isRunningRef.current = false
+
+      // Si el usuario sigue queriendo dictar y no pasamos del tope, relanzamos
+      // el engine. Esto es lo que permite dictado largo sin sentirse atado.
+      // Importante: no tocamos silenceTimerRef aquí — sigue corriendo entre
+      // reinicios para cerrar sesión por silencio total.
+      if (sessionActiveRef.current &&
+          Date.now() - sessionStartRef.current < MAX_SESSION_MS) {
+        clearTimeout(restartTimerRef.current)
+        restartTimerRef.current = setTimeout(() => {
+          if (!sessionActiveRef.current) return
+          try {
+            r.start()
+            isRunningRef.current = true
+          } catch {
+            // start() puede tirar InvalidStateError si el engine aún no
+            // liberó el lock. Un retry más tarde suele bastar.
+            setTimeout(() => {
+              if (!sessionActiveRef.current) return
+              try {
+                r.start()
+                isRunningRef.current = true
+              } catch {
+                sessionActiveRef.current = false
+                clearTimeout(silenceTimerRef.current)
+                setIsListening(false)
+                // Flush lo que haya si el engine no pudo seguir.
+                const text = finalTextRef.current.trim()
+                finalTextRef.current = ''
+                if (text) { setInput(text); sendMessageRef.current?.(text) }
+              }
+            }, 140)
+          }
+        }, 70)
+        return
+      }
+
+      // Fin de sesión real → limpiar y enviar lo acumulado.
+      clearTimeout(silenceTimerRef.current)
+      clearTimeout(restartTimerRef.current)
       setIsListening(false)
       const text = finalTextRef.current.trim()
       finalTextRef.current = ''
@@ -241,6 +306,7 @@ export default function NovaWidget({
     srRef.current = r
     return () => {
       clearTimeout(silenceTimerRef.current)
+      clearTimeout(restartTimerRef.current)
       try { r.abort() } catch {}
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -250,21 +316,25 @@ export default function NovaWidget({
     const r = srRef.current
     if (!r) return
     // Si una sesión anterior quedó a medio cerrar (onend aún no disparó),
-    // start() tira InvalidStateError. Abort() fuerza reset y reintentamos
-    // después de un tick para que el engine libere el lock.
+    // abort() fuerza reset; reintentamos tras un tick para que el engine
+    // libere el lock.
     if (isRunningRef.current) {
+      sessionActiveRef.current = false
       try { r.abort() } catch {}
       isRunningRef.current = false
-      setTimeout(() => startVoice(), 60)
+      setTimeout(() => startVoice(), 80)
       return
     }
     try {
       finalTextRef.current = ''
       setInput('')
+      sessionActiveRef.current = true
+      sessionStartRef.current = Date.now()
       r.start()
       isRunningRef.current = true
       setIsListening(true)
     } catch {
+      sessionActiveRef.current = false
       try { r.abort() } catch {}
       isRunningRef.current = false
       setIsListening(false)
@@ -272,7 +342,10 @@ export default function NovaWidget({
   }
 
   function stopVoice() {
+    // Marcar sesión como cerrada ANTES de stop() — así onend no auto-relanza.
+    sessionActiveRef.current = false
     clearTimeout(silenceTimerRef.current)
+    clearTimeout(restartTimerRef.current)
     try { srRef.current?.stop() } catch {}
     // isListening se limpia en onend para reflejar el estado real del engine
   }
@@ -694,8 +767,16 @@ export default function NovaWidget({
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="border-t border-slate-100 px-3 py-2 flex items-center gap-2 flex-shrink-0">
+      {/* Input
+          Layout mobile:  [cam]  [ input................ ]  [ MIC ]  [send]
+          - Cámara aislada a la izquierda (acción secundaria, media).
+          - Mic separado de la cámara: va al otro lado, pegado al input antes
+            del send, como una acción primaria de entrada.
+          - En mobile el mic pasa a w-12 h-12 (48px) y estilo filled para
+            ganar jerarquía clara sobre cámara y send.
+          Layout desktop: orden similar, pero los tamaños compactos originales.
+      */}
+      <div className={`border-t border-slate-100 px-3 flex items-center flex-shrink-0 ${isDesktop ? 'gap-2 py-2' : 'gap-2 py-2.5'}`}>
         {/* Cámara */}
         <button
           type="button"
@@ -721,38 +802,8 @@ export default function NovaWidget({
           onChange={handlePhoto}
         />
 
-        {/* Mic
-            Antes usaba onPointerDown: inconsistente en iOS (un micro-scroll
-            dispara pointercancel y la orden de start() llega en un estado
-            inestable). Ahora usa onClick igual que la cámara — el browser
-            filtra ruido (touch que se movió = no click) y la interacción se
-            siente idéntica a la de la cámara.
-            Hitbox ampliada a 44×44 en mobile (estándar Apple HIG) + motion.span
-            con pointerEvents:none para que la animación del icono no absorba
-            taps en los bordes. */}
-        <button
-          type="button"
-          onClick={isListening ? stopVoice : startVoice}
-          disabled={isLoading || isAnalyzingPhoto || !SR}
-          className={`flex-shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-all ${isDesktop ? 'w-8 h-8' : 'w-11 h-11'} ${
-            isListening
-              ? 'bg-red-50 text-red-500 ring-2 ring-red-200'
-              : 'text-slate-400 hover:text-blue-500 hover:bg-blue-50 disabled:opacity-30'
-          }`}
-          style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
-          aria-label={isListening ? 'Detener dictado' : 'Dictar con voz'}
-          aria-pressed={isListening}
-        >
-          <motion.span
-            className={`material-symbols-outlined ${isDesktop ? 'text-[17px]' : 'text-[20px]'}`}
-            style={{ pointerEvents: 'none' }}
-            animate={isListening ? { scale: [1, 1.2, 1] } : { scale: 1 }}
-            transition={isListening ? { duration: 0.8, repeat: Infinity } : {}}
-          >
-            {isListening ? 'stop' : 'mic'}
-          </motion.span>
-        </button>
-
+        {/* Input de texto — ahora entre cámara y mic para que el mic quede
+            separado de la cámara (acción primaria en la zona del pulgar). */}
         <input
           ref={inputRef}
           value={input}
@@ -762,12 +813,69 @@ export default function NovaWidget({
           }}
           placeholder={isAnalyzingPhoto ? 'Analizando foto…' : isListening ? 'Escuchando…' : 'Escribe o habla…'}
           disabled={isLoading || isListening || isAnalyzingPhoto}
-          className={`flex-1 bg-transparent outline-none text-slate-700 placeholder:text-slate-300 disabled:opacity-50 ${isDesktop ? 'text-[13px]' : 'text-[15px]'}`}
+          className={`flex-1 min-w-0 bg-transparent outline-none text-slate-700 placeholder:text-slate-300 disabled:opacity-50 ${isDesktop ? 'text-[13px]' : 'text-[15px]'}`}
         />
+
+        {/* Mic — acción primaria de voz.
+            En mobile: 48×48, relleno de color para jerarquía visual fuerte.
+            Idle: gradiente azul→violeta que remite al pill de Nova.
+            Listening: rojo con ring pulsante y scale loop del icono.
+            onClick (no onPointerDown) para que el browser filtre micro-scrolls
+            en iOS; motion.span con pointerEvents:none para que la animación
+            del icono no absorba taps en los bordes. */}
+        <div className={`relative flex-shrink-0 ${isDesktop ? '' : 'ml-0.5'}`}>
+          {/* Anillo pulsante externo mientras escucha — refuerzo visual claro
+              del estado "te estoy oyendo" sin tapar el botón. */}
+          {isListening && !isDesktop && (
+            <motion.span
+              aria-hidden="true"
+              className="absolute inset-0 rounded-full bg-red-400/50"
+              initial={{ scale: 1, opacity: 0.55 }}
+              animate={{ scale: 1.6, opacity: 0 }}
+              transition={{ duration: 1.3, repeat: Infinity, ease: 'easeOut' }}
+              style={{ pointerEvents: 'none' }}
+            />
+          )}
+          <button
+            type="button"
+            onClick={isListening ? stopVoice : startVoice}
+            disabled={isLoading || isAnalyzingPhoto || !SR}
+            className={`relative flex-shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-all ${
+              isDesktop ? 'w-8 h-8' : 'w-12 h-12'
+            } ${
+              isListening
+                ? isDesktop
+                  ? 'bg-red-50 text-red-500 ring-2 ring-red-200'
+                  : 'bg-red-500 text-white shadow-lg shadow-red-500/40 ring-4 ring-red-200/70'
+                : isDesktop
+                  ? 'text-slate-400 hover:text-blue-500 hover:bg-blue-50 disabled:opacity-30'
+                  : 'text-white shadow-md shadow-blue-500/30 disabled:opacity-40'
+            }`}
+            style={{
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent',
+              ...(!isDesktop && !isListening
+                ? { background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)' }
+                : {}),
+            }}
+            aria-label={isListening ? 'Detener dictado' : 'Dictar con voz'}
+            aria-pressed={isListening}
+          >
+            <motion.span
+              className={`material-symbols-outlined ${isDesktop ? 'text-[17px]' : 'text-[22px]'}`}
+              style={{ pointerEvents: 'none', fontVariationSettings: !isDesktop ? "'FILL' 1" : undefined }}
+              animate={isListening ? { scale: [1, 1.18, 1] } : { scale: 1 }}
+              transition={isListening ? { duration: 0.9, repeat: Infinity, ease: 'easeInOut' } : {}}
+            >
+              {isListening ? 'stop' : 'mic'}
+            </motion.span>
+          </button>
+        </div>
+
         <button
           onClick={() => sendMessage()}
           disabled={!input.trim() || isLoading || isAnalyzingPhoto}
-          className={`flex-shrink-0 flex items-center justify-center rounded-full bg-blue-500 text-white hover:bg-blue-600 active:scale-90 transition-all disabled:opacity-25 ${isDesktop ? 'w-7 h-7' : 'w-10 h-10'}`}
+          className={`flex-shrink-0 flex items-center justify-center rounded-full bg-slate-900 text-white hover:bg-slate-800 active:scale-90 transition-all disabled:opacity-25 disabled:bg-slate-300 ${isDesktop ? 'w-7 h-7' : 'w-10 h-10'}`}
           aria-label="Enviar mensaje"
         >
           <span className={`material-symbols-outlined ${isDesktop ? 'text-[14px]' : 'text-[18px]'}`}>arrow_upward</span>
