@@ -208,7 +208,10 @@ export default function SuggestionsInbox({
             className="fixed right-0 top-0 z-[71] flex h-full w-full max-w-md flex-col bg-slate-50 shadow-2xl"
           >
             {/* Header */}
-            <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
+            <header
+              className="flex items-center justify-between border-b border-slate-200 bg-white px-5 pb-4"
+              style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)' }}
+            >
               <div className="flex items-center gap-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-md shadow-blue-200">
                   <span
@@ -231,9 +234,10 @@ export default function SuggestionsInbox({
               </div>
               <button
                 onClick={onClose}
-                className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100"
+                aria-label="Cerrar bandeja"
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 active:scale-95"
               >
-                <span className="material-symbols-outlined text-[19px]">close</span>
+                <span className="material-symbols-outlined text-[22px]">close</span>
               </button>
             </header>
 

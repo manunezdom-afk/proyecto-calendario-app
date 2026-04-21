@@ -47,7 +47,10 @@ export default function NotificationPanel({ isOpen, onClose, notifLog, onMarkAll
         style={{ animation: 'slideInRight 0.28s cubic-bezier(0.34,1.2,0.64,1) both' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-outline-variant/15">
+        <div
+          className="flex items-center justify-between px-6 pb-5 border-b border-outline-variant/15"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.25rem)' }}
+        >
           <div className="flex items-center gap-2">
             <span
               className="material-symbols-outlined text-primary text-[20px]"
@@ -70,9 +73,10 @@ export default function NotificationPanel({ isOpen, onClose, notifLog, onMarkAll
             )}
             <button
               onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-full text-outline hover:bg-surface-container-low transition-colors"
+              aria-label="Cerrar notificaciones"
+              className="w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-full text-outline hover:bg-surface-container-low transition-colors active:scale-95"
             >
-              <span className="material-symbols-outlined text-[20px]">close</span>
+              <span className="material-symbols-outlined text-[22px]">close</span>
             </button>
           </div>
         </div>
