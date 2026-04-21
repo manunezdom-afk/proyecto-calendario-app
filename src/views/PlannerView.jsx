@@ -285,8 +285,12 @@ function LongPressZone({ onLongPress, onClick, className, style, title, children
     timer.current = setTimeout(() => {
       fired.current = true
       timer.current = null
+      // Vibración corta en dispositivos que lo soporten (iOS no lo hace, Android sí)
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(40) } catch {}
+      }
       onLongPress?.()
-    }, 600)
+    }, 550)
   }
 
   function move(e) {
@@ -305,16 +309,26 @@ function LongPressZone({ onLongPress, onClick, className, style, title, children
     }
   }
 
+  // En iOS Safari hay que bloquear el menú contextual nativo que aparece al
+  // mantener apretado; si no, el OS interrumpe nuestro timer con "copiar/pegar".
+  const mergedStyle = {
+    ...style,
+    WebkitTouchCallout: 'none',
+    WebkitUserSelect:   'none',
+    userSelect:         'none',
+  }
+
   return (
     <div
       className={className}
-      style={style}
+      style={mergedStyle}
       title={title}
       onPointerDown={start}
       onPointerMove={move}
       onPointerUp={cancel}
       onPointerLeave={cancel}
       onPointerCancel={cancel}
+      onContextMenu={(e) => e.preventDefault()}
       onClickCapture={handleClickCapture}
       onClick={onClick}
     >
@@ -357,8 +371,9 @@ function SwipeableCard({ onDelete, disabled, children }) {
       </motion.div>
 
       <motion.div
-        style={{ x }}
+        style={{ x, touchAction: 'pan-y' }}
         drag="x"
+        dragDirectionLock
         dragConstraints={{ left: -200, right: 0 }}
         dragElastic={{ left: 0.15, right: 0.05 }}
         dragMomentum={false}
