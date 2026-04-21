@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import QuickAddSheet     from '../components/QuickAddSheet'
 import FocusTimerOverlay from '../components/FocusTimerOverlay'
 import FocusBar          from '../components/FocusBar'
@@ -247,6 +248,55 @@ function buildInsights(events, profile) {
 
   // Devolver los 2 más relevantes (los primeros que se acumularon)
   return insights.slice(0, 2)
+}
+
+// ── Swipe-to-delete card ────────────────────────────────────────────────────
+// Deslizá hacia la izquierda para revelar el basurero y eliminar el evento.
+function SwipeableCard({ onDelete, disabled, children }) {
+  const x = useMotionValue(0)
+  const THRESHOLD = -72
+
+  const trashOpacity = useTransform(x, [0, -40, THRESHOLD], [0, 0.6, 1])
+  const trashScale   = useTransform(x, [0, -40, THRESHOLD], [0.6, 0.8, 1])
+  const bgOpacity    = useTransform(x, [0, THRESHOLD], [0, 1])
+
+  function handleDragEnd(_, info) {
+    if (info.offset.x < THRESHOLD) {
+      animate(x, -400, { duration: 0.25, ease: 'easeIn' }).then(onDelete)
+    } else {
+      animate(x, 0, { type: 'spring', stiffness: 400, damping: 30 })
+    }
+  }
+
+  if (disabled) return <>{children}</>
+
+  return (
+    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px' }}>
+      {/* Fondo rojo con basurero */}
+      <motion.div
+        style={{ opacity: bgOpacity }}
+        className="absolute inset-0 bg-red-500 rounded-xl flex items-center justify-end pr-5"
+      >
+        <motion.span
+          style={{ scale: trashScale, opacity: trashOpacity, fontVariationSettings: "'FILL' 1" }}
+          className="material-symbols-outlined text-white text-[26px]"
+        >
+          delete
+        </motion.span>
+      </motion.div>
+
+      <motion.div
+        style={{ x }}
+        drag="x"
+        dragConstraints={{ left: -200, right: 0 }}
+        dragElastic={{ left: 0.15, right: 0.05 }}
+        dragMomentum={false}
+        onDragEnd={handleDragEnd}
+      >
+        {children}
+      </motion.div>
+    </div>
+  )
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────
@@ -559,7 +609,14 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     {/* Columna de tarjeta */}
                     <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingBottom: '32px' }}>
                       <div className={`absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : 'bg-primary'}`}
-                        style={{ left: '-21px' }} />
+                        style={{ left: '-21px', zIndex: 1 }} />
+                      <SwipeableCard
+                        onDelete={!isSuggestion && !_asReminderOnly ? () => {
+                          dismissBlock(id)
+                          onDeleteEvent?.(id)
+                        } : undefined}
+                        disabled={isSuggestion || _asReminderOnly}
+                      >
                       <div
                         className={`rounded-xl ${
                           isSuggestion
@@ -636,6 +693,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                           </p>
                         )}
                       </div>
+                      </SwipeableCard>
                     </div>
                   </div>
                 )
