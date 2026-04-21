@@ -399,6 +399,14 @@ export default function App() {
       </AnimatePresence>
 
       {/* ── Nova hints contextuales (reemplazan el tour modal) ─────────────── */}
+      {!showWelcome && activeView === 'planner' && (
+        <NovaHint
+          id="welcome-intro-v1"
+          delayMs={1400}
+        >
+          Soy Nova. Propongo movimientos en tu día, pero nunca toco tu calendario sin tu aprobación. Pedímelo tocando el orbe.
+        </NovaHint>
+      )}
       {!showWelcome && hasNovaEmptyHint && (
         <NovaHint
           id="empty-day-v1"
