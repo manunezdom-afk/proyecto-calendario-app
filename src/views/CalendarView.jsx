@@ -226,8 +226,11 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
       <main className={isDesktop ? "max-w-4xl mx-auto px-6 pt-4 space-y-6" : "max-w-md mx-auto px-4 pt-4 space-y-8"}>
 
         {/* ── Header & View Switcher (always visible) ─────────────────── */}
+        {/* En mobile el título va arriba y los controles van en una segunda
+            fila — así el toggle "Mes/Semana" y el botón de exportar nunca
+            quedan al límite en 360–391 px. En desktop, layout horizontal. */}
         <header>
-          <div className="flex justify-between items-end">
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-end sm:gap-2">
             <div>
               <p className="text-sm font-semibold text-primary mb-1">
                 {currentMonthLabel}
@@ -241,8 +244,9 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
               {onExportClick && (
                 <button
                   onClick={onExportClick}
+                  aria-label="Exportar calendario"
                   title="Exportar calendario"
-                  className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-container-low text-outline hover:text-primary hover:bg-primary/10 transition-colors active:scale-90"
+                  className="w-11 h-11 flex items-center justify-center rounded-full bg-surface-container-low text-outline hover:text-primary hover:bg-primary/10 transition-colors active:scale-90"
                 >
                   <span className="material-symbols-outlined text-[20px]">ios_share</span>
                 </button>
@@ -253,7 +257,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                   <button
                     key={v}
                     onClick={() => setCalView(v)}
-                    className={`px-4 py-1.5 text-xs font-bold rounded-lg capitalize transition-all ${
+                    className={`px-4 py-2 text-xs font-bold rounded-lg capitalize transition-all min-h-[36px] ${
                       calView === v
                         ? 'bg-surface-container-lowest shadow-sm text-on-surface'
                         : 'text-outline'
@@ -439,14 +443,17 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
             </>)}
 
             {/* FAB — oculto en desktop y en empty state mobile.
-                bottom dinámico: nunca pisa el bottom nav ni el safe-area. */}
+                En mobile vive APILADO ENCIMA de la pastilla de Nova (que está
+                en safe-bottom + 116px y ~44px de alto). Así nunca se tapan
+                entre sí: pill abajo, FAB justo arriba, mismo borde derecho. */}
             {!isDesktop && focusEvents.length > 0 && (
             <div
-              className="fixed right-6 z-[60]"
-              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 116px)' }}
+              className="fixed right-4 z-[60]"
+              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 172px)' }}
             >
               <button
                 onClick={() => setShowModal(true)}
+                aria-label="Añadir evento"
                 className="w-14 h-14 rounded-2xl bg-primary text-white shadow-2xl flex items-center justify-center active:scale-90 transition-transform duration-300"
                 title="Añadir evento"
               >
