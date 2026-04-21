@@ -152,10 +152,19 @@ export default function AuthModal({ isOpen, onClose }) {
     }
   }
 
-  async function handleVerify(e) {
-    e?.preventDefault?.()
+  async function handleVerify(eOrCode) {
+    // Puede invocarse desde el submit del form (event) o desde el auto-submit
+    // pasando el código directo (evita leer `code` de una closure vieja mientras
+    // setState todavía no aplicó).
+    let codeToVerify
+    if (typeof eOrCode === 'string') {
+      codeToVerify = eOrCode
+    } else {
+      eOrCode?.preventDefault?.()
+      codeToVerify = code
+    }
     if (submitLock.current || loading) return
-    if (!codeValid) {
+    if (!/^\d{6}$/.test(codeToVerify)) {
       setError('El código debe tener 6 dígitos.')
       return
     }
@@ -163,7 +172,7 @@ export default function AuthModal({ isOpen, onClose }) {
     setLoading(true)
     setError(null)
     try {
-      await verifyOtp(email, code)
+      await verifyOtp(email, codeToVerify)
       clearPending()
       // handleClose resetea estado local
       handleClose()
@@ -217,7 +226,9 @@ export default function AuthModal({ isOpen, onClose }) {
     // Evita el tap extra en mobile y cumple con la expectativa del input
     // autoComplete="one-time-code" en iOS.
     if (digits.length === 6 && !submitLock.current && !loading) {
-      setTimeout(() => handleVerify(), 0)
+      // Pasamos los dígitos directo: el setCode de arriba todavía no aplicó,
+      // así que `code` del estado sigue desactualizado cuando corre el timeout.
+      setTimeout(() => handleVerify(digits), 0)
     }
   }
 
