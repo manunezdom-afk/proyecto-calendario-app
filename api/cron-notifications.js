@@ -18,7 +18,12 @@ import webpush from 'web-push'
 import { getSupabaseAdmin } from './_supabaseAdmin.js'
 
 const OFFSETS = [10, 30, 60] // minutos antes del evento
-const WINDOW_MIN = 2.5 // tolerancia: ±2.5 min alrededor del objetivo
+// Hasta cuántos minutos TARDE puede dispararse un recordatorio después de su
+// momento ideal. Antes era ±2.5 min, pero el scheduler (GitHub Actions schedule
+// o Vercel Hobby) puede atrasarse hasta varias horas, así que una ventana tan
+// angosta hacía que ninguna push saliera nunca. Con estos valores toleramos
+// atraso razonable sin convertir un "en 60 min" en algo absurdo.
+const MAX_LATE_BY_OFFSET = { 10: 8, 30: 15, 60: 25 } // minutos
 
 function configureWebPush() {
   const pub = process.env.VAPID_PUBLIC_KEY
@@ -167,9 +172,12 @@ export default async function handler(req, res) {
     checked++
 
     for (const offset of OFFSETS) {
-      // ¿El evento está en la ventana [offset - WINDOW, offset + WINDOW]?
-      const delta = Math.abs(minsLeft - offset)
-      if (delta > WINDOW_MIN) continue
+      // Queremos disparar entre [offset - MAX_LATE, offset]. Si minsLeft > offset
+      // todavía no es momento; si es menor que offset - MAX_LATE ya es tarde
+      // (mandar "en 60 min" cuando el evento es en 20 confunde).
+      const maxLate = MAX_LATE_BY_OFFSET[offset] ?? 10
+      if (minsLeft > offset) continue
+      if (minsLeft < offset - maxLate) continue
 
       // ¿Ya se envió esta combinación?
       const { data: sentRow } = await admin
@@ -187,9 +195,10 @@ export default async function handler(req, res) {
         continue
       }
 
-      // Build payload
+      // Usamos el tiempo real restante para el título (tolera atraso del cron)
+      const actualMins = Math.max(1, Math.round(minsLeft))
       const payload = {
-        title: `En ${offset} min: ${ev.title}`,
+        title: `En ${actualMins} min: ${ev.title}`,
         body: `${ev.time}${ev.section ? ` · ${ev.section}` : ''}`,
         url: '/',
         tag: `reminder-${ev.id}-${offset}`,

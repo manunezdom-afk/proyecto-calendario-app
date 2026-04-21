@@ -18,8 +18,10 @@ export default async function handler(req, res) {
   // endurecer en el futuro.
   const body = req.body || {}
   const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : ''
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-  if (!eventId || !UUID_RE.test(eventId)) {
+  // events.id es TEXT (formato "evt-<timestamp>" o similar), no UUID.
+  // Validamos shape seguro contra inyección sin exigir UUID.
+  const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+  if (!eventId || !ID_RE.test(eventId)) {
     return res.status(400).json({ error: 'missing_eventId' })
   }
 
