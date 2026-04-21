@@ -22,6 +22,7 @@ import WelcomeScreen, { useWelcomeGate } from './components/WelcomeScreen'
 import InstallAppCard              from './components/InstallAppCard'
 import AuroraBackground            from './components/AuroraBackground'
 import NovaHint                    from './components/NovaHint'
+import FirstLaunchOnboarding, { useOnboardingGate } from './components/FirstLaunchOnboarding'
 import { useFirstRunSequence }     from './hooks/useFirstRunSequence'
 
 import CalendarView    from './views/CalendarView'
@@ -43,7 +44,12 @@ const pageVariants = {
 export default function App() {
   const { authModal, setAuthModal, user } = useAuth()
   const { profile }                 = useUserProfile()
-  const { show: showWelcome, dismiss: dismissWelcome } = useWelcomeGate()
+  const { show: showOnboarding, complete: completeOnboarding } = useOnboardingGate()
+  // El welcome es la "threshold scene" que saluda una vez por día. Si el
+  // onboarding va a mostrarse, suprimimos el welcome: no queremos encadenar
+  // dos pantallas oscuras en el primer uso.
+  const { show: showWelcomeRaw, dismiss: dismissWelcome } = useWelcomeGate()
+  const showWelcome = showWelcomeRaw && !showOnboarding
 
   // Si el usuario recargó con un OTP pendiente (sessionStorage), reabrimos
   // el modal en cuanto la bienvenida termina — evita que el flujo se pierda.
@@ -142,7 +148,8 @@ export default function App() {
     permissionState === 'default' &&
     !permissionDismissed &&
     (events?.length ?? 0) > 0 &&
-    !showWelcome
+    !showWelcome &&
+    !showOnboarding
 
   const [notifPanelOpen,      setNotifPanelOpen]      = useState(false)
   const [importExportOpen,    setImportExportOpen]    = useState(false)
@@ -154,6 +161,9 @@ export default function App() {
   const [showEveningShutdown, setShowEveningShutdown] = useState(false)
 
   useEffect(() => {
+    // No apilamos el brief arriba del onboarding — sería demasiado en el
+    // primer uso. El brief empieza a aparecer desde el día siguiente.
+    if (showOnboarding) return
     const today = new Date().toISOString().slice(0, 10)
     const last  = localStorage.getItem(LAST_OPENED_KEY)
     const hour  = new Date().getHours()
@@ -165,7 +175,7 @@ export default function App() {
       localStorage.setItem(LAST_OPENED_KEY, today)
       return () => clearTimeout(timer)
     }
-  }, [])
+  }, [showOnboarding])
 
   // ── Navigation ────────────────────────────────────────────────────────────
   function navigate(view) {
@@ -198,7 +208,10 @@ export default function App() {
   const navView  = isSubView ? (previousView || 'settings') : activeView
 
   const firstRun = useFirstRunSequence()
-  const showInstallCard = firstRun.step === 'install' && !showWelcome
+  // Todos los flotantes (hints, install card, brief) esperan a que tanto el
+  // onboarding como el welcome terminen. Así la primera impresión no satura.
+  const gatesBlocking = showWelcome || showOnboarding
+  const showInstallCard = firstRun.step === 'install' && !gatesBlocking
   const hasNovaConflictHint = (events?.length ?? 0) >= 2
   const hasNovaEmptyHint = (events?.length ?? 0) === 0 && activeView === 'planner'
 
@@ -213,7 +226,7 @@ export default function App() {
     onToggleTask:      toggleTask,
     onDeleteTask:      deleteTask,
     onEveningShutdown: () => setShowEveningShutdown(true),
-    morningBrief: (showMorningBrief && !showWelcome) ? {
+    morningBrief: (showMorningBrief && !showWelcome && !showOnboarding) ? {
       events,
       tasks,
       profile,
@@ -386,7 +399,7 @@ export default function App() {
 
       {/* ── Morning Brief (solo modal en mobile; desktop: inline en PlannerView) */}
       <AnimatePresence>
-        {showMorningBrief && !isDesktop && !showWelcome && (
+        {showMorningBrief && !isDesktop && !showWelcome && !showOnboarding && (
           <MorningBrief
             events={events}
             tasks={tasks}
@@ -402,9 +415,29 @@ export default function App() {
       <AnimatePresence>
         {showWelcome && (
           <WelcomeScreen
-            onEnter={dismissWelcome}
+            onEnter={() => {
+              dismissWelcome()
+              // Al terminar la threshold dark, liberamos el dark-boot para
+              // que la app (bg surface) se pinte en una sola transición.
+              try { document.documentElement.classList.remove('focus-dark-boot') } catch {}
+            }}
             hasEvents={(events?.length ?? 0) > 0}
             hasFirstTime={(events?.length ?? 0) === 0 && (tasks?.length ?? 0) === 0}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── First-launch onboarding — tutorial animado de primer uso ───────── */}
+      <AnimatePresence>
+        {showOnboarding && (
+          <FirstLaunchOnboarding
+            onDone={() => {
+              // Cierre atómico: el hook ya persiste "completado" y marca el
+              // welcome del día. Además descartamos el welcome en memoria
+              // para que no aparezca detrás del onboarding.
+              completeOnboarding()
+              dismissWelcome()
+            }}
           />
         )}
       </AnimatePresence>
@@ -412,7 +445,7 @@ export default function App() {
       {/* ── Nova hints contextuales (reemplazan el tour modal) ─────────────── */}
       {/* Regla: una sola burbuja a la vez. Si el día está vacío, mostramos
           el hint accionable (empty-day). Si no, el intro genérico. */}
-      {!showWelcome && activeView === 'planner' && !hasNovaEmptyHint && (
+      {!gatesBlocking && activeView === 'planner' && !hasNovaEmptyHint && (
         <NovaHint
           id="welcome-intro-v1"
           delayMs={1400}
@@ -420,7 +453,7 @@ export default function App() {
           Soy Nova. Propongo movimientos en tu día, pero nunca toco tu calendario sin tu aprobación. Pedímelo tocando el orbe.
         </NovaHint>
       )}
-      {!showWelcome && hasNovaEmptyHint && (
+      {!gatesBlocking && hasNovaEmptyHint && (
         <NovaHint
           id="empty-day-v1"
           delayMs={1400}
@@ -428,7 +461,7 @@ export default function App() {
           Tu día está en blanco. Puedo proponer un bloque de foco de 25 min cuando quieras — solo pedímelo.
         </NovaHint>
       )}
-      {!showWelcome && !hasNovaEmptyHint && hasNovaConflictHint && (
+      {!gatesBlocking && !hasNovaEmptyHint && hasNovaConflictHint && (
         <NovaHint
           id="inbox-hint-v1"
           delayMs={4200}
@@ -440,7 +473,7 @@ export default function App() {
       )}
 
       {/* ── Permiso de notificaciones — contextual, tras crear un evento ── */}
-      {contextualPermission && (
+      {contextualPermission && !showOnboarding && (
         <NovaHint
           id="notif-permission-v1"
           delayMs={1500}

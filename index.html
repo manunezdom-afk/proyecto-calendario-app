@@ -81,6 +81,15 @@
          landing dark y el threshold scene dark. Se remueve al terminar. */
       html.focus-continuity, html.focus-continuity body { background: #0a0a0f !important; }
 
+      /* Dark boot: cuando arranca la app y todavía va a renderizar un frame
+         oscuro encima (onboarding o welcome), mantenemos html/body negros
+         hasta que la experiencia inicial termine. Evita el flash blanco de
+         1 frame que ocurre entre el unmount del splash inline y el mount
+         de React. La clase se añade al vuelo desde el <script> de abajo
+         (antes de que React corra) y se remueve desde JS cuando la
+         experiencia de bienvenida/onboarding dispara su exit. */
+      html.focus-dark-boot, html.focus-dark-boot body { background: #0a0a0f !important; }
+
       /* ── Instant boot splash ───────────────────────────────────────────────
          HTML+CSS puros dentro de #root. Pinta al instante con el primer parseo
          del HTML, sin depender del bundle JS ni de fuentes externas. Cuando
@@ -116,17 +125,45 @@
         box-shadow: 0 0 40px rgba(124,107,255,0.35);
         animation: focusSplashBreath 2.4s ease-in-out infinite;
       }
-      #focus-splash .word {
-        opacity: 0.55;
-        font-size: 13px;
-        letter-spacing: 0.06em;
+      #focus-splash .wordmark {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: rgba(255,255,255,0.92);
+        margin-bottom: 6px;
       }
+      #focus-splash .tagline {
+        opacity: 0.5;
+        font-size: 12.5px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: rgba(255,255,255,0.7);
+      }
+      #focus-splash .dot {
+        margin-top: 26px;
+        display: inline-flex;
+        gap: 6px;
+      }
+      #focus-splash .dot span {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: rgba(124,107,255,0.65);
+        animation: focusSplashDot 1.2s ease-in-out infinite;
+      }
+      #focus-splash .dot span:nth-child(2) { animation-delay: 0.15s; }
+      #focus-splash .dot span:nth-child(3) { animation-delay: 0.3s; }
       @keyframes focusSplashBreath {
         0%, 100% { transform: scale(1);     opacity: 0.78; }
         50%      { transform: scale(1.055); opacity: 1; }
       }
+      @keyframes focusSplashDot {
+        0%, 100% { opacity: 0.25; transform: translateY(0); }
+        50%      { opacity: 1;    transform: translateY(-2px); }
+      }
       @media (prefers-reduced-motion: reduce) {
-        #focus-splash .orb { animation: none; }
+        #focus-splash .orb,
+        #focus-splash .dot span { animation: none; }
       }
     </style>
 
@@ -144,11 +181,30 @@
         }
         try {
           var raw = sessionStorage.getItem('focus_aurora_continuity');
-          if (!raw) return;
-          var data = JSON.parse(raw);
-          if (!data || !data.t || Date.now() - data.t > 4000) return;
-          document.documentElement.classList.add('focus-continuity');
+          if (raw) {
+            var data = JSON.parse(raw);
+            if (data && data.t && Date.now() - data.t <= 4000) {
+              document.documentElement.classList.add('focus-continuity');
+            }
+          }
         } catch (_) {}
+
+        // Dark boot guard: si vamos a mostrar onboarding o welcome, mantenemos
+        // el body oscuro desde el primer parseo del HTML. Evita el flash blanco
+        // entre el splash inline y el primer render de React. Se remueve cuando
+        // la experiencia oscura dispara su exit (ver App.jsx / FirstLaunchOnboarding).
+        try {
+          var onboardingDone = localStorage.getItem('focus_onboarding_completed_v1') === '1';
+          var today = new Date().toISOString().slice(0, 10);
+          var lastWelcome = localStorage.getItem('focus_welcome_last');
+          var welcomePending = lastWelcome !== today;
+          if (!onboardingDone || welcomePending) {
+            document.documentElement.classList.add('focus-dark-boot');
+          }
+        } catch (_) {
+          // sin storage asumimos primer boot: dark es el default más seguro
+          document.documentElement.classList.add('focus-dark-boot');
+        }
       })();
     </script>
   </head>
@@ -157,7 +213,9 @@
       <!-- Splash inline: se pinta al instante y React lo reemplaza al montar. -->
       <div id="focus-splash" aria-hidden="true">
         <div class="orb"></div>
-        <div class="word">focus</div>
+        <div class="wordmark">Focus</div>
+        <div class="tagline">tu día, con Nova</div>
+        <div class="dot"><span></span><span></span><span></span></div>
       </div>
     </div>
     <script type="module" src="/src/main.jsx"></script>

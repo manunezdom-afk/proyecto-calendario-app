@@ -43,8 +43,14 @@ export default function WelcomeScreen({ onEnter, hasEvents = false, hasFirstTime
 
   useEffect(() => {
     if (phase !== 'out') return
+    // Arranca el fade oscuro→claro: removemos los flags que fuerzan bg negro
+    // al inicio del exit para que el body pinte el color claro de la app
+    // mientras el overlay se transparenta. Transición continua, sin corte.
+    try {
+      document.documentElement.classList.remove('focus-continuity')
+      document.documentElement.classList.remove('focus-dark-boot')
+    } catch {}
     const id = setTimeout(() => {
-      try { document.documentElement.classList.remove('focus-continuity') } catch {}
       onEnter?.()
     }, 280)
     return () => clearTimeout(id)
