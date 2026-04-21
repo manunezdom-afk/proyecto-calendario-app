@@ -65,7 +65,7 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
 
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-44 dark:bg-slate-900 dark:text-slate-100">
-      <main className="max-w-md lg:max-w-[1200px] mx-auto px-6 lg:px-10 pt-6 lg:pt-10 space-y-8">
+      <main className="max-w-md lg:max-w-[1200px] mx-auto px-4 lg:px-10 pt-6 lg:pt-10 space-y-8">
 
         {/* ── Header + Progress + Weekly Stats (grid en desktop) ─────────── */}
         <header className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[1fr_1fr_1fr] lg:gap-5 lg:items-stretch">

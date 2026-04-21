@@ -49,19 +49,19 @@ export default function WeeklyStatsCard({ tasks }) {
         </h3>
       </div>
 
-      {/* Stats row */}
+      {/* Stats row — labels breves para que nunca se corten en pantallas angostas */}
       <div className="flex gap-2">
-        <div className="flex-1 min-w-0 bg-white/60 dark:bg-slate-800/60 rounded-2xl p-3 text-center">
+        <div className="flex-1 min-w-0 bg-white/60 dark:bg-slate-800/60 rounded-2xl p-2.5 text-center">
           <p className="text-xl font-black text-primary tabular-nums leading-none">{totalDone}</p>
-          <p className="text-[10px] font-bold text-outline mt-1 leading-tight truncate">completadas</p>
+          <p className="text-[10px] font-bold text-outline mt-1 leading-tight">Hechas</p>
         </div>
-        <div className="flex-1 min-w-0 bg-white/60 dark:bg-slate-800/60 rounded-2xl p-3 text-center">
+        <div className="flex-1 min-w-0 bg-white/60 dark:bg-slate-800/60 rounded-2xl p-2.5 text-center">
           <p className="text-xl font-black text-secondary tabular-nums leading-none">{pct}%</p>
-          <p className="text-[10px] font-bold text-outline mt-1 leading-tight truncate">progreso</p>
+          <p className="text-[10px] font-bold text-outline mt-1 leading-tight">Progreso</p>
         </div>
-        <div className="flex-1 min-w-0 bg-white/60 dark:bg-slate-800/60 rounded-2xl p-3 text-center">
+        <div className="flex-1 min-w-0 bg-white/60 dark:bg-slate-800/60 rounded-2xl p-2.5 text-center">
           <p className="text-xl font-black text-amber-500 tabular-nums leading-none">{activeDays}</p>
-          <p className="text-[10px] font-bold text-outline mt-1 leading-tight truncate">días activos</p>
+          <p className="text-[10px] font-bold text-outline mt-1 leading-tight">Días activos</p>
         </div>
       </div>
 

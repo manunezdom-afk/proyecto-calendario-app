@@ -637,7 +637,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
           El sistema de user_signals aprende el cronotipo solo, sin preguntar. */}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8">
-        <div className={isDesktop ? "flex flex-col gap-6" : "flex flex-col md:flex-row gap-12"}>
+        <div className={isDesktop ? "flex flex-col gap-6" : "flex flex-col gap-10"}>
 
           {/* ── Left: Timeline ────────────────────────────────────────────── */}
           <div className="flex-1">
@@ -887,7 +887,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
           </div>
 
           {/* ── Right: Insights personalizados ────────────────────────────── */}
-          <div className={isDesktop ? "w-full space-y-5" : "w-full md:w-80 space-y-5"}>
+          <div className="w-full space-y-5">
 
             {/* ── Card 1: Próximo Bloque ────────────────────────────────── */}
             {blocks.length > 0 && (

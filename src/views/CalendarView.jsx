@@ -223,7 +223,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
   return (
     <div className="bg-surface text-on-surface min-h-screen pb-44">
 
-      <main className={isDesktop ? "max-w-4xl mx-auto px-6 pt-4 space-y-6" : "max-w-md mx-auto px-6 pt-4 space-y-8"}>
+      <main className={isDesktop ? "max-w-4xl mx-auto px-6 pt-4 space-y-6" : "max-w-md mx-auto px-4 pt-4 space-y-8"}>
 
         {/* ── Header & View Switcher (always visible) ─────────────────── */}
         <header>

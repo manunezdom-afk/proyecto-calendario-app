@@ -13,7 +13,7 @@ export default function TopAppBar({
 
   return (
     <nav
-      className="sticky top-0 z-50 bg-slate-50/70 dark:bg-slate-900/70 backdrop-blur-lg flex justify-between items-center w-full px-6 pb-4"
+      className="sticky top-0 z-50 bg-slate-50/70 dark:bg-slate-900/70 backdrop-blur-lg flex justify-between items-center w-full px-4 lg:px-6 pb-4"
       style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)' }}
     >
       {/* Left: back button OR logo */}

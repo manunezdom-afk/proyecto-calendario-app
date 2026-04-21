@@ -426,11 +426,15 @@ export default function NovaWidget({
     }
   }
 
-  // Posición según viewport
-  const position = isDesktop ? 'fixed bottom-6 right-6' : 'fixed bottom-[148px] right-4'
+  // Posición según viewport. En mobile, bottom dinámico con safe-area
+  // para no chocar con el bottom nav en iOS (home indicator).
+  const positionClass = isDesktop ? 'fixed bottom-6 right-6' : 'fixed right-4'
+  const positionStyle = isDesktop
+    ? undefined
+    : { bottom: 'calc(env(safe-area-inset-bottom, 0px) + 116px)' }
 
   return (
-    <div className={`${position} z-[60]`}>
+    <div className={`${positionClass} z-[60]`} style={positionStyle}>
       <AnimatePresence mode="wait">
         {isOpen ? (
           // ── Panel expandido ───────────────────────────────────────────────
