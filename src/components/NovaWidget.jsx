@@ -72,12 +72,24 @@ export default function NovaWidget({
   const [location, setLocation]     = useState(null)
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false)
   const [photoPreview, setPhotoPreview]         = useState(null)
+  const [chatHistory, setChatHistory] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem('nova_history')
+      if (raw) {
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr)) return arr.filter(
+          h => h && typeof h === 'object' && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string'
+        )
+      }
+    } catch {}
+    return []
+  })
 
   const inputRef    = useRef(null)
   const srRef       = useRef(null)
   const pressTimer  = useRef(null)
   const historyRef  = useRef([])
-  const responseRef = useRef(null)  // scroll anchor
+  const chatEndRef  = useRef(null)
   const photoInputRef = useRef(null)
 
   const displayedText = useSimulatedStream(reply, isLoading)
@@ -131,10 +143,10 @@ export default function NovaWidget({
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 80)
   }, [isOpen])
 
-  // Auto-scroll al respuesta
+  // Auto-scroll al fondo del chat
   useEffect(() => {
-    if (displayedText) responseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [displayedText])
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatHistory, displayedText, chips])
 
   // Speech recognition
   useEffect(() => {
@@ -256,6 +268,7 @@ export default function NovaWidget({
           { role: 'user', content: '[Foto enviada]' },
           { role: 'assistant', content: msg },
         ]
+        setChatHistory([...historyRef.current])
         try { sessionStorage.setItem('nova_history', JSON.stringify(historyRef.current.slice(-40))) } catch {}
 
         setChips(events.map((ev, i) => ({
@@ -307,6 +320,7 @@ export default function NovaWidget({
     setIsLoading(true)
 
     historyRef.current = [...historyRef.current, { role: 'user', content: msg }]
+    setChatHistory([...historyRef.current])
 
     logSignal('nova_message', {
       length: msg.length,
@@ -394,15 +408,19 @@ export default function NovaWidget({
       }
 
       historyRef.current = [...historyRef.current, { role: 'assistant', content: replyText }]
+      setChatHistory([...historyRef.current])
+      setReply('')
       // Persistir historial para que sobreviva a refresh (útil en PWA)
       try {
         sessionStorage.setItem('nova_history', JSON.stringify(historyRef.current.slice(-40)))
       } catch {}
     } catch (err) {
-      const msg = err?.message && typeof err.message === 'string' && err.message.length < 200
+      const errMsg = err?.message && typeof err.message === 'string' && err.message.length < 200
         ? err.message
-        : 'No pude conectarme. Probá de nuevo.'
-      setReply(msg)
+        : 'No pude conectarme. Intenta de nuevo.'
+      historyRef.current = [...historyRef.current, { role: 'assistant', content: errMsg }]
+      setChatHistory([...historyRef.current])
+      setReply('')
     } finally {
       setIsLoading(false)
     }
@@ -410,8 +428,6 @@ export default function NovaWidget({
 
   // Posición según viewport
   const position = isDesktop ? 'fixed bottom-6 right-6' : 'fixed bottom-[148px] right-4'
-
-  const hasContent = displayedText || chips.length > 0 || isLoading
 
   return (
     <div className={`${position} z-[60]`}>
@@ -424,11 +440,11 @@ export default function NovaWidget({
             animate={{ opacity: 1, scale: 1,    y: 0  }}
             exit={{    opacity: 0, scale: 0.88, y: 12 }}
             transition={{ type: 'spring', damping: 26, stiffness: 340 }}
-            className="w-80 rounded-[20px] overflow-hidden shadow-2xl shadow-black/12 border border-slate-200/70"
-            style={{ background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(20px)', transformOrigin: 'bottom right' }}
+            className="w-80 rounded-[20px] overflow-hidden shadow-2xl shadow-black/12 border border-slate-200/70 flex flex-col"
+            style={{ background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(20px)', transformOrigin: 'bottom right', height: '460px' }}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <motion.span
                   className="material-symbols-outlined text-[15px] text-blue-500"
@@ -439,22 +455,6 @@ export default function NovaWidget({
                   auto_awesome
                 </motion.span>
                 <span className="text-[13px] font-semibold text-slate-700">Nova</span>
-                {isLoading && (
-                  <motion.div
-                    className="flex gap-0.5"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                  >
-                    {[0, 1, 2].map(i => (
-                      <motion.div
-                        key={i}
-                        className="w-1 h-1 rounded-full bg-blue-400"
-                        animate={{ y: [0, -3, 0] }}
-                        transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.12 }}
-                      />
-                    ))}
-                  </motion.div>
-                )}
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-[10px] text-slate-300 font-mono">⌘K</span>
@@ -467,103 +467,121 @@ export default function NovaWidget({
               </div>
             </div>
 
-            {/* Área de respuesta */}
-            <AnimatePresence>
-              {hasContent && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="max-h-52 overflow-y-auto px-4 py-3 space-y-2"
-                >
-                  {/* Chips de acciones */}
-                  {chips.map(chip => (
-                    <motion.div
-                      key={chip.id}
-                      initial={{ opacity: 0, x: -6 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className={`flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-lg w-fit ${
-                        chip.done
-                          ? 'text-emerald-600 bg-emerald-50'
-                          : 'text-blue-600 bg-blue-50'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: chip.done ? "'FILL' 1" : '' }}>
-                        {chip.done ? 'check_circle' : chip.icon}
-                      </span>
-                      {chip.label}
-                    </motion.div>
-                  ))}
+            {/* Chat history */}
+            <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2 min-h-0">
+              {chatHistory.length === 0 && !isLoading && (
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-10">
+                  <span
+                    className="material-symbols-outlined text-[36px] text-blue-200 mb-2"
+                    style={{ fontVariationSettings: "'FILL' 1" }}
+                  >
+                    auto_awesome
+                  </span>
+                  <p className="text-[12px] text-slate-300">Pregunta algo o da una instrucción</p>
+                </div>
+              )}
 
-                  {/* Texto de respuesta */}
-                  {displayedText && (
-                    <p className="text-[13px] leading-relaxed text-slate-600">
-                      {displayedText}
-                      {isLoading && (
+              {chatHistory.map((msg, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-[13px] leading-relaxed whitespace-pre-wrap break-words ${
+                    msg.role === 'user'
+                      ? 'bg-blue-500 text-white rounded-br-[6px]'
+                      : 'bg-slate-100 text-slate-700 rounded-bl-[6px]'
+                  }`}>
+                    {msg.content}
+                  </div>
+                </motion.div>
+              ))}
+
+              {/* Burbuja de respuesta en curso */}
+              {isLoading && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-start"
+                >
+                  <div className="max-w-[85%] px-3 py-2 rounded-2xl rounded-bl-[6px] bg-slate-100 text-[13px] text-slate-700 leading-relaxed">
+                    {displayedText ? (
+                      <>
+                        {displayedText}
                         <motion.span
                           animate={{ opacity: [1, 0] }}
                           transition={{ duration: 0.5, repeat: Infinity }}
                           className="inline-block w-0.5 h-3.5 bg-blue-400 ml-0.5 align-middle rounded-full"
                         />
-                      )}
-                    </p>
-                  )}
-
-                  {/* CTA: abrir bandeja si hubo propuestas */}
-                  {chips.some(c => c.proposed) && onOpenInbox && !isLoading && (
-                    <motion.button
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      onClick={() => { onOpenInbox(); setIsOpen(false) }}
-                      className="mt-1 flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11.5px] font-semibold text-blue-600 hover:bg-blue-100 transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[13px]">inbox</span>
-                      Abrir bandeja
-                      <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
-                    </motion.button>
-                  )}
-
-                  {/* Skeleton mientras carga y no hay texto aún */}
-                  {isLoading && !displayedText && chips.length === 0 && (
-                    <div className="space-y-1.5">
-                      {[90, 75, 60].map((w, i) => (
-                        <motion.div
-                          key={i}
-                          className="h-2.5 rounded-full bg-slate-100"
-                          style={{ width: `${w}%` }}
-                          animate={{ opacity: [0.5, 1, 0.5] }}
-                          transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.15 }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  <div ref={responseRef} />
+                      </>
+                    ) : (
+                      <div className="flex gap-1 py-0.5">
+                        {[0, 1, 2].map(i => (
+                          <motion.div
+                            key={i}
+                            className="w-1.5 h-1.5 rounded-full bg-slate-400"
+                            animate={{ y: [0, -4, 0] }}
+                            transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </motion.div>
               )}
-            </AnimatePresence>
 
-            {/* Placeholder vacío cuando no hay contenido */}
-            {!hasContent && (
-              <div className="px-4 py-3">
-                <p className="text-[12px] text-slate-300 italic">Pregunta algo o da una instrucción…</p>
-              </div>
-            )}
+              {/* Chips de acciones (debajo del último mensaje de Nova) */}
+              {chips.length > 0 && !isLoading && (
+                <div className="flex justify-start">
+                  <div className="flex flex-col gap-1.5 max-w-[85%]">
+                    {chips.map(chip => (
+                      <motion.div
+                        key={chip.id}
+                        initial={{ opacity: 0, x: -6 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className={`flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-lg w-fit ${
+                          chip.done
+                            ? 'text-emerald-600 bg-emerald-50'
+                            : 'text-blue-600 bg-blue-50'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: chip.done ? "'FILL' 1" : '' }}>
+                          {chip.done ? 'check_circle' : chip.icon}
+                        </span>
+                        {chip.label}
+                      </motion.div>
+                    ))}
+                    {chips.some(c => c.proposed) && onOpenInbox && (
+                      <motion.button
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        onClick={() => { onOpenInbox(); setIsOpen(false) }}
+                        className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11.5px] font-semibold text-blue-600 hover:bg-blue-100 transition-colors w-fit"
+                      >
+                        <span className="material-symbols-outlined text-[13px]">inbox</span>
+                        Abrir bandeja
+                        <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                      </motion.button>
+                    )}
+                    {chips.some(c => c.photoEvent && !c.done) && (
+                      <button
+                        onClick={confirmPhotoEvents}
+                        className="mt-0.5 py-1.5 px-3 rounded-xl bg-blue-500 text-white text-[12px] font-semibold hover:bg-blue-600 active:scale-95 transition-all w-fit"
+                      >
+                        Agregar al calendario
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
-            {/* Botón confirmar eventos de foto */}
-            {chips.some(c => c.photoEvent && !c.done) && (
-              <div className="px-3 pb-2">
-                <button
-                  onClick={confirmPhotoEvents}
-                  className="w-full py-1.5 rounded-xl bg-blue-500 text-white text-[12px] font-semibold hover:bg-blue-600 active:scale-95 transition-all"
-                >
-                  Agregar al calendario
-                </button>
-              </div>
-            )}
+              <div ref={chatEndRef} />
+            </div>
 
             {/* Input */}
-            <div className="border-t border-slate-100 px-3 py-2 flex items-center gap-2">
+            <div className="border-t border-slate-100 px-3 py-2 flex items-center gap-2 flex-shrink-0">
               {/* Cámara */}
               <button
                 onClick={() => photoInputRef.current?.click()}
