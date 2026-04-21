@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" style="background-color:#0a0a0f">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -28,42 +28,108 @@
     <meta property="og:title" content="Focus · Calendario con IA" />
     <meta property="og:description" content="La IA que propone cambios y nunca toca tu calendario sin tu aprobación." />
     <meta property="og:type" content="website" />
+
     <!-- Preconnect para bajar latencia del fetch de Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- Fuentes: carga NO bloqueante. En iOS standalone el <link rel="stylesheet">
+         de terceros bloquea el first paint hasta que Google responde. Usamos el
+         patrón preload→onload para que el HTML parser siga descargando/ejecutando
+         el bundle mientras las fuentes cargan en paralelo. <noscript> cubre el
+         caso sin JS. -->
     <link
+      rel="preload"
+      as="style"
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"
-      rel="stylesheet"
+      onload="this.onload=null;this.rel='stylesheet'"
     />
-    <!-- Material Symbols — se descarga el set completo (display=block para que
-         no se filtre el nombre crudo del icono mientras carga). Antes teníamos
-         un filtro icon_names=... pero era whitelist y rompía cada icono nuevo
-         que agregábamos (ej: view_day del tab Mi Día, add_a_photo del botón de
-         foto) porque no estaban en la lista. Mejor descargar todo una vez y
-         cachear. -->
     <link
+      rel="preload"
+      as="style"
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1&display=block"
-      rel="stylesheet"
+      onload="this.onload=null;this.rel='stylesheet'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet"
+      />
+      <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1&display=block"
+        rel="stylesheet"
+      />
+    </noscript>
+
     <style>
+      /* Bg base dark — clave para PWA standalone iOS: antes el <body> quedaba
+         #fcf8fb por defecto y había un flash blanco entre el splash de iOS y el
+         primer render de React. Ahora html/body arrancan oscuros y el salto es
+         continuo con el splash del icono. */
+      html, body { background-color: #0a0a0f; margin: 0; }
+
       /* Cinturón de seguridad: mientras Material Symbols no haya cargado,
          ocultamos el texto del span (font-size:0) para que nunca se filtren
          los nombres crudos de iconos ("view_day", "add_a_photo", etc).
          Cuando el JS detecta que la fuente cargó, agrega 'ms-loaded' a <html>
          y los iconos vuelven a su tamaño normal. */
-      .material-symbols-outlined {
-        font-size: 0;
-      }
-      html.ms-loaded .material-symbols-outlined {
-        font-size: inherit;
-      }
+      .material-symbols-outlined { font-size: 0; }
+      html.ms-loaded .material-symbols-outlined { font-size: inherit; }
+
       /* Continuidad landing→app: si llegamos con el flag en sessionStorage,
          el body arranca oscuro para que no haya flash blanco entre la
          landing dark y el threshold scene dark. Se remueve al terminar. */
-      html.focus-continuity, html.focus-continuity body {
-        background: #0a0a0f !important;
+      html.focus-continuity, html.focus-continuity body { background: #0a0a0f !important; }
+
+      /* ── Instant boot splash ───────────────────────────────────────────────
+         HTML+CSS puros dentro de #root. Pinta al instante con el primer parseo
+         del HTML, sin depender del bundle JS ni de fuentes externas. Cuando
+         React monta, createRoot().render() reemplaza el contenido del root y
+         el splash desaparece. Objetivo: eliminar la ventana de pantalla blanca
+         al abrir la PWA desde el icono en iPhone. */
+      #focus-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(ellipse at 50% 45%, #14121f 0%, #0a0a0f 72%);
+        color: rgba(255,255,255,0.78);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+        letter-spacing: -0.02em;
+        font-weight: 600;
+        font-size: 15px;
+        z-index: 0;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      #focus-splash .orb {
+        width: 78px;
+        height: 78px;
+        border-radius: 50%;
+        margin-bottom: 22px;
+        background:
+          radial-gradient(circle at 32% 32%,
+            rgba(124,107,255,0.95) 0%,
+            rgba(124,107,255,0.55) 45%,
+            rgba(124,107,255,0) 72%);
+        box-shadow: 0 0 40px rgba(124,107,255,0.35);
+        animation: focusSplashBreath 2.4s ease-in-out infinite;
+      }
+      #focus-splash .word {
+        opacity: 0.55;
+        font-size: 13px;
+        letter-spacing: 0.06em;
+      }
+      @keyframes focusSplashBreath {
+        0%, 100% { transform: scale(1);     opacity: 0.78; }
+        50%      { transform: scale(1.055); opacity: 1; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #focus-splash .orb { animation: none; }
       }
     </style>
+
     <script>
       (function () {
         function reveal() {
@@ -87,7 +153,13 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Splash inline: se pinta al instante y React lo reemplaza al montar. -->
+      <div id="focus-splash" aria-hidden="true">
+        <div class="orb"></div>
+        <div class="word">focus</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

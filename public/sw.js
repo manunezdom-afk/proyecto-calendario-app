@@ -1,11 +1,15 @@
 // Service Worker de Focus
 // Estrategia:
-//   - App shell: cache-first con fallback a red (para arranque instantáneo offline)
-//   - Navegación: network-first con fallback al shell cacheado
+//   - App shell: cache-first con fallback a red (arranque instantáneo offline)
+//   - Navegación: stale-while-revalidate → servimos el HTML cacheado al instante
+//     y refrescamos en segundo plano. Clave en iOS PWA standalone: eliminamos
+//     la ventana de pantalla blanca mientras se espera la red. Antes estaba en
+//     network-first, lo que en iOS standalone producía ~9s de blanco cuando la
+//     red era lenta o el Webkit de la PWA arrancaba frío.
 //   - Recursos estáticos (JS/CSS/imágenes): stale-while-revalidate
 //   - Llamadas a /api/: siempre red (no se cachean)
 
-const VERSION = 'v9'
+const VERSION = 'v10'
 const STATIC_CACHE = `focus-static-${VERSION}`
 const RUNTIME_CACHE = `focus-runtime-${VERSION}`
 
@@ -52,16 +56,24 @@ self.addEventListener('fetch', (event) => {
   // No cachear APIs
   if (url.pathname.startsWith('/api/')) return
 
-  // Navegación HTML → network-first
+  // Navegación HTML → stale-while-revalidate
+  // Servimos el index.html cacheado al instante (first paint inmediato incluso
+  // con red lenta o caída), y revalidamos en background para la próxima apertura.
+  // Cualquier ruta de la SPA cae al mismo shell (el rewrite de Vercel también).
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((res) => {
-          const copy = res.clone()
-          caches.open(RUNTIME_CACHE).then((c) => c.put(request, copy))
-          return res
-        })
-        .catch(() => caches.match(request).then((r) => r || caches.match('/index.html')))
+      caches.match('/index.html').then((cached) => {
+        const networkFetch = fetch(request)
+          .then((res) => {
+            if (res && res.status === 200) {
+              const copy = res.clone()
+              caches.open(STATIC_CACHE).then((c) => c.put('/index.html', copy))
+            }
+            return res
+          })
+          .catch(() => cached || caches.match('/index.html'))
+        return cached || networkFetch
+      })
     )
     return
   }
