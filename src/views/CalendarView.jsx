@@ -69,7 +69,7 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
   return (
     <div
       className="col-span-2 bg-surface-container-lowest p-6 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.04)] space-y-4 cursor-pointer hover:shadow-md transition-shadow"
-      onClick={onOpen}
+      onClick={() => onOpen?.(event)}
     >
       <div className="flex justify-between items-start">
         <div className="p-2 bg-primary-fixed-dim/30 rounded-lg text-primary">
@@ -103,9 +103,12 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
 }
 
 // ─── Small card (secondary items in "Enfoque de Hoy") ────────────────────────
-function SmallEventCard({ event, onDelete }) {
+function SmallEventCard({ event, onDelete, onOpen }) {
   return (
-    <div className="bg-surface-container-low p-5 rounded-xl space-y-2 relative group">
+    <div
+      className="bg-surface-container-low p-5 rounded-xl space-y-2 relative group cursor-pointer hover:bg-surface-container transition-colors"
+      onClick={() => onOpen?.(event)}
+    >
       <div className="flex justify-between items-start">
         <span className="material-symbols-outlined text-secondary">
           {event.icon || 'event'}
@@ -126,9 +129,9 @@ function SmallEventCard({ event, onDelete }) {
 }
 
 // ─── Evening row card ─────────────────────────────────────────────────────────
-function EveningEventCard({ event, onDelete }) {
+function EveningEventCard({ event, onDelete, onOpen }) {
   return (
-    <div className="flex gap-4 items-center group">
+    <div className="flex gap-4 items-center group cursor-pointer" onClick={() => onOpen?.(event)}>
       {event.time && (
         <div className="w-16 text-right flex-shrink-0">
           <span className="text-xs font-bold text-outline">{event.time}</span>
@@ -358,7 +361,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                     />
                   )}
                   {smallEvents.map((ev) => (
-                    <SmallEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} />
+                    <SmallEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} onOpen={onOpenTask} />
                   ))}
                 </div>
               )}
@@ -387,7 +390,7 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
               ) : (
                 <div className="space-y-2">
                   {eveningEvents.map((ev) => (
-                    <EveningEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} />
+                    <EveningEventCard key={ev.id} event={ev} onDelete={onDeleteEvent} onOpen={onOpenTask} />
                   ))}
                 </div>
               )}

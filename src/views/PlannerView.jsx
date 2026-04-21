@@ -702,14 +702,21 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                             ))}
                           </div>
                         )}
-
-                        {description && (
-                          <p className={`text-sm leading-relaxed ${isSuggestion ? 'italic text-on-surface-variant/70' : 'text-on-surface-variant'}`}>
-                            {description}
-                          </p>
-                        )}
                       </div>
                       </SwipeableCard>
+
+                      {/* Nota/recordatorio adjunto — sticky note pegada debajo del bloque */}
+                      {description && !_asReminderOnly && !isSuggestion && (
+                        <div
+                          className="mt-1.5 ml-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2"
+                          style={{ maxWidth: 'calc(100% - 12px)' }}
+                        >
+                          <span className="material-symbols-outlined text-amber-600 text-[14px] mt-0.5 flex-shrink-0">sticky_note_2</span>
+                          <p className="text-[12px] leading-snug text-amber-900/80 flex-1 break-words">
+                            {description}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
