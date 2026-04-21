@@ -1,95 +1,189 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
+import { humanizeAuthError, isValidEmail } from '../utils/authErrors'
+
+const PENDING_KEY = 'focus_auth_pending'
+const PENDING_TTL_MS = 15 * 60 * 1000 // 15 min — tras eso el OTP ya expiró en Supabase
+const RESEND_COOLDOWN_SEC = 30
+
+function readPending() {
+  try {
+    const raw = sessionStorage.getItem(PENDING_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed?.email || !parsed?.ts) return null
+    if (Date.now() - parsed.ts > PENDING_TTL_MS) {
+      sessionStorage.removeItem(PENDING_KEY)
+      return null
+    }
+    return parsed
+  } catch { return null }
+}
+
+function writePending(email) {
+  try { sessionStorage.setItem(PENDING_KEY, JSON.stringify({ email, ts: Date.now() })) } catch {}
+}
+
+function clearPending() {
+  try { sessionStorage.removeItem(PENDING_KEY) } catch {}
+}
+
+function Spinner() {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"
+    />
+  )
+}
 
 export default function AuthModal({ isOpen, onClose }) {
   const { signInWithEmail, verifyOtp, user, signOut } = useAuth()
-  const [email, setEmail]     = useState('')
-  const [code, setCode]       = useState('')
-  const [step, setStep]       = useState('email') // 'email' | 'code'
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState(null)
 
+  // Hidratamos el paso desde sessionStorage para que reload no rompa el flujo.
+  const initialPending = typeof window !== 'undefined' ? readPending() : null
+  const [email, setEmail]       = useState(initialPending?.email || '')
+  const [code, setCode]         = useState('')
+  const [step, setStep]         = useState(initialPending ? 'code' : 'email')
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState(null)
+  const [resendCooldown, setResendCooldown] = useState(0)
+
+  // submitLock evita dobles envíos incluso en el mismo tick (antes de re-render)
+  const submitLock = useRef(false)
   const codeInputRef = useRef(null)
 
+  const emailValid = isValidEmail(email)
+  const codeValid  = /^\d{6}$/.test(code)
+
+  // Autofocus código cuando entramos al paso 'code'.
   useEffect(() => {
-    if (step === 'code' && codeInputRef.current) {
-      codeInputRef.current.focus()
-    }
+    if (step === 'code' && codeInputRef.current) codeInputRef.current.focus()
   }, [step])
 
-  // Bloquear scroll del body + cierre con Escape mientras el modal está abierto
+  // Cooldown tick para el botón de reenviar.
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const id = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(id)
+  }, [resendCooldown])
+
+  // Bloqueo de scroll + Escape + interceptar botón atrás del navegador.
+  // El back cierra el modal en vez de salir de la app.
   useEffect(() => {
     if (!isOpen) return
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    function onKey(e) {
-      if (e.key === 'Escape') handleClose()
-    }
+
+    // Empujamos un entry al history para que pop cierre el modal.
+    try { window.history.pushState({ focusAuthModal: true }, '') } catch {}
+    function onPop() { handleClose() }
+    function onKey(e) { if (e.key === 'Escape') handleClose() }
+    window.addEventListener('popstate', onPop)
     window.addEventListener('keydown', onKey)
+
     return () => {
       document.body.style.overflow = prevOverflow
+      window.removeEventListener('popstate', onPop)
       window.removeEventListener('keydown', onKey)
     }
-  }, [isOpen]) // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
+
+  const handleClose = useCallback(() => {
+    setCode('')
+    setError(null)
+    submitLock.current = false
+    // Solo reseteamos email+step si el flujo terminó (usuario logueado o manual cancel).
+    // Si hay pending, preservamos para que reopen continúe.
+    if (!readPending()) {
+      setStep('email')
+      setEmail('')
+    }
+    onClose?.()
+  }, [onClose])
 
   async function handleSendEmail(e) {
-    e.preventDefault()
+    e?.preventDefault?.()
+    if (submitLock.current || loading) return
+    if (!emailValid) {
+      setError('Ingresá un email válido.')
+      return
+    }
+    submitLock.current = true
     setLoading(true)
     setError(null)
     try {
       await signInWithEmail(email)
+      writePending(email)
       setStep('code')
+      setResendCooldown(RESEND_COOLDOWN_SEC)
     } catch (err) {
-      setError(err.message || 'No se pudo enviar el código')
+      setError(humanizeAuthError(err))
     } finally {
       setLoading(false)
+      submitLock.current = false
     }
   }
 
   async function handleVerify(e) {
-    e.preventDefault()
-    if (code.length < 6) {
-      setError('El código debe tener al menos 6 dígitos')
+    e?.preventDefault?.()
+    if (submitLock.current || loading) return
+    if (!codeValid) {
+      setError('El código debe tener 6 dígitos.')
       return
     }
+    submitLock.current = true
     setLoading(true)
     setError(null)
     try {
       await verifyOtp(email, code)
+      clearPending()
+      // handleClose resetea estado local
       handleClose()
     } catch (err) {
-      setError(err.message || 'Código inválido o expirado')
+      setError(humanizeAuthError(err))
     } finally {
       setLoading(false)
+      submitLock.current = false
     }
   }
 
   async function handleResend() {
+    if (submitLock.current || loading || resendCooldown > 0) return
+    submitLock.current = true
     setLoading(true)
     setError(null)
     setCode('')
     try {
       await signInWithEmail(email)
+      writePending(email)
+      setResendCooldown(RESEND_COOLDOWN_SEC)
     } catch (err) {
-      setError(err.message || 'No se pudo reenviar')
+      setError(humanizeAuthError(err))
     } finally {
       setLoading(false)
+      submitLock.current = false
     }
   }
 
-  function handleClose() {
+  function handleChangeEmail() {
+    clearPending()
     setStep('email')
     setCode('')
-    setEmail('')
     setError(null)
-    onClose()
   }
 
-  function handleChangeEmail() {
-    setStep('email')
-    setCode('')
-    setError(null)
+  function handleEmailChange(value) {
+    setEmail(value)
+    if (error) setError(null)
+  }
+
+  function handleCodeChange(value) {
+    const digits = value.replace(/\D/g, '').slice(0, 6)
+    setCode(digits)
+    if (error) setError(null)
   }
 
   return (
@@ -97,142 +191,196 @@ export default function AuthModal({ isOpen, onClose }) {
       {isOpen && (
         <>
           <motion.div
-            className="fixed inset-0 bg-black/40 z-50"
+            className="fixed inset-0 bg-black/50 z-[80]"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={handleClose}
           />
           <motion.div
-            className="fixed inset-x-4 bottom-0 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 bg-white rounded-t-3xl md:rounded-3xl p-6 z-50 md:w-96 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Iniciar sesión"
+            className="fixed inset-x-0 bottom-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 bg-white rounded-t-3xl sm:rounded-3xl z-[81] w-full sm:w-[420px] sm:max-w-[92vw] max-h-[92vh] overflow-y-auto shadow-2xl"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.25rem)' }}
             initial={{ y: '100%', opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: '100%', opacity: 0 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            transition={{ type: 'spring', damping: 26, stiffness: 320 }}
           >
-            {user ? (
-              /* ── Logged in ── */
-              <div className="text-center py-4">
-                <span className="material-symbols-outlined text-5xl text-primary mb-3 block">account_circle</span>
-                <p className="text-sm text-slate-500 mb-1">Sesión activa</p>
-                <p className="font-semibold mb-6">{user.email}</p>
-                <button
-                  onClick={() => { signOut(); handleClose() }}
-                  className="w-full py-3 bg-red-50 text-red-600 rounded-2xl text-sm font-semibold"
-                >
-                  Cerrar sesión
-                </button>
-                <button onClick={handleClose} className="mt-3 w-full py-3 bg-slate-100 rounded-2xl text-sm">
-                  Cancelar
-                </button>
-              </div>
-            ) : step === 'code' ? (
-              /* ── Enter 6-digit code ── */
-              <>
-                <div className="flex items-center justify-between mb-5">
-                  <div>
-                    <h2 className="text-xl font-bold">Revisa tu correo</h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Enviamos un código a <strong className="text-slate-700">{email}</strong>
+            <div className="px-5 sm:px-6 pt-5">
+              {/* Grip handle visual en mobile */}
+              <div className="sm:hidden mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" aria-hidden="true" />
+
+              {user ? (
+                /* ── Logged in ─────────────────────────────────────────── */
+                <div className="text-center py-2">
+                  <span className="material-symbols-outlined text-5xl text-primary mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }}>account_circle</span>
+                  <p className="text-[13px] text-slate-500 mb-1">Sesión activa</p>
+                  <p className="font-semibold text-slate-800 mb-6 break-all">{user.email}</p>
+                  <button
+                    type="button"
+                    onClick={() => { signOut(); handleClose() }}
+                    className="w-full py-3 bg-red-50 text-red-600 rounded-2xl text-sm font-semibold active:scale-[0.98] transition-transform"
+                  >
+                    Cerrar sesión
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="mt-3 w-full py-3 bg-slate-100 rounded-2xl text-sm active:scale-[0.98] transition-transform"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : step === 'code' ? (
+                /* ── Verificar código OTP ─────────────────────────────── */
+                <>
+                  <div className="flex items-start justify-between gap-3 mb-5">
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-[20px] sm:text-[22px] font-bold text-slate-900 leading-tight">
+                        Revisá tu correo
+                      </h2>
+                      <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
+                        Te enviamos un código a{' '}
+                        <strong className="text-slate-700 break-all">{email}</strong>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      aria-label="Cerrar"
+                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-slate-400 text-[22px]">close</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-start gap-2 p-3 bg-primary/5 rounded-2xl mb-5">
+                    <span className="material-symbols-outlined text-primary text-[20px] flex-shrink-0 mt-0.5">mark_email_read</span>
+                    <p className="text-[12px] text-slate-600 leading-snug">
+                      Buscá el código de 6 dígitos en tu bandeja (revisá spam si no aparece en 1 minuto).
                     </p>
                   </div>
-                  <button onClick={handleClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
-                    <span className="material-symbols-outlined text-slate-400">close</span>
-                  </button>
-                </div>
 
-                <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-2xl mb-5">
-                  <span className="material-symbols-outlined text-primary text-[20px]">mark_email_read</span>
-                  <p className="text-[12px] text-slate-600 leading-snug">
-                    Buscá el código en tu email (revisá spam si no llega).
-                    Pegalo acá abajo.
-                  </p>
-                </div>
+                  <form onSubmit={handleVerify} noValidate>
+                    <input
+                      ref={codeInputRef}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      autoComplete="one-time-code"
+                      value={code}
+                      onChange={(e) => handleCodeChange(e.target.value)}
+                      placeholder="123456"
+                      maxLength={6}
+                      aria-label="Código de 6 dígitos"
+                      aria-invalid={!!error}
+                      className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 text-center text-2xl font-mono tracking-[0.4em] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
+                    />
+                    {error && (
+                      <p role="alert" className="text-red-500 text-[12.5px] mb-3 text-center leading-snug">
+                        {error}
+                      </p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={loading || !codeValid}
+                      className="w-full py-3.5 bg-primary text-white rounded-2xl text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                    >
+                      {loading ? (<><Spinner /> Verificando…</>) : 'Entrar'}
+                    </button>
+                  </form>
 
-                <form onSubmit={handleVerify}>
-                  <input
-                    ref={codeInputRef}
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    autoComplete="one-time-code"
-                    value={code}
-                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    placeholder="123456"
-                    maxLength={10}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-center text-2xl font-mono mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                  {error && <p className="text-red-500 text-xs mb-3 text-center">{error}</p>}
-                  <button
-                    type="submit"
-                    disabled={loading || code.length < 6}
-                    className="w-full py-3 bg-primary text-white rounded-2xl text-sm font-bold disabled:opacity-40 transition-opacity"
-                  >
-                    {loading ? 'Verificando…' : 'Entrar'}
-                  </button>
-                </form>
-
-                <div className="mt-4 flex items-center justify-between text-[11.5px]">
-                  <button
-                    onClick={handleChangeEmail}
-                    className="text-slate-500 hover:text-slate-800 font-semibold"
-                  >
-                    ← Cambiar email
-                  </button>
-                  <button
-                    onClick={handleResend}
-                    disabled={loading}
-                    className="text-primary hover:underline font-semibold disabled:opacity-40"
-                  >
-                    Reenviar código
-                  </button>
-                </div>
-              </>
-            ) : (
-              /* ── Sign in form ── */
-              <>
-                <div className="flex items-center justify-between mb-5">
-                  <div>
-                    <h2 className="text-xl font-bold">Iniciar sesión o crear cuenta</h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Sin contraseña · código por email</p>
+                  <div className="mt-4 flex items-center justify-between text-[12px] gap-3">
+                    <button
+                      type="button"
+                      onClick={handleChangeEmail}
+                      disabled={loading}
+                      className="text-slate-500 hover:text-slate-800 font-semibold disabled:opacity-40"
+                    >
+                      ← Cambiar email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={loading || resendCooldown > 0}
+                      className="text-primary hover:underline font-semibold disabled:opacity-40 disabled:no-underline"
+                    >
+                      {resendCooldown > 0 ? `Reenviar en ${resendCooldown}s` : 'Reenviar código'}
+                    </button>
                   </div>
-                  <button onClick={handleClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
-                    <span className="material-symbols-outlined text-slate-400">close</span>
-                  </button>
-                </div>
-
-                <div className="flex gap-3 mb-5">
-                  {[
-                    { icon: 'sync', label: 'Sync multi-dispositivo' },
-                    { icon: 'cloud_done', label: 'Respaldo en la nube' },
-                    { icon: 'devices', label: 'Acceso desde cualquier lugar' },
-                  ].map(({ icon, label }) => (
-                    <div key={icon} className="flex-1 flex flex-col items-center gap-1 p-2 bg-slate-50 rounded-2xl">
-                      <span className="material-symbols-outlined text-primary text-xl">{icon}</span>
-                      <span className="text-[10px] text-center text-slate-500 leading-tight">{label}</span>
+                </>
+              ) : (
+                /* ── Pedir código ─────────────────────────────────────── */
+                <>
+                  <div className="flex items-start justify-between gap-3 mb-5">
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-[20px] sm:text-[22px] font-bold text-slate-900 leading-tight">
+                        Iniciá sesión
+                      </h2>
+                      <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
+                        Sin contraseña. Te enviamos un código de 6 dígitos por email.
+                      </p>
                     </div>
-                  ))}
-                </div>
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      aria-label="Cerrar"
+                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-slate-400 text-[22px]">close</span>
+                    </button>
+                  </div>
 
-                <form onSubmit={handleSendEmail}>
-                  <input
-                    type="email" value={email} onChange={e => setEmail(e.target.value)}
-                    placeholder="tu@email.com" required
-                    autoComplete="email"
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                  {error && <p className="text-red-500 text-xs mb-3">{error}</p>}
-                  <button
-                    type="submit" disabled={loading || !email}
-                    className="w-full py-3 bg-primary text-white rounded-2xl text-sm font-bold disabled:opacity-40 transition-opacity"
-                  >
-                    {loading ? 'Enviando...' : 'Enviar código'}
-                  </button>
-                </form>
+                  <div className="grid grid-cols-3 gap-2 mb-5">
+                    {[
+                      { icon: 'sync',       label: 'Sincronizá tus datos' },
+                      { icon: 'cloud_done', label: 'Respaldo en la nube' },
+                      { icon: 'devices',    label: 'Desde cualquier lugar' },
+                    ].map(({ icon, label }) => (
+                      <div key={icon} className="flex flex-col items-center gap-1.5 px-1.5 py-3 bg-slate-50 rounded-2xl">
+                        <span className="material-symbols-outlined text-primary text-[20px]">{icon}</span>
+                        <span className="text-[10.5px] text-center text-slate-500 leading-tight">{label}</span>
+                      </div>
+                    ))}
+                  </div>
 
-                <p className="mt-3 text-[10.5px] text-center text-slate-400">
-                  Te enviamos un código por email. Sin contraseñas.
-                </p>
-              </>
-            )}
+                  <form onSubmit={handleSendEmail} noValidate>
+                    <label htmlFor="auth-email" className="sr-only">Email</label>
+                    <input
+                      id="auth-email"
+                      type="email"
+                      inputMode="email"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      value={email}
+                      onChange={(e) => handleEmailChange(e.target.value)}
+                      placeholder="tu@email.com"
+                      required
+                      autoComplete="email"
+                      aria-invalid={!!error}
+                      className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 text-[15px] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
+                    />
+                    {error && (
+                      <p role="alert" className="text-red-500 text-[12.5px] mb-3 leading-snug">
+                        {error}
+                      </p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={loading || !emailValid}
+                      className="w-full py-3.5 bg-primary text-white rounded-2xl text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                    >
+                      {loading ? (<><Spinner /> Enviando…</>) : 'Enviar código'}
+                    </button>
+                  </form>
+
+                  <p className="mt-3 text-[11px] text-center text-slate-400 leading-snug">
+                    Al continuar aceptás que usemos tu email solo para autenticación.
+                  </p>
+                </>
+              )}
+            </div>
           </motion.div>
         </>
       )}

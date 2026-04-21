@@ -21,6 +21,7 @@ export default function DesktopSideBar({ activeView, onNavigate }) {
               isActive ? 'bg-primary/10 text-primary' : 'text-slate-400 hover:text-primary hover:bg-slate-50'
             }`}
             aria-label={label}
+            aria-current={isActive ? 'page' : undefined}
           >
             <span
               className="material-symbols-outlined text-[22px]"

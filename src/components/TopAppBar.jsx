@@ -43,17 +43,19 @@ export default function TopAppBar({
       <div className="flex items-center gap-1 lg:gap-2">
         <button
           onClick={() => setAuthModal(true)}
-          aria-label="Cuenta"
-          title={user ? user.email : 'Cuenta'}
+          aria-label={user ? 'Tu cuenta' : 'Iniciar sesión'}
+          title={user ? user.email : 'Iniciar sesión'}
           className="h-10 flex items-center gap-1.5 px-2 lg:px-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 duration-200"
         >
           <span
             className={`material-symbols-outlined text-[22px] ${user ? 'text-primary' : 'text-slate-400'}`}
             style={user ? { fontVariationSettings: "'FILL' 1" } : {}}
           >
-            account_circle
+            {user ? 'account_circle' : 'login'}
           </span>
-          <span className="hidden lg:inline text-[13px] font-semibold text-slate-600 dark:text-slate-300">Cuenta</span>
+          <span className="hidden lg:inline text-[13px] font-semibold text-slate-600 dark:text-slate-300">
+            {user ? 'Cuenta' : 'Iniciar sesión'}
+          </span>
         </button>
 
         {onShareClick && (

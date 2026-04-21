@@ -13,7 +13,6 @@ import BottomNavBar                from './components/BottomNavBar'
 import DesktopSideBar              from './components/DesktopSideBar'
 import NotificationPanel           from './components/NotificationPanel'
 import ImportExportSheet           from './components/ImportExportSheet'
-import GuestBanner                 from './components/GuestBanner'
 import AuthModal                   from './components/AuthModal'
 import NovaWidget                  from './components/NovaWidget'
 import MorningBrief                from './components/MorningBrief'
@@ -42,9 +41,23 @@ const pageVariants = {
 }
 
 export default function App() {
-  const { authModal, setAuthModal } = useAuth()
+  const { authModal, setAuthModal, user } = useAuth()
   const { profile }                 = useUserProfile()
   const { show: showWelcome, dismiss: dismissWelcome } = useWelcomeGate()
+
+  // Si el usuario recargó con un OTP pendiente (sessionStorage), reabrimos
+  // el modal en cuanto la bienvenida termina — evita que el flujo se pierda.
+  useEffect(() => {
+    if (user || showWelcome) return
+    try {
+      const raw = sessionStorage.getItem('focus_auth_pending')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        const fresh = parsed?.ts && (Date.now() - parsed.ts < 15 * 60 * 1000)
+        if (fresh && !authModal) setAuthModal(true)
+      }
+    } catch {}
+  }, [user, showWelcome]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const VALID_VIEWS = ['planner', 'calendar', 'tasks', 'settings']
   const initialView = () => {
@@ -262,8 +275,6 @@ export default function App() {
         className={`relative z-10 ${isDesktop && !isDetail ? "pb-0 pl-[72px]" : "w-full"}`}
         style={!isDesktop || isDetail ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)' } : undefined}
       >
-        {!isDetail && <GuestBanner />}
-
         {/* ── Single-view layout: cada botón del sidebar → su propia vista ── */}
         {(
           <AnimatePresence mode="wait">
@@ -399,7 +410,9 @@ export default function App() {
       </AnimatePresence>
 
       {/* ── Nova hints contextuales (reemplazan el tour modal) ─────────────── */}
-      {!showWelcome && activeView === 'planner' && (
+      {/* Regla: una sola burbuja a la vez. Si el día está vacío, mostramos
+          el hint accionable (empty-day). Si no, el intro genérico. */}
+      {!showWelcome && activeView === 'planner' && !hasNovaEmptyHint && (
         <NovaHint
           id="welcome-intro-v1"
           delayMs={1400}
@@ -410,7 +423,7 @@ export default function App() {
       {!showWelcome && hasNovaEmptyHint && (
         <NovaHint
           id="empty-day-v1"
-          delayMs={1800}
+          delayMs={1400}
         >
           Tu día está en blanco. Puedo proponer un bloque de foco de 25 min cuando quieras — solo pedímelo.
         </NovaHint>

@@ -120,11 +120,12 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
 
       {/* ── Perfil ──────────────────────────────────────────────────────── */}
       <SectionCard title="Tu perfil">
-        {/* Cuenta */}
+        {/* Estado de cuenta — muestra el email si hay sesión, o invita a crear cuenta.
+            Es el único entry point al login desde Ajustes (antes había dos). */}
         <Row
-          icon={user ? 'account_circle' : 'person_off'}
-          label={user ? user.email : 'Modo invitado'}
-          sub={user ? 'Sesión activa · datos en la nube' : 'Inicia sesión para sincronizar en todos tus dispositivos'}
+          icon={user ? 'account_circle' : 'login'}
+          label={user ? user.email : 'Iniciar sesión'}
+          sub={user ? 'Sesión activa · datos en la nube' : 'Sin cuenta — tus datos solo viven en este dispositivo'}
           onClick={() => setAuthModal(true)}
         >
           <span className="material-symbols-outlined text-[16px] text-slate-300">chevron_right</span>
@@ -206,9 +207,9 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
         </Row>
       </SectionCard>
 
-      {/* ── Cuenta ───────────────────────────────────────────────────────── */}
-      <SectionCard title="Cuenta">
-        {user ? (
+      {/* ── Cerrar sesión (solo si hay sesión activa) ───────────────────── */}
+      {user && (
+        <SectionCard title="Cuenta">
           <Row
             icon="logout"
             label="Cerrar sesión"
@@ -216,16 +217,8 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
             onClick={signOut}
             danger
           />
-        ) : (
-          <Row
-            icon="login"
-            label="Iniciar sesión"
-            sub="Sincroniza tus datos en todos tus dispositivos"
-            onClick={() => setAuthModal(true)}
-          />
-        )}
-
-      </SectionCard>
+        </SectionCard>
+      )}
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <p className="text-center text-[11px] text-slate-300 pt-2">

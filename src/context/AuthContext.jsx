@@ -59,24 +59,27 @@ export function AuthProvider({ children }) {
 
   const signInWithEmail = useCallback(async (email) => {
     if (!supabase) throw new Error('Supabase no configurado')
-    // Pedimos OTP + magic link. En mobile (sobre todo iOS PWA) usamos el
-    // código de 6 dígitos. En desktop podés usar cualquiera de los 2.
+    // Flujo OTP-only: código de 6 dígitos por email. NO pasamos
+    // emailRedirectTo para que Supabase no inyecte un magic-link en el
+    // correo — así el usuario nunca sale de la app. La redirect de
+    // cualquier link embebido usa el Site URL del proyecto (usefocus.me).
+    const clean = String(email || '').trim().toLowerCase()
     const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: window.location.origin,
-        shouldCreateUser: true,
-      },
+      email: clean,
+      options: { shouldCreateUser: true },
     })
     if (error) throw error
   }, [])
 
   const verifyOtp = useCallback(async (email, token) => {
     if (!supabase) throw new Error('Supabase no configurado')
-    const clean = String(token || '').replace(/\D/g, '').slice(0, 6)
-    if (clean.length !== 6) throw new Error('El código debe tener 6 dígitos')
+    const cleanEmail = String(email || '').trim().toLowerCase()
+    const cleanToken = String(token || '').replace(/\D/g, '').slice(0, 6)
+    if (cleanToken.length !== 6) throw new Error('El código debe tener 6 dígitos')
     const { data, error } = await supabase.auth.verifyOtp({
-      email, token: clean, type: 'email',
+      email: cleanEmail,
+      token: cleanToken,
+      type: 'email',
     })
     if (error) throw error
     return data?.user || null

@@ -109,7 +109,7 @@ GitHub → tu repo `proyecto-calendario-app` → Settings → Secrets and variab
 
 | Secret | Value |
 |---|---|
-| `APP_URL` | `https://proyecto-calendario-app.vercel.app` (sin slash al final) |
+| `APP_URL` | `https://usefocus.me` (sin slash al final) |
 | `CRON_SECRET` | El mismo string del paso 3 |
 
 ### 5. Redeploy en Vercel
