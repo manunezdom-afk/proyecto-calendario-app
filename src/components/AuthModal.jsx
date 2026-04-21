@@ -191,7 +191,7 @@ export default function AuthModal({ isOpen, onClose }) {
               <>
                 <div className="flex items-center justify-between mb-5">
                   <div>
-                    <h2 className="text-xl font-bold">Guardar tu progreso</h2>
+                    <h2 className="text-xl font-bold">Iniciar sesión o crear cuenta</h2>
                     <p className="text-xs text-slate-400 mt-0.5">Sin contraseña · código por email</p>
                   </div>
                   <button onClick={handleClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
