@@ -264,6 +264,65 @@ function buildInsights(events, profile) {
 
 // ── Swipe-to-delete card ────────────────────────────────────────────────────
 // Deslizá hacia la izquierda para revelar el basurero y eliminar el evento.
+// Long-press: mantener apretada la tarjeta ~600ms → dispara acción.
+// Se cancela si el usuario se mueve (drag/scroll) o levanta el dedo antes.
+// onClickCapture intercepta el click sintético que viene después del
+// pointerup cuando el long-press ya disparó — así el click no abre el timer.
+function LongPressZone({ onLongPress, onClick, className, style, title, children }) {
+  const timer     = useRef(null)
+  const startPos  = useRef({ x: 0, y: 0 })
+  const fired     = useRef(false)
+
+  function cancel() {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null }
+  }
+
+  function start(e) {
+    fired.current = false
+    const p = e.touches?.[0] || e
+    startPos.current = { x: p.clientX ?? 0, y: p.clientY ?? 0 }
+    cancel()
+    timer.current = setTimeout(() => {
+      fired.current = true
+      timer.current = null
+      onLongPress?.()
+    }, 600)
+  }
+
+  function move(e) {
+    if (!timer.current) return
+    const p = e.touches?.[0] || e
+    const dx = Math.abs((p.clientX ?? 0) - startPos.current.x)
+    const dy = Math.abs((p.clientY ?? 0) - startPos.current.y)
+    if (dx > 8 || dy > 8) cancel()
+  }
+
+  function handleClickCapture(e) {
+    if (fired.current) {
+      e.stopPropagation()
+      e.preventDefault()
+      fired.current = false
+    }
+  }
+
+  return (
+    <div
+      className={className}
+      style={style}
+      title={title}
+      onPointerDown={start}
+      onPointerMove={move}
+      onPointerUp={cancel}
+      onPointerLeave={cancel}
+      onPointerCancel={cancel}
+      onClickCapture={handleClickCapture}
+      onClick={onClick}
+    >
+      {children}
+    </div>
+  )
+}
+
 function SwipeableCard({ onDelete, disabled, children }) {
   const x = useMotionValue(0)
   const THRESHOLD = -72
@@ -636,7 +695,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
             })()}
 
             <div className="relative space-y-2">
-              {displayBlocks.map(({ id, time, type, title, description, subtasks = [], _asReminderOnly }) => {
+              {displayBlocks.map(({ id, eventId, time, type, title, description, subtasks = [], _asReminderOnly }) => {
                 const isSuggestion = type === 'suggestion'
                 const isGhost = type === 'ghost'
                 const inPeak = !isSuggestion && !isGhost && profile.peakStart != null
@@ -644,6 +703,18 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   : null
                 const isActive = activeBlock?.id === id
                 const isNext = !activeBlock && nextBlock?.id === id
+
+                // Delete handler unificado — usa eventId cuando existe para borrar
+                // también de Supabase (antes solo se borraba el bloque local y la
+                // useEffect de sync lo volvía a resucitar porque el evento seguía vivo).
+                const handleDeleteBlock = () => {
+                  dismissBlock(id)
+                  if (eventId) onDeleteEvent?.(eventId)
+                }
+                const handleLongPressDelete = () => {
+                  if (isSuggestion || isGhost || _asReminderOnly) return
+                  if (window.confirm(`¿Eliminar "${title}"?`)) handleDeleteBlock()
+                }
                 return (
                   <div
                     key={id}
@@ -667,13 +738,12 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       <div className={`absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : isGhost ? 'bg-outline/30' : 'bg-primary'}`}
                         style={{ left: '-21px', zIndex: 1 }} />
                       <SwipeableCard
-                        onDelete={!isSuggestion && !isGhost && !_asReminderOnly ? () => {
-                          dismissBlock(id)
-                          onDeleteEvent?.(id)
-                        } : undefined}
+                        onDelete={!isSuggestion && !isGhost && !_asReminderOnly ? handleDeleteBlock : undefined}
                         disabled={isSuggestion || isGhost || _asReminderOnly}
                       >
-                      <div
+                      <LongPressZone
+                        onLongPress={!isSuggestion && !isGhost && !_asReminderOnly ? handleLongPressDelete : undefined}
+                        onClick={!isSuggestion && !isGhost && !_asReminderOnly ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
                         className={`rounded-xl ${
                           isGhost
                             ? 'bg-surface-container-low/40 border border-dashed border-outline/25 opacity-70'
@@ -685,9 +755,8 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                                   : 'border-primary'
                               }`
                         }`}
-                        style={{ padding: '14px 16px 14px 14px', overflow: 'visible' }}
-                        title={isGhost ? 'Ejemplo — desaparecerá cuando agregues tu primer evento' : inPeak === true ? 'En tu zona de rendimiento' : inPeak === false ? 'Fuera de tu zona de rendimiento' : undefined}
-                        onClick={!isSuggestion && !isGhost && !_asReminderOnly ? () => setActiveTimerBlock({ id, time, type, title, description }) : undefined}
+                        style={{ padding: '14px 16px 14px 14px', overflow: 'visible', touchAction: 'pan-y' }}
+                        title={isGhost ? 'Ejemplo — desaparecerá cuando agregues tu primer evento' : inPeak === true ? 'En tu zona de rendimiento · Mantén apretado para eliminar' : inPeak === false ? 'Fuera de tu zona de rendimiento · Mantén apretado para eliminar' : 'Mantén apretado para eliminar'}
                       >
                         <div className="flex justify-between items-start gap-2" style={{ marginBottom: '2px' }}>
                           <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0 }}>
@@ -751,7 +820,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                             ))}
                           </div>
                         )}
-                      </div>
+                      </LongPressZone>
                       </SwipeableCard>
 
                       {/* Nota/recordatorio adjunto — sticky note pegada debajo del bloque.
@@ -830,26 +899,34 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
               {/* Contenido dinámico */}
               {activeBlock ? (
-                <SwipeableCard onDelete={() => { dismissBlock(activeBlock.id); onDeleteEvent?.(activeBlock.id) }}>
-                  <div className="py-1">
+                <SwipeableCard onDelete={() => { dismissBlock(activeBlock.id); if (activeBlock.eventId) onDeleteEvent?.(activeBlock.eventId) }}>
+                  <LongPressZone
+                    onLongPress={() => { if (window.confirm(`¿Eliminar "${activeBlock.title}"?`)) { dismissBlock(activeBlock.id); if (activeBlock.eventId) onDeleteEvent?.(activeBlock.eventId) } }}
+                    className="py-1"
+                    title="Mantén apretado para eliminar"
+                  >
                     <p className="text-xs font-semibold text-outline uppercase tracking-wider mb-1">{activeBlock.time}</p>
                     <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{activeBlock.title}</p>
                     <div className="flex items-baseline gap-1">
                       <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{Math.round(minsElapsed)}</span>
                       <span className="text-sm font-semibold text-outline">min transcurridos</span>
                     </div>
-                  </div>
+                  </LongPressZone>
                 </SwipeableCard>
               ) : nextBlock ? (
-                <SwipeableCard onDelete={() => { dismissBlock(nextBlock.id); onDeleteEvent?.(nextBlock.id) }}>
-                  <div className="py-1">
+                <SwipeableCard onDelete={() => { dismissBlock(nextBlock.id); if (nextBlock.eventId) onDeleteEvent?.(nextBlock.eventId) }}>
+                  <LongPressZone
+                    onLongPress={() => { if (window.confirm(`¿Eliminar "${nextBlock.title}"?`)) { dismissBlock(nextBlock.id); if (nextBlock.eventId) onDeleteEvent?.(nextBlock.eventId) } }}
+                    className="py-1"
+                    title="Mantén apretado para eliminar"
+                  >
                     <p className="text-xs font-semibold text-outline uppercase tracking-wider mb-1">{nextBlock.time}</p>
                     <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3">{nextBlock.title}</p>
                     <div className="flex items-baseline gap-1">
                       <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{formatMinutes(minsToNext)}</span>
                       {minsToNext >= 1 && <span className="text-sm font-semibold text-outline">para empezar</span>}
                     </div>
-                  </div>
+                  </LongPressZone>
                 </SwipeableCard>
               ) : (
                 <div className="text-center py-2">
