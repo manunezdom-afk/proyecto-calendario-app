@@ -23,6 +23,7 @@ import AuroraBackground            from './components/AuroraBackground'
 import NovaHint                    from './components/NovaHint'
 import FirstLaunchOnboarding, { useOnboardingGate } from './components/FirstLaunchOnboarding'
 import { useFirstRunSequence }     from './hooks/useFirstRunSequence'
+import { writeIncomingPairCode, normalizeUserCode } from './utils/devicePairing'
 
 import CalendarView    from './views/CalendarView'
 import DayView         from './views/DayView'
@@ -65,6 +66,36 @@ export default function App() {
       }
     } catch {}
   }, [user, showWelcome]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Deep-link de vinculación: ?pair=XXXXXXXX en la URL.
+  //
+  // Caso típico: el dispositivo nuevo muestra un QR con el URL de la app +
+  // ?pair=CODE. La cámara nativa del dispositivo ya logueado lee ese QR y
+  // abre el link en Safari/PWA. Levantamos el código, lo guardamos en
+  // sessionStorage y limpiamos la URL para que un refresh no lo reaplique.
+  // Si hay sesión activa: abrimos el AuthModal, que salta al paso approve
+  // con el código pre-llenado. Si no hay sesión: el código queda en
+  // sessionStorage y el AuthModal lo consumirá después del login.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const url = new URL(window.location.href)
+      const raw = url.searchParams.get('pair')
+      if (!raw) return
+      const code = normalizeUserCode(raw)
+      // Siempre limpiamos el parámetro de la URL (aunque el código sea
+      // inválido, no queremos que quede colgando en la barra).
+      url.searchParams.delete('pair')
+      const next = url.pathname + (url.search ? url.search : '') + (url.hash || '')
+      window.history.replaceState(window.history.state, '', next)
+      if (!code) return
+      writeIncomingPairCode(code)
+      if (!authModal) setAuthModal(true)
+    } catch {}
+    // Solo corremos una vez al montar; si más adelante cambia la URL vía
+    // navigate/popstate, el usuario tendrá que scanear de nuevo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const VALID_VIEWS = ['planner', 'calendar', 'day', 'tasks', 'settings']
   const initialView = () => {

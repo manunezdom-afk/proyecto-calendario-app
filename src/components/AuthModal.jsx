@@ -2,6 +2,14 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { humanizeAuthError, isValidEmail, isRateLimitError, extractRetryAfterSec } from '../utils/authErrors'
+import QRCodeView from './QRCodeView'
+import QRScannerSheet from './QRScannerSheet'
+import {
+  buildQRValue,
+  extractUserCodeFromScanned,
+  readIncomingPairCode,
+  clearIncomingPairCode,
+} from '../utils/devicePairing'
 
 const PENDING_KEY  = 'focus_auth_pending'
 const COOLDOWN_KEY = 'focus_auth_resend_until'
@@ -155,6 +163,8 @@ export default function AuthModal({ isOpen, onClose }) {
   // Estado del lado que aprueba (logged-in).
   const [approveCode, setApproveCode]       = useState('')
   const [approvedInfo, setApprovedInfo]     = useState(null)
+  // Escáner QR: abierto vía botón "Escanear QR" dentro del step device_approve.
+  const [scannerOpen, setScannerOpen] = useState(false)
   // Subestados del botón "Aprobar" para que el botón no quede 1-2s en
   // "Aprobando…" sin feedback:
   //   idle        — sin acción
@@ -300,25 +310,37 @@ export default function AuthModal({ isOpen, onClose }) {
   // si el usuario cerró el modal hace >15 min (TTL del pending ya caducó),
   // al reabrir veríamos step='code' con email viejo en memoria apuntando a
   // un OTP ya expirado — y el botón "Reenviar" pegaría al email equivocado.
+  //
+  // También detectamos un "incoming pair code" (del URL ?pair=XXXX que levantó
+  // App.jsx): si hay uno y el usuario está logueado, saltamos directo a
+  // device_approve con el código pre-llenado. Si NO hay sesión, el código
+  // queda en sessionStorage y se consumirá tras login.
   useEffect(() => {
     if (!isOpen) return
     const pending = readPending()
     const device  = readDevicePairing()
-    if (pending) {
+    const incomingCode = readIncomingPairCode()
+
+    if (user && incomingCode) {
+      // Prioridad máxima: aprobar el dispositivo entrante.
+      setApproveCode(incomingCode)
+      setStep('device_approve')
+      clearIncomingPairCode()
+    } else if (pending) {
       setEmail(pending.email)
       setStep('code')
     } else if (device) {
       setDevicePairing(device)
       setStep('device_wait')
     } else {
-      setStep(user ? 'chooser' : 'chooser')
+      setStep('chooser')
       setCode('')
     }
     setError(null)
     setRateLimitHit(false)
     setResendCooldown(readCooldownSec())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen])
+  }, [isOpen, user])
 
   // Bloqueo de scroll + Escape + interceptar botón atrás del navegador.
   // El back cierra el modal en vez de salir de la app.
@@ -554,10 +576,19 @@ export default function AuthModal({ isOpen, onClose }) {
   }
 
   // ── Device pairing: lado logueado que aprueba ───────────────────────────
-  async function handleApprove(e) {
-    e?.preventDefault?.()
+  // Admite un override de código (desde scan QR) para evitar depender del
+  // estado approveCode, que puede estar stale cuando el escáner llama
+  // inmediatamente después de setApproveCode.
+  async function handleApprove(eOrCode) {
+    let explicitCode = null
+    if (typeof eOrCode === 'string') {
+      explicitCode = eOrCode
+    } else {
+      eOrCode?.preventDefault?.()
+    }
     if (submitLock.current || loading) return
-    const clean = approveCode.replace(/[^A-Z0-9]/gi, '').toUpperCase()
+    const source = explicitCode ?? approveCode
+    const clean = String(source).replace(/[^A-Z0-9]/gi, '').toUpperCase()
     if (clean.length !== 8) {
       setError('El código tiene 8 caracteres.')
       return
@@ -594,6 +625,24 @@ export default function AuthModal({ isOpen, onClose }) {
     const clean = String(raw).replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 8)
     setApproveCode(clean)
     if (error) setError(null)
+  }
+
+  // Scanner de QR en el lado logueado. El QR escaneado puede ser una URL
+  // (con ?pair=XXXX) o texto plano con el código — extractUserCodeFromScanned
+  // normaliza ambos casos.
+  function handleScanDetected(raw) {
+    setScannerOpen(false)
+    const userCode = extractUserCodeFromScanned(raw)
+    if (!userCode) {
+      setError('El QR no contiene un código de vinculación válido.')
+      return
+    }
+    setApproveCode(userCode)
+    setError(null)
+    // Pequeño delay para que el sheet del scanner termine su animación de
+    // salida antes de disparar el submit. Pasamos el código explícitamente
+    // para no depender del estado que puede llegar stale al closure.
+    setTimeout(() => handleApprove(userCode), 180)
   }
 
   const userAgentSummary = (ua) => {
@@ -646,7 +695,7 @@ export default function AuthModal({ isOpen, onClose }) {
                           Aprobar otro dispositivo
                         </h2>
                         <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
-                          Ingresa el código de 8 caracteres que muestra el dispositivo nuevo.
+                          Escanea el QR del dispositivo nuevo o escribe su código de 8 caracteres.
                         </p>
                       </div>
                       <button
@@ -658,6 +707,24 @@ export default function AuthModal({ isOpen, onClose }) {
                         <span className="material-symbols-outlined text-slate-400 text-[22px]">arrow_back</span>
                       </button>
                     </div>
+
+                    {/* Botón principal: escanear QR. Debajo, el input manual. */}
+                    <button
+                      type="button"
+                      onClick={() => { setError(null); setScannerOpen(true) }}
+                      disabled={loading}
+                      className="w-full mb-3 px-4 py-3.5 rounded-2xl bg-primary text-white font-bold text-[14px] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">qr_code_scanner</span>
+                      Escanear QR
+                    </button>
+
+                    <div className="flex items-center gap-3 my-3">
+                      <div className="flex-1 h-px bg-slate-200" />
+                      <span className="text-[11px] text-slate-400 font-semibold tracking-wide">O ESCRIBE EL CÓDIGO</span>
+                      <div className="flex-1 h-px bg-slate-200" />
+                    </div>
+
                     <form onSubmit={handleApprove} noValidate>
                       <input
                         ref={approveInputRef}
@@ -846,12 +913,31 @@ export default function AuthModal({ isOpen, onClose }) {
                     </button>
                   </div>
 
-                  <div className="bg-slate-50 rounded-3xl p-5 mb-4 text-center">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Tu código</p>
+                  {/* Escanea este QR desde el dispositivo ya logueado. El
+                      payload es una URL con ?pair=CODE para que también
+                      funcione con la cámara nativa del sistema (abre la PWA
+                      con el código prellenado). */}
+                  {devicePairing?.user_code && (
+                    <div className="flex flex-col items-center gap-3 mb-4">
+                      <QRCodeView
+                        size={208}
+                        value={buildQRValue(
+                          devicePairing.user_code,
+                          typeof window !== 'undefined' ? window.location.origin : '',
+                        )}
+                      />
+                      <p className="text-[11px] text-slate-400 text-center leading-snug max-w-[280px]">
+                        Apunta la cámara desde el otro dispositivo, o escribe el código manualmente.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="bg-slate-50 rounded-3xl p-4 mb-4 text-center">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">O este código</p>
                     <button
                       type="button"
                       onClick={handleCopyCode}
-                      className="text-[32px] sm:text-[36px] font-mono font-bold tracking-[0.18em] text-slate-900 active:scale-95 transition-transform"
+                      className="text-[28px] sm:text-[32px] font-mono font-bold tracking-[0.18em] text-slate-900 active:scale-95 transition-transform"
                       aria-label="Copiar código"
                     >
                       {formatUserCode(devicePairing?.user_code)}
@@ -904,7 +990,7 @@ export default function AuthModal({ isOpen, onClose }) {
                         <li>Abre Focus en el dispositivo donde ya iniciaste sesión.</li>
                         <li>Toca tu avatar o entra a tu cuenta.</li>
                         <li>Elige <span className="font-semibold text-slate-800">Vincular otro dispositivo</span>.</li>
-                        <li>Ingresa el código que ves arriba.</li>
+                        <li>Escanea el QR de arriba o escribe el código.</li>
                       </ol>
 
                       <div className="flex gap-2">
@@ -1130,6 +1216,14 @@ export default function AuthModal({ isOpen, onClose }) {
               )}
             </div>
           </motion.div>
+
+          {/* Scanner QR — se monta fuera de la card del modal para ocupar la
+              pantalla completa. Su overlay incluye el cierre. */}
+          <QRScannerSheet
+            isOpen={scannerOpen}
+            onDetect={handleScanDetected}
+            onClose={() => setScannerOpen(false)}
+          />
         </>
       )}
     </AnimatePresence>
