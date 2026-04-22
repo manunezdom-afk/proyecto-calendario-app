@@ -228,6 +228,7 @@ export default function App() {
     onToggleTask:      toggleTask,
     onDeleteTask:      deleteTask,
     onEveningShutdown: () => setShowEveningShutdown(true),
+    onNavigate:        navigate,
     morningBrief: (showMorningBrief && !showWelcome && !showOnboarding) ? {
       events,
       tasks,

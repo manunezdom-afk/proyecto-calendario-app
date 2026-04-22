@@ -17,6 +17,16 @@ function formatToday() {
   return `${DAY_NAMES_ES[d.getDay()]}, ${d.getDate()} de ${MONTH_NAMES_ES[d.getMonth()]}`
 }
 
+function tomorrowISO() {
+  const d = new Date(Date.now() + 86400000)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function formatTomorrow() {
+  const d = new Date(Date.now() + 86400000)
+  return `${DAY_NAMES_ES[d.getDay()]}, ${d.getDate()} de ${MONTH_NAMES_ES[d.getMonth()]}`
+}
+
 function currentHour() {
   const d = new Date()
   return d.getHours() + d.getMinutes() / 60
@@ -360,7 +370,7 @@ function SwipeableCard({ onDelete, disabled, children }) {
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────
-export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, onAddTask, onToggleTask, onDeleteTask, events = [], tasks = [], onOpenAssistant, onEveningShutdown, isDesktop = false, morningBrief = null }) {
+export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, onAddTask, onToggleTask, onDeleteTask, events = [], tasks = [], onOpenAssistant, onEveningShutdown, onNavigate, isDesktop = false, morningBrief = null }) {
   const [blocks, setBlocks] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -487,6 +497,27 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
   const topInsight = buildInsights(events, profile)[0] ?? null
 
+  // ── Adelanto de mañana ───────────────────────────────────────────────────
+  // Se muestra cuando Mi Día ya no aporta acción inmediata: día vacío, o
+  // todos los eventos de hoy ya quedaron atrás (no hay activeBlock ni next).
+  // Si mañana tampoco tiene eventos, no renderizamos nada — evitamos una
+  // tarjeta vacía.
+  const tomorrowEvents = (() => {
+    const iso = tomorrowISO()
+    return (events || [])
+      .filter((e) => e?.date === iso)
+      .map((e) => {
+        const firstTime = String(e.time || '').split('-')[0].trim()
+        return { ...e, _displayTime: firstTime || '—', _h: parseTimeToDecimal(firstTime) }
+      })
+      .sort((a, b) => {
+        const ah = a._h ?? Number.POSITIVE_INFINITY
+        const bh = b._h ?? Number.POSITIVE_INFINITY
+        return ah - bh
+      })
+      .slice(0, 3)
+  })()
+
   // ── Card 1: Próximo Bloque ────────────────────────────────────────────────
   const DAY_START_H = 8
   const DAY_END_H   = 22
@@ -507,6 +538,10 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   })()
 
   const nextBlock   = blocksWithDecimal.find((b) => b._h > now) ?? null
+  const hasBlocks   = blocksWithDecimal.length > 0
+  const dayIsEmpty  = !hasBlocks
+  const dayIsDone   = hasBlocks && !activeBlock && !nextBlock
+  const showTomorrowPreview = !showGhosts && (dayIsEmpty || dayIsDone) && tomorrowEvents.length > 0
   const minsToNext  = nextBlock   ? (nextBlock._h   - now) * 60 : null
   const minsElapsed = activeBlock ? (now - activeBlock._h) * 60 : null
   const dayProgress = Math.min(1, Math.max(0, (now - DAY_START_H) / (DAY_END_H - DAY_START_H)))
@@ -871,11 +906,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   <div className="flex gap-6">
                     <div className="w-16" />
                     <div className="flex-1 bg-surface-container-low rounded-xl p-6 space-y-3">
-                      <p className="text-outline text-sm font-semibold">Tu día todavía está en blanco.</p>
+                      <p className="text-outline text-sm font-semibold">Hoy está libre.</p>
                       <p className="text-outline/70 text-xs leading-relaxed">
                         {pendingTotal > 0
-                          ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. ¿Qué arrancamos?`
-                          : 'Pídele a Nova que agende tu primer evento del día.'}
+                          ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. Buen momento para avanzar una.`
+                          : 'Agrega un evento o pídele a Nova que arme tu agenda.'}
                       </p>
                       {onOpenAssistant && (
                         <button
@@ -890,6 +925,63 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   </div>
                 )
               })()}
+
+              {/* ── Adelanto de mañana ─────────────────────────────────────
+                  Aparece cuando hoy está vacío o ya no quedan bloques por
+                  delante. Máx. 3 eventos, ordenados por hora, sin tarjeta
+                  vacía cuando mañana tampoco tiene nada. */}
+              {showTomorrowPreview && (
+                <div className="mt-10 flex gap-6">
+                  <div className="w-16 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-end justify-between gap-3 mb-3">
+                      <div className="min-w-0">
+                        <p className="text-primary font-semibold text-xs mb-1">Adelanto de mañana</p>
+                        <p className="text-sm text-outline truncate">{formatTomorrow()}</p>
+                      </div>
+                      {onNavigate && (
+                        <button
+                          onClick={() => onNavigate('calendar')}
+                          className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-2 py-1 rounded-full transition-colors flex-shrink-0"
+                        >
+                          Ver calendario
+                          <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                        </button>
+                      )}
+                    </div>
+                    <ul className="space-y-2">
+                      {tomorrowEvents.map((ev) => {
+                        const detail = ev.description && !/^\d{4}-\d{2}-\d{2}$/.test(String(ev.description).trim())
+                          ? String(ev.description).trim()
+                          : null
+                        return (
+                          <li
+                            key={ev.id}
+                            className="flex items-start gap-3 bg-surface-container-lowest rounded-xl px-3 py-2.5 border-l-2 border-primary/40"
+                          >
+                            <span
+                              className="text-[12px] font-semibold text-outline tabular-nums flex-shrink-0 pt-0.5"
+                              style={{ minWidth: '52px' }}
+                            >
+                              {ev._displayTime}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-on-surface truncate">
+                                {ev.title || '(sin título)'}
+                              </p>
+                              {detail && (
+                                <p className="text-xs text-outline/70 mt-0.5 truncate">
+                                  {detail}
+                                </p>
+                              )}
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
