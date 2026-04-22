@@ -315,26 +315,28 @@ export const dataService = {
     if (error) enqueue({ table: 'user_memories', type: 'delete', id, userId })
   },
 
-  // ── Migration ───────────────────────────────────────────────────────────────
+  // ── Migration (deprecated) ──────────────────────────────────────────────────
+  // Antes subía la caché global (focus_events / focus_tasks) al Supabase del
+  // usuario en el primer login. Eso hacía que tareas sueltas de sesiones
+  // anteriores en el mismo dispositivo aparecieran como "tareas pendientes"
+  // reales del usuario. Ahora es no-op: la nube es la única fuente de verdad.
+  isMigrated() { return true },
+  markMigrated() {},
+  async migrateToCloud() { /* no-op: ver comentario arriba */ },
 
-  isMigrated() { return localStorage.getItem('focus_migrated') === 'true' },
-  markMigrated() { localStorage.setItem('focus_migrated', 'true') },
-
-  async migrateToCloud(userId) {
-    if (this.isMigrated() || !supabase) return
-    const events = cacheGet('focus_events', [])
-    const tasks = cacheGet('focus_tasks', [])
-    const profile = cacheGet('focus_user_profile', null)
-
-    if (events.length > 0)
-      await supabase.from('events').upsert(events.map(e => eventToDb(e, userId)))
-    if (tasks.length > 0)
-      await supabase.from('tasks').upsert(tasks.map(t => taskToDb(t, userId)))
-    if (profile)
-      await supabase.from('user_profiles').upsert(profileToDb(profile, userId))
-
-    this.markMigrated()
-    console.log('[Focus] ✅ localStorage migrado a Supabase')
+  // Borra las claves globales de caché (sin userId). Se usa al cerrar sesión
+  // y al iniciar sesión para que nada del dispositivo se cuele en la cuenta.
+  clearGlobalCache() {
+    try {
+      localStorage.removeItem('focus_events')
+      localStorage.removeItem('focus_tasks')
+      localStorage.removeItem('focus_suggestions')
+      localStorage.removeItem('focus_user_profile')
+      localStorage.removeItem('focus_user_memories')
+      localStorage.removeItem('focus_user_behavior')
+      localStorage.removeItem('focus_migrated')
+      localStorage.removeItem('focus_task_links')
+    } catch {}
   },
 
   // ── Flush offline queue ─────────────────────────────────────────────────────

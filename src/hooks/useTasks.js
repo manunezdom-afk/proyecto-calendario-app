@@ -22,7 +22,10 @@ export function useTasks() {
   // de que Supabase confirme el DELETE, ignoramos la tarea "resucitada".
   const pendingDeletesRef = useRef(new Set())
 
-  const [tasks, setTasks] = useState(() => hydrateTasksWithLinks(dataService.getCachedTasks([]), user?.id))
+  // Sin usuario arrancamos vacío: la caché global (focus_tasks sin userId)
+  // solía dejar "tareas fantasma" de sesiones anteriores flotando al iniciar
+  // sesión. Las tareas reales llegan del refetch a Supabase con user.id.
+  const [tasks, setTasks] = useState([])
 
   const refetch = useCoalescedRefetch(async (tag = '') => {
     if (!user) return
@@ -43,7 +46,12 @@ export function useTasks() {
   })
 
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      // Al cerrar sesión limpiamos el estado para que la caché global no
+      // quede contaminada con tareas del usuario anterior.
+      setTasks([])
+      return
+    }
 
     setTasks(hydrateTasksWithLinks(dataService.getCachedTasks([], user.id), user.id))
 
@@ -69,7 +77,10 @@ export function useTasks() {
   }, [user?.id, refetch])
 
   useEffect(() => {
-    dataService.setCachedTasks(tasks, user?.id)
+    // Solo persistimos caché cuando hay usuario. Sin sesión no escribimos a
+    // la clave global para no dejar residuos que reaparezcan al re-login.
+    if (!user?.id) return
+    dataService.setCachedTasks(tasks, user.id)
   }, [tasks, user?.id])
 
   function addTask({ label, priority = 'Media', category = 'hoy', linkedEventId = null }) {

@@ -14,8 +14,6 @@ function parseEventHour(time) {
   return h >= 0 && h <= 23 ? h : null
 }
 
-const LEGACY_KEY = 'sanctuary_events'
-
 export function useEvents() {
   const { user } = useAuth()
   // IDs de eventos cuyo DELETE está en vuelo — evita que un refetch previo a la
@@ -23,17 +21,10 @@ export function useEvents() {
   // especialmente común en iOS donde visibilitychange dispara refetch en cada tap).
   const pendingDeletesRef = useRef(new Set())
 
-  const [events, setEvents] = useState(() => {
-    try {
-      const legacy = localStorage.getItem(LEGACY_KEY)
-      if (legacy) {
-        localStorage.setItem('focus_events', legacy)
-        localStorage.removeItem(LEGACY_KEY)
-        console.log('[Focus] 🔄 Migrated events: sanctuary_events → focus_events')
-      }
-    } catch {}
-    return dataService.getCachedEvents()
-  })
+  // Sin usuario arrancamos vacío: la caché global (focus_events sin userId)
+  // solía mostrar eventos de una sesión anterior al iniciar sesión otra vez.
+  // La fuente real al login es la tabla events de Supabase.
+  const [events, setEvents] = useState([])
 
   const refetch = useCoalescedRefetch(async (tag = '') => {
     if (!user) return
@@ -53,7 +44,12 @@ export function useEvents() {
 
   // Carga desde Supabase cuando el usuario inicia sesión
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      // Al cerrar sesión, limpiamos el estado para que no quede contaminando
+      // la próxima sesión (antes los eventos se escribían a la caché global).
+      setEvents([])
+      return
+    }
 
     // Al cambiar de usuario, partimos del cache propio (no del global compartido)
     setEvents(dataService.getCachedEvents(user.id))
@@ -84,7 +80,10 @@ export function useEvents() {
 
   // Mantiene el cache local sincronizado (scoped por user)
   useEffect(() => {
-    dataService.setCachedEvents(events, user?.id)
+    // Solo persistimos caché cuando hay usuario. Sin sesión no escribimos a
+    // la clave global para no dejar residuos que reaparezcan al re-login.
+    if (!user?.id) return
+    dataService.setCachedEvents(events, user.id)
   }, [events, user?.id])
 
   function addEvent({ title, time, description = '', section = 'focus', icon = 'event', dotColor = 'bg-secondary-container', date = null }) {

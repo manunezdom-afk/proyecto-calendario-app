@@ -29,7 +29,11 @@ export function AuthProvider({ children }) {
         setUser(newUser)
         setSignalsUserId(newUser?.id ?? null)
         if (event === 'SIGNED_IN' && newUser) {
-          await dataService.migrateToCloud(newUser.id)
+          // Limpiamos las claves globales (sin userId) para que cualquier
+          // caché residual del dispositivo — p. ej. tareas o eventos de una
+          // sesión anterior — no se muestre como datos del nuevo usuario.
+          // La fuente de verdad pasa a ser únicamente Supabase.
+          dataService.clearGlobalCache()
           await dataService.flushQueue()
           await flushSignalsQueue()
           await fetchBehavior(newUser.id).catch(() => {})
@@ -104,6 +108,10 @@ export function AuthProvider({ children }) {
       sessionStorage.removeItem('focus_auth_resend_until')
       sessionStorage.removeItem('focus_device_pairing')
     } catch {}
+    // Borramos las claves globales (sin userId) de caché local. Los datos del
+    // usuario que siguieron en estado React al salir ya no se persisten al
+    // cierre y no pueden aparecer como "tareas pendientes" en el próximo login.
+    dataService.clearGlobalCache()
   }, [])
 
   // ── Device pairing ─────────────────────────────────────────────────────────
