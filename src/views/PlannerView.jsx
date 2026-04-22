@@ -6,7 +6,6 @@ import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { isInPeak, parseEventHour, peakRangeLabel } from '../utils/peakZone'
 import { todayISO as todayISODate, parseTimeToDecimal } from '../utils/time'
-import { buildGhostBlocks } from '../utils/ghosts'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
@@ -138,13 +137,6 @@ function looksLikeReminderTitle(title) {
 }
 
 const STORAGE_KEY = 'focus_planner_blocks'
-const GHOST_KEY   = 'focus_ghosts_dismissed'
-
-// Eventos fantasma — se muestran solo a usuarios nuevos como demo visual
-// de cómo luce Mi Día. Desaparecen en cuanto el usuario crea su primer
-// evento, tarea o bloque. Definidos en utils/ghosts.js para que
-// Calendario y Tareas compartan el mismo flag de dismissal.
-const GHOST_BLOCKS = buildGhostBlocks()
 
 // ── Lógica de insights personalizados ─────────────────────────────────────
 function buildInsights(events, profile) {
@@ -394,23 +386,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     localStorage.setItem(STORAGE_KEY, JSON.stringify(blocks))
   }, [blocks])
 
-  // ── Eventos fantasma (onboarding) ──────────────────────────────────────
-  const [ghostsDismissed, setGhostsDismissed] = useState(() => {
-    try { return localStorage.getItem(GHOST_KEY) === '1' } catch { return false }
-  })
-  const hasAnyRealContent =
-    (events?.length ?? 0) > 0 ||
-    (tasks?.length ?? 0) > 0 ||
-    (Array.isArray(blocks) && blocks.length > 0)
-  const showGhosts = !ghostsDismissed && !hasAnyRealContent
-
-  useEffect(() => {
-    if (!ghostsDismissed && hasAnyRealContent) {
-      try { localStorage.setItem(GHOST_KEY, '1') } catch {}
-      setGhostsDismissed(true)
-    }
-  }, [ghostsDismissed, hasAnyRealContent])
-
   // Sincroniza "Mi Día" (timeline) con eventos de HOY.
   // Antes solo AÑADÍA blocks — por eso cuando Nova decía "eliminé tus eventos"
   // los blocks quedaban zombies en localStorage. Ahora también los elimina
@@ -559,14 +534,13 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   // arma mucho después. Antes, borrar el último evento dejaba dayIsEmpty=true
   // y la evaluación de pendingTasksCount antes de su const crasheaba el render
   // entero (pantalla blanca).
-  const pendingTasksCount = (!showGhosts && Array.isArray(tasks))
+  const pendingTasksCount = Array.isArray(tasks)
     ? tasks.filter((t) => t && !t.done && t.category === 'hoy').length
     : 0
   // Si hay tareas pendientes de hoy, el día no está vacío aunque no haya
   // eventos con hora — no tiene sentido empujar al usuario al adelanto de
   // mañana cuando tiene cosas por resolver hoy.
-  const showTomorrowPreview = !showGhosts
-    && (dayIsEmpty || dayIsDone)
+  const showTomorrowPreview = (dayIsEmpty || dayIsDone)
     && pendingTasksCount === 0
     && tomorrowEvents.length > 0
   const minsToNext  = nextBlock   ? (nextBlock._h   - now) * 60 : null
@@ -575,9 +549,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
   // Heurística "Google Calendar": recordatorios como eventos cortos anidados (UI-only)
   const displayBlocks = (() => {
-    const arrRaw = showGhosts
-      ? GHOST_BLOCKS
-      : (Array.isArray(blocks) ? blocks : [])
+    const arrRaw = Array.isArray(blocks) ? blocks : []
     // NO ocultamos eventos pasados: si el usuario crea "fútbol 5 PM" a las 9 PM
     // debe verlo en Mi Día como confirmación. El estilo "pasado" se aplica en
     // el render (opacity/tachado), no filtrando.
@@ -683,7 +655,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     //    y las mostramos como subtareas debajo, para que no queden flotando
     //    sueltas en la pestaña Tareas sin contexto.
     const attachedTaskIds = new Set()
-    if (!showGhosts && Array.isArray(tasks) && tasks.length > 0) {
+    if (Array.isArray(tasks) && tasks.length > 0) {
       const blocksByEventId = new Map()
       for (const entry of order) {
         if (entry?.eventId) blocksByEventId.set(entry.eventId, entry)
@@ -706,7 +678,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     //    Evita duplicar las que ya colgamos como subtareas en paso 3.
     //    Orden: prioridad Alta primero, luego Media, luego Baja; dentro de
     //    cada nivel respetamos el orden de creación para que la lista no baile.
-    if (!showGhosts && Array.isArray(tasks) && tasks.length > 0) {
+    if (Array.isArray(tasks) && tasks.length > 0) {
       const PRIO_RANK = { Alta: 0, Media: 1, Baja: 2 }
       const pendingToday = tasks
         .filter((t) => t && !t.done && t.category === 'hoy' && !attachedTaskIds.has(t.id))
@@ -802,7 +774,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
             })()}
 
             <div className="relative space-y-2">
-              {displayBlocks.map(({ id, eventId, taskId, time, type, title, description, priority, subtasks = [], _asReminderOnly, _isTask, isGhost: isGhostFlag }) => {
+              {displayBlocks.map(({ id, eventId, taskId, time, type, title, description, priority, subtasks = [], _asReminderOnly, _isTask }) => {
                 // Tareas de hoy (sin hora): se pintan como item distinto del
                 // timeline, con etiqueta "Pendiente de hoy" y acciones ligadas
                 // a los handlers de tareas (no a los de eventos).
@@ -878,8 +850,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 }
 
                 const isSuggestion = type === 'suggestion'
-                const isGhost = !!isGhostFlag
-                const inPeak = !isSuggestion && !isGhost && profile.peakStart != null
+                const inPeak = !isSuggestion && profile.peakStart != null
                   ? isInPeak(time, profile.peakStart, profile.peakEnd)
                   : null
                 const isActive = activeBlock?.id === id
@@ -893,7 +864,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   if (eventId) onDeleteEvent?.(eventId)
                 }
                 const handleLongPressDelete = () => {
-                  if (isSuggestion || isGhost || _asReminderOnly) return
+                  if (isSuggestion || _asReminderOnly) return
                   if (window.confirm(`¿Eliminar "${title}"?`)) handleDeleteBlock()
                 }
                 return (
@@ -919,11 +890,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       <div className={`absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : 'bg-primary'}`}
                         style={{ left: '-21px', zIndex: 1 }} />
                       <SwipeableCard
-                        onDelete={!isSuggestion && !isGhost && !_asReminderOnly ? handleDeleteBlock : undefined}
-                        disabled={isSuggestion || isGhost || _asReminderOnly}
+                        onDelete={!isSuggestion && !_asReminderOnly ? handleDeleteBlock : undefined}
+                        disabled={isSuggestion || _asReminderOnly}
                       >
                       <LongPressZone
-                        onLongPress={!isSuggestion && !isGhost && !_asReminderOnly ? handleLongPressDelete : undefined}
+                        onLongPress={!isSuggestion && !_asReminderOnly ? handleLongPressDelete : undefined}
                         className={`rounded-xl ${
                           isSuggestion
                             ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
@@ -935,7 +906,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                               }`
                         }`}
                         style={{ padding: '14px 16px 14px 14px', overflow: 'visible', touchAction: 'pan-y' }}
-                        title={isGhost ? 'Ejemplo — desaparecerá cuando agregues tu primer evento' : inPeak === true ? 'En tu zona de rendimiento · Mantén apretado para eliminar' : inPeak === false ? 'Fuera de tu zona de rendimiento · Mantén apretado para eliminar' : 'Mantén apretado para eliminar'}
+                        title={inPeak === true ? 'En tu zona de rendimiento · Mantén apretado para eliminar' : inPeak === false ? 'Fuera de tu zona de rendimiento · Mantén apretado para eliminar' : 'Mantén apretado para eliminar'}
                       >
                         <div className="flex justify-between items-start gap-2" style={{ marginBottom: '2px' }}>
                           <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0 }}>
@@ -944,14 +915,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                               {title || '(sin título)'}
                             </h3>
                           </div>
-                          {isGhost ? (
-                            <span
-                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary"
-                              style={{ flexShrink: 0, letterSpacing: '0.08em' }}
-                            >
-                              EJEMPLO
-                            </span>
-                          ) : isSuggestion ? (
+                          {isSuggestion ? (
                             <button
                               onClick={(e) => { e.stopPropagation(); acceptSuggestion(id) }}
                               className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-secondary/20 hover:bg-secondary/10 text-secondary transition-colors"
@@ -1026,7 +990,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 )
               })}
 
-              {blocks.length === 0 && pendingTasksCount === 0 && !showGhosts && (() => {
+              {blocks.length === 0 && pendingTasksCount === 0 && (() => {
                 const pendingTotal = semanaCount + algoDiaCount
                 return (
                   <div className="flex gap-6">
