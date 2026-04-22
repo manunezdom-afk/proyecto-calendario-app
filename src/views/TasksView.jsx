@@ -11,7 +11,7 @@ const CATEGORIES = ['hoy', 'semana', 'algún día']
 const CAT_LABELS = { hoy: 'Hoy', semana: 'Esta semana', 'algún día': 'Algún día' }
 const CAT_ICONS  = { hoy: 'today', semana: 'date_range', 'algún día': 'inbox' }
 
-export default function TasksView({ tasks = [], addTask = () => {}, toggleTask = () => {}, deleteTask = () => {} }) {
+export default function TasksView({ tasks = [], events = [], addTask = () => {}, toggleTask = () => {}, deleteTask = () => {} }) {
   const [showInput, setShowInput]     = useState(false)
   const [addCategory, setAddCategory] = useState('hoy')
   const [newLabel, setNewLabel]       = useState('')
@@ -76,7 +76,7 @@ export default function TasksView({ tasks = [], addTask = () => {}, toggleTask =
 
           {/* Weekly stats en desktop va al lado del progreso */}
           <div className="hidden lg:block">
-            <WeeklyStatsCard tasks={tasks} />
+            <WeeklyStatsCard tasks={tasks} events={events} />
           </div>
         </header>
 

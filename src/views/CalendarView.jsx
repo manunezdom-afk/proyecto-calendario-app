@@ -192,7 +192,7 @@ function formatWeekRange(weekStart) {
 }
 
 // ─── Main view ────────────────────────────────────────────────────────────────
-export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask, onExportClick, isDesktop = false }) {
+export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask, onExportClick, onOpenDay, isDesktop = false }) {
   const [showModal, setShowModal] = useState(false)
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('dia')           // 'dia' | 'semana' | 'mes'
@@ -430,13 +430,26 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                       : `${dayName} ${activeDay} de ${monthName.toLowerCase()}`
                   })()}
                 </h2>
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[16px]">add</span>
-                  Añadir
-                </button>
+                <div className="flex items-center gap-1">
+                  {onOpenDay && (
+                    <button
+                      onClick={() => onOpenDay(activeDayISO)}
+                      aria-label="Ver día completo"
+                      title="Ver día completo"
+                      className="flex items-center gap-1 text-xs font-bold text-outline hover:bg-surface-container-low px-3 py-1.5 rounded-full transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">open_in_full</span>
+                      Ver día
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">add</span>
+                    Añadir
+                  </button>
+                </div>
               </div>
 
               {focusEvents.length === 0 ? (

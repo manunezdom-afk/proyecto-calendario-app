@@ -87,11 +87,17 @@ export function useEvents() {
     dataService.setCachedEvents(events, user.id)
   }, [events, user?.id])
 
-  function addEvent({ title, time, description = '', section = 'focus', icon = 'event', dotColor = 'bg-secondary-container', date = null }) {
+  function addEvent({ title, time, description = '', section = 'focus', icon = 'event', dotColor = 'bg-secondary-container', date = null, reminderOffsets = null, timezone = null }) {
+    let tz = timezone
+    if (!tz) {
+      try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null } catch { tz = null }
+    }
     const newEvent = {
       id: `evt-${Date.now()}`,
       title: cleanGeneratedTitle(title) || title,
       time, description, section, featured: false, icon, dotColor, date,
+      reminderOffsets,
+      timezone: tz,
     }
     console.log(`[Focus] ➕ addEvent: "${newEvent.title}"`)
     setEvents(prev => [...prev, newEvent])

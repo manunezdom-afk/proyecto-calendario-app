@@ -336,6 +336,15 @@ export default function App() {
                   onEditEvent={editEvent}
                   onOpenTask={(event) => openTaskDetail(event)}
                   onExportClick={() => { setImportExportInitialTab('export'); setImportExportOpen(true) }}
+                  onOpenDay={(iso) => {
+                    try {
+                      const url = new URL(window.location.href)
+                      url.searchParams.set('view', 'day')
+                      if (iso) url.searchParams.set('date', iso)
+                      window.history.pushState({ view: 'day' }, '', url.toString())
+                    } catch {}
+                    setActiveView('day')
+                  }}
                   isDesktop={isDesktop}
                 />
               )}
@@ -352,6 +361,7 @@ export default function App() {
               {activeView === 'tasks' && (
                 <TasksView
                   tasks={tasks}
+                  events={events}
                   addTask={addTask}
                   toggleTask={toggleTask}
                   deleteTask={deleteTask}

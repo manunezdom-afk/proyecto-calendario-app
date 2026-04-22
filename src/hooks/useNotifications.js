@@ -6,8 +6,20 @@ const LOG_KEY    = 'focus_notif_log'
 const FIRED_KEY  = 'focus_notif_fired'
 const DISMISS_KEY = 'focus_notif_dismissed'
 
-// Minutes before event to fire each reminder
-const OFFSETS = [10, 30, 60]
+// Default minutes before event to fire each reminder (if event has no custom offsets)
+const DEFAULT_OFFSETS = [10, 30, 60]
+
+function offsetLabel(min) {
+  if (min >= 1440) {
+    const d = Math.round(min / 1440)
+    return d === 1 ? 'mañana' : `en ${d} días`
+  }
+  if (min >= 60) {
+    const h = Math.round(min / 60)
+    return h === 1 ? 'en 1 hora' : `en ${h} horas`
+  }
+  return `en ${min} minutos`
+}
 
 function todayISO() {
   const d = new Date()
@@ -114,7 +126,12 @@ export function useNotifications({ events = [] } = {}) {
       const eventTime = parseEventTime(event.time, eventDate)
       if (!eventTime) return
 
-      OFFSETS.forEach((offsetMin) => {
+      // Per-event offsets: null/undefined → use defaults; [] = silenced; array = custom
+      const rawOffsets = event.reminderOffsets
+      const offsets = Array.isArray(rawOffsets) ? rawOffsets : DEFAULT_OFFSETS
+      if (offsets.length === 0) return
+
+      offsets.forEach((offsetMin) => {
         const fireAt  = new Date(eventTime.getTime() - offsetMin * 60 * 1000)
         const firedKey = `${event.id}-${offsetMin}m`
 
@@ -130,11 +147,7 @@ export function useNotifications({ events = [] } = {}) {
         try { localStorage.setItem(FIRED_KEY, JSON.stringify(firedRef.current)) } catch (_) {}
 
         // Build notification content
-        const label = offsetMin === 60
-          ? 'en 1 hora'
-          : offsetMin === 30
-          ? 'en 30 minutos'
-          : 'en 10 minutos'
+        const label = offsetLabel(offsetMin)
         const title = `${event.title} ${label}`
         const body  = event.time ? `Comienza a las ${event.time.split(' - ')[0]}` : ''
 

@@ -25,6 +25,8 @@ function eventToDb(event, userId) {
     dot_color: event.dotColor ?? 'bg-secondary-container',
     date: event.date ?? null,
     featured: event.featured ?? false,
+    reminder_offsets: Array.isArray(event.reminderOffsets) ? event.reminderOffsets : null,
+    timezone: event.timezone ?? null,
   }
 }
 
@@ -34,6 +36,8 @@ function eventFromDb(row) {
     description: row.description, section: row.section,
     icon: row.icon, dotColor: row.dot_color,
     date: row.date, featured: row.featured,
+    reminderOffsets: row.reminder_offsets ?? null,
+    timezone: row.timezone ?? null,
   }
 }
 

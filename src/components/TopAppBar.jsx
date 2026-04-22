@@ -65,7 +65,7 @@ export default function TopAppBar({
             onClick={onSearchClick}
             aria-label="Buscar (⌘K)"
             title="Buscar (⌘K)"
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center gap-1.5 px-2.5 lg:px-3 rounded-full text-slate-400 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 duration-200"
+            className="hidden lg:flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 px-2.5 lg:px-3 rounded-full text-slate-400 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 duration-200"
           >
             <span className="material-symbols-outlined text-[22px]">search</span>
             <span className="hidden lg:inline text-[13px] font-semibold text-slate-600 dark:text-slate-300">Buscar</span>

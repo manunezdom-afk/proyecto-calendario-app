@@ -1,3 +1,5 @@
+import { resolveEventDate } from '../utils/resolveEventDate'
+
 const DAY_ABBR = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 function getWeekDates() {
@@ -19,7 +21,11 @@ function isSameDay(a, b) {
          a.getDate()     === b.getDate()
 }
 
-export default function WeeklyStatsCard({ tasks }) {
+function isoOf(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export default function WeeklyStatsCard({ tasks, events = [] }) {
   const weekDates = getWeekDates()
   const today     = new Date()
 
@@ -33,6 +39,10 @@ export default function WeeklyStatsCard({ tasks }) {
   const totalTasks  = tasks.filter((t) => t.category === 'hoy' || t.category === 'semana').length
   const pct         = totalTasks > 0 ? Math.round((totalDone / totalTasks) * 100) : 0
   const maxCount    = Math.max(...countsByDay, 1)
+
+  // Count events this week (by resolved ISO date)
+  const weekIsoSet = new Set(weekDates.map(isoOf))
+  const eventsThisWeek = (events || []).filter((ev) => weekIsoSet.has(resolveEventDate(ev))).length
 
   return (
     <div className="bg-gradient-to-br from-primary/8 to-secondary/5 dark:from-primary/15 dark:to-secondary/10 rounded-[24px] p-5 border border-primary/10 space-y-4">
@@ -63,6 +73,12 @@ export default function WeeklyStatsCard({ tasks }) {
           <p className="text-xl font-black text-amber-500 tabular-nums leading-none">{activeDays}</p>
           <p className="text-[10px] font-bold text-outline mt-1 leading-tight">Días activos</p>
         </div>
+        {events && events.length > 0 && (
+          <div className="flex-1 min-w-0 bg-white/60 dark:bg-slate-800/60 rounded-2xl p-2.5 text-center">
+            <p className="text-xl font-black text-tertiary tabular-nums leading-none">{eventsThisWeek}</p>
+            <p className="text-[10px] font-bold text-outline mt-1 leading-tight">Eventos</p>
+          </div>
+        )}
       </div>
 
       {/* 7-day bar chart */}
