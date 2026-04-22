@@ -278,17 +278,30 @@ ${behaviorContext ? '\n' + behaviorContext : ''}
 ${memoriesContext}
 
 Recordatorios previos a un evento (CRÍTICO):
-- Si el usuario pide "avísame X minutos antes", "recuérdame salir X min antes", "ponme un aviso X antes" de un evento existente:
+
+PASO 0 — Antes de actuar: VERIFICA que el evento principal exista en la lista "Eventos actuales" del contexto. La verificación es por combinación de título + hora (con match flexible — ignora acentos y mayúsculas). NUNCA asumas que existe si no lo ves en la lista.
+
+Caso A — El evento principal YA EXISTE en la lista:
   1. NO modifiques ni edites el evento principal (no uses edit_event sobre él).
-  2. Crea un NUEVO evento con add_event:
+  2. Emite UNA sola acción add_event para el aviso:
      - title: "Recordatorio: [título del evento principal]"
      - time: hora del evento principal MENOS los minutos solicitados (ej: fútbol 21:00, 15 min antes → 20:45 → "8:45 PM")
+     - endTime: null (los recordatorios NUNCA tienen hora de término)
      - date: misma fecha que el evento principal (null si es hoy)
      - section: "evening" si la hora calculada ≥ 14:00, sino "focus"
      - icon: "alarm"
      - description: "Salir para [título del evento principal] a las [hora del evento principal]"
-  3. El reply debe confirmar ambas cosas: el evento principal sigue en su hora, y el aviso queda agendado a la hora calculada.
-- Ejemplo: "Fútbol" a las 9:00 PM, pide aviso 15 min antes → crea "Recordatorio: Fútbol" a las 8:45 PM con description "Salir para Fútbol a las 9:00 PM".
+  3. En el reply confirma ambas cosas: el evento principal sigue en su hora original, y el aviso quedó agendado a la hora calculada.
+  4. Ejemplo: existe "Fútbol" 9:00 PM, usuario pide aviso 15 min antes → UN add_event con "Recordatorio: Fútbol" a 8:45 PM. Reply: "Listo, recordatorio agendado a las 8:45 PM. Tu evento de fútbol sigue a las 9:00 PM."
+
+Caso B — El evento principal NO EXISTE en la lista (el usuario lo menciona en la misma frase, ej. "tengo fútbol a las 7, recuérdame 30 min antes"):
+  1. Emite DOS acciones add_event en orden:
+     a) Primero el evento principal (el que el usuario describe). endTime según reglas de duración normales.
+     b) Después el recordatorio, con las mismas reglas que el Caso A pero respecto al evento que acabas de crear.
+  2. En el reply di EXPLÍCITAMENTE que creaste ambos, y menciona cada hora. NO digas "tu evento sigue a las X" si en realidad lo acabas de crear — di "agendé tu fútbol a las 7:00 PM y un recordatorio a las 6:30 PM".
+  3. Ejemplo: usuario dice "tengo fútbol a las 7 PM, recuérdame 30 min antes" y NO hay fútbol hoy en la lista → dos add_event: "Fútbol" 7:00-8:00 PM + "Recordatorio: Fútbol" 6:30 PM. Reply: "Agendé tu fútbol a las 7:00 PM y un recordatorio a las 6:30 PM para que te prepares."
+
+REGLA ABSOLUTA: nunca afirmes en el reply que "tu evento sigue/está a las X" sin haberlo verificado en la lista de eventos o sin haberlo creado en esta misma respuesta. Si el usuario te pide un recordatorio y no puedes confirmar que el evento padre existe, estás en Caso B y debes crear ambos.
 
 Instrucciones adicionales:
 - Si el usuario pide mover un evento, usa edit_event con el id correcto

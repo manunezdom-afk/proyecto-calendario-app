@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
@@ -45,12 +45,41 @@ function normalizeTimeField({ time, endTime, isReminder }) {
   return time
 }
 
+// Ventana para considerar un upsert "en vuelo": si el refetch llega antes de
+// que Supabase confirme el INSERT/UPDATE, preservamos el evento local durante
+// este tiempo. Sin este escudo, Nova creaba un recordatorio y el realtime
+// subsiguiente disparaba un refetch que traía un snapshot de Supabase todavía
+// sin commitear — y el `setEvents(cloudEvents)` borraba tanto el recordatorio
+// como cualquier otro evento con upsert en curso. Resultado: "desapareció de
+// la nada".
+const PENDING_UPSERT_TTL_MS = 60_000
+
 export function useEvents() {
   const { user } = useAuth()
   // IDs de eventos cuyo DELETE está en vuelo — evita que un refetch previo a la
   // confirmación de Supabase restaure el evento en el estado local (race condition
   // especialmente común en iOS donde visibilitychange dispara refetch en cada tap).
   const pendingDeletesRef = useRef(new Set())
+
+  // Eventos recién agregados/editados cuyo upsert a Supabase puede estar en
+  // vuelo. Guardamos el evento completo + timestamp: si cloudEvents todavía
+  // no los trae, los preservamos hasta TTL o hasta que el backend confirme.
+  // Map<id, { event, markedAt }>
+  const pendingUpsertsRef = useRef(new Map())
+
+  const markPendingUpsert = useCallback((event) => {
+    if (!event?.id) return
+    pendingUpsertsRef.current.set(event.id, { event, markedAt: Date.now() })
+  }, [])
+
+  const sweepStalePending = useCallback(() => {
+    const now = Date.now()
+    for (const [id, { markedAt }] of pendingUpsertsRef.current) {
+      if (now - markedAt > PENDING_UPSERT_TTL_MS) {
+        pendingUpsertsRef.current.delete(id)
+      }
+    }
+  }, [])
 
   // Sin usuario arrancamos vacío: la caché global (focus_events sin userId)
   // solía mostrar eventos de una sesión anterior al iniciar sesión otra vez.
@@ -61,13 +90,36 @@ export function useEvents() {
     if (!user) return
     try {
       const cloudEvents = await dataService.fetchEvents(user.id)
-      const pending = pendingDeletesRef.current
-      const filtered = pending.size > 0
-        ? cloudEvents.filter(e => !pending.has(e.id))
+      const pendingDeletes = pendingDeletesRef.current
+      const cloudFiltered = pendingDeletes.size > 0
+        ? cloudEvents.filter(e => !pendingDeletes.has(e.id))
         : cloudEvents
-      setEvents(filtered)
-      dataService.setCachedEvents(filtered, user.id)
-      console.log(`[Focus] ☁️ ${filtered.length} eventos cargados ${tag} (user=${user.id.slice(0,8)})`)
+      const cloudIds = new Set(cloudFiltered.map(e => e.id))
+
+      // Preservar upserts en vuelo: si el cloud ya trae el id, el pending
+      // cumplió su propósito y lo soltamos. Si no, mantenemos el evento local
+      // (dentro del TTL) para que un refetch acelerado por realtime no borre
+      // un evento que todavía está viajando al backend.
+      sweepStalePending()
+      const pendingToKeep = []
+      for (const [id, { event }] of pendingUpsertsRef.current) {
+        if (cloudIds.has(id)) {
+          pendingUpsertsRef.current.delete(id)
+        } else {
+          pendingToKeep.push(event)
+        }
+      }
+
+      const merged = pendingToKeep.length > 0
+        ? [...cloudFiltered, ...pendingToKeep]
+        : cloudFiltered
+      setEvents(merged)
+      dataService.setCachedEvents(merged, user.id)
+      if (pendingToKeep.length > 0) {
+        console.log(`[Focus] ☁️ ${cloudFiltered.length} en nube + ${pendingToKeep.length} pendientes ${tag}`)
+      } else {
+        console.log(`[Focus] ☁️ ${merged.length} eventos cargados ${tag} (user=${user.id.slice(0,8)})`)
+      }
     } catch (err) {
       console.warn('[Focus] ⚠️ No se pudo cargar eventos de Supabase', err)
     }
@@ -147,7 +199,15 @@ export function useEvents() {
     }
     console.log(`[Focus] ➕ addEvent: "${newEvent.title}"`)
     setEvents(prev => [...prev, newEvent])
-    if (user) dataService.upsertEvent(newEvent, user.id).catch(console.warn)
+    // Marcamos el evento como "upsert pendiente" ANTES del setEvents para
+    // que si el realtime de Supabase dispara un refetch entre este punto y
+    // el commit del upsert, el escudo lo preserve.
+    markPendingUpsert(newEvent)
+    if (user) {
+      dataService.upsertEvent(newEvent, user.id).catch((err) => {
+        console.warn('[Focus] ⚠️ upsertEvent falló, quedará en cola offline:', err)
+      })
+    }
     logSignal('event_created', {
       hour: parseEventHour(finalTime),
       section,
@@ -160,6 +220,9 @@ export function useEvents() {
   function deleteEvent(id) {
     console.log(`[Focus] 🗑️ deleteEvent: "${id}"`)
     pendingDeletesRef.current.add(id)
+    // Si el evento que estamos borrando estaba marcado como upsert pendiente,
+    // lo sacamos — si no, el refetch lo resucitaría desde pendingUpsertsRef.
+    pendingUpsertsRef.current.delete(id)
     setEvents(prev => {
       const removed = prev.find(e => e.id === id)
       if (removed) {
@@ -196,9 +259,16 @@ export function useEvents() {
         }
         return merged
       })
-      if (user) {
-        const updated = next.find(e => e.id === id)
-        if (updated) dataService.upsertEvent(updated, user.id).catch(console.warn)
+      const updated = next.find(e => e.id === id)
+      if (updated) {
+        // Un edit también puede ser pisado por un refetch si el realtime
+        // notifica antes de que el UPDATE commitee. Lo marcamos igual.
+        markPendingUpsert(updated)
+        if (user) {
+          dataService.upsertEvent(updated, user.id).catch((err) => {
+            console.warn('[Focus] ⚠️ upsertEvent (edit) falló, quedará en cola offline:', err)
+          })
+        }
       }
       return next
     })
