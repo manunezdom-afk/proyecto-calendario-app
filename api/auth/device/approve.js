@@ -7,7 +7,7 @@
 // Genera un magic-link via supabase.auth.admin.generateLink: esto NO envía
 // email (solo devuelve el token_hash que el nuevo dispositivo intercambia).
 
-import { getSupabaseAdmin, getUserIdFromAuth } from '../../_supabaseAdmin.js'
+import { getSupabaseAdmin, getUserFromAuth } from '../../_supabaseAdmin.js'
 import { rateLimited, clientIp } from '../../_lib/rateLimit.js'
 
 export default async function handler(req, res) {
@@ -21,8 +21,10 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'rate_limited' })
   }
 
-  const userId = await getUserIdFromAuth(req)
-  if (!userId) return res.status(401).json({ error: 'unauthorized' })
+  const authUser = await getUserFromAuth(req)
+  if (!authUser?.id || !authUser?.email) return res.status(401).json({ error: 'unauthorized' })
+  const userId = authUser.id
+  const email = authUser.email
 
   // Normalizamos: quitamos espacios, guiones, y pasamos a mayúsculas. El
   // alfabeto del user_code no tiene letras ambiguas, así que no mapeamos O→0.
@@ -54,13 +56,6 @@ export default async function handler(req, res) {
   if (new Date(pairing.expires_at).getTime() < Date.now()) {
     return res.status(410).json({ error: 'expired' })
   }
-
-  const { data: userRes, error: uErr } = await admin.auth.admin.getUserById(userId)
-  if (uErr || !userRes?.user?.email) {
-    console.error('[device/approve] user lookup', uErr)
-    return res.status(500).json({ error: 'user_lookup_failed' })
-  }
-  const email = userRes.user.email
 
   const { data: linkData, error: lErr } = await admin.auth.admin.generateLink({
     type: 'magiclink',

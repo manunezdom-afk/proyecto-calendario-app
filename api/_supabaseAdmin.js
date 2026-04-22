@@ -18,6 +18,13 @@ export function getSupabaseAdmin() {
 
 /** Extrae el user_id del JWT "Bearer <token>" del header Authorization */
 export async function getUserIdFromAuth(req) {
+  const user = await getUserFromAuth(req)
+  return user?.id || null
+}
+
+/** Devuelve { id, email } del JWT. Una sola llamada a Supabase — evita
+ *  que un handler tenga que volver a consultar getUserById después. */
+export async function getUserFromAuth(req) {
   const authHeader = req.headers?.authorization || req.headers?.Authorization
   if (!authHeader?.startsWith('Bearer ')) return null
   const token = authHeader.slice(7)
@@ -25,8 +32,8 @@ export async function getUserIdFromAuth(req) {
   if (!admin) return null
   try {
     const { data, error } = await admin.auth.getUser(token)
-    if (error) return null
-    return data?.user?.id || null
+    if (error || !data?.user?.id) return null
+    return { id: data.user.id, email: data.user.email || null }
   } catch {
     return null
   }

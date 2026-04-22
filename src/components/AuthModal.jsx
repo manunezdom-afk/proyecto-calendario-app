@@ -13,7 +13,10 @@ const RESEND_COOLDOWN_SEC = 60
 // Cuando Supabase rechaza por rate-limit, aplicamos un cooldown largo en UI
 // para no seguir martillando el endpoint (cada rechazo puede extender el ban).
 const RATE_LIMIT_COOLDOWN_SEC = 5 * 60
-const DEVICE_POLL_INTERVAL_MS = 3000
+// Polling cada 1.5s: el rate-limit del endpoint (120/min) deja holgura de sobra
+// (40 reqs/min). Antes estaba en 3s y dejaba un gap promedio de 1.5s entre
+// "aprobar" y el login real — se sentía pegado.
+const DEVICE_POLL_INTERVAL_MS = 1500
 
 function readPending() {
   try {
@@ -143,9 +146,21 @@ export default function AuthModal({ isOpen, onClose }) {
   // Estado del device pairing en el nuevo dispositivo.
   const [devicePairing, setDevicePairing] = useState(initialDevice)
   const [deviceCountdown, setDeviceCountdown] = useState(0)
+  // Subestados del paso device_wait, para mostrar progreso granular y que la UI
+  // no parezca congelada entre "detecté la aprobación" y "sesión lista":
+  //   waiting     — polling, aún sin aprobar
+  //   approved    — el backend marcó approved, estamos a punto de canjear
+  //   signing_in  — intercambiando el token_hash por sesión real
+  const [deviceStage, setDeviceStage] = useState('waiting')
   // Estado del lado que aprueba (logged-in).
   const [approveCode, setApproveCode]       = useState('')
   const [approvedInfo, setApprovedInfo]     = useState(null)
+  // Subestados del botón "Aprobar" para que el botón no quede 1-2s en
+  // "Aprobando…" sin feedback:
+  //   idle        — sin acción
+  //   validating  — acaba de darle click, request en vuelo
+  //   approving   — el backend ya respondió validación, generando link
+  const [approveStage, setApproveStage] = useState('idle')
   // Banner post rate-limit sugiriendo usar otro dispositivo.
   const [rateLimitHit, setRateLimitHit]     = useState(false)
 
@@ -233,14 +248,24 @@ export default function AuthModal({ isOpen, onClose }) {
         if (res.status === 'approved' && res.token_hash) {
           // Intercambiamos el token_hash por una sesión real. onAuthStateChange
           // detectará el SIGNED_IN y disparará los flujos post-login.
+          setDeviceStage('approved')
           clearDevicePairing()
-          setDevicePairing(null)
           try {
+            // Pequeño tick para que el stepper alcance a renderizar "Código
+            // aprobado" antes de cambiar a "Iniciando sesión" — sin esto, el
+            // usuario solo percibe un flash.
+            await new Promise((r) => setTimeout(r, 120))
+            if (cancelled) return
+            setDeviceStage('signing_in')
             await exchangeDeviceToken(res.token_hash)
+            if (cancelled) return
+            setDevicePairing(null)
             setStep('device_success')
-            // Cierre automático en ~1.2s para dejar ver el check.
-            setTimeout(() => { if (!cancelled) handleClose() }, 1200)
+            // Cierre automático en ~900ms para dejar ver el check.
+            setTimeout(() => { if (!cancelled) handleClose() }, 900)
           } catch (err) {
+            setDeviceStage('waiting')
+            setDevicePairing(null)
             setError(humanizeAuthError(err) || 'No pudimos iniciar sesión con ese código.')
             setStep('chooser')
           }
@@ -502,6 +527,7 @@ export default function AuthModal({ isOpen, onClose }) {
       }
       writeDevicePairing(pairing)
       setDevicePairing(pairing)
+      setDeviceStage('waiting')
       setStep('device_wait')
     } catch (err) {
       setError('No pudimos generar el código. Prueba de nuevo en un momento.')
@@ -515,6 +541,7 @@ export default function AuthModal({ isOpen, onClose }) {
     if (pollTimerRef.current) { clearTimeout(pollTimerRef.current); pollTimerRef.current = null }
     clearDevicePairing()
     setDevicePairing(null)
+    setDeviceStage('waiting')
     setStep('chooser')
     setError(null)
   }
@@ -538,6 +565,11 @@ export default function AuthModal({ isOpen, onClose }) {
     submitLock.current = true
     setLoading(true)
     setError(null)
+    setApproveStage('validating')
+    // A los 400ms, si seguimos en validating, pasamos a "approving". El backend
+    // típicamente tarda 1-2s por el generateLink de Supabase. Este tick evita
+    // que el usuario vea 2s seguidos del mismo texto "Aprobando…".
+    const stageTimer = setTimeout(() => setApproveStage('approving'), 400)
     try {
       const res = await approveDevicePairing(clean)
       setApprovedInfo({ email: res.email, user_agent: res.user_agent })
@@ -551,6 +583,8 @@ export default function AuthModal({ isOpen, onClose }) {
       else if (code === 429) setError('Demasiados intentos. Espera un momento.')
       else setError('No pudimos aprobar el código. Prueba de nuevo.')
     } finally {
+      clearTimeout(stageTimer)
+      setApproveStage('idle')
       setLoading(false)
       submitLock.current = false
     }
@@ -650,7 +684,14 @@ export default function AuthModal({ isOpen, onClose }) {
                         disabled={loading || !approveCodeValid}
                         className="w-full py-3.5 bg-primary text-white rounded-2xl text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                       >
-                        {loading ? (<><Spinner /> Aprobando…</>) : 'Aprobar dispositivo'}
+                        {loading
+                          ? (
+                            <>
+                              <Spinner />
+                              {approveStage === 'validating' ? 'Validando código…' : 'Aprobando dispositivo…'}
+                            </>
+                          )
+                          : 'Aprobar dispositivo'}
                       </button>
                     </form>
                     <p className="mt-3 text-[11px] text-center text-slate-400 leading-snug">
@@ -820,38 +861,70 @@ export default function AuthModal({ isOpen, onClose }) {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-2xl mb-4">
-                    <span className="material-symbols-outlined text-primary text-[20px] flex-shrink-0">timer</span>
-                    <p className="text-[12px] text-slate-600 leading-snug">
-                      {deviceCountdown > 0
-                        ? `Expira en ${Math.floor(deviceCountdown/60)}m ${String(deviceCountdown%60).padStart(2,'0')}s. Esperando aprobación…`
-                        : 'Expira en unos segundos…'}
-                    </p>
-                  </div>
+                  {deviceStage === 'waiting' ? (
+                    <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-2xl mb-4">
+                      <span className="material-symbols-outlined text-primary text-[20px] flex-shrink-0 animate-pulse">timer</span>
+                      <p className="text-[12px] text-slate-600 leading-snug">
+                        {deviceCountdown > 0
+                          ? `Expira en ${Math.floor(deviceCountdown/60)}m ${String(deviceCountdown%60).padStart(2,'0')}s. Esperando aprobación…`
+                          : 'Expira en unos segundos…'}
+                      </p>
+                    </div>
+                  ) : (
+                    <ol className="p-3 bg-emerald-50/60 border border-emerald-100 rounded-2xl mb-4 space-y-1.5" aria-live="polite">
+                      {[
+                        { key: 'approved',   label: 'Código aprobado' },
+                        { key: 'signing_in', label: 'Iniciando sesión' },
+                        { key: 'done',       label: 'Listo' },
+                      ].map((s, i, arr) => {
+                        const order = arr.findIndex((x) => x.key === deviceStage)
+                        const done    = i < order
+                        const current = i === order
+                        return (
+                          <li key={s.key} className="flex items-center gap-2 text-[12.5px] leading-snug">
+                            {done ? (
+                              <span className="material-symbols-outlined text-emerald-500 text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                            ) : current ? (
+                              <Spinner />
+                            ) : (
+                              <span className="inline-block w-4 h-4 rounded-full border-2 border-slate-200" aria-hidden="true" />
+                            )}
+                            <span className={current ? 'text-slate-800 font-semibold' : done ? 'text-slate-600' : 'text-slate-400'}>
+                              {s.label}
+                            </span>
+                          </li>
+                        )
+                      })}
+                    </ol>
+                  )}
 
-                  <ol className="text-[12.5px] text-slate-600 space-y-1.5 mb-5 list-decimal list-inside leading-snug">
-                    <li>Abre Focus en el dispositivo donde ya iniciaste sesión.</li>
-                    <li>Toca tu avatar o entra a tu cuenta.</li>
-                    <li>Elige <span className="font-semibold text-slate-800">Vincular otro dispositivo</span>.</li>
-                    <li>Ingresa el código que ves arriba.</li>
-                  </ol>
+                  {deviceStage === 'waiting' && (
+                    <>
+                      <ol className="text-[12.5px] text-slate-600 space-y-1.5 mb-5 list-decimal list-inside leading-snug">
+                        <li>Abre Focus en el dispositivo donde ya iniciaste sesión.</li>
+                        <li>Toca tu avatar o entra a tu cuenta.</li>
+                        <li>Elige <span className="font-semibold text-slate-800">Vincular otro dispositivo</span>.</li>
+                        <li>Ingresa el código que ves arriba.</li>
+                      </ol>
 
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handleCancelDevice}
-                      className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-2xl text-[13px] font-semibold active:scale-[0.98] transition-transform"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setStep('email'); setError(null) }}
-                      className="flex-1 py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl text-[13px] font-semibold active:scale-[0.98] transition-transform"
-                    >
-                      Usar email
-                    </button>
-                  </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCancelDevice}
+                          className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-2xl text-[13px] font-semibold active:scale-[0.98] transition-transform"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setStep('email'); setError(null) }}
+                          className="flex-1 py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl text-[13px] font-semibold active:scale-[0.98] transition-transform"
+                        >
+                          Usar email
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </>
               ) : step === 'device_success' ? (
                 <div className="text-center py-6">
