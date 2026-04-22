@@ -112,16 +112,17 @@ export default function MorningBrief({
           </div>
         )}
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <button
             onClick={handleStart}
-            className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary/90 transition-colors"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary/90 active:scale-[0.98] transition-all shadow-sm shadow-primary/20"
           >
+            <span className="material-symbols-outlined text-[16px]">play_arrow</span>
             Empezar el día
           </button>
           <button
             onClick={handleDismiss}
-            className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-colors"
+            className="px-3 py-2 rounded-xl text-[12.5px] font-semibold text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
           >
             Más tarde
           </button>

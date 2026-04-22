@@ -50,7 +50,7 @@ export default function DayTimeGrid({ events = [], onAdd, onOpenTask, referenceD
         </button>
       </div>
 
-      <div className="relative bg-surface-container-lowest border border-slate-200 rounded-2xl overflow-hidden" style={{ height: gridHeight }}>
+      <div className="relative bg-surface-container-lowest border border-outline-variant/30 rounded-2xl overflow-hidden shadow-sm" style={{ height: gridHeight }}>
         {hours.map((h, i) => (
           <div
             key={h}
@@ -60,7 +60,7 @@ export default function DayTimeGrid({ events = [], onAdd, onOpenTask, referenceD
             <span className="w-12 flex-shrink-0 text-[10px] text-outline/60 font-semibold pl-2 pt-0.5">
               {h}:00
             </span>
-            <div className="flex-1 border-t border-slate-100" />
+            <div className="flex-1 border-t border-outline-variant/15" />
           </div>
         ))}
 

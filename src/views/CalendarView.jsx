@@ -312,7 +312,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
   return (
     <div className="bg-surface text-on-surface min-h-screen pb-44">
 
-      <main className={isDesktop ? "max-w-4xl mx-auto px-6 pt-4 space-y-6" : "max-w-md mx-auto px-4 pt-4 space-y-8"}>
+      <main className={isDesktop ? "max-w-6xl xl:max-w-7xl mx-auto px-6 pt-4 space-y-6" : "max-w-md mx-auto px-4 pt-4 space-y-8"}>
 
         {/* ── Header & View Switcher (always visible) ─────────────────── */}
         {/* En mobile el título va arriba y los controles van en una segunda

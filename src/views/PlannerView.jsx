@@ -716,20 +716,24 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
           El sistema de user_signals aprende el cronotipo solo, sin preguntar. */}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8">
-        <div className={isDesktop ? "flex flex-col gap-6" : "flex flex-col gap-10"}>
+        {/* Desktop: 2 columnas (timeline 2fr + insights 1fr). Mobile: stack.
+            Antes todo iba en flex-col incluso en desktop, lo que dejaba la
+            columna derecha vacía a partir de 1024px. El grid con fr permite
+            que el timeline respire y los insights queden fijos al lado. */}
+        <div className={isDesktop ? "grid grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] gap-8 items-start" : "flex flex-col gap-10"}>
 
           {/* ── Left: Timeline ────────────────────────────────────────────── */}
-          <div className="flex-1">
+          <div className="min-w-0">
             {isDesktop && morningBrief && (
               <div className="mb-6">
                 <MorningBrief inline {...morningBrief} />
               </div>
             )}
-            <header className="mb-10">
-              <p className="text-primary font-semibold text-xs mb-2">
+            <header className="mb-8">
+              <p className="text-primary font-bold text-[11px] uppercase tracking-[0.14em] mb-2.5">
                 {formatToday()}
               </p>
-              <h2 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface">
+              <h2 className="text-4xl lg:text-5xl font-headline font-extrabold tracking-tight text-on-surface">
                 Mi Día
               </h2>
             </header>
@@ -746,7 +750,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
               inline
             />
 
-            <div className="relative space-y-2">
+            <div className="relative space-y-3">
               {displayBlocks.map(({ id, eventId, taskId, time, type, title, description, priority, subtasks = [], _asReminderOnly, _isTask }) => {
                 // Tareas de hoy (sin hora): se pintan como item distinto del
                 // timeline, con etiqueta "Pendiente de hoy" y acciones ligadas
