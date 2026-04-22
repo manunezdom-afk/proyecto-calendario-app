@@ -554,6 +554,14 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   const hasBlocks   = blocksWithDecimal.length > 0
   const dayIsEmpty  = !hasBlocks && !flexibleBlock
   const dayIsDone   = hasBlocks && !activeBlock && !nextBlock && !flexibleBlock
+  // Tareas de hoy pendientes. Se calcula aquí (y no derivado de displayBlocks)
+  // para evitar TDZ: showTomorrowPreview lo lee más abajo y displayBlocks se
+  // arma mucho después. Antes, borrar el último evento dejaba dayIsEmpty=true
+  // y la evaluación de pendingTasksCount antes de su const crasheaba el render
+  // entero (pantalla blanca).
+  const pendingTasksCount = (!showGhosts && Array.isArray(tasks))
+    ? tasks.filter((t) => t && !t.done && t.category === 'hoy').length
+    : 0
   // Si hay tareas pendientes de hoy, el día no está vacío aunque no haya
   // eventos con hora — no tiene sentido empujar al usuario al adelanto de
   // mañana cuando tiene cosas por resolver hoy.
@@ -719,8 +727,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
     return order
   })()
-
-  const pendingTasksCount = displayBlocks.filter((b) => b._isTask).length
 
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-56 dark:bg-slate-900 dark:text-slate-100">
