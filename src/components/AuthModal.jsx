@@ -157,9 +157,15 @@ export default function AuthModal({ isOpen, onClose }) {
   const historyPushedRef = useRef(false)
   // Guardamos el id del polling para cancelarlo al cambiar de paso o cerrar.
   const pollTimerRef = useRef(null)
+  // Debounce del auto-submit del OTP: cancela disparos previos si el usuario
+  // sigue tipeando/pegando. Evita que un código de 8 dígitos se envíe truncado
+  // a Supabase al pasar por la longitud 6 intermedia.
+  const autoSubmitTimerRef = useRef(null)
 
   const emailValid = isValidEmail(email)
-  const codeValid  = /^\d{6}$/.test(code)
+  // Aceptamos 6-10 dígitos: Supabase puede entregar 6 (default) u 8 (config
+  // del proyecto). La UI no puede asumir un largo fijo o trunca el código.
+  const codeValid  = /^\d{6,10}$/.test(code)
   const approveCodeValid = approveCode.replace(/[^A-Z0-9]/gi, '').length === 8
 
   // Si el usuario verifica con éxito mientras el modal está abierto, cerramos
@@ -179,7 +185,16 @@ export default function AuthModal({ isOpen, onClose }) {
   useEffect(() => {
     if (step === 'code' && codeInputRef.current) codeInputRef.current.focus()
     if (step === 'device_approve' && approveInputRef.current) approveInputRef.current.focus()
+    // Si salimos del paso 'code', cancelamos cualquier auto-submit pendiente.
+    if (step !== 'code' && autoSubmitTimerRef.current) {
+      clearTimeout(autoSubmitTimerRef.current)
+      autoSubmitTimerRef.current = null
+    }
   }, [step])
+
+  useEffect(() => () => {
+    if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current)
+  }, [])
 
   // Cooldown tick para el botón de reenviar.
   useEffect(() => {
@@ -376,15 +391,15 @@ export default function AuthModal({ isOpen, onClose }) {
   async function handleVerify(eOrCode) {
     let cleanCode
     if (typeof eOrCode === 'string') {
-      cleanCode = String(eOrCode).replace(/\D/g, '').slice(0, 6)
+      cleanCode = String(eOrCode).replace(/\D/g, '').slice(0, 10)
     } else {
       eOrCode?.preventDefault?.()
       const raw = codeInputRef.current?.value ?? code
-      cleanCode = String(raw).replace(/\D/g, '').slice(0, 6)
+      cleanCode = String(raw).replace(/\D/g, '').slice(0, 10)
     }
     if (submitLock.current || loading) return
-    if (!/^\d{6}$/.test(cleanCode)) {
-      setError('El código debe tener 6 dígitos.')
+    if (!/^\d{6,10}$/.test(cleanCode)) {
+      setError('Revisa el código de tu correo.')
       return
     }
     submitLock.current = true
@@ -456,12 +471,18 @@ export default function AuthModal({ isOpen, onClose }) {
   }
 
   function handleCodeChange(rawValue) {
-    const cleanCode = String(rawValue).replace(/\D/g, '').slice(0, 6)
+    const cleanCode = String(rawValue).replace(/\D/g, '').slice(0, 10)
     setCode(cleanCode)
     if (error) setError(null)
-    // Auto-submit cuando el usuario pega o termina de tipear los 6 dígitos.
-    if (cleanCode.length === 6 && !submitLock.current && !loading) {
-      setTimeout(() => handleVerify(cleanCode), 0)
+    // Auto-submit con debounce: dispara solo si el usuario dejó de tipear
+    // 350ms y ya hay >=6 dígitos. Sin esto, un código de 8 dígitos pegado
+    // se autosubmiteaba al llegar a 6 (truncado) y Supabase lo rechazaba.
+    if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current)
+    if (cleanCode.length >= 6 && !submitLock.current && !loading) {
+      autoSubmitTimerRef.current = setTimeout(() => {
+        autoSubmitTimerRef.current = null
+        handleVerify(cleanCode)
+      }, 350)
     }
   }
 
@@ -730,7 +751,7 @@ export default function AuthModal({ isOpen, onClose }) {
                       <span className="material-symbols-outlined text-primary text-[22px] flex-shrink-0">mail</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-[14px] font-semibold text-slate-800">Continuar con email</p>
-                        <p className="text-[11.5px] text-slate-500 leading-snug">Te enviamos un código de 6 dígitos.</p>
+                        <p className="text-[11.5px] text-slate-500 leading-snug">Te enviamos un código por correo.</p>
                       </div>
                       <span className="material-symbols-outlined text-slate-300 text-[20px]">chevron_right</span>
                     </button>
@@ -864,7 +885,7 @@ export default function AuthModal({ isOpen, onClose }) {
                   <div className="flex items-start gap-2 p-3 bg-primary/5 rounded-2xl mb-5">
                     <span className="material-symbols-outlined text-primary text-[20px] flex-shrink-0 mt-0.5">mark_email_read</span>
                     <p className="text-[12px] text-slate-600 leading-snug">
-                      Busca el código de 6 dígitos en tu bandeja (revisa spam si no aparece en 1 minuto).
+                      Busca el código en tu bandeja (revisa spam si no aparece en 1 minuto).
                     </p>
                   </div>
 
@@ -877,11 +898,21 @@ export default function AuthModal({ isOpen, onClose }) {
                       autoComplete="one-time-code"
                       value={code}
                       onChange={(e) => handleCodeChange(e.target.value)}
-                      placeholder="123456"
-                      maxLength={6}
-                      aria-label="Código de 6 dígitos"
+                      onPaste={(e) => {
+                        // Capturamos el texto del clipboard y lo procesamos directo.
+                        // Sin esto, un código pegado con espacios o guiones podía
+                        // cargarse parcial antes de que el onChange limpiara.
+                        const pasted = e.clipboardData?.getData('text') ?? ''
+                        if (pasted) {
+                          e.preventDefault()
+                          handleCodeChange(pasted)
+                        }
+                      }}
+                      placeholder="Pega o escribe el código"
+                      maxLength={10}
+                      aria-label="Código de tu correo"
                       aria-invalid={!!error}
-                      className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 text-center text-2xl font-mono tracking-[0.4em] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
+                      className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 text-center text-2xl font-mono tracking-[0.25em] mb-3 placeholder:text-[13px] placeholder:tracking-normal placeholder:font-sans placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
                     />
                     {error && (
                       <p role="alert" className="text-red-500 text-[12.5px] mb-3 text-center leading-snug">
@@ -950,7 +981,7 @@ export default function AuthModal({ isOpen, onClose }) {
                         Continuar con email
                       </h2>
                       <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
-                        Sin contraseña. Te enviamos un código de 6 dígitos.
+                        Sin contraseña. Te enviamos un código por correo.
                       </p>
                     </div>
                     <button

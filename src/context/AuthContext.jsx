@@ -59,7 +59,7 @@ export function AuthProvider({ children }) {
 
   const signInWithEmail = useCallback(async (email) => {
     if (!supabase) throw new Error('Supabase no configurado')
-    // Flujo OTP-only: código de 6 dígitos por email. NO pasamos
+    // Flujo OTP-only: código numérico por email (largo según config Supabase). NO pasamos
     // emailRedirectTo para que Supabase no inyecte un magic-link en el
     // correo — así el usuario nunca sale de la app. La redirect de
     // cualquier link embebido usa el Site URL del proyecto (usefocus.me).
@@ -74,7 +74,9 @@ export function AuthProvider({ children }) {
   const verifyOtp = useCallback(async (email, token) => {
     if (!supabase) throw new Error('Supabase no configurado')
     const cleanEmail = String(email || '').trim().toLowerCase()
-    const cleanToken = String(token || '').replace(/\D/g, '').slice(0, 6)
+    // 10 dígitos de margen: Supabase puede estar configurado a 6 u 8.
+    // Truncar a 6 acá invalidaba códigos de 8 dígitos antes de enviarlos.
+    const cleanToken = String(token || '').replace(/\D/g, '').slice(0, 10)
     // TEMP LOG: confirmar qué llega a Supabase. Remover tras validar.
     // eslint-disable-next-line no-console
     console.log('[OTP supabase]', { cleanEmail, cleanToken, len: cleanToken.length })
