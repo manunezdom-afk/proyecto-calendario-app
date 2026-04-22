@@ -5,10 +5,16 @@ import { useUserMemories } from '../hooks/useUserMemories'
 import MicButton from './MicButton'
 import { logSignal } from '../services/signalsService'
 import { getCachedBehavior } from '../services/behaviorAnalysis'
+import { isIOSSafari } from '../lib/permissions'
 
-const SR =
+// En Safari iPhone webkitSpeechRecognition existe (iOS 14.5+) pero dispara
+// 'not-allowed' aunque el permiso real del micrófono esté concedido. Lo
+// tratamos como no disponible para evitar el falso "Permiso denegado" y
+// redirigir al dictado nativo del teclado iOS.
+const SR_RAW =
   typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
+const SR = typeof window !== 'undefined' && isIOSSafari() ? null : SR_RAW
 
 async function reverseGeocode(lat, lon) {
   try {
@@ -257,7 +263,7 @@ export default function NovaWidget({
       // bloquea), ahora se lo decimos en vez de que "el mic no haga nada".
       const blocking = ev?.error
       if (blocking === 'not-allowed' || blocking === 'service-not-allowed') {
-        setReply('Permiso de micrófono denegado. Actívalo en los ajustes del sistema y vuelve a intentarlo.')
+        setReply('Permiso de micrófono denegado. Ábrelo en los ajustes del sistema y vuelve a intentarlo.')
       } else if (blocking === 'audio-capture') {
         setReply('No se pudo acceder al micrófono. Revisa que otra app no lo esté usando.')
       }
@@ -328,7 +334,7 @@ export default function NovaWidget({
     // en seco sin feedback. Ahora el botón sí responde: guiamos al usuario al
     // dictado nativo del teclado de iOS enfocando el input.
     if (!SR) {
-      setReply('Safari en iPhone no soporta dictado por voz en la web. Toca el campo y usa el micrófono del teclado del iPhone para dictar.')
+      setReply('En iPhone, el dictado usa el micrófono del teclado. Toca el campo de texto y pulsa el icono de micrófono que aparece sobre el teclado para dictar.')
       setTimeout(() => inputRef.current?.focus(), 60)
       return
     }

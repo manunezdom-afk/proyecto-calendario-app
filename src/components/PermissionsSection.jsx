@@ -11,6 +11,8 @@ import {
   isIOS,
   isStandalone,
   isSafari,
+  isIOSSafari,
+  hasWorkingSpeechRecognition,
 } from '../lib/permissions'
 
 /**
@@ -151,7 +153,7 @@ function HelpBlock({ state, kind }) {
   return null
 }
 
-function PermissionRow({ icon, label, description, state, onRequest, kind, busy }) {
+function PermissionRow({ icon, label, description, state, onRequest, kind, busy, footerNote }) {
   const [expanded, setExpanded] = useState(false)
   const canRequest = state === 'prompt' || state === 'unknown'
   const needsManual = state === 'denied' || state === 'requires_install'
@@ -209,6 +211,12 @@ function PermissionRow({ icon, label, description, state, onRequest, kind, busy 
           </motion.div>
         )}
       </AnimatePresence>
+
+      {footerNote && (
+        <div className="mx-5 mb-4 rounded-xl bg-amber-50 px-3.5 py-2.5 text-[11.5px] leading-relaxed text-amber-800">
+          {footerNote}
+        </div>
+      )}
     </div>
   )
 }
@@ -292,6 +300,15 @@ export default function PermissionsSection() {
   }
 
   const iosNotInstalled = isIOS() && !isStandalone()
+  // En iOS Safari la API Web Speech está presente pero no es fiable: aunque
+  // el permiso de micrófono esté concedido, el dictado web no funciona. La
+  // app cae al dictado nativo del teclado iOS. Lo comunicamos aquí para que
+  // Ajustes no parezca contradecir a Mi Día ("Permitido" pero el botón no
+  // dicta).
+  const micUsesKeyboardDictation = !hasWorkingSpeechRecognition() && isIOSSafari()
+  const micDescription = micUsesKeyboardDictation
+    ? 'En iPhone el dictado se hace con el teclado del sistema'
+    : 'Dictado con Nova y comandos de voz'
 
   return (
     <section className="bg-white rounded-[20px] border border-slate-100 shadow-sm overflow-hidden">
@@ -306,11 +323,19 @@ export default function PermissionsSection() {
       <PermissionRow
         icon="mic"
         label="Micrófono"
-        description="Dictado con Nova y comandos de voz"
+        description={micDescription}
         state={mic}
         onRequest={handleMic}
         kind="microphone"
         busy={busy === 'mic'}
+        footerNote={micUsesKeyboardDictation ? (
+          <>
+            Safari en iPhone no permite el dictado web. Cuando pulsas el micrófono
+            en la app, se abre el teclado del iPhone; toca el icono de micrófono
+            sobre el teclado para dictar. El permiso de micrófono se usa para
+            otras funciones de voz.
+          </>
+        ) : null}
       />
 
       <PermissionRow

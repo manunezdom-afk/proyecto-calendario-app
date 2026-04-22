@@ -2,9 +2,15 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUserMemories } from '../hooks/useUserMemories'
 import MicButton from './MicButton'
+import { isIOSSafari } from '../lib/permissions'
 
-const SR = typeof window !== 'undefined' &&
+// En Safari iPhone webkitSpeechRecognition existe (iOS 14.5+) pero dispara
+// 'not-allowed' aunque el permiso real del micrófono esté concedido. Lo
+// tratamos como no disponible para no mostrar un falso "Permiso denegado" y
+// redirigir al dictado nativo del teclado iOS, que sí funciona.
+const SR_RAW = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
+const SR = typeof window !== 'undefined' && isIOSSafari() ? null : SR_RAW
 
 // Busca el evento que Nova intentó borrar cuando manda un id que no existe.
 // Extrae título/hora del texto del reply y matchea contra los eventos reales.
@@ -225,7 +231,7 @@ export default function FocusBar({
       const blocking = ev?.error
       if (blocking === 'not-allowed' || blocking === 'service-not-allowed') {
         setReply({
-          content: 'Permiso de micrófono denegado. Actívalo en los ajustes del sistema y vuelve a intentarlo.',
+          content: 'Permiso de micrófono denegado. Ábrelo en los ajustes del sistema y vuelve a intentarlo.',
           actions: [],
         })
       } else if (blocking === 'audio-capture') {
@@ -434,12 +440,13 @@ export default function FocusBar({
 
   function toggleMic() {
     if (isThinking) return
-    // Safari iPhone no expone webkitSpeechRecognition. Antes el botón quedaba
-    // `disabled={!SR}` y el tap no disparaba nada. Ahora sí llega acá y
-    // redirigimos al dictado nativo del teclado iOS con un mensaje claro.
+    // Sin Web Speech utilizable: en Safari iPhone (donde la API existe pero
+    // falla con 'not-allowed' aunque el permiso esté concedido) redirigimos al
+    // dictado nativo del teclado iOS enfocando el input. Para el usuario es un
+    // único flujo coherente: toca el mic y puede dictar.
     if (!SR) {
       setReply({
-        content: 'Safari en iPhone no soporta dictado por voz en la web. Toca el campo y usa el micrófono del teclado del iPhone para dictar.',
+        content: 'En iPhone, el dictado usa el micrófono del teclado. Toca el campo de texto y pulsa el icono de micrófono que aparece sobre el teclado para dictar.',
         actions: [],
       })
       setTimeout(() => inputRef.current?.focus(), 60)

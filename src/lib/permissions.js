@@ -47,6 +47,26 @@ function hasSpeechRecognition() {
   return !!(window.SpeechRecognition || window.webkitSpeechRecognition)
 }
 
+// Safari en iPhone/iPad expone webkitSpeechRecognition desde iOS 14.5, pero la
+// implementación es inestable: aunque el permiso de micrófono esté concedido,
+// .start() a menudo emite 'not-allowed' o 'service-not-allowed' por razones
+// estructurales (PWA standalone, requiere Dictado del sistema activado, origen,
+// etc.). Tratarlo como "sin soporte" evita el falso "Permiso denegado" y nos
+// lleva al dictado nativo del teclado iOS, que siempre funciona.
+export function isIOSSafari() {
+  if (typeof navigator === 'undefined') return false
+  if (!isIOS()) return false
+  const ua = navigator.userAgent
+  if (/crios|fxios|edgios|opios/i.test(ua)) return false
+  return true
+}
+
+export function hasWorkingSpeechRecognition() {
+  if (!hasSpeechRecognition()) return false
+  if (isIOSSafari()) return false
+  return true
+}
+
 async function queryPermission(name) {
   if (typeof navigator === 'undefined' || !navigator.permissions?.query) return 'unknown'
   try {
