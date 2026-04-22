@@ -136,6 +136,48 @@ function looksLikeReminderTitle(title) {
   return false
 }
 
+function isReminderBlock(b) {
+  if (!b) return false
+  const meta = extractReminderMeta(b?.title)
+  return meta.isReminder || looksLikeReminderTitle(b?.title)
+}
+
+// Un recordatorio "tiene padre" cuando existe un evento real al que se refiere
+// (ya sea explícito por título "Recordatorio: X" o por heurística de cercanía +
+// similitud). Los que tienen padre se muestran anidados; los que no, aparecen
+// como recordatorio destacado.
+function reminderHasParent(reminderBlock, eventBlocks) {
+  if (!reminderBlock || !Array.isArray(eventBlocks) || eventBlocks.length === 0) return false
+  const meta = extractReminderMeta(reminderBlock?.title)
+  if (meta.isReminder && meta.parentTitle) {
+    const key = normalizeTitleKey(meta.parentTitle)
+    if (eventBlocks.some((e) => normalizeTitleKey(e?.title) === key)) return true
+  }
+  const rh = parseTimeToDecimal(reminderBlock?.time)
+  if (rh === null || rh === undefined) return false
+  const rTokens = titleTokenSet(reminderBlock?.title)
+  for (const ev of eventBlocks) {
+    const eh = parseTimeToDecimal(ev?.time)
+    if (eh === null || eh === undefined) continue
+    const delta = (eh - rh) * 60
+    if (delta < 0 || delta > 60) continue
+    if (jaccard(rTokens, titleTokenSet(ev?.title)) >= 0.55) return true
+  }
+  return false
+}
+
+// Copy del contador de un recordatorio. "Ahora" dentro de ±30 seg; "En 1 min"
+// hasta 1.5 min; luego "En X min" y "En Xh Ym" para tiempos más largos.
+function formatReminderCountdown(totalMinutes) {
+  if (totalMinutes === null || totalMinutes === undefined) return ''
+  if (totalMinutes <= 0.5) return 'Ahora'
+  if (totalMinutes < 1.5) return 'En 1 min'
+  if (totalMinutes < 60) return `En ${Math.round(totalMinutes)} min`
+  const h = Math.floor(totalMinutes / 60)
+  const m = Math.round(totalMinutes % 60)
+  return m > 0 ? `En ${h}h ${m}m` : `En ${h}h`
+}
+
 const STORAGE_KEY = 'focus_planner_blocks'
 
 // ── Lógica de insights personalizados ─────────────────────────────────────
@@ -498,7 +540,14 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   const DAY_END_H   = 22
   const now = currentHour()
 
-  const blocksWithDecimal = blocks
+  // Separamos recordatorios de eventos/bloques reales. Un recordatorio no es un
+  // "bloque activo" ni un "próximo bloque": no debe mostrar "En curso" ni
+  // "X min transcurridos". Se maneja con su propia tarjeta más abajo.
+  const allBlocksRaw = Array.isArray(blocks) ? blocks : []
+  const eventBlocksRaw = allBlocksRaw.filter((b) => !isReminderBlock(b))
+  const reminderBlocksRaw = allBlocksRaw.filter((b) => isReminderBlock(b))
+
+  const blocksWithDecimal = eventBlocksRaw
     .map((b) => ({ ...b, _h: parseTimeToDecimal(b.time) }))
     .filter((b) => b._h !== null)
     .sort((a, b) => a._h - b._h)
@@ -514,21 +563,48 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
   const nextBlock   = blocksWithDecimal.find((b) => b._h > now) ?? null
 
-  // Fallback flexible: si no hay activo ni próximo con hora, pero sí queda un
-  // pendiente de hoy sin hora definida, lo mostramos como "Próximo bloque
-  // sugerido" para que la tarjeta no quede vacía cuando aún hay algo por hacer.
-  // Importante: no usamos tasks como flexibleBlock — las tareas de hoy ya se
-  // renderizan como items con chip "Pendiente de hoy" en el timeline, así que
-  // esta tarjeta sigue siendo exclusiva de bloques/eventos sin hora.
-  const flexibleBlock = (!activeBlock && !nextBlock)
-    ? (Array.isArray(blocks) ? blocks : []).find(
+  // Recordatorio destacado: solo los standalone (sin evento padre) y dentro de
+  // una ventana cercana a "ahora" (de -5 min a +120 min). Si ya pasó hace más
+  // de 5 min, no secuestra la tarjeta — sigue visible en el timeline.
+  const upcomingReminder = (() => {
+    if (!reminderBlocksRaw.length) return null
+    const standalone = reminderBlocksRaw
+      .filter((r) => !reminderHasParent(r, eventBlocksRaw))
+      .map((r) => ({ ...r, _h: parseTimeToDecimal(r.time) }))
+      .filter((r) => r._h !== null && r.type !== 'done')
+    if (!standalone.length) return null
+    const windowed = standalone
+      .filter((r) => {
+        const delta = (r._h - now) * 60
+        return delta >= -5 && delta <= 120
+      })
+      .sort((a, b) => Math.abs(a._h - now) - Math.abs(b._h - now))
+    return windowed[0] ?? null
+  })()
+
+  // Cuándo el recordatorio debe ocupar la tarjeta: no hay bloque activo, y
+  // o bien no hay próximo bloque, o el recordatorio ocurre antes.
+  const reminderInFocus = !activeBlock
+    && upcomingReminder
+    && (!nextBlock || upcomingReminder._h <= nextBlock._h)
+
+  // Fallback flexible: si no hay activo ni próximo con hora ni recordatorio
+  // cercano, pero sí queda un pendiente de hoy sin hora definida, lo mostramos
+  // como "Próximo bloque sugerido" para que la tarjeta no quede vacía cuando
+  // aún hay algo por hacer. Importante: no usamos tasks como flexibleBlock —
+  // las tareas de hoy ya se renderizan como items con chip "Pendiente de hoy"
+  // en el timeline, así que esta tarjeta sigue siendo exclusiva de bloques/
+  // eventos sin hora. También excluimos recordatorios para que nunca aparezcan
+  // en modo "flexible".
+  const flexibleBlock = (!activeBlock && !nextBlock && !reminderInFocus)
+    ? eventBlocksRaw.find(
         (b) => b && b.type !== 'done' && parseTimeToDecimal(b.time) === null,
       ) ?? null
     : null
 
-  const hasBlocks   = blocksWithDecimal.length > 0
+  const hasBlocks   = blocksWithDecimal.length > 0 || !!upcomingReminder
   const dayIsEmpty  = !hasBlocks && !flexibleBlock
-  const dayIsDone   = hasBlocks && !activeBlock && !nextBlock && !flexibleBlock
+  const dayIsDone   = hasBlocks && !activeBlock && !nextBlock && !upcomingReminder && !flexibleBlock
   // Tareas de hoy pendientes. Se calcula aquí (y no derivado de displayBlocks)
   // para evitar TDZ: showTomorrowPreview lo lee más abajo y displayBlocks se
   // arma mucho después. Antes, borrar el último evento dejaba dayIsEmpty=true
@@ -543,8 +619,9 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   const showTomorrowPreview = (dayIsEmpty || dayIsDone)
     && pendingTasksCount === 0
     && tomorrowEvents.length > 0
-  const minsToNext  = nextBlock   ? (nextBlock._h   - now) * 60 : null
-  const minsElapsed = activeBlock ? (now - activeBlock._h) * 60 : null
+  const minsToNext     = nextBlock        ? (nextBlock._h        - now) * 60 : null
+  const minsElapsed    = activeBlock      ? (now - activeBlock._h)       * 60 : null
+  const minsToReminder = upcomingReminder ? (upcomingReminder._h - now) * 60 : null
   const dayProgress = Math.min(1, Math.max(0, (now - DAY_START_H) / (DAY_END_H - DAY_START_H)))
 
   // Heurística "Google Calendar": recordatorios como eventos cortos anidados (UI-only)
@@ -1088,16 +1165,24 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     className="material-symbols-outlined text-primary text-[20px]"
                     style={{ fontVariationSettings: "'FILL' 1" }}
                   >
-                    {activeBlock ? 'play_circle' : flexibleBlock && !nextBlock ? 'bolt' : 'schedule'}
+                    {activeBlock
+                      ? 'play_circle'
+                      : reminderInFocus
+                        ? 'notifications'
+                        : flexibleBlock && !nextBlock
+                          ? 'bolt'
+                          : 'schedule'}
                   </span>
                   <h4 className="font-headline font-bold text-on-surface">
                     {activeBlock
                       ? 'En Curso'
-                      : nextBlock
-                        ? 'Próximo Bloque'
-                        : flexibleBlock
-                          ? 'Próximo bloque sugerido'
-                          : 'Próximo Bloque'}
+                      : reminderInFocus
+                        ? 'Recordatorio'
+                        : nextBlock
+                          ? 'Próximo Bloque'
+                          : flexibleBlock
+                            ? 'Próximo bloque sugerido'
+                            : 'Próximo Bloque'}
                   </h4>
                 </div>
                 {activeBlock && (
@@ -1105,7 +1190,12 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     ACTIVO
                   </span>
                 )}
-                {!activeBlock && !nextBlock && flexibleBlock && (
+                {!activeBlock && reminderInFocus && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-tertiary/10 text-tertiary">
+                    RECORDATORIO
+                  </span>
+                )}
+                {!activeBlock && !reminderInFocus && !nextBlock && flexibleBlock && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-secondary/10 text-secondary">
                     FLEXIBLE
                   </span>
@@ -1126,6 +1216,21 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     <div className="flex items-baseline gap-1">
                       <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{Math.round(minsElapsed)}</span>
                       <span className="text-sm font-semibold text-outline">min transcurridos</span>
+                    </div>
+                  </LongPressZone>
+                </SwipeableCard>
+              ) : reminderInFocus ? (
+                <SwipeableCard onDelete={() => { dismissBlock(upcomingReminder.id); if (upcomingReminder.eventId) onDeleteEvent?.(upcomingReminder.eventId) }}>
+                  <LongPressZone
+                    onLongPress={() => { if (window.confirm(`¿Eliminar "${upcomingReminder.title}"?`)) { dismissBlock(upcomingReminder.id); if (upcomingReminder.eventId) onDeleteEvent?.(upcomingReminder.eventId) } }}
+                    className="py-1"
+                    title="Mantén apretado para eliminar"
+                    data-next-event
+                  >
+                    <p className="text-xs font-semibold text-outline mb-1">{upcomingReminder.time}</p>
+                    <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3 break-words">{upcomingReminder.title || '(sin título)'}</p>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-extrabold font-headline text-tertiary tabular-nums">{formatReminderCountdown(minsToReminder)}</span>
                     </div>
                   </LongPressZone>
                 </SwipeableCard>
