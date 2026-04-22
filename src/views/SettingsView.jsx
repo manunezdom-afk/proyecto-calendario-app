@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getPushStatus, subscribeToPush } from '../lib/pushSubscription'
+import PermissionsSection from '../components/PermissionsSection'
 
 function SectionCard({ title, children }) {
   return (
@@ -183,7 +184,17 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
         </Row>
       </SectionCard>
 
+      {/* ── Permisos ─────────────────────────────────────────────────────── */}
+      {/* Micrófono, cámara y notificaciones en un solo lugar. Útil sobre todo
+          en Safari/iPhone, donde los permisos bloqueados solo se reactivan
+          desde Ajustes del sistema y el usuario necesita una guía clara. */}
+      <PermissionsSection />
+
       {/* ── Notificaciones ───────────────────────────────────────────────── */}
+      {/* El estado de concesión ya lo maneja PermissionsSection. Aquí
+          mantenemos el diagnóstico avanzado de push (VAPID, suscripción en
+          el servidor, etc.) para desbloquear casos donde el permiso está
+          concedido pero la entrega de push falla. */}
       <SectionCard title="Notificaciones">
         <Row
           icon="notifications"
