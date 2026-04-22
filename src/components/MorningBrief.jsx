@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { todayISO as getTodayISO, parseTimeToDecimal } from '../utils/time'
 import AuroraBackground from './AuroraBackground'
@@ -77,18 +77,7 @@ function generateBrief({ events, tasks, profile }) {
     }
   }
 
-  // Frase para TTS — natural, sin jerarquía visual.
-  let speech = `${greeting}. `
-  speech += summaryParts.length > 0
-    ? `Tienes ${summaryParts.join(' y ').replace(/reunión/, 'reunión').replace(/tareas?/, m => m.includes('s') ? 'tareas pendientes' : 'tarea pendiente')} para hoy. `
-    : 'Agenda despejada para hoy. '
-  if (peakConflicts.length > 0) {
-    speech += peakConflicts.length === 1
-      ? `Hay una reunión en tu zona pico.`
-      : `Hay ${peakConflicts.length} reuniones en tu zona pico.`
-  }
-
-  return { greeting, summary, peakHint, speech, peakConflicts, meetingCount, pendingTasks }
+  return { greeting, summary, peakHint, peakConflicts, meetingCount, pendingTasks }
 }
 
 export default function MorningBrief({
@@ -103,59 +92,14 @@ export default function MorningBrief({
   const brief = useMemo(() => generateBrief({ events, tasks, profile }), [events, tasks, profile])
   const dateStr = useMemo(() => formatDateEyebrow(), [])
   const [phase, setPhase]   = useState('brief')
-  const [muted, setMuted]   = useState(inline) // inline: start muted, no TTS auto
-  const [speaking, setSpeaking] = useState(false)
-  const srRef     = useRef(null)
-  const spokenRef = useRef(false)
 
-  useEffect(() => {
-    if (inline || muted || spokenRef.current || !window.speechSynthesis) return
-    const timer = setTimeout(() => {
-      if (spokenRef.current) return
-      spokenRef.current = true
-      setSpeaking(true)
-      window.speechSynthesis.cancel()
+  // Nova no emite voz de salida. El brief se navega solo por botones
+  // (arrancamos / rechazar / modificar); el micrófono sigue disponible en
+  // NovaWidget para que el usuario hable, pero la app no narra respuestas.
 
-      const speak = () => {
-        const utter = new SpeechSynthesisUtterance(brief.speech)
-        utter.lang = 'es-ES'
-        utter.rate = 1.0
-        const voices = window.speechSynthesis.getVoices()
-        const esVoice =
-          voices.find(v => ['Paulina','Monica','Helena','Laura'].some(n => v.name.includes(n))) ||
-          voices.find(v => v.lang.startsWith('es'))
-        if (esVoice) utter.voice = esVoice
-        utter.onend   = () => setSpeaking(false)
-        utter.onerror = () => setSpeaking(false)
-        window.speechSynthesis.speak(utter)
-      }
-
-      if (window.speechSynthesis.getVoices().length > 0) {
-        speak()
-      } else {
-        window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.onvoiceschanged = null; speak() }
-        setTimeout(speak, 600)
-      }
-    }, 900)
-
-    return () => clearTimeout(timer)
-  }, [muted, inline]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ⚠️ La escucha por voz al abrir el MorningBrief fue removida.
-  // iOS pedía permiso de micrófono al arrancar la app, sin que el usuario
-  // lo pidiera explícitamente. Mala UX. Ahora el micrófono solo se activa
-  // cuando tocan el botón del mic en NovaWidget (gesto explícito).
-  // El brief se navega por botones (arrancamos / rechazar / modificar).
-
-  function stopSpeech() {
-    window.speechSynthesis?.cancel()
-    setSpeaking(false)
-  }
-
-  function handleStart()   { stopSpeech(); try { srRef.current?.stop() } catch {}; onStart?.() }
-  function handleDismiss() { stopSpeech(); try { srRef.current?.stop() } catch {}; onDismiss?.() }
+  function handleStart()   { onStart?.() }
+  function handleDismiss() { onDismiss?.() }
   function handleConflicts()  {
-    stopSpeech()
     if (brief.peakConflicts.length > 0) setPhase('conflicts')
   }
 
@@ -488,28 +432,6 @@ export default function MorningBrief({
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Voz — utilidad secundaria, muy integrada, nunca flotando sobre el hero */}
-        <motion.button
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.2, duration: 0.5 }}
-          onClick={() => { setMuted(m => !m); stopSpeech() }}
-          aria-label={muted ? 'Activar voz de Nova' : 'Silenciar voz de Nova'}
-          aria-pressed={!muted}
-          className="mt-8 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] text-white/35 transition-colors hover:text-white/70"
-          style={{ letterSpacing: '0.04em' }}
-        >
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: 14, opacity: muted ? 0.6 : 1 }}
-          >
-            {muted ? 'volume_off' : 'volume_up'}
-          </span>
-          <span className="font-medium">
-            {muted ? 'Activar voz' : speaking ? 'Narrando' : 'Silenciar voz'}
-          </span>
-        </motion.button>
       </motion.div>
     </motion.div>
   )
