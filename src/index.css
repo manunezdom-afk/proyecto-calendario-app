@@ -24,6 +24,17 @@ html {
   scroll-behavior: smooth;
 }
 
+/* iOS Safari auto-zooma al enfocar cualquier input con font-size < 16px, y
+ * en la PWA el zoom recorta el layout. Forzamos 16px mínimo en todos los
+ * inputs. Usamos @layer utilities + !important porque los arbitrary values
+ * de Tailwind (text-[14px], text-[16px]) tienen mayor especificidad que una
+ * regla de elemento plana. */
+@layer utilities {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 body {
   font-family: 'Inter', sans-serif;
   min-height: 100dvh;

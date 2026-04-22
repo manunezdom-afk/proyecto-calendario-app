@@ -4,13 +4,16 @@ import { useUserMemories } from '../hooks/useUserMemories'
 import MicButton from './MicButton'
 import { isIOSSafari } from '../lib/permissions'
 
-// En Safari iPhone webkitSpeechRecognition existe (iOS 14.5+) pero dispara
-// 'not-allowed' aunque el permiso real del micrófono esté concedido. Lo
-// tratamos como no disponible para no mostrar un falso "Permiso denegado" y
-// redirigir al dictado nativo del teclado iOS, que sí funciona.
-const SR_RAW = typeof window !== 'undefined' &&
+// En Safari iPhone webkitSpeechRecognition existe desde iOS 14.5 y sí funciona
+// en muchos contextos (Safari regular con permiso concedido). Antes gateábamos
+// SR=null preventivamente en todo iOS Safari — resultado: el mic NUNCA
+// intentaba dictar en iPhone y siempre caía al banner de "usa el teclado",
+// incluso cuando el dictado web funcionaba perfectamente. Ahora dejamos que
+// intente; si el engine responde con 'not-allowed' en iOS Safari (típico en
+// PWA standalone), onerror cae al mensaje de dictado por teclado. Ese es el
+// contrato correcto: probar primero, degradar sólo si falla.
+const SR = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
-const SR = typeof window !== 'undefined' && isIOSSafari() ? null : SR_RAW
 
 // Busca el evento que Nova intentó borrar cuando manda un id que no existe.
 // Extrae título/hora del texto del reply y matchea contra los eventos reales.
@@ -230,10 +233,22 @@ export default function FocusBar({
       // "el mic no hace nada". Ahora los reflejamos en la burbuja de reply.
       const blocking = ev?.error
       if (blocking === 'not-allowed' || blocking === 'service-not-allowed') {
-        setReply({
-          content: 'Permiso de micrófono denegado. Ábrelo en los ajustes del sistema y vuelve a intentarlo.',
-          actions: [],
-        })
+        // En iOS Safari, not-allowed puede dispararse aunque el permiso del
+        // sistema esté concedido (bug conocido de WebKit, especialmente en
+        // PWA standalone). Mostrar "Permiso denegado" ahí contradice a
+        // Ajustes. Degradamos al dictado por teclado, que sí funciona.
+        if (isIOSSafari()) {
+          setReply({
+            content: 'En iPhone, si el dictado web no arranca puedes usar el micrófono del teclado: toca el campo y pulsa el icono de micrófono sobre el teclado.',
+            actions: [],
+          })
+          setTimeout(() => inputRef.current?.focus(), 60)
+        } else {
+          setReply({
+            content: 'Permiso de micrófono denegado. Ábrelo en los ajustes del sistema y vuelve a intentarlo.',
+            actions: [],
+          })
+        }
       } else if (blocking === 'audio-capture') {
         setReply({
           content: 'No se pudo acceder al micrófono. Revisa que otra app no lo esté usando.',
@@ -440,13 +455,14 @@ export default function FocusBar({
 
   function toggleMic() {
     if (isThinking) return
-    // Sin Web Speech utilizable: en Safari iPhone (donde la API existe pero
-    // falla con 'not-allowed' aunque el permiso esté concedido) redirigimos al
-    // dictado nativo del teclado iOS enfocando el input. Para el usuario es un
-    // único flujo coherente: toca el mic y puede dictar.
+    // Sin Web Speech API en absoluto (desktop Firefox, navegadores antiguos).
+    // En iOS Safari sí existe, así que no caemos aquí — dejamos que intente y
+    // onerror degrada al teclado si realmente falla.
     if (!SR) {
       setReply({
-        content: 'En iPhone, el dictado usa el micrófono del teclado. Toca el campo de texto y pulsa el icono de micrófono que aparece sobre el teclado para dictar.',
+        content: isIOSSafari()
+          ? 'En iPhone puedes dictar con el micrófono del teclado: toca el campo y pulsa el icono de micrófono sobre el teclado.'
+          : 'Este navegador no soporta dictado por voz. Escribe tu mensaje.',
         actions: [],
       })
       setTimeout(() => inputRef.current?.focus(), 60)
@@ -600,12 +616,25 @@ export default function FocusBar({
             ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onFocus={() => setIsFocused(true)}
+            onFocus={() => {
+              setIsFocused(true)
+              // iOS PWA a veces no desplaza el input al abrir el teclado.
+              // Forzamos scroll tras la animación del teclado (~280ms) como
+              // red de seguridad.
+              setTimeout(() => {
+                inputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+              }, 280)
+            }}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && hasText && handleSend()}
             placeholder={isAnalyzingPhoto ? 'Analizando foto…' : isListening ? 'Escuchando…' : 'Habla con Nova...'}
             disabled={isThinking || isAnalyzingPhoto}
-            className="flex-1 min-w-0 bg-transparent text-[14px] text-on-surface outline-none placeholder:text-outline/50 disabled:opacity-50"
+            enterKeyHint="send"
+            autoComplete="off"
+            autoCorrect="off"
+            // text-[16px] es crítico en iOS: Safari auto-zooma al enfocar
+            // cualquier input con font-size < 16px, arruinando el layout.
+            className="flex-1 min-w-0 bg-transparent text-[16px] text-on-surface outline-none placeholder:text-outline/50 disabled:opacity-50"
           />
 
           {/* Mic — versión única y discreta (MicButton). */}
@@ -751,12 +780,20 @@ export default function FocusBar({
             ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onFocus={() => setIsFocused(true)}
+            onFocus={() => {
+              setIsFocused(true)
+              setTimeout(() => {
+                inputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+              }, 280)
+            }}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && hasText && handleSend()}
             placeholder={isAnalyzingPhoto ? 'Analizando foto…' : isListening ? 'Escuchando…' : 'Habla con Nova...'}
             disabled={isThinking || isAnalyzingPhoto}
-            className="flex-1 min-w-0 bg-transparent text-[14px] text-white outline-none placeholder:text-white/25 disabled:opacity-50"
+            enterKeyHint="send"
+            autoComplete="off"
+            autoCorrect="off"
+            className="flex-1 min-w-0 bg-transparent text-[16px] text-white outline-none placeholder:text-white/25 disabled:opacity-50"
           />
 
           {/* Mic — versión única y discreta (MicButton). El modo floating

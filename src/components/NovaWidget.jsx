@@ -7,14 +7,15 @@ import { logSignal } from '../services/signalsService'
 import { getCachedBehavior } from '../services/behaviorAnalysis'
 import { isIOSSafari } from '../lib/permissions'
 
-// En Safari iPhone webkitSpeechRecognition existe (iOS 14.5+) pero dispara
-// 'not-allowed' aunque el permiso real del micrófono esté concedido. Lo
-// tratamos como no disponible para evitar el falso "Permiso denegado" y
-// redirigir al dictado nativo del teclado iOS.
-const SR_RAW =
+// En Safari iPhone webkitSpeechRecognition existe desde iOS 14.5 y sí funciona
+// en Safari regular con permiso concedido. Antes gateábamos SR=null
+// preventivamente en todo iOS Safari — el mic nunca intentaba dictar en
+// iPhone y siempre caía al banner de teclado. Ahora dejamos que intente; si
+// realmente falla con 'not-allowed' en iOS Safari (típico en PWA standalone),
+// onerror degrada al dictado por teclado.
+const SR =
   typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
-const SR = typeof window !== 'undefined' && isIOSSafari() ? null : SR_RAW
 
 async function reverseGeocode(lat, lon) {
   try {
@@ -263,7 +264,16 @@ export default function NovaWidget({
       // bloquea), ahora se lo decimos en vez de que "el mic no haga nada".
       const blocking = ev?.error
       if (blocking === 'not-allowed' || blocking === 'service-not-allowed') {
-        setReply('Permiso de micrófono denegado. Ábrelo en los ajustes del sistema y vuelve a intentarlo.')
+        // En iOS Safari, not-allowed puede dispararse aun con permiso del
+        // sistema concedido (bug conocido, sobre todo en PWA standalone).
+        // Mostrar "denegado" ahí contradice a Ajustes. Degradamos al dictado
+        // del teclado nativo, que siempre funciona en iPhone.
+        if (isIOSSafari()) {
+          setReply('En iPhone, si el dictado web no arranca puedes usar el micrófono del teclado: toca el campo y pulsa el icono de micrófono sobre el teclado.')
+          setTimeout(() => inputRef.current?.focus(), 60)
+        } else {
+          setReply('Permiso de micrófono denegado. Ábrelo en los ajustes del sistema y vuelve a intentarlo.')
+        }
       } else if (blocking === 'audio-capture') {
         setReply('No se pudo acceder al micrófono. Revisa que otra app no lo esté usando.')
       }
@@ -329,12 +339,13 @@ export default function NovaWidget({
 
   function startVoice() {
     if (isLoading) return
-    // Safari iPhone no expone webkitSpeechRecognition (Apple no implementa la
-    // Web Speech API). Antes el botón quedaba `disabled={!SR}` y el tap moría
-    // en seco sin feedback. Ahora el botón sí responde: guiamos al usuario al
-    // dictado nativo del teclado de iOS enfocando el input.
+    // Sin Web Speech API (desktop Firefox, navegadores antiguos). En iOS
+    // Safari la API sí existe, así que no caemos acá — dejamos que intente y
+    // onerror degrada al teclado si falla.
     if (!SR) {
-      setReply('En iPhone, el dictado usa el micrófono del teclado. Toca el campo de texto y pulsa el icono de micrófono que aparece sobre el teclado para dictar.')
+      setReply(isIOSSafari()
+        ? 'En iPhone puedes dictar con el micrófono del teclado: toca el campo y pulsa el icono de micrófono sobre el teclado.'
+        : 'Este navegador no soporta dictado por voz. Escribe tu mensaje.')
       setTimeout(() => inputRef.current?.focus(), 60)
       return
     }
@@ -843,6 +854,9 @@ export default function NovaWidget({
           }}
           placeholder={isAnalyzingPhoto ? 'Analizando foto…' : isListening ? 'Escuchando…' : 'Escribe o habla…'}
           disabled={isLoading || isListening || isAnalyzingPhoto}
+          enterKeyHint="send"
+          autoComplete="off"
+          autoCorrect="off"
           className={`flex-1 min-w-0 bg-transparent outline-none text-slate-700 placeholder:text-slate-300 disabled:opacity-50 ${isDesktop ? 'text-[13px]' : 'text-[15px]'}`}
         />
 
