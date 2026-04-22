@@ -15,8 +15,8 @@ const EXAMPLES = [
   '"cena con mamá a las 8"',
 ]
 
-export default function QuickAddSheet({ onSave, onCancel, targetDateLabel }) {
-  const [input, setInput] = useState('')
+export default function QuickAddSheet({ onSave, onCancel, targetDateLabel, initialText = '' }) {
+  const [input, setInput] = useState(initialText)
   const [parsed, setParsed] = useState(null)
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   // Duración elegida por el usuario en esta sesión del sheet. null significa

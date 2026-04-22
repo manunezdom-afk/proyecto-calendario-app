@@ -244,18 +244,38 @@ export default function SuggestionsInbox({
             {/* Contenido */}
             <div className="flex-1 overflow-y-auto px-4 py-4">
               {pending.length === 0 && resolved.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-                  <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-violet-50">
+                <div className="flex h-full flex-col items-center justify-center px-5 py-6">
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-violet-50">
                     <span className="material-symbols-outlined text-[28px] text-blue-500">
                       auto_awesome
                     </span>
                   </div>
-                  <p className="text-[14px] font-semibold text-slate-700">
-                    Bandeja vacía
+                  <p className="text-center text-[14px] font-semibold text-slate-700">
+                    Aquí caen las propuestas de Nova
                   </p>
-                  <p className="mt-1 max-w-[260px] text-[12.5px] leading-relaxed text-slate-500">
-                    Cuando le pidas algo a Nova, sus propuestas aparecerán aquí para que las apruebes antes de aplicarlas.
+                  <p className="mt-1 max-w-[280px] text-center text-[12.5px] leading-relaxed text-slate-500">
+                    Nova nunca toca tu calendario sin que apruebes. Pídele algo y verás sus sugerencias aquí.
                   </p>
+                  <div className="mt-5 w-full max-w-[320px] space-y-2">
+                    <p className="px-1 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">
+                      Prueba pidiéndole
+                    </p>
+                    {[
+                      { icon: 'event', text: 'Agéndame gimnasio lunes, miércoles y viernes a las 7' },
+                      { icon: 'psychology', text: 'Bloquea 2h de foco mañana por la tarde' },
+                      { icon: 'swap_horiz', text: 'Reordena mi semana para liberar el viernes' },
+                    ].map((ex, i) => (
+                      <div
+                        key={i}
+                        className="flex items-start gap-2.5 rounded-xl bg-slate-50 px-3 py-2.5"
+                      >
+                        <span className="material-symbols-outlined mt-0.5 text-[16px] text-blue-500">
+                          {ex.icon}
+                        </span>
+                        <p className="text-[12.5px] leading-snug text-slate-600">{ex.text}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3">

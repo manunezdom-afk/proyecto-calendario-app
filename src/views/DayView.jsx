@@ -28,9 +28,20 @@ function formatHeader(iso) {
   return { label, isToday }
 }
 
-export default function DayView({ events = [], tasks = [], onAddEvent, onOpenTask, isDesktop = false }) {
+export default function DayView({ events = [], tasks = [], onAddEvent, onOpenTask, onOpenImport, onOpenPhotoImport, isDesktop = false }) {
   const [activeDate, setActiveDate] = useState(initialDate)
   const [showAdd, setShowAdd] = useState(false)
+  // initialText permite prellenar el sheet con una plantilla (ej: bloque de
+  // foco). Se limpia al cerrar para no arrastrar texto entre aperturas.
+  const [quickAddInitial, setQuickAddInitial] = useState('')
+
+  function scrollToNova() {
+    try {
+      const el = document.getElementById('nova-widget')
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    } catch {}
+  }
 
   // Tick para reclasificar pasado/futuro cada minuto. Sin esto, un evento que
   // acaba a las 10:00 seguiría viéndose como "activo" hasta el próximo render
@@ -142,17 +153,77 @@ export default function DayView({ events = [], tasks = [], onAddEvent, onOpenTas
                   visibles como finalizados (no los borramos).
               · Con items activos/futuros → grid normal. */}
         {!hasAnyItem && (
-          <div className="bg-surface-container-low rounded-xl p-8 flex flex-col items-center gap-3 text-center">
-            <span className="material-symbols-outlined text-3xl text-outline">event_available</span>
-            <p className="text-sm font-semibold text-outline">
-              {isToday ? 'Día libre. Todo tuyo.' : 'Sin eventos en este día.'}
-            </p>
-            <button
-              onClick={() => setShowAdd(true)}
-              className="text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
-            >
-              Añadir primer evento
-            </button>
+          <div className="bg-surface-container-low rounded-3xl p-5 sm:p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <span
+                className="material-symbols-outlined text-primary text-[26px] flex-shrink-0 mt-0.5"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                {isToday ? 'wb_sunny' : 'event_available'}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-bold text-on-surface leading-tight">
+                  {isToday ? 'Día libre. ¿Por dónde arrancamos?' : 'Sin eventos en este día.'}
+                </p>
+                <p className="text-[12.5px] text-outline mt-1 leading-snug">
+                  {isToday
+                    ? 'Elige una acción para poner algo en marcha.'
+                    : 'Planifica desde ya para no llegar con la agenda en blanco.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => { setQuickAddInitial(''); setShowAdd(true) }}
+                className="group flex flex-col items-start gap-1.5 rounded-2xl bg-surface-container-lowest hover:bg-primary/5 border border-outline-variant/40 hover:border-primary/40 p-3 text-left transition-colors active:scale-[0.98]"
+              >
+                <span className="material-symbols-outlined text-primary text-[22px]">add_circle</span>
+                <span className="text-[13px] font-semibold text-on-surface leading-tight">Añadir evento</span>
+                <span className="text-[11px] text-outline leading-snug">Lo que tengas en mente, escríbelo natural.</span>
+              </button>
+
+              <button
+                onClick={() => { setQuickAddInitial('Bloque de foco 90 min'); setShowAdd(true) }}
+                className="group flex flex-col items-start gap-1.5 rounded-2xl bg-surface-container-lowest hover:bg-primary/5 border border-outline-variant/40 hover:border-primary/40 p-3 text-left transition-colors active:scale-[0.98]"
+              >
+                <span className="material-symbols-outlined text-primary text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>psychology</span>
+                <span className="text-[13px] font-semibold text-on-surface leading-tight">Bloque de foco</span>
+                <span className="text-[11px] text-outline leading-snug">90 minutos sin interrupciones.</span>
+              </button>
+
+              <button
+                onClick={scrollToNova}
+                className="group flex flex-col items-start gap-1.5 rounded-2xl bg-surface-container-lowest hover:bg-primary/5 border border-outline-variant/40 hover:border-primary/40 p-3 text-left transition-colors active:scale-[0.98]"
+              >
+                <span className="material-symbols-outlined text-primary text-[22px]">mic</span>
+                <span className="text-[13px] font-semibold text-on-surface leading-tight">Dictar con voz</span>
+                <span className="text-[11px] text-outline leading-snug">Cuéntale tu día a Nova.</span>
+              </button>
+
+              <button
+                onClick={() => (onOpenPhotoImport || onOpenImport)?.()}
+                disabled={!onOpenImport && !onOpenPhotoImport}
+                className="group flex flex-col items-start gap-1.5 rounded-2xl bg-surface-container-lowest hover:bg-primary/5 border border-outline-variant/40 hover:border-primary/40 p-3 text-left transition-colors active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span className="material-symbols-outlined text-primary text-[22px]">{onOpenPhotoImport ? 'photo_camera' : 'download'}</span>
+                <span className="text-[13px] font-semibold text-on-surface leading-tight">
+                  {onOpenPhotoImport ? 'Foto de tu agenda' : 'Importar agenda'}
+                </span>
+                <span className="text-[11px] text-outline leading-snug">
+                  {onOpenPhotoImport ? 'Envía una foto, Nova la parsea.' : 'Desde un ICS o suscripción.'}
+                </span>
+              </button>
+            </div>
+
+            {onOpenImport && onOpenPhotoImport && (
+              <button
+                onClick={onOpenImport}
+                className="w-full text-[12px] font-semibold text-primary hover:bg-primary/5 rounded-full py-2 transition-colors"
+              >
+                O importa desde un archivo .ics →
+              </button>
+            )}
           </div>
         )}
 
@@ -220,8 +291,9 @@ export default function DayView({ events = [], tasks = [], onAddEvent, onOpenTas
 
         {showAdd && (
           <QuickAddSheet
-            onSave={handleSave}
-            onCancel={() => setShowAdd(false)}
+            onSave={(d) => { handleSave(d); setQuickAddInitial('') }}
+            onCancel={() => { setShowAdd(false); setQuickAddInitial('') }}
+            initialText={quickAddInitial}
           />
         )}
       </main>

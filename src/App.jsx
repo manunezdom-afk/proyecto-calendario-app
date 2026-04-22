@@ -387,6 +387,8 @@ export default function App() {
                   tasks={tasks}
                   onAddEvent={addEvent}
                   onOpenTask={(event) => openTaskDetail(event)}
+                  onOpenImport={() => { setImportExportInitialTab('import'); setImportExportOpen(true) }}
+                  onOpenPhotoImport={() => { setImportExportInitialTab('photo'); setImportExportOpen(true) }}
                   isDesktop={isDesktop}
                 />
               )}

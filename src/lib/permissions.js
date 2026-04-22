@@ -25,6 +25,11 @@ export function isIOS() {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 }
 
+export function isAndroid() {
+  if (typeof navigator === 'undefined') return false
+  return /android/i.test(navigator.userAgent)
+}
+
 export function isStandalone() {
   if (typeof window === 'undefined') return false
   return window.matchMedia?.('(display-mode: standalone)').matches ||

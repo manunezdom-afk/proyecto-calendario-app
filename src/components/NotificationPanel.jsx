@@ -84,14 +84,40 @@ export default function NotificationPanel({ isOpen, onClose, notifLog, onMarkAll
         {/* Body */}
         <div className="flex-1 overflow-y-auto hide-scrollbar">
           {notifLog.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-4 h-full text-center px-6 py-12">
-              <span className="material-symbols-outlined text-5xl text-outline/30">
-                notifications_off
-              </span>
-              <p className="font-bold text-on-surface dark:text-slate-300">Sin notificaciones aún</p>
-              <p className="text-sm text-outline font-medium leading-relaxed">
-                Tus recordatorios de eventos aparecerán aquí antes de que comiencen.
+            <div className="flex flex-col items-center justify-center gap-3 h-full text-center px-6 py-10">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                <span
+                  className="material-symbols-outlined text-primary text-[26px]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  notifications_active
+                </span>
+              </div>
+              <p className="font-bold text-on-surface dark:text-slate-300">
+                Todo tranquilo por aquí
               </p>
+              <p className="text-sm text-outline font-medium leading-relaxed max-w-[260px]">
+                Te avisaremos 10 minutos antes de cada evento. Si pierdes alguno, también queda registrado.
+              </p>
+              <div className="mt-2 w-full max-w-[260px] rounded-xl bg-surface-container-low/60 p-3 text-left">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-outline/80 mb-1.5">
+                  Qué verás aquí
+                </p>
+                <ul className="space-y-1.5 text-[12.5px] text-on-surface-variant">
+                  <li className="flex items-start gap-2">
+                    <span className="material-symbols-outlined text-[14px] mt-0.5 text-primary">schedule</span>
+                    Recordatorios antes de cada evento
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="material-symbols-outlined text-[14px] mt-0.5 text-primary">auto_awesome</span>
+                    Sugerencias de Nova
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="material-symbols-outlined text-[14px] mt-0.5 text-primary">check_circle</span>
+                    Confirmaciones de cambios
+                  </li>
+                </ul>
+              </div>
             </div>
           ) : (
             <div className="py-2">

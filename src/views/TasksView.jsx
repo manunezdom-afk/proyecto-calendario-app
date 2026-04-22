@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import WeeklyStatsCard from '../components/WeeklyStatsCard'
 
 const PRIORITY_CFG = {
@@ -17,6 +17,12 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
   const [newLabel, setNewLabel]       = useState('')
   const [newPriority, setNewPriority] = useState('Media')
   const [collapsed, setCollapsed]     = useState({})
+  // Feedback tras añadir: contador de tareas creadas en esta sesión de input
+  // abierto. Se muestra como chip "· Añadidas N" y sube moral del usuario.
+  const [justAddedCount, setJustAddedCount] = useState(0)
+  const [flashAdded, setFlashAdded] = useState(false)
+  const flashTimerRef = useRef(null)
+  useEffect(() => () => { if (flashTimerRef.current) clearTimeout(flashTimerRef.current) }, [])
 
   const handleToggle = (id) => toggleTask(id)
   const handleDelete = (id) => deleteTask(id)
@@ -37,8 +43,21 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
     const trimmed = newLabel.trim()
     if (!trimmed) return
     addTask({ label: trimmed, priority: newPriority, category: addCategory })
+    // UX: dejamos el input abierto para rapid-fire. El usuario cierra con
+    // Cancelar/Escape o haciendo click fuera del add-form. Menos fricción
+    // cuando vuelca varias tareas de golpe.
     setNewLabel('')
+    setJustAddedCount((n) => n + 1)
+    setFlashAdded(true)
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+    flashTimerRef.current = setTimeout(() => setFlashAdded(false), 1400)
+  }
+
+  function closeAddForm() {
     setShowInput(false)
+    setNewLabel('')
+    setJustAddedCount(0)
+    setFlashAdded(false)
   }
 
   function toggleCollapse(cat) {
@@ -145,7 +164,10 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
                     </span>
                   </button>
                   <button
-                    onClick={() => { setAddCategory(cat); setShowInput(true) }}
+                    onClick={() => {
+                      if (addCategory !== cat) setJustAddedCount(0)
+                      setAddCategory(cat); setShowInput(true)
+                    }}
                     className="w-7 h-7 flex items-center justify-center rounded-full text-outline hover:text-primary hover:bg-primary/10 transition-colors"
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>
@@ -203,15 +225,17 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
                     {showInput && addCategory === cat && (
                       <form
                         onSubmit={handleAdd}
-                        className="bg-surface-container-lowest rounded-xl ring-2 ring-primary/30 px-3 py-2.5 space-y-2"
+                        className={`bg-surface-container-lowest rounded-xl ring-2 px-3 py-2.5 space-y-2 transition-colors ${
+                          flashAdded ? 'ring-primary' : 'ring-primary/30'
+                        }`}
                       >
                         <input
                           autoFocus
                           type="text"
                           value={newLabel}
                           onChange={(e) => setNewLabel(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Escape') { setShowInput(false); setNewLabel('') } }}
-                          placeholder="¿Qué necesitas hacer?"
+                          onKeyDown={(e) => { if (e.key === 'Escape') closeAddForm() }}
+                          placeholder={justAddedCount > 0 ? 'Añade otra tarea…' : '¿Qué necesitas hacer?'}
                           className="w-full bg-transparent text-on-surface placeholder:text-outline/50 text-sm font-medium focus:outline-none"
                         />
                         <div className="flex items-center gap-2">
@@ -227,11 +251,27 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
                               )
                             })}
                           </div>
+                          {justAddedCount > 0 && (
+                            <span
+                              className={`inline-flex items-center gap-1 text-[10.5px] font-bold ${
+                                flashAdded ? 'text-primary' : 'text-outline/70'
+                              } transition-colors`}
+                            >
+                              <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                                check_circle
+                              </span>
+                              {justAddedCount === 1 ? 'Añadida' : `${justAddedCount} añadidas`}
+                            </span>
+                          )}
                           <div className="flex gap-2 ml-auto">
-                            <button type="button" onClick={() => { setShowInput(false); setNewLabel('') }} className="text-xs text-outline px-2 py-1">
-                              Cancelar
+                            <button type="button" onClick={closeAddForm} className="text-xs text-outline px-2 py-1">
+                              Cerrar
                             </button>
-                            <button type="submit" className="text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors">
+                            <button
+                              type="submit"
+                              disabled={!newLabel.trim()}
+                              className="text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors disabled:opacity-40"
+                            >
                               Añadir
                             </button>
                           </div>

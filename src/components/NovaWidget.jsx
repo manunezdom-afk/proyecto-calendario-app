@@ -902,6 +902,7 @@ export default function NovaWidget({
         {!isOpen && (
           <motion.div
             key="pill-wrap"
+            id="nova-widget"
             className={`${pillPositionClass} z-[60]`}
             style={pillPositionStyle}
             initial={{ opacity: 0, scale: 0.7 }}

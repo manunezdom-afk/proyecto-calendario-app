@@ -8,6 +8,16 @@ import {
 } from '../lib/pushSubscription'
 import PermissionsSection from '../components/PermissionsSection'
 import { useAppPreferences } from '../hooks/useAppPreferences'
+import { isIOS, isAndroid } from '../lib/permissions'
+
+// Copy contextual por plataforma para "dónde habilitar el permiso".
+// El usuario ve "Ajustes de Android" en Android, "Ajustes del iPhone" en iOS,
+// "ajustes del navegador" en desktop — no una instrucción genérica de iPhone.
+function blockedPermissionMsg() {
+  if (isIOS()) return 'Permiso de notificaciones bloqueado. Habilítalo en Ajustes del iPhone → Focus.'
+  if (isAndroid()) return 'Permiso de notificaciones bloqueado. Habilítalo en Ajustes de Android → Apps → Focus → Notificaciones.'
+  return 'Permiso de notificaciones bloqueado. Habilítalo en los ajustes del sitio del navegador.'
+}
 
 function SectionCard({ title, children }) {
   return (
@@ -61,7 +71,7 @@ function PushDiagnostic() {
     try {
       const s = await getPushStatus()
       if (!s.supported) { setStatus({ ok: false, msg: 'Este dispositivo no soporta notificaciones push.' }); return }
-      if (s.permission === 'denied') { setStatus({ ok: false, msg: 'Permiso de notificaciones bloqueado. Habilitalo en Ajustes del iPhone → Focus.' }); return }
+      if (s.permission === 'denied') { setStatus({ ok: false, msg: blockedPermissionMsg() }); return }
       if (s.permission !== 'granted') { setStatus({ ok: false, msg: 'Permiso no concedido. Activa las notificaciones desde la pantalla principal.' }); return }
 
       // Primero chequeamos la salud con el backend para dar diagnóstico fiel
@@ -93,7 +103,8 @@ function PushDiagnostic() {
         } else if (r.reason === 'no_vapid_key') {
           setStatus({ ok: false, msg: 'Falta configurar VITE_VAPID_PUBLIC_KEY en Vercel.' })
         } else if (r.reason === 'subscribe_failed') {
-          setStatus({ ok: false, msg: `iOS rechazó la suscripción: ${r.error}` })
+          const plat = isIOS() ? 'iOS' : (isAndroid() ? 'Android' : 'El navegador')
+          setStatus({ ok: false, msg: `${plat} rechazó la suscripción: ${r.error}` })
         } else {
           setStatus({ ok: false, msg: `Error: ${r.reason} — ${r.error || ''}` })
         }

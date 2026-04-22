@@ -9,6 +9,7 @@ import {
   requestNotificationsPermission,
   watchPermission,
   isIOS,
+  isAndroid,
   isStandalone,
   isSafari,
   isIOSSafari,
@@ -76,6 +77,7 @@ function ActionButton({ children, onClick, disabled, variant = 'solid' }) {
 function HelpBlock({ state, kind }) {
   // Devuelve los pasos para desbloquear manualmente según plataforma y tipo.
   const ios = isIOS()
+  const android = isAndroid()
   const safari = isSafari()
 
   if (state === 'requires_install' && kind === 'notifications') {
@@ -94,7 +96,7 @@ function HelpBlock({ state, kind }) {
   }
 
   if (kind === 'microphone' || kind === 'camera') {
-    const labelIOS = kind === 'microphone' ? 'Micrófono' : 'Cámara'
+    const label = kind === 'microphone' ? 'Micrófono' : 'Cámara'
     if (ios || safari) {
       return (
         <>
@@ -102,7 +104,7 @@ function HelpBlock({ state, kind }) {
           <ol className="list-decimal pl-4 space-y-1">
             <li>Abre la app <b>Ajustes</b> del iPhone.</li>
             <li>Busca <b>Safari</b> y entra.</li>
-            <li>Entra en <b>{labelIOS}</b> y marca <b>Preguntar</b> o <b>Permitir</b>.</li>
+            <li>Entra en <b>{label}</b> y marca <b>Preguntar</b> o <b>Permitir</b>.</li>
             <li>Vuelve a Focus y recarga la pestaña.</li>
           </ol>
           <p className="mt-2 text-slate-500">
@@ -112,12 +114,28 @@ function HelpBlock({ state, kind }) {
         </>
       )
     }
+    if (android) {
+      return (
+        <>
+          <p className="font-semibold text-slate-700 mb-1.5">En Android / Chrome:</p>
+          <ol className="list-decimal pl-4 space-y-1">
+            <li>Toca el icono de candado junto a la URL.</li>
+            <li>Entra en <b>Permisos</b>.</li>
+            <li>Cambia <b>{label}</b> a <b>Permitir</b>.</li>
+            <li>Recarga Focus.</li>
+          </ol>
+          <p className="mt-2 text-slate-500">
+            Si tienes Focus instalado, también puedes ir a <b>Ajustes de Android → Apps → Focus → Permisos</b>.
+          </p>
+        </>
+      )
+    }
     return (
       <>
         <p className="font-semibold text-slate-700 mb-1.5">En tu navegador:</p>
         <ol className="list-decimal pl-4 space-y-1">
           <li>Toca el icono de candado o información a la izquierda de la URL.</li>
-          <li>Busca <b>{kind === 'microphone' ? 'Micrófono' : 'Cámara'}</b> en la lista de permisos.</li>
+          <li>Busca <b>{label}</b> en la lista de permisos.</li>
           <li>Cámbialo a <b>Permitir</b>.</li>
           <li>Recarga la pestaña.</li>
         </ol>
@@ -134,6 +152,18 @@ function HelpBlock({ state, kind }) {
             <li>Abre <b>Ajustes</b> del iPhone.</li>
             <li>Busca <b>Focus</b> en la lista de apps.</li>
             <li>Entra en <b>Notificaciones</b> y actívalas.</li>
+          </ol>
+        </>
+      )
+    }
+    if (android) {
+      return (
+        <>
+          <p className="font-semibold text-slate-700 mb-1.5">En Android:</p>
+          <ol className="list-decimal pl-4 space-y-1">
+            <li>Abre <b>Ajustes</b> de Android.</li>
+            <li>Entra en <b>Apps → Focus → Notificaciones</b>.</li>
+            <li>Actívalas y vuelve a Focus.</li>
           </ol>
         </>
       )
