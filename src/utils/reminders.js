@@ -36,6 +36,10 @@ export function extractReminderMeta(title) {
   const m1 = t.match(/^recordatorio:\s*(.+)$/i)
   if (m1) return { isReminder: true, parentTitle: m1[1].trim(), label: 'Recordatorio' }
 
+  // "Prepararse para X" / "Prepararme para X" / "Prepararte para X" — aviso previo a un evento.
+  const mPrep = t.match(/^prepar(?:arse|arme|arte|ándome|ándose|ándote|ar)\s+para\s+(.+)$/i)
+  if (mPrep) return { isReminder: true, parentTitle: mPrep[1].trim(), label: 'Recordatorio' }
+
   const m2 = t.match(/^(.+?)\s*(?:—|-)\s*recordatorio\b.*$/i)
   if (m2) return { isReminder: true, parentTitle: m2[1].trim(), label: 'Recordatorio' }
 
