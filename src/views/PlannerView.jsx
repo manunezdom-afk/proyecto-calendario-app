@@ -538,9 +538,19 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   })()
 
   const nextBlock   = blocksWithDecimal.find((b) => b._h > now) ?? null
+
+  // Fallback flexible: si no hay activo ni próximo con hora, pero sí queda un
+  // pendiente de hoy sin hora definida, lo mostramos como "Próximo bloque
+  // sugerido" para que la tarjeta no quede vacía cuando aún hay algo por hacer.
+  const flexibleBlock = (!activeBlock && !nextBlock)
+    ? (Array.isArray(blocks) ? blocks : []).find(
+        (b) => b && b.type !== 'done' && parseTimeToDecimal(b.time) === null,
+      ) ?? null
+    : null
+
   const hasBlocks   = blocksWithDecimal.length > 0
-  const dayIsEmpty  = !hasBlocks
-  const dayIsDone   = hasBlocks && !activeBlock && !nextBlock
+  const dayIsEmpty  = !hasBlocks && !flexibleBlock
+  const dayIsDone   = hasBlocks && !activeBlock && !nextBlock && !flexibleBlock
   const showTomorrowPreview = !showGhosts && (dayIsEmpty || dayIsDone) && tomorrowEvents.length > 0
   const minsToNext  = nextBlock   ? (nextBlock._h   - now) * 60 : null
   const minsElapsed = activeBlock ? (now - activeBlock._h) * 60 : null
@@ -998,15 +1008,26 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     className="material-symbols-outlined text-primary text-[20px]"
                     style={{ fontVariationSettings: "'FILL' 1" }}
                   >
-                    {activeBlock ? 'play_circle' : 'schedule'}
+                    {activeBlock ? 'play_circle' : flexibleBlock && !nextBlock ? 'bolt' : 'schedule'}
                   </span>
                   <h4 className="font-headline font-bold text-on-surface">
-                    {activeBlock ? 'En Curso' : 'Próximo Bloque'}
+                    {activeBlock
+                      ? 'En Curso'
+                      : nextBlock
+                        ? 'Próximo Bloque'
+                        : flexibleBlock
+                          ? 'Próximo bloque sugerido'
+                          : 'Próximo Bloque'}
                   </h4>
                 </div>
                 {activeBlock && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                     ACTIVO
+                  </span>
+                )}
+                {!activeBlock && !nextBlock && flexibleBlock && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-secondary/10 text-secondary">
+                    FLEXIBLE
                   </span>
                 )}
               </div>
@@ -1042,6 +1063,22 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{formatMinutes(minsToNext)}</span>
                       {minsToNext >= 1 && <span className="text-sm font-semibold text-outline">para empezar</span>}
                     </div>
+                  </LongPressZone>
+                </SwipeableCard>
+              ) : flexibleBlock ? (
+                <SwipeableCard onDelete={() => { dismissBlock(flexibleBlock.id); if (flexibleBlock.eventId) onDeleteEvent?.(flexibleBlock.eventId) }}>
+                  <LongPressZone
+                    onLongPress={() => { if (window.confirm(`¿Eliminar "${flexibleBlock.title}"?`)) { dismissBlock(flexibleBlock.id); if (flexibleBlock.eventId) onDeleteEvent?.(flexibleBlock.eventId) } }}
+                    className="py-1"
+                    title="Mantén apretado para eliminar"
+                    data-next-event
+                  >
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-secondary/10 text-secondary mb-2">
+                      <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
+                      Sin hora definida
+                    </span>
+                    <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-2 break-words">{flexibleBlock.title || '(sin título)'}</p>
+                    <p className="text-sm font-medium text-outline leading-snug">Cuando puedas durante el día.</p>
                   </LongPressZone>
                 </SwipeableCard>
               ) : (
