@@ -4,7 +4,7 @@ import QuickAddSheet     from '../components/QuickAddSheet'
 import FocusBar          from '../components/FocusBar'
 import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
-import { isInPeak, parseEventHour, peakRangeLabel } from '../utils/peakZone'
+import { isInPeak } from '../utils/peakZone'
 import { todayISO as todayISODate, parseTimeToDecimal } from '../utils/time'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -813,42 +813,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
               tasks={tasks}
               inline
             />
-
-            {/* ── Shield: eventos que interrumpen la zona de rendimiento ─── */}
-            {(() => {
-              if (!profile.peakStart) return null
-              const intruders = displayBlocks.filter(b => {
-                if (b.type === 'suggestion' || b._asReminderOnly) return false
-                const h = parseEventHour(b.time)
-                if (h === null) return false
-                if (h < profile.peakStart || h >= profile.peakEnd) return false
-                return /reuni[oó]n|meeting|llamada|call|sincro|junta|clase|lecture|training/i.test(b.title)
-              })
-              if (intruders.length === 0) return null
-              return (
-                <div className="mb-5 bg-amber-50 border border-amber-200 rounded-2xl p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="material-symbols-outlined text-amber-600 text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
-                    <p className="text-[10px] font-bold text-amber-700">Zona de Rendimiento en riesgo</p>
-                  </div>
-                  <p className="text-sm text-amber-800 leading-snug mb-2">
-                    {intruders.length === 1
-                      ? <><strong>"{intruders[0].title}"</strong> está en tu zona de rendimiento ({peakRangeLabel(profile.peakStart, profile.peakEnd)}). Considera moverlo fuera de ese horario.</>
-                      : <><strong>{intruders.length} eventos</strong> interrumpen tu zona de rendimiento ({peakRangeLabel(profile.peakStart, profile.peakEnd)}). Considera moverlos fuera de ese horario.</>
-                    }
-                  </p>
-                  {onOpenAssistant && (
-                    <button
-                      onClick={onOpenAssistant}
-                      className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-2 py-1 rounded-full transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[13px]">auto_awesome</span>
-                      Pedirle a Nova que proponga un horario
-                    </button>
-                  )}
-                </div>
-              )
-            })()}
 
             <div className="relative space-y-2">
               {displayBlocks.map(({ id, eventId, taskId, time, type, title, description, priority, subtasks = [], _asReminderOnly, _isTask }) => {
