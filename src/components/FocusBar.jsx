@@ -220,6 +220,20 @@ export default function FocusBar({
       clearTimeout(silenceRef.current)
       clearTimeout(restartTimerRef.current)
       setIsListening(false)
+      // Errores bloqueantes: antes fallaban en silencio y el usuario veía
+      // "el mic no hace nada". Ahora los reflejamos en la burbuja de reply.
+      const blocking = ev?.error
+      if (blocking === 'not-allowed' || blocking === 'service-not-allowed') {
+        setReply({
+          content: 'Permiso de micrófono denegado. Actívalo en los ajustes del sistema y vuelve a intentarlo.',
+          actions: [],
+        })
+      } else if (blocking === 'audio-capture') {
+        setReply({
+          content: 'No se pudo acceder al micrófono. Revisa que otra app no lo esté usando.',
+          actions: [],
+        })
+      }
     }
 
     r.onend = () => {
@@ -420,6 +434,17 @@ export default function FocusBar({
 
   function toggleMic() {
     if (isThinking) return
+    // Safari iPhone no expone webkitSpeechRecognition. Antes el botón quedaba
+    // `disabled={!SR}` y el tap no disparaba nada. Ahora sí llega acá y
+    // redirigimos al dictado nativo del teclado iOS con un mensaje claro.
+    if (!SR) {
+      setReply({
+        content: 'Safari en iPhone no soporta dictado por voz en la web. Toca el campo y usa el micrófono del teclado del iPhone para dictar.',
+        actions: [],
+      })
+      setTimeout(() => inputRef.current?.focus(), 60)
+      return
+    }
     const r = srRef.current
     if (!r) return
 
@@ -577,9 +602,12 @@ export default function FocusBar({
           />
 
           {/* Mic — versión única y discreta (MicButton). */}
+          {/* No gateamos `disabled` con `!SR`: en Safari iPhone webkitSpeechRecognition
+              no existe y el HTML `disabled` mataba el tap sin feedback. El botón
+              ahora responde siempre y toggleMic maneja el fallback. */}
           <MicButton
             isListening={isListening}
-            disabled={!SR || isThinking}
+            disabled={isThinking}
             onToggle={toggleMic}
           />
 
@@ -727,9 +755,12 @@ export default function FocusBar({
           {/* Mic — versión única y discreta (MicButton). El modo floating
               vive sobre un fondo oscuro, pero mantenemos el mismo estilo
               para no volver a divergir entre vistas. */}
+          {/* No gateamos `disabled` con `!SR`: en Safari iPhone webkitSpeechRecognition
+              no existe y el HTML `disabled` mataba el tap sin feedback. El botón
+              ahora responde siempre y toggleMic maneja el fallback. */}
           <MicButton
             isListening={isListening}
-            disabled={!SR || isThinking}
+            disabled={isThinking}
             onToggle={toggleMic}
           />
 

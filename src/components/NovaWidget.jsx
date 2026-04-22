@@ -252,6 +252,15 @@ export default function NovaWidget({
       clearTimeout(silenceTimerRef.current)
       clearTimeout(restartTimerRef.current)
       setIsListening(false)
+      // Antes los errores bloqueantes caían en silencio. Si el usuario está
+      // en un navegador que soporta SR pero denegó el permiso (o el OS lo
+      // bloquea), ahora se lo decimos en vez de que "el mic no haga nada".
+      const blocking = ev?.error
+      if (blocking === 'not-allowed' || blocking === 'service-not-allowed') {
+        setReply('Permiso de micrófono denegado. Actívalo en los ajustes del sistema y vuelve a intentarlo.')
+      } else if (blocking === 'audio-capture') {
+        setReply('No se pudo acceder al micrófono. Revisa que otra app no lo esté usando.')
+      }
     }
 
     r.onend = () => {
@@ -313,7 +322,16 @@ export default function NovaWidget({
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function startVoice() {
-    if (!SR || isLoading) return
+    if (isLoading) return
+    // Safari iPhone no expone webkitSpeechRecognition (Apple no implementa la
+    // Web Speech API). Antes el botón quedaba `disabled={!SR}` y el tap moría
+    // en seco sin feedback. Ahora el botón sí responde: guiamos al usuario al
+    // dictado nativo del teclado de iOS enfocando el input.
+    if (!SR) {
+      setReply('Safari en iPhone no soporta dictado por voz en la web. Toca el campo y usa el micrófono del teclado del iPhone para dictar.')
+      setTimeout(() => inputRef.current?.focus(), 60)
+      return
+    }
     const r = srRef.current
     if (!r) return
     // Si una sesión anterior quedó a medio cerrar (onend aún no disparó),
@@ -834,9 +852,14 @@ export default function NovaWidget({
               de onClick. Safari móvil a veces descarta el click sintético
               tras un micro-scroll; los eventos de puntero disparan aunque
               el click se pierda. */}
+        {/* Importante: NO condicionamos `disabled` en `!SR`. En Safari iPhone
+            webkitSpeechRecognition no existe y antes el botón salía con atributo
+            HTML `disabled` → el tap llegaba pero moría en `fire()`. Ahora el
+            botón sí responde y startVoice se encarga del fallback con guía al
+            dictado nativo del teclado iOS. */}
         <MicButton
           isListening={isListening}
-          disabled={isLoading || isAnalyzingPhoto || !SR}
+          disabled={isLoading || isAnalyzingPhoto}
           onToggle={isListening ? stopVoice : startVoice}
         />
 
