@@ -5,7 +5,7 @@
  * 1. El usuario otorga permiso de notificaciones (browser API)
  * 2. Registramos al service worker en /sw.js si no está
  * 3. Subscribimos al pushManager con la VAPID_PUBLIC_KEY
- * 4. POST /api/push-subscribe con la subscription JSON (guarda en Supabase)
+ * 4. POST /api/push { action: 'subscribe', ... } (guarda en Supabase)
  *
  * El backend después puede mandarle push a ese endpoint cuando haga falta.
  */
@@ -123,27 +123,28 @@ export async function subscribeToPush() {
       return { ok: true, subscription: subJson, reason: 'saved_locally_no_session' }
     }
 
-    const res = await fetch('/api/push-subscribe', {
+    const res = await fetch('/api/push', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
+        action: 'subscribe',
         subscription: subJson,
         user_agent: navigator.userAgent.slice(0, 200),
       }),
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      console.error('[Focus] push-subscribe failed:', res.status, data)
+      console.error('[Focus] push subscribe failed:', res.status, data)
       return { ok: false, reason: 'backend_error', error: data.error || `status ${res.status}` }
     }
     console.log('[Focus] ✅ push subscription guardada en Supabase, endpoint:', subJson.endpoint?.slice(0, 60))
     localStorage.removeItem('focus_pending_push_sub')
     return { ok: true, subscription: subJson }
   } catch (err) {
-    console.error('[Focus] push-subscribe network error:', err)
+    console.error('[Focus] push subscribe network error:', err)
     return { ok: false, reason: 'sync_failed', error: String(err) }
   }
 }
@@ -165,13 +166,13 @@ export async function unsubscribeFromPush() {
   try {
     const token = (await supabase?.auth.getSession())?.data?.session?.access_token
     if (token) {
-      await fetch('/api/push-unsubscribe', {
+      await fetch('/api/push', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ endpoint }),
+        body: JSON.stringify({ action: 'unsubscribe', endpoint }),
       })
     }
   } catch {}
@@ -187,13 +188,14 @@ export async function flushPendingSubscription() {
     const subJson = JSON.parse(raw)
     const token = (await supabase?.auth.getSession())?.data?.session?.access_token
     if (!token) return
-    const res = await fetch('/api/push-subscribe', {
+    const res = await fetch('/api/push', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
+        action: 'subscribe',
         subscription: subJson,
         user_agent: navigator.userAgent.slice(0, 200),
       }),

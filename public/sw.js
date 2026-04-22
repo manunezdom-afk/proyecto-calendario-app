@@ -152,10 +152,11 @@ self.addEventListener('notificationclick', (event) => {
   // Snooze: avisar al backend que reprograme +10min
   if (action === 'snooze') {
     event.waitUntil(
-      fetch('/api/push-snooze', {
+      fetch('/api/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'snooze',
           eventId: event.notification.data?.eventId,
           minutes: 10,
         }),
@@ -189,10 +190,10 @@ self.addEventListener('pushsubscriptionchange', (event) => {
           userVisibleOnly: true,
           applicationServerKey: event.oldSubscription?.options?.applicationServerKey,
         })
-        await fetch('/api/push-subscribe', {
+        await fetch('/api/push', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subscription: newSub.toJSON(), renewed: true }),
+          body: JSON.stringify({ action: 'subscribe', subscription: newSub.toJSON(), renewed: true }),
         })
       } catch {}
     })()
