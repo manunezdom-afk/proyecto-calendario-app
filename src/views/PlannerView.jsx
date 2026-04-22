@@ -5,6 +5,16 @@ import FocusBar          from '../components/FocusBar'
 import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { todayISO as todayISODate, parseTimeToDecimal } from '../utils/time'
+import {
+  normalizeTitleKey,
+  extractReminderMeta,
+  titleTokenSet,
+  jaccard,
+  looksLikeReminderTitle,
+  isReminderItem as isReminderBlock,
+  reminderHasParent,
+  isMainEntity,
+} from '../utils/reminders'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
@@ -62,108 +72,11 @@ function eventTimeToBlockTime(timeStr) {
   return '—'
 }
 
-function normalizeTitleKey(s) {
-  return String(s || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function extractReminderMeta(title) {
-  const t = String(title || '').trim()
-  // Common patterns:
-  // - "Recordatorio: Clases de Historia"
-  // - "Clases de Historia — recordatorio"
-  // - "Clases de Historia (recordatorio 10 min)"
-  // - "Clases de Historia en 10 minutos"
-  const m1 = t.match(/^recordatorio:\s*(.+)$/i)
-  if (m1) return { isReminder: true, parentTitle: m1[1].trim(), label: 'Recordatorio' }
-
-  const m2 = t.match(/^(.+?)\s*(?:—|-)\s*recordatorio\b.*$/i)
-  if (m2) return { isReminder: true, parentTitle: m2[1].trim(), label: 'Recordatorio' }
-
-  const m3 = t.match(/^(.+?)\s*\((?:.*\brecordatorio\b.*)\)\s*$/i)
-  if (m3) {
-    const inside = t.replace(m3[1], '').trim().replace(/^\(|\)$/g, '').trim()
-    return { isReminder: true, parentTitle: m3[1].trim(), label: inside || 'Recordatorio' }
-  }
-
-  const m4 = t.match(/^(.+?)\s+en\s+(?:10|30|60)\s+minutos\b/i)
-  if (m4) return { isReminder: true, parentTitle: m4[1].trim(), label: t.slice(m4[1].length).trim() }
-
-  if (/\b(recordatorio|reminder)\b/i.test(t)) {
-    // Fallback: try stripping the keyword and using the rest
-    const guessParent = t
-      .replace(/\b(recordatorio|reminder)\b/ig, '')
-      .replace(/[()—-]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-    return { isReminder: true, parentTitle: guessParent || t, label: 'Recordatorio' }
-  }
-
-  return { isReminder: false, parentTitle: '', label: '' }
-}
-
-function titleTokenSet(title) {
-  const cleaned = normalizeTitleKey(title)
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const tokens = cleaned.split(' ').filter(Boolean)
-  // remove very common stop-words to improve similarity signal
-  const STOP = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'y', 'a', 'en', 'para', 'por', 'con', 'un', 'una'])
-  return new Set(tokens.filter((t) => t.length > 2 && !STOP.has(t)))
-}
-
-function jaccard(a, b) {
-  if (!a?.size || !b?.size) return 0
-  let inter = 0
-  for (const x of a) if (b.has(x)) inter++
-  const union = a.size + b.size - inter
-  return union === 0 ? 0 : inter / union
-}
-
-function looksLikeReminderTitle(title) {
-  const t = normalizeTitleKey(title)
-  // Imperative / checklist-like reminders often created as short standalone events.
-  // Examples: "Recordar enviar mail", "Check presentación", "Revisar notas", etc.
-  if (/^(recordar|recuerda|remember|check|revisar|enviar|llamar|pagar|comprar|hacer|preparar|confirmar|agendar)\b/.test(t)) return true
-  if (/\b(recordatorio|reminder)\b/.test(t)) return true
-  if (/^todo\b/.test(t)) return true
-  return false
-}
-
-function isReminderBlock(b) {
-  if (!b) return false
-  const meta = extractReminderMeta(b?.title)
-  return meta.isReminder || looksLikeReminderTitle(b?.title)
-}
-
-// Un recordatorio "tiene padre" cuando existe un evento real al que se refiere
-// (ya sea explícito por título "Recordatorio: X" o por heurística de cercanía +
-// similitud). Los que tienen padre se muestran anidados; los que no, aparecen
-// como recordatorio destacado.
-function reminderHasParent(reminderBlock, eventBlocks) {
-  if (!reminderBlock || !Array.isArray(eventBlocks) || eventBlocks.length === 0) return false
-  const meta = extractReminderMeta(reminderBlock?.title)
-  if (meta.isReminder && meta.parentTitle) {
-    const key = normalizeTitleKey(meta.parentTitle)
-    if (eventBlocks.some((e) => normalizeTitleKey(e?.title) === key)) return true
-  }
-  const rh = parseTimeToDecimal(reminderBlock?.time)
-  if (rh === null || rh === undefined) return false
-  const rTokens = titleTokenSet(reminderBlock?.title)
-  for (const ev of eventBlocks) {
-    const eh = parseTimeToDecimal(ev?.time)
-    if (eh === null || eh === undefined) continue
-    const delta = (eh - rh) * 60
-    if (delta < 0 || delta > 60) continue
-    if (jaccard(rTokens, titleTokenSet(ev?.title)) >= 0.55) return true
-  }
-  return false
-}
+// Helpers de recordatorios (isReminderBlock, reminderHasParent, extracción de
+// meta por título, similitud Jaccard, etc.) viven en src/utils/reminders.js y
+// están importados arriba. Single source of truth — Mi Día, Morning Brief y
+// Evening Shutdown usan los mismos criterios para no descontar en un lado y
+// duplicar en otro.
 
 // Copy del contador de un recordatorio. "Ahora" dentro de ±30 seg; "En 1 min"
 // hasta 1.5 min; luego "En X min" y "En Xh Ym" para tiempos más largos.
@@ -482,10 +395,20 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   }
 
   // ── Datos personalizados ─────────────────────────────────────────────────
-  const confirmedCount  = blocks.filter((b) => b.type === 'confirmed').length
-  const suggestionCount = blocks.filter((b) => b.type === 'suggestion').length
-  const completedCount  = blocks.filter((b) => b.type === 'done').length
-  const totalBlocks     = blocks.length
+  // Contadores de "Tu Día" cuentan SOLO entidades principales. Un recordatorio
+  // asociado a un evento (ej: "Recordatorio: Reunión con Juan" para la reunión
+  // de las 15:00) no es una entidad separada — se renderiza como subtarea del
+  // evento padre, así que no debe aparecer en confirmados/pendientes/completados
+  // ni en la barra de progreso. Sí cuentan los recordatorios independientes
+  // (sin padre) porque son la única representación de ese compromiso.
+  // Ver src/utils/reminders.js para la definición completa de "entidad principal".
+  const mainBlocks = Array.isArray(blocks)
+    ? blocks.filter((b) => b && isMainEntity(b, blocks))
+    : []
+  const confirmedCount  = mainBlocks.filter((b) => b.type === 'confirmed').length
+  const suggestionCount = mainBlocks.filter((b) => b.type === 'suggestion').length
+  const completedCount  = mainBlocks.filter((b) => b.type === 'done').length
+  const totalBlocks     = mainBlocks.length
   // Progreso del día = cuántos bloques confirmados del día ya se cerraron.
   // Las sugerencias aún no son parte del día, así que no cuentan en el denominador.
   const scheduledBlocks = confirmedCount + completedCount

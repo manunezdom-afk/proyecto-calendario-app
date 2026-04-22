@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { todayISO as getTodayISO } from '../utils/time'
+import { splitReminders } from '../utils/reminders'
 import AuroraBackground from './AuroraBackground'
 import NovaOrb from './NovaOrb'
 
@@ -28,7 +29,12 @@ function generateBrief({ events, tasks }) {
   const todayISO = getTodayISO()
   const todayEvents = events.filter(e => !e.date || e.date === todayISO)
 
-  const meetingCount = todayEvents.filter(e =>
+  // Excluimos recordatorios asociados a un evento principal — no son reuniones
+  // independientes y duplicarían la cuenta (el evento padre ya cuenta por sí).
+  // Los recordatorios independientes se descartan del filtro de reuniones
+  // porque "Recordar llamar a Juan" no es una reunión real.
+  const { events: mainEvents } = splitReminders(todayEvents)
+  const meetingCount = mainEvents.filter(e =>
     /reuni[oó]n|meeting|llamada|call|sincro|junta/i.test(e.title),
   ).length
 

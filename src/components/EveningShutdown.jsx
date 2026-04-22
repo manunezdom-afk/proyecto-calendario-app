@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import AuroraBackground from './AuroraBackground'
 import NovaOrb from './NovaOrb'
+import { splitReminders } from '../utils/reminders'
 
 const PHASES = ['review', 'move', 'tomorrow']
 const PHASE_LABELS = { review: 'Revisión', move: 'Pendientes', tomorrow: 'Mañana' }
@@ -287,8 +288,15 @@ export default function EveningShutdown({
 
   const todayISO     = getTodayISO()
   const tomorrowISO  = getTomorrowISO()
-  const todayEvents  = events.filter(e => !e.date || e.date === todayISO)
-  const tomorrowEvents = events.filter(e => e.date === tomorrowISO)
+  // Sólo contamos eventos principales + recordatorios independientes. Los
+  // recordatorios atados a un evento ya existente se absorben en el evento
+  // padre — si no, "tienes 2 cosas hoy" cuando en realidad es una sola.
+  const todayEventsRaw = events.filter(e => !e.date || e.date === todayISO)
+  const { events: todayMainEvents, standaloneReminders: todayStandaloneReminders } = splitReminders(todayEventsRaw)
+  const todayEvents  = [...todayMainEvents, ...todayStandaloneReminders]
+  const tomorrowEventsRaw = events.filter(e => e.date === tomorrowISO)
+  const { events: tomorrowMainEvents, standaloneReminders: tomorrowStandaloneReminders } = splitReminders(tomorrowEventsRaw)
+  const tomorrowEvents = [...tomorrowMainEvents, ...tomorrowStandaloneReminders]
 
   // 90-second soft timer
   useEffect(() => {
