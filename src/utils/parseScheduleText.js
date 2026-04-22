@@ -15,6 +15,8 @@
  *   - Línea fecha+evento: "Lunes 9:00 Gym" → fecha=lunes, hora=9:00, título=Gym
  */
 
+import { stripFillerPhrases } from './titleCleanup'
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function toISO(date) {
@@ -235,6 +237,9 @@ function cleanTitle(line, timeResult) {
 
   // Quitar separadores sobrantes al inicio/fin
   t = t.replace(/^[\s\-–:•|]+/, '').replace(/[\s\-–:•|]+$/, '').trim()
+
+  // Quitar muletillas y frases de relleno ("lo de", "tema de", "cosa de"…).
+  t = stripFillerPhrases(t)
 
   // Colapsar espacios múltiples
   return t.replace(/\s+/g, ' ').trim()

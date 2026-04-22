@@ -1,3 +1,5 @@
+import { stripFillerPhrases } from './titleCleanup'
+
 /**
  * Extracts { title, time, date, section, icon, dotColor }
  * from informal Spanish text.
@@ -242,6 +244,9 @@ function cleanTitle(text) {
 
   // Strip leading articles / indefinite
   t = t.replace(/^(un[ao]?|el|la|los|las)\s+/i, '')
+
+  // Quitar muletillas y frases de relleno ("lo de", "tema de", "cosa de"…).
+  t = stripFillerPhrases(t)
 
   // Strip "para ir a/al/en el/a la" → keep destination
   // e.g. "levantarme para ir al gimnasio" → "levantarme gimnasio"

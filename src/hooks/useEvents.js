@@ -4,6 +4,7 @@ import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useCoalescedRefetch } from './useCoalescedRefetch'
+import { cleanGeneratedTitle } from '../utils/titleCleanup'
 
 // Extrae la hora (0-23) de un string "HH:MM" o "HH:MM – HH:MM"
 function parseEventHour(time) {
@@ -89,7 +90,8 @@ export function useEvents() {
   function addEvent({ title, time, description = '', section = 'focus', icon = 'event', dotColor = 'bg-secondary-container', date = null }) {
     const newEvent = {
       id: `evt-${Date.now()}`,
-      title, time, description, section, featured: false, icon, dotColor, date,
+      title: cleanGeneratedTitle(title) || title,
+      time, description, section, featured: false, icon, dotColor, date,
     }
     console.log(`[Focus] ➕ addEvent: "${newEvent.title}"`)
     setEvents(prev => [...prev, newEvent])

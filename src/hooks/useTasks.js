@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useCoalescedRefetch } from './useCoalescedRefetch'
 import { getTaskLinks, setTaskLink, clearTaskLink } from '../utils/taskLinks'
+import { cleanGeneratedTitle } from '../utils/titleCleanup'
 
 // Hidrata tasks con el linkedEventId guardado en localStorage. La columna
 // linked_event_id no existe en Supabase (evitamos migrar), así que mantenemos
@@ -84,9 +85,10 @@ export function useTasks() {
   }, [tasks, user?.id])
 
   function addTask({ label, priority = 'Media', category = 'hoy', linkedEventId = null }) {
-    const t = { id: `tsk-${Date.now()}`, label, done: false, priority, category }
+    const cleanLabel = cleanGeneratedTitle(label) || label
+    const t = { id: `tsk-${Date.now()}`, label: cleanLabel, done: false, priority, category }
     if (linkedEventId) t.linkedEventId = linkedEventId
-    console.log(`[Focus] ➕ addTask: "${label}"${linkedEventId ? ` (ligada a ${linkedEventId})` : ''}`)
+    console.log(`[Focus] ➕ addTask: "${cleanLabel}"${linkedEventId ? ` (ligada a ${linkedEventId})` : ''}`)
     setTasks(prev => [...prev, t])
     if (user) dataService.upsertTask(t, user.id).catch(console.warn)
     if (linkedEventId) setTaskLink(t.id, linkedEventId, user?.id)
