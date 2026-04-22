@@ -15,6 +15,7 @@ import {
   reminderHasParent,
   isMainEntity,
 } from '../utils/reminders'
+import { parseTimeRange, NO_END_TIME_LABEL } from '../utils/eventDuration'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
@@ -450,15 +451,35 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   const reminderBlocksRaw = allBlocksRaw.filter((b) => isReminderBlock(b))
 
   const blocksWithDecimal = eventBlocksRaw
-    .map((b) => ({ ...b, _h: parseTimeToDecimal(b.time) }))
+    .map((b) => {
+      const range = parseTimeRange(b.time)
+      const startH = range?.startH ?? parseTimeToDecimal(b.time)
+      const endH = range?.endH ?? null
+      return { ...b, _h: startH, _endH: endH }
+    })
     .filter((b) => b._h !== null)
     .sort((a, b) => a._h - b._h)
 
+  // Un bloque se considera "En curso" cuando estamos dentro de su ventana
+  // temporal. Distinguimos dos casos:
+  //   · Con hora de término válida: activo mientras [start, end).
+  //   · Sin hora de término: activo solo durante una ventana corta de
+  //     cortesía (15 min) a partir de start, o hasta que empiece el próximo
+  //     bloque — lo que ocurra antes. Así la tarjeta refleja "esto acaba de
+  //     empezar" sin inventar un `end` arbitrario de 1h, y sin afirmar
+  //     elapsed/progress sobre una duración inexistente (la UI se encarga de
+  //     eso con activeHasEnd).
   const activeBlock = (() => {
+    const NO_END_GRACE_H = 15 / 60
     for (let i = 0; i < blocksWithDecimal.length; i++) {
       const b = blocksWithDecimal[i]
-      const nextH = blocksWithDecimal[i + 1]?._h ?? (b._h + 1)
-      if (now >= b._h && now < nextH) return b
+      if (b._endH !== null && b._endH > b._h) {
+        if (now >= b._h && now < b._endH) return b
+        continue
+      }
+      const nextH = blocksWithDecimal[i + 1]?._h ?? Number.POSITIVE_INFINITY
+      const graceEnd = Math.min(b._h + NO_END_GRACE_H, nextH)
+      if (now >= b._h && now < graceEnd) return b
     }
     return null
   })()
@@ -522,7 +543,16 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     && pendingTasksCount === 0
     && tomorrowEvents.length > 0
   const minsToNext     = nextBlock        ? (nextBlock._h        - now) * 60 : null
-  const minsElapsed    = activeBlock      ? (now - activeBlock._h)       * 60 : null
+  // minsElapsed solo tiene sentido cuando el bloque activo tiene ambos
+  // extremos válidos. Por construcción activeBlock ya lo garantiza, pero lo
+  // dejamos explícito para que un refactor futuro no regrese al comportamiento
+  // de eventos "eternos".
+  const activeHasEnd    = !!(activeBlock && activeBlock._endH && activeBlock._endH > activeBlock._h)
+  const minsElapsed     = activeHasEnd ? (now - activeBlock._h) * 60 : null
+  const activeDurationMin = activeHasEnd ? (activeBlock._endH - activeBlock._h) * 60 : null
+  const activeProgress  = activeHasEnd
+    ? Math.min(1, Math.max(0, (now - activeBlock._h) / (activeBlock._endH - activeBlock._h)))
+    : null
   const minsToReminder = upcomingReminder ? (upcomingReminder._h - now) * 60 : null
   const dayProgress = Math.min(1, Math.max(0, (now - DAY_START_H) / (DAY_END_H - DAY_START_H)))
 
@@ -1073,10 +1103,31 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   >
                     <p className="text-xs font-semibold text-outline mb-1">{activeBlock.time}</p>
                     <p className="font-headline font-bold text-on-surface text-[17px] leading-snug mb-3 break-words">{activeBlock.title || '(sin título)'}</p>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{Math.round(minsElapsed)}</span>
-                      <span className="text-sm font-semibold text-outline">min transcurridos</span>
-                    </div>
+                    {/* Métricas de "en curso" — SOLO cuando el bloque tiene
+                        hora de término real. Sin endTime no mostramos
+                        transcurridos ni barra de progreso: son métricas
+                        inventadas sobre una duración inexistente. */}
+                    {activeHasEnd ? (
+                      <>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-extrabold font-headline text-primary tabular-nums">{Math.round(minsElapsed)}</span>
+                          <span className="text-sm font-semibold text-outline">
+                            min transcurridos{activeDurationMin ? ` · de ${Math.round(activeDurationMin)} min` : ''}
+                          </span>
+                        </div>
+                        <div className="mt-2 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full transition-all duration-700"
+                            style={{ width: `${(activeProgress ?? 0) * 100}%` }}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-outline/80 px-2 py-0.5 rounded-full bg-surface-container-low">
+                        <span className="material-symbols-outlined text-[13px]">hourglass_empty</span>
+                        {NO_END_TIME_LABEL}
+                      </span>
+                    )}
                   </LongPressZone>
                 </SwipeableCard>
               ) : reminderInFocus ? (

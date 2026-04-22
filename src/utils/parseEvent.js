@@ -1,4 +1,9 @@
 import { stripFillerPhrases } from './titleCleanup'
+import {
+  extractExplicitDurationMinutes,
+  inferDurationFromTitle,
+  composeTimeRange,
+} from './eventDuration'
 
 /**
  * Extracts { title, time, date, section, icon, dotColor }
@@ -286,6 +291,17 @@ export function parseEvent(rawText) {
     text = text.replace(timeResult.fullMatch, '')
   }
 
+  // Duración explícita en el texto ("por 2 horas", "media hora"). La
+  // extraemos ANTES de limpiar el título para que no quede colgada en el
+  // nombre del evento, y para usarla como fuente canónica si está presente.
+  const explicitDuration = extractExplicitDurationMinutes(withoutIntent)
+  if (explicitDuration !== null) {
+    text = text
+      .replace(/(?:por|durante|de)\s+(?:\d+(?:[.,]\d+)?\s+)?(?:horas?|h|min|minutos)(?:\s+y\s+media)?/i, '')
+      .replace(/\bmedia\s+hora\b/i, '')
+      .replace(/\b(?:un\s+)?cuarto\s+de\s+hora\b/i, '')
+  }
+
   // Extract date
   const { date, text: textAfterDate } = extractDate(text)
   text = textAfterDate
@@ -300,7 +316,21 @@ export function parseEvent(rawText) {
   // Build result
   const h24 = timeResult?.h24 ?? null
   const min = timeResult?.min ?? 0
-  const displayTime = h24 !== null ? formatHour(h24, min) : ''
+  const startTime = h24 !== null ? formatHour(h24, min) : ''
+
+  // Inferencia por tipo de evento — usada sólo cuando no hubo duración
+  // explícita. Quien consume el parse decide si confirma con chips o asume
+  // el default según la preferencia del usuario.
+  const inferred = explicitDuration === null ? inferDurationFromTitle(title) : null
+
+  // El campo `time` que devolvemos siempre incluye el rango cuando hay
+  // duración explícita (el usuario fue claro → no preguntamos de nuevo).
+  // Cuando solo hay inferencia, devolvemos la hora de inicio sola y dejamos
+  // que la UI resuelva con chips.
+  const displayTime = explicitDuration && startTime
+    ? composeTimeRange(startTime, explicitDuration)
+    : startTime
+
   const section = h24 !== null && h24 >= 14 ? 'evening' : 'focus'
   const icon = guessIcon(title)
   const dotColor = section === 'evening' ? 'bg-secondary-container' : ''
@@ -313,7 +343,21 @@ export function parseEvent(rawText) {
     icon,
     isMorning,
     timeResult,
+    explicitDuration,
+    inferred,
   })
 
-  return { title, time: displayTime, date, section, icon, dotColor }
+  return {
+    title,
+    time: displayTime,
+    startTime,
+    date,
+    section,
+    icon,
+    dotColor,
+    // Pistas de duración para que QuickAddSheet / Nova decidan el flujo
+    durationMinutes: explicitDuration ?? null,
+    inferredDurationMinutes: inferred?.minutes ?? null,
+    inferredConfidence: inferred?.confidence ?? null,
+  }
 }

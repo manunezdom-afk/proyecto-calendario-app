@@ -34,7 +34,14 @@ function formatDateReadable(dateISO) {
 
 function describeEvent(ev) {
   const parts = []
-  if (ev?.time) parts.push(ev.time)
+  // Nova emite `time` (inicio) y `endTime` (fin) por separado. En la UI el
+  // rango se compone al guardar, pero en el preview de la bandeja queremos
+  // mostrar "3:00 PM – 4:00 PM" desde ya. Si el `time` ya viene como rango,
+  // se usa tal cual.
+  const alreadyRange = ev?.time && String(ev.time).includes('-')
+  if (ev?.time) {
+    parts.push(alreadyRange ? ev.time : (ev.endTime ? `${ev.time} – ${ev.endTime}` : ev.time))
+  }
   parts.push(formatDateReadable(ev?.date))
   if (ev?.section === 'focus') parts.push('Focus')
   return parts.join(' · ')

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getPushStatus, subscribeToPush } from '../lib/pushSubscription'
 import PermissionsSection from '../components/PermissionsSection'
+import { useAppPreferences } from '../hooks/useAppPreferences'
 
 function SectionCard({ title, children }) {
   return (
@@ -108,8 +109,19 @@ function PushDiagnostic() {
   )
 }
 
+const DURATION_BEHAVIOR_OPTIONS = [
+  { value: 'ask',        label: 'Preguntar cada vez',       sub: 'Muestra chips de duración antes de guardar' },
+  { value: 'default30',  label: '30 minutos por defecto',   sub: 'Asume 30 min sin preguntar cuando no es claro' },
+  { value: 'none',       label: 'Sin hora de término',      sub: 'Guarda solo la hora de inicio' },
+]
+
 export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKnows }) {
   const { user, setAuthModal, signOut } = useAuth()
+  const { prefs, setPreference } = useAppPreferences()
+  const currentBehavior = DURATION_BEHAVIOR_OPTIONS.find(
+    (o) => o.value === prefs.defaultDurationBehavior,
+  ) ?? DURATION_BEHAVIOR_OPTIONS[0]
+  const [durationPickerOpen, setDurationPickerOpen] = useState(false)
 
   return (
     <div className="max-w-lg lg:max-w-2xl mx-auto px-4 py-6 space-y-4 pb-40">
@@ -182,6 +194,57 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
         >
           <span className="text-[12px] font-semibold text-slate-400">Focus</span>
         </Row>
+      </SectionCard>
+
+      {/* ── Eventos ──────────────────────────────────────────────────────── */}
+      {/* Comportamiento por defecto al crear un evento sin duración explícita.
+          "Preguntar" es el default — muestra chips de duración en QuickAdd y
+          obliga a Nova a confirmar si no puede inferir con seguridad. Las
+          otras opciones silencian esa fricción a cambio de asumir algo. */}
+      <SectionCard title="Eventos">
+        <Row
+          icon="schedule"
+          label="Duración al crear eventos"
+          sub={currentBehavior.sub}
+          onClick={() => setDurationPickerOpen((v) => !v)}
+        >
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-[12px] font-semibold text-slate-500">{currentBehavior.label}</span>
+            <span className="material-symbols-outlined text-[16px] text-slate-300">
+              {durationPickerOpen ? 'expand_less' : 'chevron_right'}
+            </span>
+          </div>
+        </Row>
+        {durationPickerOpen && (
+          <div className="border-t border-slate-50 bg-slate-50/40">
+            {DURATION_BEHAVIOR_OPTIONS.map((opt) => {
+              const selected = prefs.defaultDurationBehavior === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    setPreference('defaultDurationBehavior', opt.value)
+                    setDurationPickerOpen(false)
+                  }}
+                  className={`w-full flex items-start gap-3 px-5 py-3 text-left border-t border-slate-100 first:border-t-0 transition-colors hover:bg-white active:bg-slate-100 ${selected ? 'bg-white' : ''}`}
+                >
+                  <span
+                    className={`material-symbols-outlined text-[18px] mt-0.5 flex-shrink-0 ${selected ? 'text-primary' : 'text-slate-300'}`}
+                    style={{ fontVariationSettings: selected ? "'FILL' 1" : "'FILL' 0" }}
+                  >
+                    {selected ? 'radio_button_checked' : 'radio_button_unchecked'}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[13px] font-semibold leading-tight ${selected ? 'text-slate-800' : 'text-slate-600'}`}>
+                      {opt.label}
+                    </p>
+                    <p className="text-[11.5px] text-slate-400 mt-0.5 leading-tight">{opt.sub}</p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </SectionCard>
 
       {/* ── Permisos ─────────────────────────────────────────────────────── */}

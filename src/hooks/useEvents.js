@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useCoalescedRefetch } from './useCoalescedRefetch'
 import { cleanGeneratedTitle } from '../utils/titleCleanup'
+import { composeTimeRange, parseTimeRange } from '../utils/eventDuration'
+import { isReminderItem } from '../utils/reminders'
 
 // Extrae la hora (0-23) de un string "HH:MM" o "HH:MM – HH:MM"
 function parseEventHour(time) {
@@ -13,6 +15,34 @@ function parseEventHour(time) {
   if (!m) return null
   const h = parseInt(m[1], 10)
   return h >= 0 && h <= 23 ? h : null
+}
+
+// Normaliza el campo `time` que se guarda en DB a partir de time + endTime
+// (posiblemente separados, como los emite Nova). Ver comentarios en addEvent
+// para las reglas. Devuelve el string final o '' si no hay hora.
+function normalizeTimeField({ time, endTime, isReminder }) {
+  if (!time) return ''
+  // Recordatorios no tienen duración. Si viene un rango, nos quedamos con
+  // el inicio; si viene endTime separado, lo ignoramos.
+  if (isReminder) return String(time).split('-')[0].trim()
+  // Si `time` ya es un rango válido, respetarlo.
+  const existingRange = parseTimeRange(time)
+  if (existingRange && existingRange.endH != null && existingRange.endH > existingRange.startH) {
+    return time
+  }
+  // Si llega un endTime separado y coherente, componer el rango.
+  if (endTime) {
+    const startH = existingRange?.startH ?? null
+    const endRange = parseTimeRange(endTime)
+    const endH = endRange?.startH ?? null // el endTime viene como string de hora simple
+    if (startH != null && endH != null && endH > startH) {
+      const startMinutes = Math.round(startH * 60)
+      const endMinutes = Math.round(endH * 60)
+      return composeTimeRange(time, endMinutes - startMinutes)
+    }
+  }
+  // Sin end → dejamos la hora de inicio tal cual.
+  return time
 }
 
 export function useEvents() {
@@ -87,15 +117,31 @@ export function useEvents() {
     dataService.setCachedEvents(events, user.id)
   }, [events, user?.id])
 
-  function addEvent({ title, time, description = '', section = 'focus', icon = 'event', dotColor = 'bg-secondary-container', date = null, reminderOffsets = null, timezone = null }) {
+  function addEvent({ title, time, endTime = null, description = '', section = 'focus', icon = 'event', dotColor = 'bg-secondary-container', date = null, reminderOffsets = null, timezone = null }) {
     let tz = timezone
     if (!tz) {
       try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null } catch { tz = null }
     }
+
+    // Normalización del campo time:
+    //   · Los recordatorios nunca llevan hora de término — el aviso es
+    //     puntual, no un bloque con duración.
+    //   · Si time ya viene como rango "HH:MM AM/PM - HH:MM AM/PM", lo dejamos.
+    //   · Si viene endTime separado (como los emite Nova), lo componemos en
+    //     el string `time` — así el resto de la app (time grids, Mi Día,
+    //     export ICS) lee un único campo como lo ha hecho siempre.
+    //   · Sin endTime: dejamos solo la hora de inicio.
+    const finalTime = normalizeTimeField({
+      time,
+      endTime,
+      isReminder: isReminderItem({ title }),
+    })
+
     const newEvent = {
       id: `evt-${Date.now()}`,
       title: cleanGeneratedTitle(title) || title,
-      time, description, section, featured: false, icon, dotColor, date,
+      time: finalTime,
+      description, section, featured: false, icon, dotColor, date,
       reminderOffsets,
       timezone: tz,
     }
@@ -103,7 +149,7 @@ export function useEvents() {
     setEvents(prev => [...prev, newEvent])
     if (user) dataService.upsertEvent(newEvent, user.id).catch(console.warn)
     logSignal('event_created', {
-      hour: parseEventHour(time),
+      hour: parseEventHour(finalTime),
       section,
       date,
       weekday: new Date().getDay(),
@@ -133,7 +179,23 @@ export function useEvents() {
   function editEvent(id, updates) {
     console.log(`[Focus] ✏️ editEvent: "${id}"`, updates)
     setEvents(prev => {
-      const next = prev.map(e => e.id === id ? { ...e, ...updates } : e)
+      const next = prev.map(e => {
+        if (e.id !== id) return e
+        const merged = { ...e, ...updates }
+        // Si el update trae endTime separado o cambia el time, renormalizamos
+        // a la forma canónica del string (rango o solo inicio). Así evitamos
+        // guardar un endTime suelto en el campo del evento — el resto de la
+        // app siempre lee `time`.
+        if ('endTime' in updates || 'time' in updates) {
+          merged.time = normalizeTimeField({
+            time: merged.time,
+            endTime: updates.endTime ?? null,
+            isReminder: isReminderItem({ title: merged.title }),
+          })
+          delete merged.endTime
+        }
+        return merged
+      })
       if (user) {
         const updated = next.find(e => e.id === id)
         if (updated) dataService.upsertEvent(updated, user.id).catch(console.warn)
