@@ -115,14 +115,20 @@ export function AuthProvider({ children }) {
   }, [])
 
   // ── Device pairing ─────────────────────────────────────────────────────────
-  // Vía alternativa al OTP: el dispositivo nuevo pide un code, otro dispositivo
-  // ya autenticado lo aprueba, y el nuevo canjea un token_hash por una sesión
-  // real de Supabase (sin enviar email).
+  // El dispositivo ya logueado genera un pairing pre-aprobado y muestra un QR
+  // con el user_code. El dispositivo nuevo escanea (o tipea) el code y lo
+  // canjea por un token_hash que usa para abrir sesión. Sin emails.
 
   const startDevicePairing = useCallback(async () => {
+    if (!supabase) throw new Error('Supabase no configurado')
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) throw new Error('no_session')
     const r = await fetch('/api/auth/device/start', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify({
         user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
       }),
@@ -136,36 +142,15 @@ export function AuthProvider({ children }) {
     return body
   }, [])
 
-  const pollDevicePairing = useCallback(async (deviceCode) => {
-    const r = await fetch('/api/auth/device/poll', {
+  const claimDevicePairing = useCallback(async (userCode) => {
+    const r = await fetch('/api/auth/device/claim', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_code: deviceCode }),
-    })
-    const body = await r.json().catch(() => ({}))
-    if (!r.ok) {
-      const err = new Error(body?.error || 'device_poll_failed')
-      err.status = r.status
-      throw err
-    }
-    return body
-  }, [])
-
-  const approveDevicePairing = useCallback(async (userCode) => {
-    if (!supabase) throw new Error('Supabase no configurado')
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.access_token) throw new Error('no_session')
-    const r = await fetch('/api/auth/device/approve', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
       body: JSON.stringify({ user_code: userCode }),
     })
     const body = await r.json().catch(() => ({}))
     if (!r.ok) {
-      const err = new Error(body?.error || 'device_approve_failed')
+      const err = new Error(body?.error || 'device_claim_failed')
       err.status = r.status
       err.body = body
       throw err
@@ -187,7 +172,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       user, loading, authModal, setAuthModal,
       signInWithEmail, verifyOtp, signOut,
-      startDevicePairing, pollDevicePairing, approveDevicePairing, exchangeDeviceToken,
+      startDevicePairing, claimDevicePairing, exchangeDeviceToken,
     }}>
       {children}
     </AuthContext.Provider>

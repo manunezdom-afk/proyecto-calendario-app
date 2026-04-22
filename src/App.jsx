@@ -69,13 +69,13 @@ export default function App() {
 
   // Deep-link de vinculación: ?pair=XXXXXXXX en la URL.
   //
-  // Caso típico: el dispositivo nuevo muestra un QR con el URL de la app +
-  // ?pair=CODE. La cámara nativa del dispositivo ya logueado lee ese QR y
-  // abre el link en Safari/PWA. Levantamos el código, lo guardamos en
-  // sessionStorage y limpiamos la URL para que un refresh no lo reaplique.
-  // Si hay sesión activa: abrimos el AuthModal, que salta al paso approve
-  // con el código pre-llenado. Si no hay sesión: el código queda en
-  // sessionStorage y el AuthModal lo consumirá después del login.
+  // Caso típico: el dispositivo LOGUEADO muestra un QR con el URL de la app +
+  // ?pair=CODE. La cámara nativa del dispositivo nuevo lee ese QR y abre el
+  // link en Safari/PWA. Levantamos el código, lo guardamos en sessionStorage
+  // y limpiamos la URL para que un refresh no lo reaplique. Si NO hay sesión
+  // (caso esperado), el AuthModal lo consume en `device_scan` y canjea. Si
+  // ya hay sesión, el código se ignora — el QR no está pensado para reusar
+  // en el mismo dispositivo que lo generó.
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {

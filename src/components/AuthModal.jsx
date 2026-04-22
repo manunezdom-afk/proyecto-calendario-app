@@ -13,7 +13,6 @@ import {
 
 const PENDING_KEY  = 'focus_auth_pending'
 const COOLDOWN_KEY = 'focus_auth_resend_until'
-const DEVICE_KEY   = 'focus_device_pairing'
 const PENDING_TTL_MS = 15 * 60 * 1000 // 15 min — tras eso el OTP ya expiró en Supabase
 // Supabase por defecto acepta 1 OTP por minuto por email. Alineamos la UI
 // a 60s para que el primer reintento no choque con el rate limit del backend.
@@ -21,10 +20,6 @@ const RESEND_COOLDOWN_SEC = 60
 // Cuando Supabase rechaza por rate-limit, aplicamos un cooldown largo en UI
 // para no seguir martillando el endpoint (cada rechazo puede extender el ban).
 const RATE_LIMIT_COOLDOWN_SEC = 5 * 60
-// Polling cada 1.5s: el rate-limit del endpoint (120/min) deja holgura de sobra
-// (40 reqs/min). Antes estaba en 3s y dejaba un gap promedio de 1.5s entre
-// "aprobar" y el login real — se sentía pegado.
-const DEVICE_POLL_INTERVAL_MS = 1500
 
 function readPending() {
   try {
@@ -75,31 +70,6 @@ function clearCooldown() {
   try { sessionStorage.removeItem(COOLDOWN_KEY) } catch {}
 }
 
-// Estado del device pairing en curso. Persistimos device_code + user_code +
-// expiry en sessionStorage para que cerrar/reabrir el modal (o recargar la
-// pestaña) no pierda el pairing en vuelo.
-function readDevicePairing() {
-  try {
-    const raw = sessionStorage.getItem(DEVICE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (!parsed?.device_code || !parsed?.user_code || !parsed?.expires_at) return null
-    if (parsed.expires_at < Date.now()) {
-      sessionStorage.removeItem(DEVICE_KEY)
-      return null
-    }
-    return parsed
-  } catch { return null }
-}
-
-function writeDevicePairing(obj) {
-  try { sessionStorage.setItem(DEVICE_KEY, JSON.stringify(obj)) } catch {}
-}
-
-function clearDevicePairing() {
-  try { sessionStorage.removeItem(DEVICE_KEY) } catch {}
-}
-
 function formatUserCode(code) {
   if (!code) return ''
   const clean = String(code).toUpperCase().replace(/[^A-Z0-9]/g, '')
@@ -119,26 +89,23 @@ function Spinner() {
 export default function AuthModal({ isOpen, onClose }) {
   const {
     signInWithEmail, verifyOtp, user, signOut,
-    startDevicePairing, pollDevicePairing, approveDevicePairing, exchangeDeviceToken,
+    startDevicePairing, claimDevicePairing, exchangeDeviceToken,
   } = useAuth()
 
   // Hidratamos el paso desde sessionStorage para que reload no rompa el flujo.
   const initialPending = typeof window !== 'undefined' ? readPending() : null
-  const initialDevice  = typeof window !== 'undefined' ? readDevicePairing() : null
 
   const [email, setEmail]       = useState(initialPending?.email || '')
   const [code, setCode]         = useState('')
   // Pasos:
-  //   chooser         — elección entre email y otro dispositivo
+  //   chooser         — elección entre email y escanear QR
   //   email           — pedir email para OTP
   //   code            — verificar OTP
-  //   device_wait     — dispositivo nuevo esperando aprobación
+  //   device_scan     — (sin sesión) escanear/tipear código para entrar
+  //   device_show     — (logueado) mostrar QR para que otro dispositivo entre
   //   device_success  — breve confirmación antes de cerrar
-  //   device_approve  — (logged-in) ingresar user_code de otro dispositivo
-  //   device_approved — (logged-in) confirmación de aprobación
   const [step, setStep] = useState(() => {
     if (initialPending) return 'code'
-    if (initialDevice)  return 'device_wait'
     return 'chooser'
   })
   const [loading, setLoading]   = useState(false)
@@ -151,37 +118,32 @@ export default function AuthModal({ isOpen, onClose }) {
     typeof window !== 'undefined' ? readCooldownSec() : 0
   )
 
-  // Estado del device pairing en el nuevo dispositivo.
-  const [devicePairing, setDevicePairing] = useState(initialDevice)
-  const [deviceCountdown, setDeviceCountdown] = useState(0)
-  // Subestados del paso device_wait, para mostrar progreso granular y que la UI
-  // no parezca congelada entre "detecté la aprobación" y "sesión lista":
-  //   waiting     — polling, aún sin aprobar
-  //   approved    — el backend marcó approved, estamos a punto de canjear
-  //   signing_in  — intercambiando el token_hash por sesión real
-  const [deviceStage, setDeviceStage] = useState('waiting')
-  // Estado del lado que aprueba (logged-in).
-  const [approveCode, setApproveCode]       = useState('')
-  const [approvedInfo, setApprovedInfo]     = useState(null)
-  // Escáner QR: abierto vía botón "Escanear QR" dentro del step device_approve.
+  // ── Lado logueado: pairing generado + countdown de expiración. No
+  // persistimos en sessionStorage porque el user_code vive 5 min y lo
+  // regeneramos al reabrir; si guardáramos y el usuario volviera 4 min
+  // después veríamos un QR casi vencido sin un refresh natural.
+  const [sharePairing, setSharePairing] = useState(null) // { user_code, expires_at }
+  const [shareCountdown, setShareCountdown] = useState(0)
+
+  // ── Lado nuevo dispositivo: código que el usuario tipea o escanea.
+  const [claimCode, setClaimCode] = useState('')
+  // Subestados del claim para mostrar feedback granular:
+  //   idle       — nada en curso
+  //   claiming   — request al backend en vuelo
+  //   signing_in — ya tenemos token_hash, canjeando por sesión
+  const [claimStage, setClaimStage] = useState('idle')
+
+  // Escáner QR (lado nuevo dispositivo).
   const [scannerOpen, setScannerOpen] = useState(false)
-  // Subestados del botón "Aprobar" para que el botón no quede 1-2s en
-  // "Aprobando…" sin feedback:
-  //   idle        — sin acción
-  //   validating  — acaba de darle click, request en vuelo
-  //   approving   — el backend ya respondió validación, generando link
-  const [approveStage, setApproveStage] = useState('idle')
   // Banner post rate-limit sugiriendo usar otro dispositivo.
-  const [rateLimitHit, setRateLimitHit]     = useState(false)
+  const [rateLimitHit, setRateLimitHit] = useState(false)
 
   // submitLock evita dobles envíos incluso en el mismo tick (antes de re-render)
   const submitLock = useRef(false)
   const codeInputRef = useRef(null)
-  const approveInputRef = useRef(null)
+  const claimInputRef = useRef(null)
   // historyPushedRef: evita apilar múltiples entries al abrir/cerrar varias veces.
   const historyPushedRef = useRef(false)
-  // Guardamos el id del polling para cancelarlo al cambiar de paso o cerrar.
-  const pollTimerRef = useRef(null)
   // Debounce del auto-submit del OTP: cancela disparos previos si el usuario
   // sigue tipeando/pegando. Evita que un código de 8 dígitos se envíe truncado
   // a Supabase al pasar por la longitud 6 intermedia.
@@ -191,25 +153,51 @@ export default function AuthModal({ isOpen, onClose }) {
   // Aceptamos 6-10 dígitos: Supabase puede entregar 6 (default) u 8 (config
   // del proyecto). La UI no puede asumir un largo fijo o trunca el código.
   const codeValid  = /^\d{6,10}$/.test(code)
-  const approveCodeValid = approveCode.replace(/[^A-Z0-9]/gi, '').length === 8
+  const claimCodeValid = claimCode.replace(/[^A-Z0-9]/gi, '').length === 8
+
+  const handleClose = useCallback(() => {
+    setCode('')
+    setError(null)
+    setRateLimitHit(false)
+    submitLock.current = false
+    // Si hay una entry en el history que empujamos nosotros, la quitamos
+    // haciendo history.back — pero solo si la entry está activa. Si el close
+    // vino por popstate (back), el browser ya la consumió.
+    if (historyPushedRef.current) {
+      historyPushedRef.current = false
+      try {
+        if (window.history.state?.focusAuthModal) window.history.back()
+      } catch {}
+    }
+    // Solo reseteamos email+step si el flujo terminó. Si hay pending (OTP),
+    // preservamos para que reopen continúe.
+    const hasPending = !!readPending()
+    if (!hasPending) {
+      setStep('chooser')
+      setEmail('')
+      setClaimCode('')
+      setSharePairing(null)
+      setClaimStage('idle')
+    }
+    onClose?.()
+  }, [onClose])
 
   // Si el usuario verifica con éxito mientras el modal está abierto, cerramos
   // automáticamente — evita que quede atascado en el paso 'code' si el auth
   // context resolvió la sesión (p. ej. desde otra pestaña).
   useEffect(() => {
     if (!isOpen) return
-    if (user && (step === 'code' || step === 'device_wait' || step === 'device_success')) {
+    if (user && (step === 'code' || step === 'device_scan' || step === 'device_success')) {
       clearPending()
-      clearDevicePairing()
       handleClose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isOpen, step])
 
-  // Autofocus código cuando entramos al paso 'code'.
+  // Autofocus código cuando entramos al paso 'code' o 'device_scan'.
   useEffect(() => {
     if (step === 'code' && codeInputRef.current) codeInputRef.current.focus()
-    if (step === 'device_approve' && approveInputRef.current) approveInputRef.current.focus()
+    if (step === 'device_scan' && claimInputRef.current) claimInputRef.current.focus()
     // Si salimos del paso 'code', cancelamos cualquier auto-submit pendiente.
     if (step !== 'code' && autoSubmitTimerRef.current) {
       clearTimeout(autoSubmitTimerRef.current)
@@ -228,83 +216,83 @@ export default function AuthModal({ isOpen, onClose }) {
     return () => clearInterval(id)
   }, [resendCooldown])
 
-  // Countdown del device pairing (para mostrar "expira en Xm Ys").
+  // Countdown del share del dispositivo logueado. Al llegar a 0, limpiamos el
+  // QR y pedimos al usuario generar uno nuevo (el token_hash detrás ya expiró).
   useEffect(() => {
-    if (step !== 'device_wait' || !devicePairing) return
+    if (step !== 'device_show' || !sharePairing?.expires_at) return
     const tick = () => {
-      const rest = Math.max(0, Math.ceil((devicePairing.expires_at - Date.now()) / 1000))
-      setDeviceCountdown(rest)
+      const rest = Math.max(0, Math.ceil((sharePairing.expires_at - Date.now()) / 1000))
+      setShareCountdown(rest)
       if (rest === 0) {
-        clearDevicePairing()
-        setDevicePairing(null)
-        setError('El código expiró. Genera uno nuevo.')
-        setStep('chooser')
+        setSharePairing(null)
       }
     }
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [step, devicePairing])
+  }, [step, sharePairing])
 
-  // Polling del device pairing. Se detiene al salir del step o cerrar modal.
+  // Al entrar al paso device_show sin pairing vivo, generamos uno. Esto cubre
+  // (a) la apertura inicial, (b) post-expiración cuando el countdown lo borró.
+  const handleStartShare = useCallback(async () => {
+    if (submitLock.current) return
+    submitLock.current = true
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await startDevicePairing()
+      setSharePairing({
+        user_code: res.user_code,
+        expires_at: Date.now() + (res.expires_in || 300) * 1000,
+      })
+    } catch (err) {
+      setError('No pudimos generar el código. Prueba de nuevo en un momento.')
+    } finally {
+      setLoading(false)
+      submitLock.current = false
+    }
+  }, [startDevicePairing])
+
   useEffect(() => {
-    if (step !== 'device_wait' || !devicePairing?.device_code) return
-    let cancelled = false
+    if (step !== 'device_show') return
+    if (sharePairing || loading) return
+    handleStartShare()
+  }, [step, sharePairing, loading, handleStartShare])
 
-    async function loop() {
-      try {
-        const res = await pollDevicePairing(devicePairing.device_code)
-        if (cancelled) return
-        if (res.status === 'approved' && res.token_hash) {
-          // Intercambiamos el token_hash por una sesión real. onAuthStateChange
-          // detectará el SIGNED_IN y disparará los flujos post-login.
-          setDeviceStage('approved')
-          clearDevicePairing()
-          try {
-            // Pequeño tick para que el stepper alcance a renderizar "Código
-            // aprobado" antes de cambiar a "Iniciando sesión" — sin esto, el
-            // usuario solo percibe un flash.
-            await new Promise((r) => setTimeout(r, 120))
-            if (cancelled) return
-            setDeviceStage('signing_in')
-            await exchangeDeviceToken(res.token_hash)
-            if (cancelled) return
-            setDevicePairing(null)
-            setStep('device_success')
-            // Cierre automático en ~900ms para dejar ver el check.
-            setTimeout(() => { if (!cancelled) handleClose() }, 900)
-          } catch (err) {
-            setDeviceStage('waiting')
-            setDevicePairing(null)
-            setError(humanizeAuthError(err) || 'No pudimos iniciar sesión con ese código.')
-            setStep('chooser')
-          }
-          return
-        }
-        if (res.status === 'expired' || res.status === 'not_found' || res.status === 'consumed') {
-          clearDevicePairing()
-          setDevicePairing(null)
-          setError(res.status === 'expired'
-            ? 'El código expiró. Genera uno nuevo.'
-            : 'El código ya no es válido. Genera uno nuevo.')
-          setStep('chooser')
-          return
-        }
-        pollTimerRef.current = setTimeout(loop, DEVICE_POLL_INTERVAL_MS)
-      } catch (err) {
-        if (cancelled) return
-        // Si el backend está caído, esperamos un poco más antes de reintentar.
-        pollTimerRef.current = setTimeout(loop, DEVICE_POLL_INTERVAL_MS * 2)
-      }
+  // Canjear user_code → token_hash → sesión. Admite override explícito para
+  // evitar depender del estado claimCode cuando lo disparamos tras un scan.
+  const handleClaim = useCallback(async (explicit) => {
+    if (submitLock.current || loading) return
+    const source = typeof explicit === 'string' ? explicit : claimCode
+    const clean = String(source).replace(/[^A-Z0-9]/gi, '').toUpperCase()
+    if (clean.length !== 8) {
+      setError('El código tiene 8 caracteres.')
+      return
     }
-
-    pollTimerRef.current = setTimeout(loop, DEVICE_POLL_INTERVAL_MS)
-    return () => {
-      cancelled = true
-      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+    submitLock.current = true
+    setLoading(true)
+    setError(null)
+    setClaimStage('claiming')
+    try {
+      const { token_hash } = await claimDevicePairing(clean)
+      setClaimStage('signing_in')
+      await exchangeDeviceToken(token_hash)
+      setStep('device_success')
+      // Cierre automático en ~900ms para dejar ver el check.
+      setTimeout(() => handleClose(), 900)
+    } catch (err) {
+      setClaimStage('idle')
+      const st = err?.status
+      if (st === 404) setError('No encontramos ese código. Revisa que esté bien.')
+      else if (st === 410) setError('El código expiró. Pide uno nuevo en el otro dispositivo.')
+      else if (st === 409) setError('Ese código ya fue usado.')
+      else if (st === 429) setError('Demasiados intentos. Espera un momento.')
+      else setError(humanizeAuthError(err) || 'No pudimos iniciar sesión con ese código.')
+    } finally {
+      setLoading(false)
+      submitLock.current = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, devicePairing?.device_code])
+  }, [claimCode, claimDevicePairing, exchangeDeviceToken, handleClose, loading])
 
   // Al reabrir el modal, re-hidratamos state desde sessionStorage. Sin esto,
   // si el usuario cerró el modal hace >15 min (TTL del pending ya caducó),
@@ -312,26 +300,25 @@ export default function AuthModal({ isOpen, onClose }) {
   // un OTP ya expirado — y el botón "Reenviar" pegaría al email equivocado.
   //
   // También detectamos un "incoming pair code" (del URL ?pair=XXXX que levantó
-  // App.jsx): si hay uno y el usuario está logueado, saltamos directo a
-  // device_approve con el código pre-llenado. Si NO hay sesión, el código
-  // queda en sessionStorage y se consumirá tras login.
+  // App.jsx): si llegó y NO hay sesión, saltamos a device_scan y auto-canjeamos.
+  // Si hay sesión, ignoramos — el QR es para dispositivos nuevos, no para
+  // reusar en el mismo dispositivo.
   useEffect(() => {
     if (!isOpen) return
     const pending = readPending()
-    const device  = readDevicePairing()
     const incomingCode = readIncomingPairCode()
 
-    if (user && incomingCode) {
-      // Prioridad máxima: aprobar el dispositivo entrante.
-      setApproveCode(incomingCode)
-      setStep('device_approve')
+    if (!user && incomingCode) {
+      setClaimCode(incomingCode)
+      setStep('device_scan')
       clearIncomingPairCode()
+    } else if (user && incomingCode) {
+      // Sin uso para un usuario logueado: lo limpiamos para que no quede pegado.
+      clearIncomingPairCode()
+      setStep('chooser')
     } else if (pending) {
       setEmail(pending.email)
       setStep('code')
-    } else if (device) {
-      setDevicePairing(device)
-      setStep('device_wait')
     } else {
       setStep('chooser')
       setCode('')
@@ -341,6 +328,15 @@ export default function AuthModal({ isOpen, onClose }) {
     setResendCooldown(readCooldownSec())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, user])
+
+  // Si llegamos a device_scan con un code pre-seteado (desde ?pair=), auto-claim.
+  useEffect(() => {
+    if (step !== 'device_scan') return
+    if (!claimCodeValid) return
+    if (submitLock.current || loading || claimStage !== 'idle') return
+    handleClaim(claimCode)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, claimCode])
 
   // Bloqueo de scroll + Escape + interceptar botón atrás del navegador.
   // El back cierra el modal en vez de salir de la app.
@@ -366,35 +362,6 @@ export default function AuthModal({ isOpen, onClose }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
-
-  const handleClose = useCallback(() => {
-    setCode('')
-    setError(null)
-    setRateLimitHit(false)
-    submitLock.current = false
-    if (pollTimerRef.current) { clearTimeout(pollTimerRef.current); pollTimerRef.current = null }
-    // Si hay una entry en el history que empujamos nosotros, la quitamos
-    // haciendo history.back — pero solo si la entry está activa. Si el close
-    // vino por popstate (back), el browser ya la consumió.
-    if (historyPushedRef.current) {
-      historyPushedRef.current = false
-      try {
-        if (window.history.state?.focusAuthModal) window.history.back()
-      } catch {}
-    }
-    // Solo reseteamos email+step si el flujo terminó. Si hay pending (OTP)
-    // o device_pairing vivo, preservamos para que reopen continúe.
-    const hasPending = !!readPending()
-    const hasDevice  = !!readDevicePairing()
-    if (!hasPending && !hasDevice) {
-      setStep('chooser')
-      setEmail('')
-      setDevicePairing(null)
-      setApproveCode('')
-      setApprovedInfo(null)
-    }
-    onClose?.()
-  }, [onClose])
 
   async function handleSendEmail(e) {
     e?.preventDefault?.()
@@ -533,103 +500,21 @@ export default function AuthModal({ isOpen, onClose }) {
     }
   }
 
-  // ── Device pairing: nuevo dispositivo ────────────────────────────────────
-  async function handleStartDevice() {
-    if (submitLock.current || loading) return
-    submitLock.current = true
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await startDevicePairing()
-      const expires_at = Date.now() + (res.expires_in || 300) * 1000
-      const pairing = {
-        device_code: res.device_code,
-        user_code: res.user_code,
-        expires_at,
-      }
-      writeDevicePairing(pairing)
-      setDevicePairing(pairing)
-      setDeviceStage('waiting')
-      setStep('device_wait')
-    } catch (err) {
-      setError('No pudimos generar el código. Prueba de nuevo en un momento.')
-    } finally {
-      setLoading(false)
-      submitLock.current = false
-    }
-  }
-
-  function handleCancelDevice() {
-    if (pollTimerRef.current) { clearTimeout(pollTimerRef.current); pollTimerRef.current = null }
-    clearDevicePairing()
-    setDevicePairing(null)
-    setDeviceStage('waiting')
-    setStep('chooser')
-    setError(null)
-  }
-
-  async function handleCopyCode() {
-    if (!devicePairing?.user_code) return
-    try {
-      await navigator.clipboard?.writeText(devicePairing.user_code)
-    } catch {}
-  }
-
-  // ── Device pairing: lado logueado que aprueba ───────────────────────────
-  // Admite un override de código (desde scan QR) para evitar depender del
-  // estado approveCode, que puede estar stale cuando el escáner llama
-  // inmediatamente después de setApproveCode.
-  async function handleApprove(eOrCode) {
-    let explicitCode = null
-    if (typeof eOrCode === 'string') {
-      explicitCode = eOrCode
-    } else {
-      eOrCode?.preventDefault?.()
-    }
-    if (submitLock.current || loading) return
-    const source = explicitCode ?? approveCode
-    const clean = String(source).replace(/[^A-Z0-9]/gi, '').toUpperCase()
-    if (clean.length !== 8) {
-      setError('El código tiene 8 caracteres.')
-      return
-    }
-    submitLock.current = true
-    setLoading(true)
-    setError(null)
-    setApproveStage('validating')
-    // A los 400ms, si seguimos en validating, pasamos a "approving". El backend
-    // típicamente tarda 1-2s por el generateLink de Supabase. Este tick evita
-    // que el usuario vea 2s seguidos del mismo texto "Aprobando…".
-    const stageTimer = setTimeout(() => setApproveStage('approving'), 400)
-    try {
-      const res = await approveDevicePairing(clean)
-      setApprovedInfo({ email: res.email, user_agent: res.user_agent })
-      setStep('device_approved')
-      setApproveCode('')
-    } catch (err) {
-      const code = err?.status
-      if (code === 404) setError('No encontramos ese código. Revisa que esté bien.')
-      else if (code === 410) setError('El código expiró. Pide uno nuevo en el otro dispositivo.')
-      else if (code === 409) setError('Ese código ya fue usado o ya no es válido.')
-      else if (code === 429) setError('Demasiados intentos. Espera un momento.')
-      else setError('No pudimos aprobar el código. Prueba de nuevo.')
-    } finally {
-      clearTimeout(stageTimer)
-      setApproveStage('idle')
-      setLoading(false)
-      submitLock.current = false
-    }
-  }
-
-  function handleApproveCodeChange(raw) {
+  function handleClaimCodeChange(raw) {
     const clean = String(raw).replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 8)
-    setApproveCode(clean)
+    setClaimCode(clean)
     if (error) setError(null)
   }
 
-  // Scanner de QR en el lado logueado. El QR escaneado puede ser una URL
-  // (con ?pair=XXXX) o texto plano con el código — extractUserCodeFromScanned
-  // normaliza ambos casos.
+  async function handleCopyShare() {
+    if (!sharePairing?.user_code) return
+    try {
+      await navigator.clipboard?.writeText(sharePairing.user_code)
+    } catch {}
+  }
+
+  // Scanner de QR (nuevo dispositivo). El QR puede ser URL con ?pair=XXX o
+  // el código pelado — extractUserCodeFromScanned normaliza ambos.
   function handleScanDetected(raw) {
     setScannerOpen(false)
     const userCode = extractUserCodeFromScanned(raw)
@@ -637,28 +522,11 @@ export default function AuthModal({ isOpen, onClose }) {
       setError('El QR no contiene un código de vinculación válido.')
       return
     }
-    setApproveCode(userCode)
+    setClaimCode(userCode)
     setError(null)
     // Pequeño delay para que el sheet del scanner termine su animación de
-    // salida antes de disparar el submit. Pasamos el código explícitamente
-    // para no depender del estado que puede llegar stale al closure.
-    setTimeout(() => handleApprove(userCode), 180)
-  }
-
-  const userAgentSummary = (ua) => {
-    if (!ua) return 'Dispositivo sin identificar'
-    const isIOS  = /iPhone|iPad|iPod/i.test(ua)
-    const isAnd  = /Android/i.test(ua)
-    const isMac  = /Mac OS X/i.test(ua) && !isIOS
-    const isWin  = /Windows/i.test(ua)
-    const isLin  = /Linux/i.test(ua) && !isAnd
-    const browser = /Chrome/i.test(ua) && !/Edg/i.test(ua) ? 'Chrome'
-                  : /Safari/i.test(ua) && !/Chrome/i.test(ua) ? 'Safari'
-                  : /Firefox/i.test(ua) ? 'Firefox'
-                  : /Edg/i.test(ua) ? 'Edge'
-                  : 'Navegador'
-    const os = isIOS ? 'iPhone/iPad' : isAnd ? 'Android' : isMac ? 'Mac' : isWin ? 'Windows' : isLin ? 'Linux' : 'otro'
-    return `${browser} en ${os}`
+    // salida antes de disparar el submit.
+    setTimeout(() => handleClaim(userCode), 180)
   }
 
   return (
@@ -686,21 +554,21 @@ export default function AuthModal({ isOpen, onClose }) {
               <div className="sm:hidden mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" aria-hidden="true" />
 
               {user ? (
-                step === 'device_approve' ? (
-                  /* ── Logged-in: aprobar otro dispositivo ─────────────── */
+                step === 'device_show' ? (
+                  /* ── Logged-in: mostrar QR para que otro dispositivo entre ── */
                   <>
                     <div className="flex items-start justify-between gap-3 mb-5">
                       <div className="min-w-0 flex-1">
                         <h2 className="text-[20px] sm:text-[22px] font-bold text-slate-900 leading-tight">
-                          Aprobar otro dispositivo
+                          Vincular otro dispositivo
                         </h2>
                         <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
-                          Escanea el QR del dispositivo nuevo o escribe su código de 8 caracteres.
+                          Escanea este QR desde el dispositivo nuevo, o dicta el código.
                         </p>
                       </div>
                       <button
                         type="button"
-                        onClick={() => { setStep('chooser'); setApproveCode(''); setError(null) }}
+                        onClick={() => { setSharePairing(null); setStep('chooser'); setError(null) }}
                         aria-label="Volver"
                         className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors active:scale-95"
                       >
@@ -708,83 +576,81 @@ export default function AuthModal({ isOpen, onClose }) {
                       </button>
                     </div>
 
-                    {/* Botón principal: escanear QR. Debajo, el input manual. */}
-                    <button
-                      type="button"
-                      onClick={() => { setError(null); setScannerOpen(true) }}
-                      disabled={loading}
-                      className="w-full mb-3 px-4 py-3.5 rounded-2xl bg-primary text-white font-bold text-[14px] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">qr_code_scanner</span>
-                      Escanear QR
-                    </button>
+                    {sharePairing?.user_code ? (
+                      <>
+                        <div className="flex flex-col items-center gap-3 mb-4">
+                          <QRCodeView
+                            size={232}
+                            value={buildQRValue(
+                              sharePairing.user_code,
+                              typeof window !== 'undefined' ? window.location.origin : '',
+                            )}
+                          />
+                          <p className="text-[11px] text-slate-400 text-center leading-snug max-w-[280px]">
+                            Apunta la cámara del otro dispositivo al QR.
+                          </p>
+                        </div>
 
-                    <div className="flex items-center gap-3 my-3">
-                      <div className="flex-1 h-px bg-slate-200" />
-                      <span className="text-[11px] text-slate-400 font-semibold tracking-wide">O ESCRIBE EL CÓDIGO</span>
-                      <div className="flex-1 h-px bg-slate-200" />
-                    </div>
+                        <div className="bg-slate-50 rounded-3xl p-4 mb-4 text-center">
+                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">O este código</p>
+                          <button
+                            type="button"
+                            onClick={handleCopyShare}
+                            className="text-[28px] sm:text-[32px] font-mono font-bold tracking-[0.18em] text-slate-900 active:scale-95 transition-transform"
+                            aria-label="Copiar código"
+                          >
+                            {formatUserCode(sharePairing.user_code)}
+                          </button>
+                          <p className="text-[11px] text-slate-400 mt-2">
+                            Toca el código para copiarlo
+                          </p>
+                        </div>
 
-                    <form onSubmit={handleApprove} noValidate>
-                      <input
-                        ref={approveInputRef}
-                        type="text"
-                        inputMode="text"
-                        autoComplete="off"
-                        autoCapitalize="characters"
-                        spellCheck={false}
-                        value={formatUserCode(approveCode)}
-                        onChange={(e) => handleApproveCodeChange(e.target.value)}
-                        placeholder="ABCD-EFGH"
-                        maxLength={9}
-                        aria-label="Código de vinculación"
-                        aria-invalid={!!error}
-                        className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 text-center text-2xl font-mono tracking-[0.25em] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 uppercase"
-                      />
-                      {error && (
-                        <p role="alert" className="text-red-500 text-[12.5px] mb-3 text-center leading-snug">
-                          {error}
+                        <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-2xl mb-4">
+                          <span className="material-symbols-outlined text-primary text-[20px] flex-shrink-0 animate-pulse">timer</span>
+                          <p className="text-[12px] text-slate-600 leading-snug">
+                            {shareCountdown > 0
+                              ? `Expira en ${Math.floor(shareCountdown/60)}m ${String(shareCountdown%60).padStart(2,'0')}s. Esperando al otro dispositivo…`
+                              : 'Expira en unos segundos…'}
+                          </p>
+                        </div>
+
+                        <p className="text-[11px] text-center text-slate-400 leading-snug">
+                          Solo comparte este QR con un dispositivo tuyo.
                         </p>
-                      )}
-                      <button
-                        type="submit"
-                        disabled={loading || !approveCodeValid}
-                        className="w-full py-3.5 bg-primary text-white rounded-2xl text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                      >
-                        {loading
-                          ? (
-                            <>
-                              <Spinner />
-                              {approveStage === 'validating' ? 'Validando código…' : 'Aprobando dispositivo…'}
-                            </>
-                          )
-                          : 'Aprobar dispositivo'}
-                      </button>
-                    </form>
-                    <p className="mt-3 text-[11px] text-center text-slate-400 leading-snug">
-                      Solo aprueba códigos que tú mismo estés viendo en otro dispositivo.
-                    </p>
+                      </>
+                    ) : (
+                      <div className="py-10 flex flex-col items-center gap-3">
+                        {loading ? (
+                          <>
+                            <Spinner />
+                            <p className="text-[12.5px] text-slate-500">Generando QR seguro…</p>
+                          </>
+                        ) : error ? (
+                          <>
+                            <p className="text-[12.5px] text-red-500 text-center leading-snug">{error}</p>
+                            <button
+                              type="button"
+                              onClick={handleStartShare}
+                              className="mt-2 px-4 py-2 bg-primary text-white rounded-xl text-[13px] font-semibold active:scale-[0.98] transition-transform"
+                            >
+                              Reintentar
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleStartShare}
+                            className="px-4 py-2.5 bg-primary text-white rounded-xl text-[13px] font-semibold active:scale-[0.98] transition-transform"
+                          >
+                            Generar QR nuevo
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </>
-                ) : step === 'device_approved' ? (
-                  /* ── Logged-in: confirmación de aprobación ───────────── */
-                  <div className="text-center py-2">
-                    <span className="material-symbols-outlined text-5xl text-emerald-500 mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                    <p className="font-semibold text-slate-800 text-[15px]">Dispositivo aprobado</p>
-                    <p className="text-[12.5px] text-slate-500 mt-1 mb-5 leading-snug">
-                      {approvedInfo?.user_agent
-                        ? `${userAgentSummary(approvedInfo.user_agent)} ya puede iniciar sesión.`
-                        : 'El otro dispositivo ya puede iniciar sesión.'}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleClose}
-                      className="w-full py-3 bg-primary text-white rounded-2xl text-sm font-semibold active:scale-[0.98] transition-transform"
-                    >
-                      Listo
-                    </button>
-                  </div>
                 ) : (
-                  /* ── Logged in ─────────────────────────────────────── */
+                  /* ── Logged in: menú principal ─────────────────────── */
                   <div className="py-2">
                     <div className="text-center">
                       <span className="material-symbols-outlined text-5xl text-primary mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }}>account_circle</span>
@@ -793,7 +659,7 @@ export default function AuthModal({ isOpen, onClose }) {
                     </div>
                     <button
                       type="button"
-                      onClick={() => { setApproveCode(''); setError(null); setStep('device_approve') }}
+                      onClick={() => { setError(null); setSharePairing(null); setStep('device_show') }}
                       className="w-full py-3 bg-slate-900 text-white rounded-2xl text-sm font-semibold active:scale-[0.98] transition-transform flex items-center justify-center gap-2 mb-3"
                     >
                       <span className="material-symbols-outlined text-[18px]">devices</span>
@@ -866,18 +732,15 @@ export default function AuthModal({ isOpen, onClose }) {
 
                     <button
                       type="button"
-                      onClick={handleStartDevice}
-                      disabled={loading}
-                      className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 hover:border-primary/40 hover:bg-primary/5 active:scale-[0.99] transition-all flex items-center gap-3 text-left disabled:opacity-60"
+                      onClick={() => { setClaimCode(''); setError(null); setStep('device_scan') }}
+                      className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 hover:border-primary/40 hover:bg-primary/5 active:scale-[0.99] transition-all flex items-center gap-3 text-left"
                     >
-                      <span className="material-symbols-outlined text-primary text-[22px] flex-shrink-0">devices</span>
+                      <span className="material-symbols-outlined text-primary text-[22px] flex-shrink-0">qr_code_scanner</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-semibold text-slate-800">Iniciar sesión desde otro dispositivo</p>
-                        <p className="text-[11.5px] text-slate-500 leading-snug">Apruébalo desde donde ya tienes sesión.</p>
+                        <p className="text-[14px] font-semibold text-slate-800">Entrar con QR de otro dispositivo</p>
+                        <p className="text-[11.5px] text-slate-500 leading-snug">Escanea el código de donde ya tienes sesión.</p>
                       </div>
-                      {loading
-                        ? <Spinner />
-                        : <span className="material-symbols-outlined text-slate-300 text-[20px]">chevron_right</span>}
+                      <span className="material-symbols-outlined text-slate-300 text-[20px]">chevron_right</span>
                     </button>
                   </div>
 
@@ -891,126 +754,83 @@ export default function AuthModal({ isOpen, onClose }) {
                     Al continuar aceptas que usemos tu email solo para autenticación.
                   </p>
                 </>
-              ) : step === 'device_wait' ? (
-                /* ── Nuevo dispositivo: esperando aprobación ──────────── */
+              ) : step === 'device_scan' ? (
+                /* ── Nuevo dispositivo: escanear o tipear código ────── */
                 <>
                   <div className="flex items-start justify-between gap-3 mb-5">
                     <div className="min-w-0 flex-1">
                       <h2 className="text-[20px] sm:text-[22px] font-bold text-slate-900 leading-tight">
-                        Apruébalo desde otro dispositivo
+                        Escanea el QR
                       </h2>
                       <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
-                        Abre Focus donde ya tienes sesión e ingresa este código.
+                        Abre Focus donde ya tienes sesión y pulsa <span className="font-semibold text-slate-700">Vincular otro dispositivo</span>. Ahí verás el QR.
                       </p>
                     </div>
                     <button
                       type="button"
-                      onClick={handleClose}
-                      aria-label="Cerrar"
+                      onClick={() => { setClaimCode(''); setClaimStage('idle'); setError(null); setStep('chooser') }}
+                      aria-label="Volver"
                       className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors active:scale-95"
                     >
-                      <span className="material-symbols-outlined text-slate-400 text-[22px]">close</span>
+                      <span className="material-symbols-outlined text-slate-400 text-[22px]">arrow_back</span>
                     </button>
                   </div>
 
-                  {/* Escanea este QR desde el dispositivo ya logueado. El
-                      payload es una URL con ?pair=CODE para que también
-                      funcione con la cámara nativa del sistema (abre la PWA
-                      con el código prellenado). */}
-                  {devicePairing?.user_code && (
-                    <div className="flex flex-col items-center gap-3 mb-4">
-                      <QRCodeView
-                        size={208}
-                        value={buildQRValue(
-                          devicePairing.user_code,
-                          typeof window !== 'undefined' ? window.location.origin : '',
-                        )}
-                      />
-                      <p className="text-[11px] text-slate-400 text-center leading-snug max-w-[280px]">
-                        Apunta la cámara desde el otro dispositivo, o escribe el código manualmente.
-                      </p>
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setError(null); setScannerOpen(true) }}
+                    disabled={loading}
+                    className="w-full mb-3 px-4 py-3.5 rounded-2xl bg-primary text-white font-bold text-[14px] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">qr_code_scanner</span>
+                    Escanear QR
+                  </button>
 
-                  <div className="bg-slate-50 rounded-3xl p-4 mb-4 text-center">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">O este código</p>
+                  <div className="flex items-center gap-3 my-3">
+                    <div className="flex-1 h-px bg-slate-200" />
+                    <span className="text-[11px] text-slate-400 font-semibold tracking-wide">O ESCRIBE EL CÓDIGO</span>
+                    <div className="flex-1 h-px bg-slate-200" />
+                  </div>
+
+                  <form onSubmit={(e) => { e.preventDefault(); handleClaim() }} noValidate>
+                    <input
+                      ref={claimInputRef}
+                      type="text"
+                      inputMode="text"
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      value={formatUserCode(claimCode)}
+                      onChange={(e) => handleClaimCodeChange(e.target.value)}
+                      placeholder="ABCD-EFGH"
+                      maxLength={9}
+                      aria-label="Código de vinculación"
+                      aria-invalid={!!error}
+                      className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 text-center text-2xl font-mono tracking-[0.25em] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 uppercase"
+                    />
+                    {error && (
+                      <p role="alert" className="text-red-500 text-[12.5px] mb-3 text-center leading-snug">
+                        {error}
+                      </p>
+                    )}
                     <button
-                      type="button"
-                      onClick={handleCopyCode}
-                      className="text-[28px] sm:text-[32px] font-mono font-bold tracking-[0.18em] text-slate-900 active:scale-95 transition-transform"
-                      aria-label="Copiar código"
+                      type="submit"
+                      disabled={loading || !claimCodeValid}
+                      className="w-full py-3.5 bg-primary text-white rounded-2xl text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                     >
-                      {formatUserCode(devicePairing?.user_code)}
-                    </button>
-                    <p className="text-[11px] text-slate-400 mt-2">
-                      Toca el código para copiarlo
-                    </p>
-                  </div>
-
-                  {deviceStage === 'waiting' ? (
-                    <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-2xl mb-4">
-                      <span className="material-symbols-outlined text-primary text-[20px] flex-shrink-0 animate-pulse">timer</span>
-                      <p className="text-[12px] text-slate-600 leading-snug">
-                        {deviceCountdown > 0
-                          ? `Expira en ${Math.floor(deviceCountdown/60)}m ${String(deviceCountdown%60).padStart(2,'0')}s. Esperando aprobación…`
-                          : 'Expira en unos segundos…'}
-                      </p>
-                    </div>
-                  ) : (
-                    <ol className="p-3 bg-emerald-50/60 border border-emerald-100 rounded-2xl mb-4 space-y-1.5" aria-live="polite">
-                      {[
-                        { key: 'approved',   label: 'Código aprobado' },
-                        { key: 'signing_in', label: 'Iniciando sesión' },
-                        { key: 'done',       label: 'Listo' },
-                      ].map((s, i, arr) => {
-                        const order = arr.findIndex((x) => x.key === deviceStage)
-                        const done    = i < order
-                        const current = i === order
-                        return (
-                          <li key={s.key} className="flex items-center gap-2 text-[12.5px] leading-snug">
-                            {done ? (
-                              <span className="material-symbols-outlined text-emerald-500 text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                            ) : current ? (
-                              <Spinner />
-                            ) : (
-                              <span className="inline-block w-4 h-4 rounded-full border-2 border-slate-200" aria-hidden="true" />
-                            )}
-                            <span className={current ? 'text-slate-800 font-semibold' : done ? 'text-slate-600' : 'text-slate-400'}>
-                              {s.label}
-                            </span>
-                          </li>
+                      {loading
+                        ? (
+                          <>
+                            <Spinner />
+                            {claimStage === 'claiming' ? 'Validando código…' : 'Iniciando sesión…'}
+                          </>
                         )
-                      })}
-                    </ol>
-                  )}
-
-                  {deviceStage === 'waiting' && (
-                    <>
-                      <ol className="text-[12.5px] text-slate-600 space-y-1.5 mb-5 list-decimal list-inside leading-snug">
-                        <li>Abre Focus en el dispositivo donde ya iniciaste sesión.</li>
-                        <li>Toca tu avatar o entra a tu cuenta.</li>
-                        <li>Elige <span className="font-semibold text-slate-800">Vincular otro dispositivo</span>.</li>
-                        <li>Escanea el QR de arriba o escribe el código.</li>
-                      </ol>
-
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={handleCancelDevice}
-                          className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-2xl text-[13px] font-semibold active:scale-[0.98] transition-transform"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setStep('email'); setError(null) }}
-                          className="flex-1 py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl text-[13px] font-semibold active:scale-[0.98] transition-transform"
-                        >
-                          Usar email
-                        </button>
-                      </div>
-                    </>
-                  )}
+                        : 'Entrar'}
+                    </button>
+                  </form>
+                  <p className="mt-3 text-[11px] text-center text-slate-400 leading-snug">
+                    El código expira en 5 minutos.
+                  </p>
                 </>
               ) : step === 'device_success' ? (
                 <div className="text-center py-6">
@@ -1096,16 +916,16 @@ export default function AuthModal({ isOpen, onClose }) {
                             ¿Ya tienes sesión en otro dispositivo?
                           </p>
                           <p className="text-[11.5px] text-amber-800 mt-0.5 leading-snug">
-                            Apruébalo desde ahí. Es más rápido y no depende del correo.
+                            Entra con QR desde ahí. Es más rápido y no depende del correo.
                           </p>
                           <button
                             type="button"
-                            onClick={handleStartDevice}
+                            onClick={() => { setClaimCode(''); setError(null); setStep('device_scan') }}
                             disabled={loading}
                             className="mt-2 w-full py-2 bg-amber-900 text-white rounded-xl text-[12.5px] font-semibold active:scale-[0.98] transition-transform flex items-center justify-center gap-1.5"
                           >
-                            <span className="material-symbols-outlined text-[16px]">devices</span>
-                            Iniciar sesión desde otro dispositivo
+                            <span className="material-symbols-outlined text-[16px]">qr_code_scanner</span>
+                            Entrar con QR
                           </button>
                         </div>
                       </div>
@@ -1193,16 +1013,16 @@ export default function AuthModal({ isOpen, onClose }) {
                             Prueba con otro dispositivo
                           </p>
                           <p className="text-[11.5px] text-amber-800 mt-0.5 leading-snug">
-                            Si ya iniciaste sesión en otro lado, apruébalo desde ahí sin depender del correo.
+                            Si ya iniciaste sesión en otro lado, escanea su QR desde ahí sin depender del correo.
                           </p>
                           <button
                             type="button"
-                            onClick={handleStartDevice}
+                            onClick={() => { setClaimCode(''); setError(null); setStep('device_scan') }}
                             disabled={loading}
                             className="mt-2 w-full py-2 bg-amber-900 text-white rounded-xl text-[12.5px] font-semibold active:scale-[0.98] transition-transform flex items-center justify-center gap-1.5"
                           >
-                            <span className="material-symbols-outlined text-[16px]">devices</span>
-                            Iniciar sesión desde otro dispositivo
+                            <span className="material-symbols-outlined text-[16px]">qr_code_scanner</span>
+                            Entrar con QR
                           </button>
                         </div>
                       </div>
