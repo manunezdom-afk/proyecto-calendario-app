@@ -542,6 +542,9 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   // Fallback flexible: si no hay activo ni próximo con hora, pero sí queda un
   // pendiente de hoy sin hora definida, lo mostramos como "Próximo bloque
   // sugerido" para que la tarjeta no quede vacía cuando aún hay algo por hacer.
+  // Importante: no usamos tasks como flexibleBlock — las tareas de hoy ya se
+  // renderizan como items con chip "Pendiente de hoy" en el timeline, así que
+  // esta tarjeta sigue siendo exclusiva de bloques/eventos sin hora.
   const flexibleBlock = (!activeBlock && !nextBlock)
     ? (Array.isArray(blocks) ? blocks : []).find(
         (b) => b && b.type !== 'done' && parseTimeToDecimal(b.time) === null,
@@ -551,7 +554,13 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   const hasBlocks   = blocksWithDecimal.length > 0
   const dayIsEmpty  = !hasBlocks && !flexibleBlock
   const dayIsDone   = hasBlocks && !activeBlock && !nextBlock && !flexibleBlock
-  const showTomorrowPreview = !showGhosts && (dayIsEmpty || dayIsDone) && tomorrowEvents.length > 0
+  // Si hay tareas pendientes de hoy, el día no está vacío aunque no haya
+  // eventos con hora — no tiene sentido empujar al usuario al adelanto de
+  // mañana cuando tiene cosas por resolver hoy.
+  const showTomorrowPreview = !showGhosts
+    && (dayIsEmpty || dayIsDone)
+    && pendingTasksCount === 0
+    && tomorrowEvents.length > 0
   const minsToNext  = nextBlock   ? (nextBlock._h   - now) * 60 : null
   const minsElapsed = activeBlock ? (now - activeBlock._h) * 60 : null
   const dayProgress = Math.min(1, Math.max(0, (now - DAY_START_H) / (DAY_END_H - DAY_START_H)))
@@ -665,6 +674,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     //    antes de una llamada, etc.). Buscamos el bloque cuyo eventId coincida
     //    y las mostramos como subtareas debajo, para que no queden flotando
     //    sueltas en la pestaña Tareas sin contexto.
+    const attachedTaskIds = new Set()
     if (!showGhosts && Array.isArray(tasks) && tasks.length > 0) {
       const blocksByEventId = new Map()
       for (const entry of order) {
@@ -680,11 +690,37 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
           text: t.label,
           taskId: t.id,
         })
+        attachedTaskIds.add(t.id)
+      }
+    }
+
+    // 4) Append standalone "hoy" tasks as flexible items al final del día.
+    //    Evita duplicar las que ya colgamos como subtareas en paso 3.
+    //    Orden: prioridad Alta primero, luego Media, luego Baja; dentro de
+    //    cada nivel respetamos el orden de creación para que la lista no baile.
+    if (!showGhosts && Array.isArray(tasks) && tasks.length > 0) {
+      const PRIO_RANK = { Alta: 0, Media: 1, Baja: 2 }
+      const pendingToday = tasks
+        .filter((t) => t && !t.done && t.category === 'hoy' && !attachedTaskIds.has(t.id))
+        .sort((a, b) => (PRIO_RANK[a.priority] ?? 1) - (PRIO_RANK[b.priority] ?? 1))
+      for (const t of pendingToday) {
+        order.push({
+          id: `tsk-${t.id}`,
+          taskId: t.id,
+          time: '—',
+          type: 'task',
+          title: t.label,
+          priority: t.priority,
+          _isTask: true,
+          subtasks: [],
+        })
       }
     }
 
     return order
   })()
+
+  const pendingTasksCount = displayBlocks.filter((b) => b._isTask).length
 
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-56 dark:bg-slate-900 dark:text-slate-100">
@@ -760,7 +796,81 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
             })()}
 
             <div className="relative space-y-2">
-              {displayBlocks.map(({ id, eventId, time, type, title, description, subtasks = [], _asReminderOnly, isGhost: isGhostFlag }) => {
+              {displayBlocks.map(({ id, eventId, taskId, time, type, title, description, priority, subtasks = [], _asReminderOnly, _isTask, isGhost: isGhostFlag }) => {
+                // Tareas de hoy (sin hora): se pintan como item distinto del
+                // timeline, con etiqueta "Pendiente de hoy" y acciones ligadas
+                // a los handlers de tareas (no a los de eventos).
+                if (_isTask) {
+                  const prioStyle = priority === 'Alta'
+                    ? 'border-error'
+                    : priority === 'Baja'
+                      ? 'border-outline-variant'
+                      : 'border-secondary'
+                  const handleToggle = () => { if (taskId) onToggleTask?.(taskId) }
+                  const handleTaskDelete = () => { if (taskId) onDeleteTask?.(taskId) }
+                  const handleTaskLongPress = () => {
+                    if (window.confirm(`¿Eliminar "${title}"?`)) handleTaskDelete()
+                  }
+                  return (
+                    <div
+                      key={id}
+                      data-task-card
+                      style={{ display: 'flex', gap: '24px', overflow: 'visible' }}
+                      className="group"
+                    >
+                      <div style={{ flexShrink: 0, width: '52px', paddingTop: '10px', textAlign: 'right', overflow: 'visible' }}>
+                        <span
+                          className="material-symbols-outlined text-outline/50 text-[18px]"
+                          style={{ fontVariationSettings: "'FILL' 0" }}
+                          title="Sin hora · pendiente del día"
+                        >
+                          check_box_outline_blank
+                        </span>
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingBottom: '24px' }}>
+                        <div
+                          className="absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface bg-outline-variant"
+                          style={{ left: '-21px', zIndex: 1 }}
+                        />
+                        <SwipeableCard onDelete={handleTaskDelete}>
+                          <LongPressZone
+                            onLongPress={handleTaskLongPress}
+                            className={`rounded-xl bg-surface-container-low/60 border-l-4 ${prioStyle}`}
+                            style={{ padding: '12px 14px 12px 14px', overflow: 'visible', touchAction: 'pan-y' }}
+                            title="Mantén apretado para eliminar"
+                          >
+                            <div className="flex justify-between items-start gap-2">
+                              <div className="min-w-0" style={{ flex: 1 }}>
+                                <span
+                                  className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-secondary/10 text-secondary"
+                                  style={{ letterSpacing: '0.08em', marginBottom: '4px' }}
+                                >
+                                  <span className="material-symbols-outlined text-[11px]" style={{ fontVariationSettings: "'FILL' 1" }}>task_alt</span>
+                                  Pendiente de hoy
+                                </span>
+                                <h3
+                                  className="font-semibold text-on-surface text-[14px] leading-snug"
+                                  style={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
+                                >
+                                  {title || '(sin título)'}
+                                </h3>
+                              </div>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleToggle() }}
+                                className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-emerald-100 hover:text-emerald-600 transition-colors"
+                                style={{ flexShrink: 0 }}
+                              >
+                                HECHO ✓
+                              </button>
+                            </div>
+                          </LongPressZone>
+                        </SwipeableCard>
+                      </div>
+                    </div>
+                  )
+                }
+
                 const isSuggestion = type === 'suggestion'
                 const isGhost = !!isGhostFlag
                 const inPeak = !isSuggestion && !isGhost && profile.peakStart != null
@@ -910,7 +1020,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 )
               })}
 
-              {blocks.length === 0 && !showGhosts && (() => {
+              {blocks.length === 0 && pendingTasksCount === 0 && !showGhosts && (() => {
                 const pendingTotal = semanaCount + algoDiaCount
                 return (
                   <div className="flex gap-6">
