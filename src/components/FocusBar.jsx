@@ -136,6 +136,20 @@ export default function FocusBar({
   const [reply, setReply]             = useState(null)   // { content, actions }
   const [isFocused, setIsFocused]     = useState(false)
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false)
+  // Rotación de placeholder para que la barra no se sienta muerta — cambia
+  // cada 4s entre ejemplos conversacionales. Se detiene al enfocar/escuchar.
+  const [placeholderIdx, setPlaceholderIdx] = useState(0)
+  const PLACEHOLDER_EXAMPLES = [
+    'Habla con Nova…',
+    'Ej: "Agenda dentista el viernes a las 10"',
+    'Ej: "Bloquea 90 min para estudiar mañana"',
+    'Ej: "Mueve mi reunión a las 4"',
+  ]
+  useEffect(() => {
+    if (isFocused || isListening || isAnalyzingPhoto || text) return
+    const id = setInterval(() => setPlaceholderIdx((i) => (i + 1) % PLACEHOLDER_EXAMPLES.length), 4000)
+    return () => clearInterval(id)
+  }, [isFocused, isListening, isAnalyzingPhoto, text]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const inputRef   = useRef(null)
   const srRef      = useRef(null)
@@ -627,7 +641,7 @@ export default function FocusBar({
             }}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && hasText && handleSend()}
-            placeholder={isAnalyzingPhoto ? 'Analizando foto…' : isListening ? 'Escuchando…' : 'Habla con Nova...'}
+            placeholder={isAnalyzingPhoto ? 'Analizando foto…' : isListening ? 'Escuchando…' : PLACEHOLDER_EXAMPLES[placeholderIdx]}
             disabled={isThinking || isAnalyzingPhoto}
             enterKeyHint="send"
             autoComplete="off"
@@ -788,7 +802,7 @@ export default function FocusBar({
             }}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && hasText && handleSend()}
-            placeholder={isAnalyzingPhoto ? 'Analizando foto…' : isListening ? 'Escuchando…' : 'Habla con Nova...'}
+            placeholder={isAnalyzingPhoto ? 'Analizando foto…' : isListening ? 'Escuchando…' : PLACEHOLDER_EXAMPLES[placeholderIdx]}
             disabled={isThinking || isAnalyzingPhoto}
             enterKeyHint="send"
             autoComplete="off"

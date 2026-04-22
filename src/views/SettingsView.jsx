@@ -22,7 +22,7 @@ function blockedPermissionMsg() {
 function SectionCard({ title, children }) {
   return (
     <section className="bg-white rounded-[20px] border border-slate-100 shadow-sm overflow-hidden">
-      <p className="px-5 pt-4 pb-2 text-[11px] font-bold text-slate-400">
+      <p className="px-5 pt-4 pb-2.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-400">
         {title}
       </p>
       {children}
@@ -181,7 +181,7 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
   const [durationPickerOpen, setDurationPickerOpen] = useState(false)
 
   return (
-    <div className="max-w-lg lg:max-w-2xl mx-auto px-4 py-6 space-y-4 pb-40">
+    <div className="max-w-lg lg:max-w-2xl mx-auto px-4 py-6 space-y-6 pb-40">
 
       {/* Título */}
       <div className="px-1 mb-2">

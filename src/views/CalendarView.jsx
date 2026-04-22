@@ -433,7 +433,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
           <>
             {/* Week strip */}
             <div className="grid grid-cols-7 gap-2">
-              {CALENDAR_DAYS.map(({ day, num, iso }) => {
+              {CALENDAR_DAYS.map(({ day, num, iso, isToday }) => {
                 const isActive  = num === activeDay
                 const dayEvts   = effectiveEvents.filter((e) => resolveEventDate(e) === iso)
                 const hasEvts   = dayEvts.length > 0
@@ -451,11 +451,11 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                     title={tooltip}
                     className="flex flex-col items-center gap-2 focus:outline-none"
                   >
-                    <span className={`text-[10px] font-bold ${isActive ? 'text-primary' : 'text-outline'}`}>
+                    <span className={`text-[10px] font-bold ${isActive ? 'text-primary' : isToday && !isActive ? 'text-primary/80' : 'text-outline'}`}>
                       {day}
                     </span>
                     {isActive ? (
-                      <div className="w-10 h-14 flex flex-col items-center justify-center rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20">
+                      <div className="relative w-10 h-14 flex flex-col items-center justify-center rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/25 ring-2 ring-primary/30 ring-offset-2 ring-offset-surface">
                         <span>{num}</span>
                         {hasEvts && (
                           <div className="flex gap-[3px] mt-1">
@@ -470,9 +470,11 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                       </div>
                     ) : (
                       <div className={`w-10 h-14 flex flex-col items-center justify-center rounded-2xl font-semibold transition-colors ${
-                        highLoad
-                          ? 'bg-primary/15 text-primary hover:bg-primary/20'
-                          : 'bg-surface-container-low text-on-surface hover:bg-surface-container'
+                        isToday
+                          ? 'bg-primary/10 text-primary border border-primary/40 hover:bg-primary/15'
+                          : highLoad
+                            ? 'bg-primary/15 text-primary hover:bg-primary/20'
+                            : 'bg-surface-container-low text-on-surface hover:bg-surface-container'
                       }`}>
                         <span>{num}</span>
                         {hasEvts && (

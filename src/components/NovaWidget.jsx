@@ -698,14 +698,37 @@ export default function NovaWidget({
       {/* Chat history */}
       <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2 min-h-0">
         {chatHistory.length === 0 && !isLoading && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-10">
+          <div className="flex-1 flex flex-col items-center justify-center px-4 py-8">
             <span
-              className="material-symbols-outlined text-[36px] text-blue-200 mb-2"
+              className="material-symbols-outlined text-[36px] text-blue-200 mb-3"
               style={{ fontVariationSettings: "'FILL' 1" }}
             >
               auto_awesome
             </span>
-            <p className="text-[12px] text-slate-300">Pregunta algo o da una instrucción</p>
+            <p className="text-[13px] font-semibold text-slate-500 text-center mb-1">
+              ¿Qué necesitas?
+            </p>
+            <p className="text-[11.5px] text-slate-400 text-center max-w-[240px] leading-snug mb-4">
+              Te ayudo a agendar, mover o limpiar tu día. Siempre confirmas antes de aplicar.
+            </p>
+            <div className="w-full max-w-[280px] space-y-1.5">
+              {[
+                { icon: 'event', text: 'Agenda gym mañana a las 7' },
+                { icon: 'psychology', text: 'Bloquea 2h de foco esta tarde' },
+                { icon: 'swap_horiz', text: 'Libérame el viernes' },
+              ].map((ex) => (
+                <button
+                  key={ex.text}
+                  onClick={() => sendMessage(ex.text)}
+                  className="w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 text-slate-600 transition-colors active:scale-[0.98]"
+                >
+                  <span className="material-symbols-outlined text-[14px] text-blue-400 flex-shrink-0">
+                    {ex.icon}
+                  </span>
+                  <span className="text-[12px] font-medium truncate">{ex.text}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
