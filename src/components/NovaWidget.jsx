@@ -488,7 +488,12 @@ export default function NovaWidget({
 
   async function sendMessage(text) {
     const msg = (text ?? input).trim()
-    if (!msg || isLoading || isListening) return
+    // No chequeamos isListening aquí: el flush desde r.onend llega justo
+    // después de setIsListening(false) y la closure capturada aún ve
+    // isListening=true, así que la guardia descartaba el texto dictado.
+    // El input está deshabilitado mientras se escucha, así que no hay otra
+    // vía donde esta verificación sea necesaria.
+    if (!msg || isLoading) return
     if (msg.length > 4000) {
       setReply('El mensaje es demasiado largo. Acórtalo por favor.')
       return
@@ -816,23 +821,26 @@ export default function NovaWidget({
           className={`flex-1 min-w-0 bg-transparent outline-none text-slate-700 placeholder:text-slate-300 disabled:opacity-50 ${isDesktop ? 'text-[13px]' : 'text-[15px]'}`}
         />
 
-        {/* Mic — acción primaria de voz.
-            En mobile: 48×48, relleno de color para jerarquía visual fuerte.
-            Idle: gradiente azul→violeta que remite al pill de Nova.
-            Listening: rojo con ring pulsante y scale loop del icono.
-            onClick (no onPointerDown) para que el browser filtre micro-scrolls
-            en iOS; motion.span con pointerEvents:none para que la animación
-            del icono no absorba taps en los bordes. */}
+        {/* Mic — acción primaria de voz, única pieza en color Nova.
+            · Idle mobile: relleno Nova (#7c6bff), sin gradiente. Tono sobrio
+              que conecta con la identidad de la app en lugar del antiguo
+              azul→violeta genérico.
+            · Idle desktop: ghost button con texto Nova para no competir con
+              el input; el peso visual vive en el send.
+            · Listening: mantiene el relleno Nova, añade halo pulsante en
+              nova-soft y reemplaza el icono por un mini-ecualizador — señal
+              inequívoca de "te estoy oyendo".
+            onClick (no onPointerDown) para que iOS filtre micro-scrolls;
+            motion spans con pointerEvents:none para que las animaciones no
+            absorban taps en los bordes. */}
         <div className={`relative flex-shrink-0 ${isDesktop ? '' : 'ml-0.5'}`}>
-          {/* Anillo pulsante externo mientras escucha — refuerzo visual claro
-              del estado "te estoy oyendo" sin tapar el botón. */}
           {isListening && !isDesktop && (
             <motion.span
               aria-hidden="true"
-              className="absolute inset-0 rounded-full bg-red-400/50"
-              initial={{ scale: 1, opacity: 0.55 }}
-              animate={{ scale: 1.6, opacity: 0 }}
-              transition={{ duration: 1.3, repeat: Infinity, ease: 'easeOut' }}
+              className="absolute inset-0 rounded-2xl bg-[#a99bff]/55"
+              initial={{ scale: 1, opacity: 0.6 }}
+              animate={{ scale: 1.5, opacity: 0 }}
+              transition={{ duration: 1.4, repeat: Infinity, ease: 'easeOut' }}
               style={{ pointerEvents: 'none' }}
             />
           )}
@@ -840,35 +848,47 @@ export default function NovaWidget({
             type="button"
             onClick={isListening ? stopVoice : startVoice}
             disabled={isLoading || isAnalyzingPhoto || !SR}
-            className={`relative flex-shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-all ${
-              isDesktop ? 'w-8 h-8' : 'w-12 h-12'
+            className={`relative flex-shrink-0 flex items-center justify-center transition-all active:scale-95 ${
+              isDesktop ? 'w-9 h-9 rounded-xl' : 'w-12 h-12 rounded-2xl'
             } ${
-              isListening
-                ? isDesktop
-                  ? 'bg-red-50 text-red-500 ring-2 ring-red-200'
-                  : 'bg-red-500 text-white shadow-lg shadow-red-500/40 ring-4 ring-red-200/70'
-                : isDesktop
-                  ? 'text-slate-400 hover:text-blue-500 hover:bg-blue-50 disabled:opacity-30'
-                  : 'text-white shadow-md shadow-blue-500/30 disabled:opacity-40'
+              isDesktop
+                ? isListening
+                  ? 'bg-[#7c6bff] text-white shadow-sm'
+                  : 'text-[#7c6bff] hover:bg-[#7c6bff]/10 disabled:opacity-30'
+                : isListening
+                  ? 'bg-[#7c6bff] text-white shadow-lg shadow-[#7c6bff]/40 ring-2 ring-[#a99bff]/70'
+                  : 'bg-[#7c6bff] text-white shadow-md shadow-[#7c6bff]/30 disabled:opacity-40'
             }`}
             style={{
               touchAction: 'manipulation',
               WebkitTapHighlightColor: 'transparent',
-              ...(!isDesktop && !isListening
-                ? { background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)' }
-                : {}),
             }}
             aria-label={isListening ? 'Detener dictado' : 'Dictar con voz'}
             aria-pressed={isListening}
           >
-            <motion.span
-              className={`material-symbols-outlined ${isDesktop ? 'text-[17px]' : 'text-[22px]'}`}
-              style={{ pointerEvents: 'none', fontVariationSettings: !isDesktop ? "'FILL' 1" : undefined }}
-              animate={isListening ? { scale: [1, 1.18, 1] } : { scale: 1 }}
-              transition={isListening ? { duration: 0.9, repeat: Infinity, ease: 'easeInOut' } : {}}
-            >
-              {isListening ? 'stop' : 'mic'}
-            </motion.span>
+            {isListening ? (
+              <span
+                className="flex items-end justify-center gap-[3px] h-4"
+                aria-hidden="true"
+                style={{ pointerEvents: 'none' }}
+              >
+                {[0, 1, 2].map(i => (
+                  <motion.span
+                    key={i}
+                    className="block w-[3px] rounded-full bg-current"
+                    animate={{ height: ['5px', '14px', '5px'] }}
+                    transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.12, ease: 'easeInOut' }}
+                  />
+                ))}
+              </span>
+            ) : (
+              <span
+                className={`material-symbols-outlined ${isDesktop ? 'text-[19px]' : 'text-[22px]'}`}
+                style={{ pointerEvents: 'none', fontVariationSettings: "'FILL' 1" }}
+              >
+                mic
+              </span>
+            )}
           </button>
         </div>
 

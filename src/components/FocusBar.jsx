@@ -254,12 +254,16 @@ export default function FocusBar({
       }
 
       // Fin real de sesión: enviar lo acumulado.
+      // Usamos handleSendRef en lugar de handleSend directo: el effect de SR
+      // se monta una sola vez, así que el closure sobre handleSend capturaba
+      // events/tasks/memories del primer render y el dictado terminaba
+      // invocándose con estado desactualizado.
       clearTimeout(silenceRef.current)
       clearTimeout(restartTimerRef.current)
       setIsListening(false)
       const txt = finalTextRef.current.trim()
       finalTextRef.current = ''
-      if (txt) handleSend(txt)
+      if (txt) handleSendRef.current?.(txt)
     }
 
     srRef.current = r
@@ -528,7 +532,7 @@ export default function FocusBar({
         <div
           className={`flex items-center gap-2 rounded-2xl border bg-surface-container-lowest px-2 py-2 transition-all duration-200 ${
             isListening
-              ? 'border-primary/40 shadow-[0_0_0_3px_rgba(0,88,188,0.08)]'
+              ? 'border-[#7c6bff]/50 shadow-[0_0_0_3px_rgba(124,107,255,0.12)]'
               : isFocused
               ? 'border-outline/30 shadow-sm'
               : 'border-outline/15'
@@ -571,19 +575,22 @@ export default function FocusBar({
             className="flex-1 min-w-0 bg-transparent text-[14px] text-on-surface outline-none placeholder:text-outline/50 disabled:opacity-50"
           />
 
-          {/* Mic — acción primaria de voz, jerarquía fuerte en mobile.
-              Nota: usamos <button> nativo con motion.span interno para la
-              animación. motion.button con animate corriendo perdía taps
-              en iOS Safari (el nodo se reconciliaba y el onClick quedaba
-              huérfano al re-render). Así el botón DOM es estable. */}
+          {/* Mic — acción primaria de voz en Nova (#7c6bff).
+              · Mobile: sólido Nova, 48×48, blanco sobre relleno.
+              · Desktop: ghost en color Nova para no pelearse con el send.
+              · Listening: el relleno se mantiene, aparece halo pulsante en
+                nova-soft y el icono se reemplaza por un ecualizador animado
+                (tres barras) — señal clara de "te estoy oyendo".
+              Se mantiene el patrón <button> + motion.span porque motion.button
+              con animate corriendo perdía taps en iOS Safari. */}
           <div className="relative flex-shrink-0">
             {isListening && (
               <motion.span
                 aria-hidden="true"
-                className="absolute inset-0 rounded-xl bg-red-400/45 lg:hidden"
-                initial={{ scale: 1, opacity: 0.55 }}
-                animate={{ scale: 1.45, opacity: 0 }}
-                transition={{ duration: 1.3, repeat: Infinity, ease: 'easeOut' }}
+                className="absolute inset-0 rounded-xl bg-[#a99bff]/55 lg:hidden"
+                initial={{ scale: 1, opacity: 0.6 }}
+                animate={{ scale: 1.5, opacity: 0 }}
+                transition={{ duration: 1.4, repeat: Infinity, ease: 'easeOut' }}
                 style={{ pointerEvents: 'none' }}
               />
             )}
@@ -595,32 +602,39 @@ export default function FocusBar({
               aria-pressed={isListening}
               className={`relative z-[1] flex h-12 w-12 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-all select-none disabled:opacity-50 ${
                 isListening
-                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/40 ring-4 ring-red-200/70 lg:shadow-none lg:ring-2 lg:ring-red-200 lg:bg-red-50 lg:text-red-500'
-                  : 'text-white shadow-md shadow-blue-500/30 lg:shadow-none lg:text-outline lg:bg-surface-container lg:hover:bg-surface-container-high lg:hover:text-on-surface'
+                  ? 'bg-[#7c6bff] text-white shadow-lg shadow-[#7c6bff]/40 ring-2 ring-[#a99bff]/70 lg:shadow-sm lg:ring-0'
+                  : 'bg-[#7c6bff] text-white shadow-md shadow-[#7c6bff]/30 lg:bg-transparent lg:text-[#7c6bff] lg:shadow-none lg:hover:bg-[#7c6bff]/10'
               }`}
               style={{
                 touchAction: 'manipulation',
                 WebkitTapHighlightColor: 'transparent',
                 WebkitUserSelect: 'none',
                 userSelect: 'none',
-                ...(!isListening
-                  ? { background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)' }
-                  : {}),
               }}
             >
-              <motion.span
-                className="flex items-center justify-center"
-                animate={isListening ? { scale: [1, 1.12, 1] } : { scale: 1 }}
-                transition={{ duration: 0.9, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
-                style={{ pointerEvents: 'none' }}
-              >
+              {isListening ? (
                 <span
-                  className="material-symbols-outlined text-[1.35rem] lg:text-[1.05rem]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
+                  className="flex items-end justify-center gap-[3px] h-4 lg:h-3.5"
+                  aria-hidden="true"
+                  style={{ pointerEvents: 'none' }}
                 >
-                  {isListening ? 'stop' : 'mic'}
+                  {[0, 1, 2].map(i => (
+                    <motion.span
+                      key={i}
+                      className="block w-[3px] rounded-full bg-current"
+                      animate={{ height: ['5px', '14px', '5px'] }}
+                      transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.12, ease: 'easeInOut' }}
+                    />
+                  ))}
                 </span>
-              </motion.span>
+              ) : (
+                <span
+                  className="material-symbols-outlined text-[1.35rem] lg:text-[1.1rem]"
+                  style={{ pointerEvents: 'none', fontVariationSettings: "'FILL' 1" }}
+                >
+                  mic
+                </span>
+              )}
             </button>
           </div>
 
@@ -769,10 +783,10 @@ export default function FocusBar({
             {isListening && (
               <motion.span
                 aria-hidden="true"
-                className="absolute inset-0 rounded-xl bg-red-400/45 lg:hidden"
-                initial={{ scale: 1, opacity: 0.55 }}
-                animate={{ scale: 1.45, opacity: 0 }}
-                transition={{ duration: 1.3, repeat: Infinity, ease: 'easeOut' }}
+                className="absolute inset-0 rounded-xl bg-[#a99bff]/55 lg:hidden"
+                initial={{ scale: 1, opacity: 0.6 }}
+                animate={{ scale: 1.5, opacity: 0 }}
+                transition={{ duration: 1.4, repeat: Infinity, ease: 'easeOut' }}
                 style={{ pointerEvents: 'none' }}
               />
             )}
@@ -784,32 +798,39 @@ export default function FocusBar({
               aria-pressed={isListening}
               className={`relative z-[1] flex h-12 w-12 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-all select-none disabled:opacity-50 ${
                 isListening
-                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/40 ring-4 ring-red-200/70 lg:shadow-none lg:ring-0 lg:bg-indigo-500/25 lg:text-indigo-300'
-                  : 'text-white shadow-md shadow-blue-500/30 lg:shadow-none lg:text-white/40 lg:bg-white/[0.06] lg:hover:bg-white/10 lg:hover:text-white/60'
+                  ? 'bg-[#7c6bff] text-white shadow-lg shadow-[#7c6bff]/40 ring-2 ring-[#a99bff]/70 lg:shadow-sm lg:ring-0'
+                  : 'bg-[#7c6bff] text-white shadow-md shadow-[#7c6bff]/30 lg:bg-[#7c6bff]/20 lg:text-[#a99bff] lg:hover:bg-[#7c6bff]/30'
               }`}
               style={{
                 touchAction: 'manipulation',
                 WebkitTapHighlightColor: 'transparent',
                 WebkitUserSelect: 'none',
                 userSelect: 'none',
-                ...(!isListening
-                  ? { background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)' }
-                  : {}),
               }}
             >
-              <motion.span
-                className="flex items-center justify-center"
-                animate={isListening ? { scale: [1, 1.12, 1] } : { scale: 1 }}
-                transition={{ duration: 0.9, repeat: isListening ? Infinity : 0, ease: 'easeInOut' }}
-                style={{ pointerEvents: 'none' }}
-              >
+              {isListening ? (
                 <span
-                  className="material-symbols-outlined text-[1.35rem] lg:text-[1.05rem]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
+                  className="flex items-end justify-center gap-[3px] h-4 lg:h-3.5"
+                  aria-hidden="true"
+                  style={{ pointerEvents: 'none' }}
                 >
-                  {isListening ? 'stop' : 'mic'}
+                  {[0, 1, 2].map(i => (
+                    <motion.span
+                      key={i}
+                      className="block w-[3px] rounded-full bg-current"
+                      animate={{ height: ['5px', '14px', '5px'] }}
+                      transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.12, ease: 'easeInOut' }}
+                    />
+                  ))}
                 </span>
-              </motion.span>
+              ) : (
+                <span
+                  className="material-symbols-outlined text-[1.35rem] lg:text-[1.1rem]"
+                  style={{ pointerEvents: 'none', fontVariationSettings: "'FILL' 1" }}
+                >
+                  mic
+                </span>
+              )}
             </button>
           </div>
 
