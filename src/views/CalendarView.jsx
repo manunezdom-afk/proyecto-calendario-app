@@ -2,6 +2,7 @@ import { useState } from 'react'
 import DayTimeGrid from '../components/DayTimeGrid'
 import QuickAddSheet from '../components/QuickAddSheet'
 import MonthCalendar from '../components/MonthCalendar'
+import WeekTimeGrid from '../components/WeekTimeGrid'
 import { resolveEventDate } from '../utils/resolveEventDate'
 
 // Descripción útil: no mostramos cuando es solo una fecha ISO (YYYY-MM-DD) —
@@ -162,11 +163,44 @@ function EveningEventCard({ event, onDelete, onOpen }) {
   )
 }
 
+// Devuelve el lunes (00:00) de la semana que contiene `date`.
+function getMondayOf(date) {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  const dow = d.getDay() // 0 = domingo
+  const diff = dow === 0 ? -6 : 1 - dow
+  d.setDate(d.getDate() + diff)
+  return d
+}
+
+function formatWeekRange(weekStart) {
+  const end = new Date(weekStart)
+  end.setDate(weekStart.getDate() + 6)
+  const sameMonth = weekStart.getMonth() === end.getMonth()
+  const sameYear  = weekStart.getFullYear() === end.getFullYear()
+  const sMonth = MONTH_NAMES_ES[weekStart.getMonth()]
+  const eMonth = MONTH_NAMES_ES[end.getMonth()]
+  const sYear  = weekStart.getFullYear()
+  const eYear  = end.getFullYear()
+  if (sameMonth && sameYear) {
+    return `${weekStart.getDate()} – ${end.getDate()} ${sMonth} ${sYear}`
+  }
+  if (sameYear) {
+    return `${weekStart.getDate()} ${sMonth} – ${end.getDate()} ${eMonth} ${sYear}`
+  }
+  return `${weekStart.getDate()} ${sMonth} ${sYear} – ${end.getDate()} ${eMonth} ${eYear}`
+}
+
 // ─── Main view ────────────────────────────────────────────────────────────────
 export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask, onExportClick, isDesktop = false }) {
   const [showModal, setShowModal] = useState(false)
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
-  const [calView, setCalView] = useState('semana')         // 'mes' | 'semana'
+  const [calView, setCalView] = useState('dia')           // 'dia' | 'semana' | 'mes'
+  const [weekStart, setWeekStart] = useState(() => getMondayOf(new Date()))
+  // Fecha preseleccionada cuando el usuario abre "Añadir" tocando una celda
+  // de la vista semanal — hace que el evento caiga en el día correcto aunque
+  // el texto tipeado no incluya fecha explícita.
+  const [pendingDate, setPendingDate] = useState(null)
 
   const effectiveEvents = events ?? []
 
@@ -224,17 +258,17 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
               )}
               {/* View switcher */}
               <div className="bg-surface-container-low p-1 rounded-xl flex">
-                {['mes', 'semana'].map((v) => (
+                {['dia', 'semana', 'mes'].map((v) => (
                   <button
                     key={v}
                     onClick={() => setCalView(v)}
-                    className={`px-4 py-2 text-xs font-bold rounded-lg capitalize transition-all min-h-[36px] ${
+                    className={`px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-all min-h-[36px] ${
                       calView === v
                         ? 'bg-surface-container-lowest shadow-sm text-on-surface'
                         : 'text-outline'
                     }`}
                   >
-                    {v.charAt(0).toUpperCase() + v.slice(1)}
+                    {v === 'dia' ? 'Día' : v.charAt(0).toUpperCase() + v.slice(1)}
                   </button>
                 ))}
               </div>
@@ -251,8 +285,67 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
           />
         )}
 
-        {/* ── VISTA SEMANA ─────────────────────────────────────────────── */}
+        {/* ── VISTA SEMANA (grid real: columnas = días, filas = horas) ── */}
         {calView === 'semana' && (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d)
+                  }}
+                  aria-label="Semana anterior"
+                  className="w-10 h-10 flex items-center justify-center rounded-full text-outline hover:bg-surface-container-low active:scale-90 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+                </button>
+                <button
+                  onClick={() => setWeekStart(getMondayOf(new Date()))}
+                  className="px-3 h-10 text-xs font-bold text-primary hover:bg-primary/10 rounded-full transition-colors"
+                >
+                  Hoy
+                </button>
+                <button
+                  onClick={() => {
+                    const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d)
+                  }}
+                  aria-label="Semana siguiente"
+                  className="w-10 h-10 flex items-center justify-center rounded-full text-outline hover:bg-surface-container-low active:scale-90 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                </button>
+              </div>
+              <p className="text-xs sm:text-sm font-semibold text-outline truncate">
+                {formatWeekRange(weekStart)}
+              </p>
+            </div>
+
+            <WeekTimeGrid
+              weekStart={weekStart}
+              events={effectiveEvents}
+              onOpenTask={onOpenTask}
+              onAddAt={(iso) => {
+                setPendingDate(iso)
+                setShowModal(true)
+              }}
+            />
+
+            {showModal && (
+              <QuickAddSheet
+                onSave={(formData) => {
+                  // Si el usuario tocó una celda concreta, esa fecha manda.
+                  onAddEvent({ ...formData, date: pendingDate ?? formData.date })
+                  setShowModal(false)
+                  setPendingDate(null)
+                }}
+                onCancel={() => { setShowModal(false); setPendingDate(null) }}
+              />
+            )}
+          </section>
+        )}
+
+        {/* ── VISTA DÍA ────────────────────────────────────────────────── */}
+        {calView === 'dia' && (
           <>
             {/* Week strip */}
             <div className="grid grid-cols-7 gap-2">
