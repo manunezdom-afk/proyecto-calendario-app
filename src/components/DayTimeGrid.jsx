@@ -1,5 +1,5 @@
 import { LayoutGroup, motion } from 'framer-motion'
-import { parseEventHour, peakRangeLabel } from '../utils/peakZone'
+import { parseEventHour } from '../utils/time'
 
 const START_H = 8
 const END_H = 22
@@ -14,7 +14,7 @@ function parseEndHour(timeStr, startH) {
   return end > startH ? end : startH + 1
 }
 
-export default function DayTimeGrid({ events = [], peakStart, peakEnd, onAdd, onOpenTask }) {
+export default function DayTimeGrid({ events = [], onAdd, onOpenTask }) {
   const hours = []
   for (let h = START_H; h <= END_H; h++) hours.push(h)
   const gridHeight = (END_H - START_H) * ROW_H
@@ -30,11 +30,6 @@ export default function DayTimeGrid({ events = [], peakStart, peakEnd, onAdd, on
     })
     .filter(Boolean)
 
-  const peakTop = peakStart != null ? (Math.max(peakStart, START_H) - START_H) * ROW_H : 0
-  const peakHeight = peakStart != null && peakEnd != null
-    ? (Math.min(peakEnd, END_H) - Math.max(peakStart, START_H)) * ROW_H
-    : 0
-
   return (
     <section className="space-y-3">
       <div className="flex justify-between items-center">
@@ -49,16 +44,6 @@ export default function DayTimeGrid({ events = [], peakStart, peakEnd, onAdd, on
       </div>
 
       <div className="relative bg-surface-container-lowest border border-slate-200 rounded-2xl overflow-hidden" style={{ height: gridHeight }}>
-        {peakStart != null && peakEnd != null && peakHeight > 0 && (
-          <div
-            className="absolute left-0 right-0 bg-emerald-50 pointer-events-none"
-            style={{ top: peakTop, height: peakHeight }}
-            title={`Zona de rendimiento · ${peakRangeLabel(peakStart, peakEnd)}`}
-          >
-            <span className="absolute top-1 right-2 text-[9px] font-bold text-emerald-700">Zona de rendimiento</span>
-          </div>
-        )}
-
         {hours.map((h, i) => (
           <div
             key={h}

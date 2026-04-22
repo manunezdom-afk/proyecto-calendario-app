@@ -3,8 +3,6 @@ import DayTimeGrid from '../components/DayTimeGrid'
 import QuickAddSheet from '../components/QuickAddSheet'
 import MonthCalendar from '../components/MonthCalendar'
 import { resolveEventDate } from '../utils/resolveEventDate'
-import { useUserProfile } from '../hooks/useUserProfile'
-import { peakRangeLabel } from '../utils/peakZone'
 
 // Descripción útil: no mostramos cuando es solo una fecha ISO (YYYY-MM-DD) —
 // data vieja generada por QuickAddSheet cuando stuffing date en description.
@@ -166,7 +164,6 @@ function EveningEventCard({ event, onDelete, onOpen }) {
 
 // ─── Main view ────────────────────────────────────────────────────────────────
 export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask, onExportClick, isDesktop = false }) {
-  const { profile } = useUserProfile()
   const [showModal, setShowModal] = useState(false)
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('semana')         // 'mes' | 'semana'
@@ -251,7 +248,6 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
             events={effectiveEvents}
             onAddEvent={onAddEvent}
             onDeleteEvent={handleDeleteEvent}
-            profile={profile}
           />
         )}
 
@@ -322,28 +318,10 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
             {isDesktop ? (
               <DayTimeGrid
                 events={dayEvents}
-                peakStart={profile.peakStart}
-                peakEnd={profile.peakEnd}
                 onAdd={() => setShowModal(true)}
                 onOpenTask={onOpenTask}
               />
             ) : (<>
-            {/* ── Banda zona de rendimiento ──────────────────────────── */}
-            {profile.peakStart != null && (
-              <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl">
-                <span
-                  className="material-symbols-outlined text-emerald-600 text-[17px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >bolt</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-emerald-800">
-                    Zona de rendimiento · {peakRangeLabel(profile.peakStart, profile.peakEnd)}
-                  </p>
-                  <p className="text-[10px] text-emerald-600 leading-tight">Tu franja de máxima energía</p>
-                </div>
-              </div>
-            )}
-
             {/* Enfoque del día seleccionado */}
             <section className="space-y-4">
               <div className="flex justify-between items-center">

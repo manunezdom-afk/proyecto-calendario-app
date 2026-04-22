@@ -6,8 +6,6 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   id            UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   chronotype    TEXT,
   role          TEXT,
-  peak_start    NUMERIC  DEFAULT 9,
-  peak_end      NUMERIC  DEFAULT 11.5,
   setup_done    BOOLEAN  DEFAULT FALSE,
   snoozed_until BIGINT,
   timezone      TEXT     DEFAULT 'UTC',

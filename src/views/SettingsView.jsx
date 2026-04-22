@@ -162,7 +162,7 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
         <Row
           icon="insights"
           label="Lo que Nova sabe de ti"
-          sub="Patrones que aprendió de tu uso — pico real, días fuertes, tipos rechazados"
+          sub="Patrones que aprendió de tu uso — días fuertes, tipos rechazados, categorías"
           onClick={onOpenNovaKnows}
         >
           <span className="material-symbols-outlined text-[16px] text-slate-300">chevron_right</span>

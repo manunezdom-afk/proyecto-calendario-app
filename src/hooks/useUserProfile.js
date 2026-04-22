@@ -13,17 +13,9 @@ function detectBrowserTimezone() {
 const DEFAULT_PROFILE = {
   chronotype:   null,
   role:         null,
-  peakStart:    9,
-  peakEnd:      11.5,
   setupDone:    false,
   snoozedUntil: null,
   timezone:     detectBrowserTimezone(),
-}
-
-const CHRONOTYPE_PEAKS = {
-  morning:   { peakStart: 7,  peakEnd: 11 },
-  afternoon: { peakStart: 13, peakEnd: 17 },
-  night:     { peakStart: 19, peakEnd: 23 },
 }
 
 export function useUserProfile() {
@@ -58,8 +50,7 @@ export function useUserProfile() {
   }, [profile])
 
   function saveProfile(answers) {
-    const peaks = CHRONOTYPE_PEAKS[answers.chronotype] ?? {}
-    const next = { ...profile, ...answers, ...peaks, setupDone: true, snoozedUntil: null }
+    const next = { ...profile, ...answers, setupDone: true, snoozedUntil: null }
     setProfile(next)
     if (user) dataService.upsertProfile(next, user.id).catch(console.warn)
   }

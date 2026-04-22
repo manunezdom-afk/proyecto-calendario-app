@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { todayISO as getTodayISO, parseTimeToDecimal } from '../utils/time'
+import { useMemo } from 'react'
+import { motion } from 'framer-motion'
+import { todayISO as getTodayISO } from '../utils/time'
 import AuroraBackground from './AuroraBackground'
 import NovaOrb from './NovaOrb'
 
@@ -21,16 +21,9 @@ function formatDateEyebrow(d = new Date()) {
   return `${wd} · ${clean}`
 }
 
-function generateBrief({ events, tasks, profile }) {
+function generateBrief({ events, tasks }) {
   const now = new Date()
   const hour = now.getHours()
-  const min  = now.getMinutes()
-  const currentDecimal = hour + min / 60
-
-  const inPeak =
-    profile?.peakStart != null &&
-    currentDecimal >= profile.peakStart &&
-    currentDecimal < profile.peakEnd
 
   const todayISO = getTodayISO()
   const todayEvents = events.filter(e => !e.date || e.date === todayISO)
@@ -41,20 +34,6 @@ function generateBrief({ events, tasks, profile }) {
 
   const pendingTasks = tasks.filter(t => !t.done && t.category === 'hoy').length
 
-  const peakConflicts =
-    profile?.peakStart != null
-      ? todayEvents.filter(e => {
-          if (!e.time) return false
-          const dec = parseTimeToDecimal(e.time)
-          if (!dec) return false
-          return (
-            dec >= profile.peakStart &&
-            dec < profile.peakEnd &&
-            /reuni[oó]n|meeting|llamada|call|sincro|junta/i.test(e.title)
-          )
-        })
-      : []
-
   // Línea principal corta, una sola frase. Sin "Son las X" — el usuario ya ve la hora.
   const greeting = greetingFor(hour)
 
@@ -64,34 +43,18 @@ function generateBrief({ events, tasks, profile }) {
   if (pendingTasks  > 0) summaryParts.push(`${pendingTasks} tarea${pendingTasks > 1 ? 's' : ''}`)
   const summary = summaryParts.length > 0 ? summaryParts.join(' · ') : 'Agenda despejada'
 
-  // Contexto de zona pico (opcional).
-  let peakHint = null
-  if (inPeak) {
-    peakHint = 'Estás en tu zona pico.'
-  } else if (profile?.peakStart != null) {
-    const minsToP = Math.round((profile.peakStart - currentDecimal) * 60)
-    if (minsToP > 0 && minsToP < 240) {
-      peakHint = minsToP < 60
-        ? `Zona pico en ${minsToP} min`
-        : `Zona pico en ${Math.floor(minsToP / 60)} h`
-    }
-  }
-
-  return { greeting, summary, peakHint, peakConflicts, meetingCount, pendingTasks }
+  return { greeting, summary, meetingCount, pendingTasks }
 }
 
 export default function MorningBrief({
   events = [],
   tasks  = [],
-  profile = null,
   onStart,
   onDismiss,
-  onMoveEvent,
   inline = false,
 }) {
-  const brief = useMemo(() => generateBrief({ events, tasks, profile }), [events, tasks, profile])
+  const brief = useMemo(() => generateBrief({ events, tasks }), [events, tasks])
   const dateStr = useMemo(() => formatDateEyebrow(), [])
-  const [phase, setPhase]   = useState('brief')
 
   // Nova no emite voz de salida. El brief se navega solo por botones
   // (arrancamos / rechazar / modificar); el micrófono sigue disponible en
@@ -99,9 +62,6 @@ export default function MorningBrief({
 
   function handleStart()   { onStart?.() }
   function handleDismiss() { onDismiss?.() }
-  function handleConflicts()  {
-    if (brief.peakConflicts.length > 0) setPhase('conflicts')
-  }
 
   // ─── Inline variant: card dentro de Mi Día en desktop ────────────────────
   if (inline) {
@@ -125,13 +85,9 @@ export default function MorningBrief({
           </button>
         </div>
 
-        <p className="text-[15px] leading-relaxed text-slate-800 mb-1">
+        <p className="text-[15px] leading-relaxed text-slate-800 mb-4">
           {brief.greeting}. <span className="text-slate-500">{brief.summary}.</span>
         </p>
-        {brief.peakHint && (
-          <p className="text-[12.5px] text-slate-500 mb-4">{brief.peakHint}</p>
-        )}
-        {!brief.peakHint && <div className="mb-4" />}
 
         {(brief.meetingCount > 0 || brief.pendingTasks > 0) && (
           <div className="flex items-center gap-4 mb-4">
@@ -213,16 +169,12 @@ export default function MorningBrief({
         />
 
         {/* Contenido principal */}
-        <AnimatePresence mode="wait">
-          {phase === 'brief' ? (
-            <motion.div
-              key="brief"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.35, ease: EASE }}
-              className="flex w-full flex-col items-center"
-            >
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.35, ease: EASE }}
+          className="flex w-full flex-col items-center"
+        >
               {/* Eyebrow — fecha */}
               <motion.p
                 initial={{ opacity: 0, y: 4 }}
@@ -288,43 +240,6 @@ export default function MorningBrief({
                 {brief.summary}
               </motion.p>
 
-              {/* Hint de zona pico — micro, casi tipográfico */}
-              {brief.peakHint && (
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 0.55 }}
-                  transition={{ delay: 0.78, duration: 0.5, ease: EASE }}
-                  className="mt-2.5 text-center text-[12.5px] text-white/55"
-                  style={{ letterSpacing: '0.01em' }}
-                >
-                  {brief.peakHint}
-                </motion.p>
-              )}
-
-              {/* Chip de conflictos — solo si existen, inline, discreto */}
-              {brief.peakConflicts.length > 0 && (
-                <motion.button
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.88, duration: 0.5, ease: EASE }}
-                  onClick={handleConflicts}
-                  className="mt-5 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-medium text-white/80 transition-colors hover:bg-white/10"
-                  style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                  }}
-                >
-                  <span
-                    aria-hidden="true"
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ background: '#f5b35c', boxShadow: '0 0 8px rgba(245,179,92,0.7)' }}
-                  />
-                  {brief.peakConflicts.length === 1
-                    ? '1 reunión en tu zona pico'
-                    : `${brief.peakConflicts.length} reuniones en tu zona pico`}
-                </motion.button>
-              )}
-
               {/* CTAs — uno deseable, otro retirado */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -357,81 +272,7 @@ export default function MorningBrief({
                   Más tarde
                 </button>
               </motion.div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="conflicts"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.35, ease: EASE }}
-              className="w-full"
-            >
-              <div className="mb-6 text-center">
-                <p className="font-nova text-[10.5px] font-medium uppercase text-white/50" style={{ letterSpacing: '0.28em' }}>
-                  En tu zona pico
-                </p>
-                <h2
-                  className="mt-3 font-headline text-white"
-                  style={{
-                    fontSize: 'clamp(22px, 4.2vw, 26px)',
-                    lineHeight: 1.15,
-                    letterSpacing: '-0.02em',
-                    fontWeight: 500,
-                  }}
-                >
-                  {brief.peakConflicts.length === 1
-                    ? 'Una reunión choca con tu mejor hora.'
-                    : `${brief.peakConflicts.length} reuniones chocan con tu mejor hora.`}
-                </h2>
-              </div>
-
-              <div className="space-y-2">
-                {brief.peakConflicts.map(e => (
-                  <div
-                    key={e.id}
-                    className="flex items-center justify-between rounded-2xl px-4 py-3"
-                    style={{
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                    }}
-                  >
-                    <div className="min-w-0 pr-3">
-                      <p className="truncate text-[14px] font-semibold text-white/90">{e.title}</p>
-                      <p className="mt-0.5 text-[11.5px] text-white/45 tabular-nums">{e.time}</p>
-                    </div>
-                    <button
-                      onClick={() => onMoveEvent?.(e.id, { section: 'evening' })}
-                      className="flex-shrink-0 rounded-full border border-white/15 px-3 py-1.5 text-[11.5px] font-semibold text-white/85 transition-colors hover:bg-white/10"
-                    >
-                      Mover
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-8 flex flex-col items-center gap-4">
-                <button
-                  onClick={handleStart}
-                  className="w-full max-w-[320px] rounded-full py-3.5 font-semibold text-white transition-transform active:scale-[0.985]"
-                  style={{
-                    fontSize: '15px',
-                    background: 'linear-gradient(135deg, #8b7bff 0%, #5b4bd6 100%)',
-                    boxShadow: '0 14px 34px -12px rgba(124,107,255,0.55), inset 0 1px 0 rgba(255,255,255,0.18)',
-                  }}
-                >
-                  Empezar el día
-                </button>
-                <button
-                  onClick={() => setPhase('brief')}
-                  className="py-1.5 text-[13px] font-medium text-white/45 transition-colors hover:text-white/75"
-                >
-                  Volver
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        </motion.div>
       </motion.div>
     </motion.div>
   )

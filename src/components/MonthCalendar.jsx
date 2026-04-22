@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import QuickAddSheet from './QuickAddSheet'
 import { resolveEventDate } from '../utils/resolveEventDate'
-import { parseEventHour } from '../utils/peakZone'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -31,7 +30,7 @@ function formatLabel(iso) {
   return `${names[dow]} ${d} de ${MONTH_NAMES[m - 1]}`
 }
 
-export default function MonthCalendar({ events, onAddEvent, onDeleteEvent, profile = null }) {
+export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
   const today = new Date()
   const todayISO = toISO(today.getFullYear(), today.getMonth(), today.getDate())
 
@@ -113,15 +112,6 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent, profi
           const count      = dayEvts.length
           const highLoad   = count >= 3
 
-          // ✨ Día con zona de rendimiento libre
-          const peakFree = profile?.peakStart != null && (() => {
-            const hasPeakEvent = dayEvts.some(ev => {
-              const h = parseEventHour(ev.time)
-              return h !== null && h >= profile.peakStart && h < profile.peakEnd
-            })
-            return !hasPeakEvent
-          })()
-
           return (
             <button
               key={iso}
@@ -135,11 +125,7 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent, profi
                   ? 'bg-primary/12 text-primary hover:bg-primary/18'
                   : 'hover:bg-surface-container-low text-on-surface'
               }`}
-              title={peakFree ? 'Zona de rendimiento libre ✨' : undefined}
             >
-              {peakFree && !isSelected && (
-                <span className="absolute top-0.5 right-1 text-[9px] leading-none" aria-hidden="true">✨</span>
-              )}
               {day}
               {count > 0 && (
                 <div className="flex gap-[2px]">

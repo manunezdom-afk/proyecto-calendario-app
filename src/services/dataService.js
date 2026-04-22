@@ -91,7 +91,6 @@ function profileToDb(profile, userId) {
   return {
     id: userId,
     chronotype: profile.chronotype, role: profile.role,
-    peak_start: profile.peakStart, peak_end: profile.peakEnd,
     setup_done: profile.setupDone, snoozed_until: profile.snoozedUntil ?? null,
     timezone: profile.timezone || 'UTC',
   }
@@ -100,7 +99,6 @@ function profileToDb(profile, userId) {
 function profileFromDb(row) {
   return {
     chronotype: row.chronotype, role: row.role,
-    peakStart: row.peak_start, peakEnd: row.peak_end,
     setupDone: row.setup_done, snoozedUntil: row.snoozed_until,
     timezone: row.timezone || 'UTC',
   }

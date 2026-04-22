@@ -10,25 +10,14 @@ function buildInsights(b, profile) {
   if (!b) return []
   const out = []
 
-  // Pico real vs declarado
   if (b.real_peak_window) {
     const { start, end } = b.real_peak_window
-    const decl = b.profile_peak
-    if (decl && start !== decl.start) {
-      out.push({
-        icon: 'bolt',
-        gradient: 'from-amber-400 to-orange-500',
-        title: `Tu pico real es ${start}–${end}h, no ${decl.start}–${decl.end}h`,
-        body: `Tu perfil declara esa franja, pero los datos muestran que rindes mejor más tarde. Estoy usando la observada, no la declarada.`,
-      })
-    } else {
-      out.push({
-        icon: 'bolt',
-        gradient: 'from-amber-400 to-orange-500',
-        title: `Tu pico de productividad es ${start}–${end}h`,
-        body: `Completas la mayoría de tus tareas en esa franja. Intento proteger ese bloque de reuniones.`,
-      })
-    }
+    out.push({
+      icon: 'bolt',
+      gradient: 'from-amber-400 to-orange-500',
+      title: `Sueles completar más tareas entre ${start}–${end}h`,
+      body: `Es la franja donde veo más actividad. La tengo en cuenta al ordenar tu día.`,
+    })
   }
 
   // Día fuerte / día flojo

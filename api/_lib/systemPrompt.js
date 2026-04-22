@@ -10,12 +10,6 @@ const CATEGORY_LABELS = {
 const CHRONO_LABELS = { morning: 'matutino', afternoon: 'vespertino', night: 'nocturno' }
 const ROLE_LABELS   = { student: 'estudiante', worker: 'trabajador', freelance: 'freelancer', other: 'otro' }
 
-function fmtHour(dec) {
-  if (dec == null) return ''
-  const h = Math.floor(dec), m = Math.round((dec - h) * 60)
-  return m > 0 ? `${h}:${String(m).padStart(2, '0')}` : `${h}:00`
-}
-
 function buildMemoriesContext(memories) {
   if (!memories.length) {
     return 'Aún no tienes memorias sobre este usuario. Cuando aprendas algo relevante sobre él (relaciones, metas, preferencias, rutinas, dolores, contextos), guárdalo usando la acción "remember".'
@@ -33,11 +27,8 @@ function buildProfileContext(profile) {
   if (!profile) return ''
   return `Perfil de productividad del usuario:
 - Cronotipo: ${CHRONO_LABELS[profile.chronotype] ?? profile.chronotype ?? 'no definido'} (${ROLE_LABELS[profile.role] ?? profile.role ?? 'rol no definido'})
-- Zona de rendimiento (máxima energía cognitiva): ${fmtHour(profile.peakStart)}–${fmtHour(profile.peakEnd)}
 
-INSTRUCCIÓN sobre la zona de rendimiento:
-- Si hay eventos que interrumpen la zona de rendimiento (reuniones, llamadas, clases), menciona el conflicto y ofrece moverlos.
-- Cuando propongas mover un evento fuera de la zona de rendimiento, da una hora concreta alternativa.
+INSTRUCCIÓN:
 - NUNCA propongas ni sugieras "bloques de foco", "sesiones de foco", "pomodoros", "deep work" ni agendar tiempo genérico de concentración. Agrega únicamente lo que el usuario pida explícitamente.`
 }
 
@@ -48,11 +39,8 @@ function buildBehaviorContext(b) {
 
   if (b.real_peak_window) {
     const { start, end } = b.real_peak_window
-    const profileBit = b.profile_peak
-      ? ` (el usuario DECLARÓ ${b.profile_peak.start}–${b.profile_peak.end}h en su perfil${start !== b.profile_peak.start ? ' — hay un desfase' : ''})`
-      : ''
-    lines.push(`- PICO REAL observado de productividad: ${start}–${end}h${profileBit}.`)
-    lines.push(`  → Prioriza estas horas reales sobre las declaradas al sugerir movimientos en la agenda.`)
+    lines.push(`- Franja más productiva observada: ${start}–${end}h.`)
+    lines.push(`  → Úsala como referencia al sugerir movimientos en la agenda.`)
   } else if (b.real_peak_hour != null) {
     lines.push(`- Hora más productiva observada: ${b.real_peak_hour}h.`)
   }
@@ -86,7 +74,7 @@ function buildBehaviorContext(b) {
   }
 
   lines.push('')
-  lines.push('INSTRUCCIÓN: Usa este modelo comportamental para personalizar TODAS tus propuestas. Cuando el pico real difiere del declarado, el real tiene prioridad. Cuando hay tipos rechazados, NO los propongas.')
+  lines.push('INSTRUCCIÓN: Usa este modelo comportamental para personalizar TODAS tus propuestas. Cuando hay tipos rechazados, NO los propongas.')
   return lines.join('\n')
 }
 
@@ -143,7 +131,7 @@ Tienes acceso completo a:
 - Su ubicación y clima en tiempo real
 - Sus contactos
 - La fecha y hora actual
-- Su perfil cronobiológico y zona de rendimiento
+- Su perfil cronobiológico
 
 Puedes:
 - Agregar, editar o eliminar eventos de calendario

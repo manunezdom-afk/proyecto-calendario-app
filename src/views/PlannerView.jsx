@@ -4,7 +4,6 @@ import QuickAddSheet     from '../components/QuickAddSheet'
 import FocusBar          from '../components/FocusBar'
 import MorningBrief      from '../components/MorningBrief'
 import { useUserProfile } from '../hooks/useUserProfile'
-import { isInPeak } from '../utils/peakZone'
 import { todayISO as todayISODate, parseTimeToDecimal } from '../utils/time'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -188,9 +187,8 @@ function buildInsights(events, profile) {
   const meetingCount = todayEvents.filter((e) =>
     /reuni[oó]n|meeting|llamada|call|sincro|junta/i.test(e.title)
   ).length
-  const h = currentHour()
 
-  const { role, chronotype, peakStart } = profile
+  const { role } = profile
   const roleLabel = { student: 'estudiar', worker: 'trabajar', freelance: 'producir', other: 'concentrarte' }[role] ?? 'concentrarte'
 
   const insights = []
@@ -241,25 +239,6 @@ function buildInsights(events, profile) {
       icon: 'self_improvement',
       label: 'AGENDA LIGERA',
       text: `Pocos eventos hoy. Aprovecha el tiempo libre para ${roleLabel} con calma.`,
-    })
-  }
-
-  // Insight 4: cronobio + hora actual
-  if (chronotype === 'night' && h < 13) {
-    insights.push({
-      color: 'text-outline',
-      bg: 'bg-surface-container-low',
-      icon: 'bedtime',
-      label: 'TU MOMENTO',
-      text: 'Aún no es tu pico de energía. Haz tareas rutinarias ahora y guarda lo difícil para la noche.',
-    })
-  } else if (chronotype === 'morning' && h > 14) {
-    insights.push({
-      color: 'text-outline',
-      bg: 'bg-surface-container-low',
-      icon: 'wb_twilight',
-      label: 'TU MOMENTO',
-      text: 'Tu pico de mañana ya pasó. Es buen momento para reuniones, correos y tareas más ligeras.',
     })
   }
 
@@ -891,9 +870,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 }
 
                 const isSuggestion = type === 'suggestion'
-                const inPeak = !isSuggestion && profile.peakStart != null
-                  ? isInPeak(time, profile.peakStart, profile.peakEnd)
-                  : null
                 const isActive = activeBlock?.id === id
                 const isNext = !activeBlock && nextBlock?.id === id
 
@@ -940,14 +916,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                           isSuggestion
                             ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
                             : `bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 ${
-                                type === 'done' ? 'border-emerald-400 opacity-60'
-                                  : inPeak === true ? 'border-emerald-500'
-                                  : inPeak === false ? 'border-amber-400'
-                                  : 'border-primary'
+                                type === 'done' ? 'border-emerald-400 opacity-60' : 'border-primary'
                               }`
                         }`}
                         style={{ padding: '14px 16px 14px 14px', overflow: 'visible', touchAction: 'pan-y' }}
-                        title={inPeak === true ? 'En tu zona de rendimiento · Mantén apretado para eliminar' : inPeak === false ? 'Fuera de tu zona de rendimiento · Mantén apretado para eliminar' : 'Mantén apretado para eliminar'}
+                        title="Mantén apretado para eliminar"
                       >
                         <div className="flex justify-between items-start gap-2" style={{ marginBottom: '2px' }}>
                           <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0 }}>

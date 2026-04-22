@@ -3,7 +3,6 @@ import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { useEvents }        from './hooks/useEvents'
 import { useTasks }         from './hooks/useTasks'
 import { useNotifications } from './hooks/useNotifications'
-import { useUserProfile }   from './hooks/useUserProfile'
 import { useSuggestions }   from './hooks/useSuggestions'
 import { useAuth }          from './context/AuthContext'
 import { actionToSuggestion, applySuggestion } from './utils/actionToSuggestion'
@@ -43,7 +42,6 @@ const pageVariants = {
 
 export default function App() {
   const { authModal, setAuthModal, user } = useAuth()
-  const { profile }                 = useUserProfile()
   const { show: showOnboarding, complete: completeOnboarding } = useOnboardingGate()
   // El welcome es la "threshold scene" que saluda una vez por día. Si el
   // onboarding va a mostrarse, suprimimos el welcome: no queremos encadenar
@@ -232,10 +230,8 @@ export default function App() {
     morningBrief: (showMorningBrief && !showWelcome && !showOnboarding) ? {
       events,
       tasks,
-      profile,
       onStart:      () => { setShowMorningBrief(false); handleStartDay() },
       onDismiss:    () => setShowMorningBrief(false),
-      onMoveEvent:  (id, updates) => { editEvent(id, updates); setShowMorningBrief(false) },
     } : null,
   }
 
@@ -408,10 +404,8 @@ export default function App() {
           <MorningBrief
             events={events}
             tasks={tasks}
-            profile={profile}
             onStart={()      => { setShowMorningBrief(false); handleStartDay() }}
             onDismiss={()    => setShowMorningBrief(false)}
-            onMoveEvent={(id, updates) => { editEvent(id, updates); setShowMorningBrief(false) }}
           />
         )}
       </AnimatePresence>

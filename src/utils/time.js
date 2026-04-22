@@ -19,3 +19,11 @@ export function parseTimeToDecimal(timeStr) {
   if (ap === 'AM' && h === 12) h = 0
   return h + min / 60
 }
+
+// Igual que parseTimeToDecimal pero acepta rangos ("9:00 AM - 10:00 AM") y usa
+// la primera hora. Devuelve null si no parsea.
+export function parseEventHour(timeStr) {
+  if (!timeStr || timeStr === '—') return null
+  const first = String(timeStr).split('-')[0].trim()
+  return parseTimeToDecimal(first)
+}

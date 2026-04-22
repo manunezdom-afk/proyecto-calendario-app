@@ -62,7 +62,7 @@ function peakWindow(hours, windowSize = 3) {
  *
  * @param {Object} opts
  * @param {string} opts.userId
- * @param {Object} [opts.profile] - perfil del usuario (cronotype, peakStart, etc.)
+ * @param {Object} [opts.profile] - perfil del usuario (cronotype, etc.)
  */
 export async function analyzeBehavior({ userId, profile = {} } = {}) {
   const signals = await fetchRecentSignals({ sinceDays: 30, limit: 500 })
@@ -163,9 +163,6 @@ export async function analyzeBehavior({ userId, profile = {} } = {}) {
     // Energía real
     real_peak_hour: realPeakHour,
     real_peak_window: realPeakWindow,
-    profile_peak: profile.peakStart != null
-      ? { start: profile.peakStart, end: profile.peakEnd }
-      : null,
 
     // Semana
     busy_weekday: busyWeekday,
@@ -245,10 +242,7 @@ export function modelToPrompt(model) {
 
   if (model.real_peak_window) {
     const { start, end } = model.real_peak_window
-    const profileBit = model.profile_peak
-      ? ` (perfil declarado: ${model.profile_peak.start}–${model.profile_peak.end}h)`
-      : ''
-    lines.push(`- Pico REAL de productividad observado: ${start}–${end}h${profileBit}.`)
+    lines.push(`- Franja más productiva observada: ${start}–${end}h.`)
   } else if (model.real_peak_hour != null) {
     lines.push(`- Hora más productiva observada: ${model.real_peak_hour}h.`)
   }
