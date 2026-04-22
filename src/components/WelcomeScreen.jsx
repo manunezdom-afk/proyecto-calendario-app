@@ -19,15 +19,17 @@ function getSubline({ hasEvents, hasFirstTime }) {
   return 'Estás aquí.'
 }
 
+const EASE = [0.22, 1, 0.36, 1]
+const ENTER_HOLD_MS = 1900
+
 /**
  * Threshold Scene — la pantalla-firma de entrada.
- * 3 frames en ~1500ms, skippable con tap/tecla en cualquier momento.
+ * Secuencia coreografiada (~1900ms) y skippable con tap/tecla.
  *
- * Frame A (0-450ms):    orbe Nova breath-in
- * Frame B (450-1100ms): frase "{greeting}. {subline}"
- * Frame C (1100-1500ms): fade completo → onEnter
- *
- * No hay barra de progreso, no hay label, no hay nombre extraído del email.
+ * 0–500ms:   orbe breath-in + wordmark "FOCUS" emergiendo
+ * 300–900ms: saludo (greeting) entra desde abajo
+ * 650–1200ms: hairline se expande + subline aparece
+ * 1900ms:    fade-out suave hacia la siguiente pantalla
  */
 export default function WelcomeScreen({ onEnter, hasEvents = false, hasFirstTime = false }) {
   const greeting = useMemo(getGreeting, [])
@@ -35,9 +37,8 @@ export default function WelcomeScreen({ onEnter, hasEvents = false, hasFirstTime
   const continuity = useMemo(readContinuity, [])
   const [phase, setPhase] = useState('in') // 'in' | 'out'
 
-  // Auto-dismiss en 1500ms. Skippable por tap o tecla → dispara fade corto.
   useEffect(() => {
-    const id = setTimeout(() => setPhase('out'), 1500)
+    const id = setTimeout(() => setPhase('out'), ENTER_HOLD_MS)
     return () => clearTimeout(id)
   }, [])
 
@@ -52,7 +53,7 @@ export default function WelcomeScreen({ onEnter, hasEvents = false, hasFirstTime
     } catch {}
     const id = setTimeout(() => {
       onEnter?.()
-    }, 280)
+    }, 320)
     return () => clearTimeout(id)
   }, [phase, onEnter])
 
@@ -70,33 +71,63 @@ export default function WelcomeScreen({ onEnter, hasEvents = false, hasFirstTime
   return (
     <motion.div
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.32, ease: EASE }}
       onClick={skip}
       role="button"
       tabIndex={-1}
       aria-label="Saltar bienvenida"
       className="fixed inset-0 z-[100] flex items-center justify-center"
       style={{
-        background: continuity ? '#0a0a0f' : 'radial-gradient(ellipse at 50% 45%, #14121f 0%, #0a0a0f 70%)',
+        background: continuity ? '#0a0a0f' : 'radial-gradient(ellipse at 50% 42%, #15121f 0%, #0a0a0f 70%)',
         cursor: 'pointer',
       }}
     >
       {/* Aurora continuidad con landing */}
       <AuroraBackground variant="threshold" intensity={1} />
 
-      {/* Contenido */}
+      {/* Wordmark superior — ancla de marca, sutil */}
+      <AnimatePresence>
+        {phase === 'in' && (
+          <motion.div
+            key="wordmark"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 0.55, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
+            className="absolute left-0 right-0 text-center select-none"
+            style={{
+              top: 'calc(env(safe-area-inset-top, 0px) + clamp(28px, 6vh, 56px))',
+            }}
+            aria-hidden="true"
+          >
+            <span
+              className="font-headline text-white/70"
+              style={{
+                fontSize: 'clamp(11px, 1.2vw, 13px)',
+                letterSpacing: '0.42em',
+                fontWeight: 500,
+                textTransform: 'uppercase',
+              }}
+            >
+              Focus
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Contenido central */}
       <div className="relative z-10 flex flex-col items-center px-6 text-center">
         <AnimatePresence>
           {phase === 'in' && (
             <motion.div
               key="orb"
-              initial={{ scale: 0.78, opacity: 0 }}
+              initial={{ scale: 0.76, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 1.05, opacity: 0 }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-              className="mb-10"
+              exit={{ scale: 1.06, opacity: 0 }}
+              transition={{ duration: 0.55, ease: EASE }}
+              className="mb-9 sm:mb-10"
             >
-              <NovaOrb size={84} ambient />
+              <NovaOrb size={typeof window !== 'undefined' && window.innerWidth >= 640 ? 96 : 84} ambient />
             </motion.div>
           )}
         </AnimatePresence>
@@ -104,34 +135,77 @@ export default function WelcomeScreen({ onEnter, hasEvents = false, hasFirstTime
         <AnimatePresence>
           {phase === 'in' && (
             <motion.h1
-              key="line"
-              initial={{ opacity: 0, y: 8 }}
+              key="greeting"
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
-              transition={{ delay: 0.35, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ delay: 0.30, duration: 0.55, ease: EASE }}
               className="font-headline font-medium text-white"
               style={{
-                fontSize: 'clamp(26px, 4.5vw, 34px)',
+                fontSize: 'clamp(28px, 5vw, 38px)',
                 letterSpacing: '-0.02em',
-                lineHeight: 1.15,
-                maxWidth: '20ch',
+                lineHeight: 1.1,
+                maxWidth: '18ch',
+                color: 'rgba(255,255,255,0.96)',
               }}
             >
-              <span style={{ color: 'rgba(255,255,255,0.95)' }}>{greeting}.</span>
-              {' '}
-              <span style={{ color: 'rgba(255,255,255,0.55)' }}>{subline}</span>
+              {greeting}.
             </motion.h1>
+          )}
+        </AnimatePresence>
+
+        {/* Hairline — marca premium sutil entre saludo y subline */}
+        <AnimatePresence>
+          {phase === 'in' && (
+            <motion.div
+              key="hairline"
+              initial={{ scaleX: 0, opacity: 0 }}
+              animate={{ scaleX: 1, opacity: 0.7 }}
+              exit={{ opacity: 0 }}
+              transition={{ delay: 0.65, duration: 0.5, ease: EASE }}
+              className="mt-5 sm:mt-6 h-px origin-center"
+              style={{
+                width: 'clamp(36px, 8vw, 56px)',
+                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)',
+              }}
+              aria-hidden="true"
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {phase === 'in' && (
+            <motion.p
+              key="subline"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -2 }}
+              transition={{ delay: 0.80, duration: 0.55, ease: EASE }}
+              className="mt-4 sm:mt-5 font-headline text-white/60"
+              style={{
+                fontSize: 'clamp(15px, 1.8vw, 18px)',
+                letterSpacing: '-0.005em',
+                lineHeight: 1.35,
+                maxWidth: '22ch',
+                fontWeight: 400,
+              }}
+            >
+              {subline}
+            </motion.p>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Hint de skip — solo visible después del primer momento */}
+      {/* Hint de skip — aparece tarde, pide mínima atención */}
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: phase === 'in' ? 0.35 : 0 }}
-        transition={{ delay: 1.0, duration: 0.4 }}
-        className="absolute bottom-[calc(env(safe-area-inset-bottom,0px)+28px)] left-0 right-0 text-center text-[11px] text-white/40"
-        style={{ letterSpacing: '0.08em' }}
+        transition={{ delay: 1.2, duration: 0.5 }}
+        className="absolute left-0 right-0 text-center text-[11px] text-white/40 select-none"
+        style={{
+          bottom: 'calc(env(safe-area-inset-bottom, 0px) + clamp(24px, 4vh, 36px))',
+          letterSpacing: '0.08em',
+        }}
       >
         toca para continuar
       </motion.p>
