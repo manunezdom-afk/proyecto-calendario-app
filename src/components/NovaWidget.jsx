@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useUserMemories } from '../hooks/useUserMemories'
+import MicButton from './MicButton'
 import { logSignal } from '../services/signalsService'
 import { getCachedBehavior } from '../services/behaviorAnalysis'
 
@@ -821,76 +822,23 @@ export default function NovaWidget({
           className={`flex-1 min-w-0 bg-transparent outline-none text-slate-700 placeholder:text-slate-300 disabled:opacity-50 ${isDesktop ? 'text-[13px]' : 'text-[15px]'}`}
         />
 
-        {/* Mic — acción primaria de voz, única pieza en color Nova.
-            · Idle mobile: relleno Nova (#7c6bff), sin gradiente. Tono sobrio
-              que conecta con la identidad de la app en lugar del antiguo
-              azul→violeta genérico.
-            · Idle desktop: ghost button con texto Nova para no competir con
-              el input; el peso visual vive en el send.
-            · Listening: mantiene el relleno Nova, añade halo pulsante en
-              nova-soft y reemplaza el icono por un mini-ecualizador — señal
-              inequívoca de "te estoy oyendo".
-            onClick (no onPointerDown) para que iOS filtre micro-scrolls;
-            motion spans con pointerEvents:none para que las animaciones no
-            absorban taps en los bordes. */}
-        <div className={`relative flex-shrink-0 ${isDesktop ? '' : 'ml-0.5'}`}>
-          {isListening && !isDesktop && (
-            <motion.span
-              aria-hidden="true"
-              className="absolute inset-0 rounded-2xl bg-[#a99bff]/55"
-              initial={{ scale: 1, opacity: 0.6 }}
-              animate={{ scale: 1.5, opacity: 0 }}
-              transition={{ duration: 1.4, repeat: Infinity, ease: 'easeOut' }}
-              style={{ pointerEvents: 'none' }}
-            />
-          )}
-          <button
-            type="button"
-            onClick={isListening ? stopVoice : startVoice}
-            disabled={isLoading || isAnalyzingPhoto || !SR}
-            className={`relative flex-shrink-0 flex items-center justify-center transition-all active:scale-95 ${
-              isDesktop ? 'w-9 h-9 rounded-xl' : 'w-12 h-12 rounded-2xl'
-            } ${
-              isDesktop
-                ? isListening
-                  ? 'bg-[#7c6bff] text-white shadow-sm'
-                  : 'text-[#7c6bff] hover:bg-[#7c6bff]/10 disabled:opacity-30'
-                : isListening
-                  ? 'bg-[#7c6bff] text-white shadow-lg shadow-[#7c6bff]/40 ring-2 ring-[#a99bff]/70'
-                  : 'bg-[#7c6bff] text-white shadow-md shadow-[#7c6bff]/30 disabled:opacity-40'
-            }`}
-            style={{
-              touchAction: 'manipulation',
-              WebkitTapHighlightColor: 'transparent',
-            }}
-            aria-label={isListening ? 'Detener dictado' : 'Dictar con voz'}
-            aria-pressed={isListening}
-          >
-            {isListening ? (
-              <span
-                className="flex items-end justify-center gap-[3px] h-4"
-                aria-hidden="true"
-                style={{ pointerEvents: 'none' }}
-              >
-                {[0, 1, 2].map(i => (
-                  <motion.span
-                    key={i}
-                    className="block w-[3px] rounded-full bg-current"
-                    animate={{ height: ['5px', '14px', '5px'] }}
-                    transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.12, ease: 'easeInOut' }}
-                  />
-                ))}
-              </span>
-            ) : (
-              <span
-                className={`material-symbols-outlined ${isDesktop ? 'text-[19px]' : 'text-[22px]'}`}
-                style={{ pointerEvents: 'none', fontVariationSettings: "'FILL' 1" }}
-              >
-                mic
-              </span>
-            )}
-          </button>
-        </div>
+        {/* Mic — una sola versión, discreta y consistente en toda la app.
+            Ghost idle + relleno Nova cuando escucha. Tamaño fijo 36×36 sin
+            breakpoints para que no cambie entre Safari, Chrome, PWA,
+            desktop o mobile.
+            · Sin halo pulsante y sin ring: evita que Safari iOS pierda el
+              tap cuando un sibling absoluto se anima entre touchstart y
+              touchend. La señal de "escuchando" es el relleno + el
+              ecualizador animado dentro del botón (layout estable).
+            · Usa onPointerUp + onTouchEnd con guard anti-doble-fire en vez
+              de onClick. Safari móvil a veces descarta el click sintético
+              tras un micro-scroll; los eventos de puntero disparan aunque
+              el click se pierda. */}
+        <MicButton
+          isListening={isListening}
+          disabled={isLoading || isAnalyzingPhoto || !SR}
+          onToggle={isListening ? stopVoice : startVoice}
+        />
 
         <button
           onClick={() => sendMessage()}

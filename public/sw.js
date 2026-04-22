@@ -21,7 +21,7 @@
 // estáticos hasheados. El único costo es una request de red para el HTML al
 // abrir la app, pero con timeout y fallback a caché si no hay conexión.
 
-const VERSION = 'v12'
+const VERSION = 'v13'
 const SHELL_CACHE = `focus-shell-${VERSION}`
 const ASSETS_CACHE = `focus-assets-${VERSION}`
 const CURRENT_CACHES = [SHELL_CACHE, ASSETS_CACHE]

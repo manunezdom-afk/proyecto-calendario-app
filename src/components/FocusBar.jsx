@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUserMemories } from '../hooks/useUserMemories'
+import MicButton from './MicButton'
 
 const SR = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
@@ -575,68 +576,12 @@ export default function FocusBar({
             className="flex-1 min-w-0 bg-transparent text-[14px] text-on-surface outline-none placeholder:text-outline/50 disabled:opacity-50"
           />
 
-          {/* Mic — acción primaria de voz en Nova (#7c6bff).
-              · Mobile: sólido Nova, 48×48, blanco sobre relleno.
-              · Desktop: ghost en color Nova para no pelearse con el send.
-              · Listening: el relleno se mantiene, aparece halo pulsante en
-                nova-soft y el icono se reemplaza por un ecualizador animado
-                (tres barras) — señal clara de "te estoy oyendo".
-              Se mantiene el patrón <button> + motion.span porque motion.button
-              con animate corriendo perdía taps en iOS Safari. */}
-          <div className="relative flex-shrink-0">
-            {isListening && (
-              <motion.span
-                aria-hidden="true"
-                className="absolute inset-0 rounded-xl bg-[#a99bff]/55 lg:hidden"
-                initial={{ scale: 1, opacity: 0.6 }}
-                animate={{ scale: 1.5, opacity: 0 }}
-                transition={{ duration: 1.4, repeat: Infinity, ease: 'easeOut' }}
-                style={{ pointerEvents: 'none' }}
-              />
-            )}
-            <button
-              type="button"
-              onClick={toggleMic}
-              disabled={!SR || isThinking}
-              aria-label={isListening ? 'Detener dictado' : 'Dictar con voz'}
-              aria-pressed={isListening}
-              className={`relative z-[1] flex h-12 w-12 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-all select-none disabled:opacity-50 ${
-                isListening
-                  ? 'bg-[#7c6bff] text-white shadow-lg shadow-[#7c6bff]/40 ring-2 ring-[#a99bff]/70 lg:shadow-sm lg:ring-0'
-                  : 'bg-[#7c6bff] text-white shadow-md shadow-[#7c6bff]/30 lg:bg-transparent lg:text-[#7c6bff] lg:shadow-none lg:hover:bg-[#7c6bff]/10'
-              }`}
-              style={{
-                touchAction: 'manipulation',
-                WebkitTapHighlightColor: 'transparent',
-                WebkitUserSelect: 'none',
-                userSelect: 'none',
-              }}
-            >
-              {isListening ? (
-                <span
-                  className="flex items-end justify-center gap-[3px] h-4 lg:h-3.5"
-                  aria-hidden="true"
-                  style={{ pointerEvents: 'none' }}
-                >
-                  {[0, 1, 2].map(i => (
-                    <motion.span
-                      key={i}
-                      className="block w-[3px] rounded-full bg-current"
-                      animate={{ height: ['5px', '14px', '5px'] }}
-                      transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.12, ease: 'easeInOut' }}
-                    />
-                  ))}
-                </span>
-              ) : (
-                <span
-                  className="material-symbols-outlined text-[1.35rem] lg:text-[1.1rem]"
-                  style={{ pointerEvents: 'none', fontVariationSettings: "'FILL' 1" }}
-                >
-                  mic
-                </span>
-              )}
-            </button>
-          </div>
+          {/* Mic — versión única y discreta (MicButton). */}
+          <MicButton
+            isListening={isListening}
+            disabled={!SR || isThinking}
+            onToggle={toggleMic}
+          />
 
           <AnimatePresence>
             {isActive && (
@@ -779,60 +724,14 @@ export default function FocusBar({
             className="flex-1 min-w-0 bg-transparent text-[14px] text-white outline-none placeholder:text-white/25 disabled:opacity-50"
           />
 
-          <div className="relative flex-shrink-0">
-            {isListening && (
-              <motion.span
-                aria-hidden="true"
-                className="absolute inset-0 rounded-xl bg-[#a99bff]/55 lg:hidden"
-                initial={{ scale: 1, opacity: 0.6 }}
-                animate={{ scale: 1.5, opacity: 0 }}
-                transition={{ duration: 1.4, repeat: Infinity, ease: 'easeOut' }}
-                style={{ pointerEvents: 'none' }}
-              />
-            )}
-            <button
-              type="button"
-              onClick={toggleMic}
-              disabled={!SR || isThinking}
-              aria-label={isListening ? 'Detener dictado' : 'Dictar con voz'}
-              aria-pressed={isListening}
-              className={`relative z-[1] flex h-12 w-12 lg:h-9 lg:w-9 flex-shrink-0 items-center justify-center rounded-xl transition-all select-none disabled:opacity-50 ${
-                isListening
-                  ? 'bg-[#7c6bff] text-white shadow-lg shadow-[#7c6bff]/40 ring-2 ring-[#a99bff]/70 lg:shadow-sm lg:ring-0'
-                  : 'bg-[#7c6bff] text-white shadow-md shadow-[#7c6bff]/30 lg:bg-[#7c6bff]/20 lg:text-[#a99bff] lg:hover:bg-[#7c6bff]/30'
-              }`}
-              style={{
-                touchAction: 'manipulation',
-                WebkitTapHighlightColor: 'transparent',
-                WebkitUserSelect: 'none',
-                userSelect: 'none',
-              }}
-            >
-              {isListening ? (
-                <span
-                  className="flex items-end justify-center gap-[3px] h-4 lg:h-3.5"
-                  aria-hidden="true"
-                  style={{ pointerEvents: 'none' }}
-                >
-                  {[0, 1, 2].map(i => (
-                    <motion.span
-                      key={i}
-                      className="block w-[3px] rounded-full bg-current"
-                      animate={{ height: ['5px', '14px', '5px'] }}
-                      transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.12, ease: 'easeInOut' }}
-                    />
-                  ))}
-                </span>
-              ) : (
-                <span
-                  className="material-symbols-outlined text-[1.35rem] lg:text-[1.1rem]"
-                  style={{ pointerEvents: 'none', fontVariationSettings: "'FILL' 1" }}
-                >
-                  mic
-                </span>
-              )}
-            </button>
-          </div>
+          {/* Mic — versión única y discreta (MicButton). El modo floating
+              vive sobre un fondo oscuro, pero mantenemos el mismo estilo
+              para no volver a divergir entre vistas. */}
+          <MicButton
+            isListening={isListening}
+            disabled={!SR || isThinking}
+            onToggle={toggleMic}
+          />
 
           <AnimatePresence>
             {isActive && (
