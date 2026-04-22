@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { humanizeAuthError, isValidEmail, isRateLimitError, extractRetryAfterSec } from '../utils/authErrors'
 
-const PENDING_KEY = 'focus_auth_pending'
+const PENDING_KEY  = 'focus_auth_pending'
 const COOLDOWN_KEY = 'focus_auth_resend_until'
+const DEVICE_KEY   = 'focus_device_pairing'
 const PENDING_TTL_MS = 15 * 60 * 1000 // 15 min — tras eso el OTP ya expiró en Supabase
 // Supabase por defecto acepta 1 OTP por minuto por email. Alineamos la UI
 // a 60s para que el primer reintento no choque con el rate limit del backend.
@@ -12,6 +13,7 @@ const RESEND_COOLDOWN_SEC = 60
 // Cuando Supabase rechaza por rate-limit, aplicamos un cooldown largo en UI
 // para no seguir martillando el endpoint (cada rechazo puede extender el ban).
 const RATE_LIMIT_COOLDOWN_SEC = 5 * 60
+const DEVICE_POLL_INTERVAL_MS = 3000
 
 function readPending() {
   try {
@@ -62,6 +64,38 @@ function clearCooldown() {
   try { sessionStorage.removeItem(COOLDOWN_KEY) } catch {}
 }
 
+// Estado del device pairing en curso. Persistimos device_code + user_code +
+// expiry en sessionStorage para que cerrar/reabrir el modal (o recargar la
+// pestaña) no pierda el pairing en vuelo.
+function readDevicePairing() {
+  try {
+    const raw = sessionStorage.getItem(DEVICE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed?.device_code || !parsed?.user_code || !parsed?.expires_at) return null
+    if (parsed.expires_at < Date.now()) {
+      sessionStorage.removeItem(DEVICE_KEY)
+      return null
+    }
+    return parsed
+  } catch { return null }
+}
+
+function writeDevicePairing(obj) {
+  try { sessionStorage.setItem(DEVICE_KEY, JSON.stringify(obj)) } catch {}
+}
+
+function clearDevicePairing() {
+  try { sessionStorage.removeItem(DEVICE_KEY) } catch {}
+}
+
+function formatUserCode(code) {
+  if (!code) return ''
+  const clean = String(code).toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (clean.length <= 4) return clean
+  return `${clean.slice(0, 4)}-${clean.slice(4)}`
+}
+
 function Spinner() {
   return (
     <span
@@ -72,13 +106,30 @@ function Spinner() {
 }
 
 export default function AuthModal({ isOpen, onClose }) {
-  const { signInWithEmail, verifyOtp, user, signOut } = useAuth()
+  const {
+    signInWithEmail, verifyOtp, user, signOut,
+    startDevicePairing, pollDevicePairing, approveDevicePairing, exchangeDeviceToken,
+  } = useAuth()
 
   // Hidratamos el paso desde sessionStorage para que reload no rompa el flujo.
   const initialPending = typeof window !== 'undefined' ? readPending() : null
+  const initialDevice  = typeof window !== 'undefined' ? readDevicePairing() : null
+
   const [email, setEmail]       = useState(initialPending?.email || '')
   const [code, setCode]         = useState('')
-  const [step, setStep]         = useState(initialPending ? 'code' : 'email')
+  // Pasos:
+  //   chooser         — elección entre email y otro dispositivo
+  //   email           — pedir email para OTP
+  //   code            — verificar OTP
+  //   device_wait     — dispositivo nuevo esperando aprobación
+  //   device_success  — breve confirmación antes de cerrar
+  //   device_approve  — (logged-in) ingresar user_code de otro dispositivo
+  //   device_approved — (logged-in) confirmación de aprobación
+  const [step, setStep] = useState(() => {
+    if (initialPending) return 'code'
+    if (initialDevice)  return 'device_wait'
+    return 'chooser'
+  })
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
   // Hidratamos desde sessionStorage: el componente AuthModal nunca se
@@ -89,21 +140,36 @@ export default function AuthModal({ isOpen, onClose }) {
     typeof window !== 'undefined' ? readCooldownSec() : 0
   )
 
+  // Estado del device pairing en el nuevo dispositivo.
+  const [devicePairing, setDevicePairing] = useState(initialDevice)
+  const [deviceCountdown, setDeviceCountdown] = useState(0)
+  // Estado del lado que aprueba (logged-in).
+  const [approveCode, setApproveCode]       = useState('')
+  const [approvedInfo, setApprovedInfo]     = useState(null)
+  // Banner post rate-limit sugiriendo usar otro dispositivo.
+  const [rateLimitHit, setRateLimitHit]     = useState(false)
+
   // submitLock evita dobles envíos incluso en el mismo tick (antes de re-render)
   const submitLock = useRef(false)
   const codeInputRef = useRef(null)
+  const approveInputRef = useRef(null)
   // historyPushedRef: evita apilar múltiples entries al abrir/cerrar varias veces.
   const historyPushedRef = useRef(false)
+  // Guardamos el id del polling para cancelarlo al cambiar de paso o cerrar.
+  const pollTimerRef = useRef(null)
 
   const emailValid = isValidEmail(email)
   const codeValid  = /^\d{6}$/.test(code)
+  const approveCodeValid = approveCode.replace(/[^A-Z0-9]/gi, '').length === 8
 
   // Si el usuario verifica con éxito mientras el modal está abierto, cerramos
   // automáticamente — evita que quede atascado en el paso 'code' si el auth
   // context resolvió la sesión (p. ej. desde otra pestaña).
   useEffect(() => {
-    if (isOpen && user && step === 'code') {
+    if (!isOpen) return
+    if (user && (step === 'code' || step === 'device_wait' || step === 'device_success')) {
       clearPending()
+      clearDevicePairing()
       handleClose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -112,6 +178,7 @@ export default function AuthModal({ isOpen, onClose }) {
   // Autofocus código cuando entramos al paso 'code'.
   useEffect(() => {
     if (step === 'code' && codeInputRef.current) codeInputRef.current.focus()
+    if (step === 'device_approve' && approveInputRef.current) approveInputRef.current.focus()
   }, [step])
 
   // Cooldown tick para el botón de reenviar.
@@ -121,6 +188,74 @@ export default function AuthModal({ isOpen, onClose }) {
     return () => clearInterval(id)
   }, [resendCooldown])
 
+  // Countdown del device pairing (para mostrar "expira en Xm Ys").
+  useEffect(() => {
+    if (step !== 'device_wait' || !devicePairing) return
+    const tick = () => {
+      const rest = Math.max(0, Math.ceil((devicePairing.expires_at - Date.now()) / 1000))
+      setDeviceCountdown(rest)
+      if (rest === 0) {
+        clearDevicePairing()
+        setDevicePairing(null)
+        setError('El código expiró. Genera uno nuevo.')
+        setStep('chooser')
+      }
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [step, devicePairing])
+
+  // Polling del device pairing. Se detiene al salir del step o cerrar modal.
+  useEffect(() => {
+    if (step !== 'device_wait' || !devicePairing?.device_code) return
+    let cancelled = false
+
+    async function loop() {
+      try {
+        const res = await pollDevicePairing(devicePairing.device_code)
+        if (cancelled) return
+        if (res.status === 'approved' && res.token_hash) {
+          // Intercambiamos el token_hash por una sesión real. onAuthStateChange
+          // detectará el SIGNED_IN y disparará los flujos post-login.
+          clearDevicePairing()
+          setDevicePairing(null)
+          try {
+            await exchangeDeviceToken(res.token_hash)
+            setStep('device_success')
+            // Cierre automático en ~1.2s para dejar ver el check.
+            setTimeout(() => { if (!cancelled) handleClose() }, 1200)
+          } catch (err) {
+            setError(humanizeAuthError(err) || 'No pudimos iniciar sesión con ese código.')
+            setStep('chooser')
+          }
+          return
+        }
+        if (res.status === 'expired' || res.status === 'not_found' || res.status === 'consumed') {
+          clearDevicePairing()
+          setDevicePairing(null)
+          setError(res.status === 'expired'
+            ? 'El código expiró. Genera uno nuevo.'
+            : 'El código ya no es válido. Genera uno nuevo.')
+          setStep('chooser')
+          return
+        }
+        pollTimerRef.current = setTimeout(loop, DEVICE_POLL_INTERVAL_MS)
+      } catch (err) {
+        if (cancelled) return
+        // Si el backend está caído, esperamos un poco más antes de reintentar.
+        pollTimerRef.current = setTimeout(loop, DEVICE_POLL_INTERVAL_MS * 2)
+      }
+    }
+
+    pollTimerRef.current = setTimeout(loop, DEVICE_POLL_INTERVAL_MS)
+    return () => {
+      cancelled = true
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, devicePairing?.device_code])
+
   // Al reabrir el modal, re-hidratamos state desde sessionStorage. Sin esto,
   // si el usuario cerró el modal hace >15 min (TTL del pending ya caducó),
   // al reabrir veríamos step='code' con email viejo en memoria apuntando a
@@ -128,14 +263,19 @@ export default function AuthModal({ isOpen, onClose }) {
   useEffect(() => {
     if (!isOpen) return
     const pending = readPending()
+    const device  = readDevicePairing()
     if (pending) {
       setEmail(pending.email)
       setStep('code')
+    } else if (device) {
+      setDevicePairing(device)
+      setStep('device_wait')
     } else {
-      setStep('email')
+      setStep(user ? 'chooser' : 'chooser')
       setCode('')
     }
     setError(null)
+    setRateLimitHit(false)
     setResendCooldown(readCooldownSec())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
@@ -168,7 +308,9 @@ export default function AuthModal({ isOpen, onClose }) {
   const handleClose = useCallback(() => {
     setCode('')
     setError(null)
+    setRateLimitHit(false)
     submitLock.current = false
+    if (pollTimerRef.current) { clearTimeout(pollTimerRef.current); pollTimerRef.current = null }
     // Si hay una entry en el history que empujamos nosotros, la quitamos
     // haciendo history.back — pero solo si la entry está activa. Si el close
     // vino por popstate (back), el browser ya la consumió.
@@ -178,11 +320,16 @@ export default function AuthModal({ isOpen, onClose }) {
         if (window.history.state?.focusAuthModal) window.history.back()
       } catch {}
     }
-    // Solo reseteamos email+step si el flujo terminó (usuario logueado o manual cancel).
-    // Si hay pending, preservamos para que reopen continúe.
-    if (!readPending()) {
-      setStep('email')
+    // Solo reseteamos email+step si el flujo terminó. Si hay pending (OTP)
+    // o device_pairing vivo, preservamos para que reopen continúe.
+    const hasPending = !!readPending()
+    const hasDevice  = !!readDevicePairing()
+    if (!hasPending && !hasDevice) {
+      setStep('chooser')
       setEmail('')
+      setDevicePairing(null)
+      setApproveCode('')
+      setApprovedInfo(null)
     }
     onClose?.()
   }, [onClose])
@@ -216,8 +363,7 @@ export default function AuthModal({ isOpen, onClose }) {
         const secs = extractRetryAfterSec(err) ?? RATE_LIMIT_COOLDOWN_SEC
         writeCooldownSec(secs)
         setResendCooldown(secs)
-        // Si el backend ya emitió un OTP, permitir ir a 'code' y esperar.
-        // Si no hay pending previo, quedarse en 'email' para no confundir.
+        setRateLimitHit(true)
         if (readPending()) setStep('code')
       }
       setError(humanizeAuthError(err))
@@ -228,23 +374,14 @@ export default function AuthModal({ isOpen, onClose }) {
   }
 
   async function handleVerify(eOrCode) {
-    // Puede invocarse desde el submit del form (event) o desde el auto-submit
-    // pasando el código directo (evita leer `code` de una closure vieja mientras
-    // setState todavía no aplicó).
     let cleanCode
     if (typeof eOrCode === 'string') {
       cleanCode = String(eOrCode).replace(/\D/g, '').slice(0, 6)
     } else {
       eOrCode?.preventDefault?.()
-      // Releemos del input real y limpiamos: si el click llega antes de que
-      // setCode aplique, el valor del DOM es más fresco que el del estado.
       const raw = codeInputRef.current?.value ?? code
       cleanCode = String(raw).replace(/\D/g, '').slice(0, 6)
     }
-    // TEMP LOG: verificar en DevTools que el valor enviado es idéntico al
-    // mostrado. Remover tras confirmar el fix en producción.
-    // eslint-disable-next-line no-console
-    console.log('[OTP verify]', { cleanCode, len: cleanCode.length, valid: /^\d{6}$/.test(cleanCode) })
     if (submitLock.current || loading) return
     if (!/^\d{6}$/.test(cleanCode)) {
       setError('El código debe tener 6 dígitos.')
@@ -257,13 +394,11 @@ export default function AuthModal({ isOpen, onClose }) {
       await verifyOtp(email, cleanCode)
       clearPending()
       clearCooldown()
-      // handleClose resetea estado local
       handleClose()
     } catch (err) {
-      // Limpiamos el código: el usuario debe reingresarlo (evita reenviar el
-      // mismo código inválido al tocar "Entrar" otra vez).
       setCode('')
       setError(humanizeAuthError(err))
+      if (isRateLimitError(err)) setRateLimitHit(true)
       setTimeout(() => codeInputRef.current?.focus(), 50)
     } finally {
       setLoading(false)
@@ -273,8 +408,6 @@ export default function AuthModal({ isOpen, onClose }) {
 
   async function handleResend() {
     if (submitLock.current || loading) return
-    // Sincronizamos con sessionStorage antes de decidir: el state local
-    // puede estar desactualizado si el usuario reabrió el modal.
     const liveCd = readCooldownSec()
     if (liveCd > 0) {
       setResendCooldown(liveCd)
@@ -298,6 +431,7 @@ export default function AuthModal({ isOpen, onClose }) {
         const secs = extractRetryAfterSec(err) ?? RATE_LIMIT_COOLDOWN_SEC
         writeCooldownSec(secs)
         setResendCooldown(secs)
+        setRateLimitHit(true)
       }
       setError(humanizeAuthError(err))
     } finally {
@@ -308,12 +442,11 @@ export default function AuthModal({ isOpen, onClose }) {
 
   function handleChangeEmail() {
     clearPending()
-    // El cooldown aplica al backend (Supabase) para el email que ya pidió
-    // OTP. Si el usuario cambia a otro email, no tiene sentido arrastrarlo.
     clearCooldown()
     setStep('email')
     setCode('')
     setError(null)
+    setRateLimitHit(false)
     setResendCooldown(0)
   }
 
@@ -324,19 +457,104 @@ export default function AuthModal({ isOpen, onClose }) {
 
   function handleCodeChange(rawValue) {
     const cleanCode = String(rawValue).replace(/\D/g, '').slice(0, 6)
-    // TEMP LOG: confirmar que limpiamos bien el valor del input.
-    // eslint-disable-next-line no-console
-    console.log('[OTP change]', { raw: rawValue, cleanCode, len: cleanCode.length })
     setCode(cleanCode)
     if (error) setError(null)
     // Auto-submit cuando el usuario pega o termina de tipear los 6 dígitos.
-    // Evita el tap extra en mobile y cumple con la expectativa del input
-    // autoComplete="one-time-code" en iOS.
     if (cleanCode.length === 6 && !submitLock.current && !loading) {
-      // Pasamos el string directo: el setCode de arriba todavía no aplicó,
-      // así que `code` del estado sigue desactualizado cuando corre el timeout.
       setTimeout(() => handleVerify(cleanCode), 0)
     }
+  }
+
+  // ── Device pairing: nuevo dispositivo ────────────────────────────────────
+  async function handleStartDevice() {
+    if (submitLock.current || loading) return
+    submitLock.current = true
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await startDevicePairing()
+      const expires_at = Date.now() + (res.expires_in || 300) * 1000
+      const pairing = {
+        device_code: res.device_code,
+        user_code: res.user_code,
+        expires_at,
+      }
+      writeDevicePairing(pairing)
+      setDevicePairing(pairing)
+      setStep('device_wait')
+    } catch (err) {
+      setError('No pudimos generar el código. Prueba de nuevo en un momento.')
+    } finally {
+      setLoading(false)
+      submitLock.current = false
+    }
+  }
+
+  function handleCancelDevice() {
+    if (pollTimerRef.current) { clearTimeout(pollTimerRef.current); pollTimerRef.current = null }
+    clearDevicePairing()
+    setDevicePairing(null)
+    setStep('chooser')
+    setError(null)
+  }
+
+  async function handleCopyCode() {
+    if (!devicePairing?.user_code) return
+    try {
+      await navigator.clipboard?.writeText(devicePairing.user_code)
+    } catch {}
+  }
+
+  // ── Device pairing: lado logueado que aprueba ───────────────────────────
+  async function handleApprove(e) {
+    e?.preventDefault?.()
+    if (submitLock.current || loading) return
+    const clean = approveCode.replace(/[^A-Z0-9]/gi, '').toUpperCase()
+    if (clean.length !== 8) {
+      setError('El código tiene 8 caracteres.')
+      return
+    }
+    submitLock.current = true
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await approveDevicePairing(clean)
+      setApprovedInfo({ email: res.email, user_agent: res.user_agent })
+      setStep('device_approved')
+      setApproveCode('')
+    } catch (err) {
+      const code = err?.status
+      if (code === 404) setError('No encontramos ese código. Revisa que esté bien.')
+      else if (code === 410) setError('El código expiró. Pide uno nuevo en el otro dispositivo.')
+      else if (code === 409) setError('Ese código ya fue usado o ya no es válido.')
+      else if (code === 429) setError('Demasiados intentos. Espera un momento.')
+      else setError('No pudimos aprobar el código. Prueba de nuevo.')
+    } finally {
+      setLoading(false)
+      submitLock.current = false
+    }
+  }
+
+  function handleApproveCodeChange(raw) {
+    const clean = String(raw).replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 8)
+    setApproveCode(clean)
+    if (error) setError(null)
+  }
+
+  const userAgentSummary = (ua) => {
+    if (!ua) return 'Dispositivo sin identificar'
+    const isIOS  = /iPhone|iPad|iPod/i.test(ua)
+    const isAnd  = /Android/i.test(ua)
+    const isMac  = /Mac OS X/i.test(ua) && !isIOS
+    const isWin  = /Windows/i.test(ua)
+    const isLin  = /Linux/i.test(ua) && !isAnd
+    const browser = /Chrome/i.test(ua) && !/Edg/i.test(ua) ? 'Chrome'
+                  : /Safari/i.test(ua) && !/Chrome/i.test(ua) ? 'Safari'
+                  : /Firefox/i.test(ua) ? 'Firefox'
+                  : /Edg/i.test(ua) ? 'Edge'
+                  : 'Navegador'
+    const os = isIOS ? 'iPhone/iPad' : isAnd ? 'Android' : isMac ? 'Mac' : isWin ? 'Windows' : isLin ? 'Linux' : 'otro'
+    return `${browser} en ${os}`
   }
 
   return (
@@ -364,25 +582,261 @@ export default function AuthModal({ isOpen, onClose }) {
               <div className="sm:hidden mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" aria-hidden="true" />
 
               {user ? (
-                /* ── Logged in ─────────────────────────────────────────── */
-                <div className="text-center py-2">
-                  <span className="material-symbols-outlined text-5xl text-primary mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }}>account_circle</span>
-                  <p className="text-[13px] text-slate-500 mb-1">Sesión activa</p>
-                  <p className="font-semibold text-slate-800 mb-6 break-all">{user.email}</p>
-                  <button
-                    type="button"
-                    onClick={() => { signOut(); handleClose() }}
-                    className="w-full py-3 bg-red-50 text-red-600 rounded-2xl text-sm font-semibold active:scale-[0.98] transition-transform"
-                  >
-                    Cerrar sesión
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="mt-3 w-full py-3 bg-slate-100 rounded-2xl text-sm active:scale-[0.98] transition-transform"
-                  >
-                    Cancelar
-                  </button>
+                step === 'device_approve' ? (
+                  /* ── Logged-in: aprobar otro dispositivo ─────────────── */
+                  <>
+                    <div className="flex items-start justify-between gap-3 mb-5">
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-[20px] sm:text-[22px] font-bold text-slate-900 leading-tight">
+                          Aprobar otro dispositivo
+                        </h2>
+                        <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
+                          Ingresa el código de 8 caracteres que muestra el dispositivo nuevo.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setStep('chooser'); setApproveCode(''); setError(null) }}
+                        aria-label="Volver"
+                        className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors active:scale-95"
+                      >
+                        <span className="material-symbols-outlined text-slate-400 text-[22px]">arrow_back</span>
+                      </button>
+                    </div>
+                    <form onSubmit={handleApprove} noValidate>
+                      <input
+                        ref={approveInputRef}
+                        type="text"
+                        inputMode="text"
+                        autoComplete="off"
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        value={formatUserCode(approveCode)}
+                        onChange={(e) => handleApproveCodeChange(e.target.value)}
+                        placeholder="ABCD-EFGH"
+                        maxLength={9}
+                        aria-label="Código de vinculación"
+                        aria-invalid={!!error}
+                        className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 text-center text-2xl font-mono tracking-[0.25em] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 uppercase"
+                      />
+                      {error && (
+                        <p role="alert" className="text-red-500 text-[12.5px] mb-3 text-center leading-snug">
+                          {error}
+                        </p>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={loading || !approveCodeValid}
+                        className="w-full py-3.5 bg-primary text-white rounded-2xl text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                      >
+                        {loading ? (<><Spinner /> Aprobando…</>) : 'Aprobar dispositivo'}
+                      </button>
+                    </form>
+                    <p className="mt-3 text-[11px] text-center text-slate-400 leading-snug">
+                      Solo aprueba códigos que tú mismo estés viendo en otro dispositivo.
+                    </p>
+                  </>
+                ) : step === 'device_approved' ? (
+                  /* ── Logged-in: confirmación de aprobación ───────────── */
+                  <div className="text-center py-2">
+                    <span className="material-symbols-outlined text-5xl text-emerald-500 mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                    <p className="font-semibold text-slate-800 text-[15px]">Dispositivo aprobado</p>
+                    <p className="text-[12.5px] text-slate-500 mt-1 mb-5 leading-snug">
+                      {approvedInfo?.user_agent
+                        ? `${userAgentSummary(approvedInfo.user_agent)} ya puede iniciar sesión.`
+                        : 'El otro dispositivo ya puede iniciar sesión.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      className="w-full py-3 bg-primary text-white rounded-2xl text-sm font-semibold active:scale-[0.98] transition-transform"
+                    >
+                      Listo
+                    </button>
+                  </div>
+                ) : (
+                  /* ── Logged in ─────────────────────────────────────── */
+                  <div className="py-2">
+                    <div className="text-center">
+                      <span className="material-symbols-outlined text-5xl text-primary mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }}>account_circle</span>
+                      <p className="text-[13px] text-slate-500 mb-1">Sesión activa</p>
+                      <p className="font-semibold text-slate-800 mb-5 break-all">{user.email}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setApproveCode(''); setError(null); setStep('device_approve') }}
+                      className="w-full py-3 bg-slate-900 text-white rounded-2xl text-sm font-semibold active:scale-[0.98] transition-transform flex items-center justify-center gap-2 mb-3"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">devices</span>
+                      Vincular otro dispositivo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { signOut(); handleClose() }}
+                      className="w-full py-3 bg-red-50 text-red-600 rounded-2xl text-sm font-semibold active:scale-[0.98] transition-transform"
+                    >
+                      Cerrar sesión
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      className="mt-3 w-full py-3 bg-slate-100 rounded-2xl text-sm active:scale-[0.98] transition-transform"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )
+              ) : step === 'chooser' ? (
+                /* ── Chooser: elegir método ──────────────────────────── */
+                <>
+                  <div className="flex items-start justify-between gap-3 mb-5">
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-[20px] sm:text-[22px] font-bold text-slate-900 leading-tight">
+                        Inicia sesión
+                      </h2>
+                      <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
+                        Elige cómo quieres entrar.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      aria-label="Cerrar"
+                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-slate-400 text-[22px]">close</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 mb-5">
+                    {[
+                      { icon: 'sync',       label: 'Sincroniza tus datos' },
+                      { icon: 'cloud_done', label: 'Respaldo en la nube' },
+                      { icon: 'devices',    label: 'Desde cualquier lugar' },
+                    ].map(({ icon, label }) => (
+                      <div key={icon} className="flex flex-col items-center gap-1.5 px-1.5 py-3 bg-slate-50 rounded-2xl">
+                        <span className="material-symbols-outlined text-primary text-[20px]">{icon}</span>
+                        <span className="text-[10.5px] text-center text-slate-500 leading-tight">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <button
+                      type="button"
+                      onClick={() => { setStep('email'); setError(null) }}
+                      className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 hover:border-primary/40 hover:bg-primary/5 active:scale-[0.99] transition-all flex items-center gap-3 text-left"
+                    >
+                      <span className="material-symbols-outlined text-primary text-[22px] flex-shrink-0">mail</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-semibold text-slate-800">Continuar con email</p>
+                        <p className="text-[11.5px] text-slate-500 leading-snug">Te enviamos un código de 6 dígitos.</p>
+                      </div>
+                      <span className="material-symbols-outlined text-slate-300 text-[20px]">chevron_right</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleStartDevice}
+                      disabled={loading}
+                      className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 hover:border-primary/40 hover:bg-primary/5 active:scale-[0.99] transition-all flex items-center gap-3 text-left disabled:opacity-60"
+                    >
+                      <span className="material-symbols-outlined text-primary text-[22px] flex-shrink-0">devices</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-semibold text-slate-800">Iniciar sesión desde otro dispositivo</p>
+                        <p className="text-[11.5px] text-slate-500 leading-snug">Apruébalo desde donde ya tienes sesión.</p>
+                      </div>
+                      {loading
+                        ? <Spinner />
+                        : <span className="material-symbols-outlined text-slate-300 text-[20px]">chevron_right</span>}
+                    </button>
+                  </div>
+
+                  {error && (
+                    <p role="alert" className="text-red-500 text-[12.5px] mt-3 leading-snug">
+                      {error}
+                    </p>
+                  )}
+
+                  <p className="mt-4 text-[11px] text-center text-slate-400 leading-snug">
+                    Al continuar aceptas que usemos tu email solo para autenticación.
+                  </p>
+                </>
+              ) : step === 'device_wait' ? (
+                /* ── Nuevo dispositivo: esperando aprobación ──────────── */
+                <>
+                  <div className="flex items-start justify-between gap-3 mb-5">
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-[20px] sm:text-[22px] font-bold text-slate-900 leading-tight">
+                        Apruébalo desde otro dispositivo
+                      </h2>
+                      <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
+                        Abre Focus donde ya tienes sesión e ingresa este código.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      aria-label="Cerrar"
+                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-slate-400 text-[22px]">close</span>
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-3xl p-5 mb-4 text-center">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Tu código</p>
+                    <button
+                      type="button"
+                      onClick={handleCopyCode}
+                      className="text-[32px] sm:text-[36px] font-mono font-bold tracking-[0.18em] text-slate-900 active:scale-95 transition-transform"
+                      aria-label="Copiar código"
+                    >
+                      {formatUserCode(devicePairing?.user_code)}
+                    </button>
+                    <p className="text-[11px] text-slate-400 mt-2">
+                      Toca el código para copiarlo
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-2xl mb-4">
+                    <span className="material-symbols-outlined text-primary text-[20px] flex-shrink-0">timer</span>
+                    <p className="text-[12px] text-slate-600 leading-snug">
+                      {deviceCountdown > 0
+                        ? `Expira en ${Math.floor(deviceCountdown/60)}m ${String(deviceCountdown%60).padStart(2,'0')}s. Esperando aprobación…`
+                        : 'Expira en unos segundos…'}
+                    </p>
+                  </div>
+
+                  <ol className="text-[12.5px] text-slate-600 space-y-1.5 mb-5 list-decimal list-inside leading-snug">
+                    <li>Abre Focus en el dispositivo donde ya iniciaste sesión.</li>
+                    <li>Toca tu avatar o entra a tu cuenta.</li>
+                    <li>Elige <span className="font-semibold text-slate-800">Vincular otro dispositivo</span>.</li>
+                    <li>Ingresa el código que ves arriba.</li>
+                  </ol>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCancelDevice}
+                      className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-2xl text-[13px] font-semibold active:scale-[0.98] transition-transform"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setStep('email'); setError(null) }}
+                      className="flex-1 py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl text-[13px] font-semibold active:scale-[0.98] transition-transform"
+                    >
+                      Usar email
+                    </button>
+                  </div>
+                </>
+              ) : step === 'device_success' ? (
+                <div className="text-center py-6">
+                  <span className="material-symbols-outlined text-6xl text-emerald-500 mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                  <p className="font-semibold text-slate-800 text-[16px]">¡Sesión iniciada!</p>
+                  <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">Ya puedes usar Focus en este dispositivo.</p>
                 </div>
               ) : step === 'code' ? (
                 /* ── Verificar código OTP ─────────────────────────────── */
@@ -443,6 +897,31 @@ export default function AuthModal({ isOpen, onClose }) {
                     </button>
                   </form>
 
+                  {rateLimitHit && (
+                    <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-2xl">
+                      <div className="flex items-start gap-2">
+                        <span className="material-symbols-outlined text-amber-600 text-[20px] flex-shrink-0 mt-0.5">lightbulb</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12.5px] font-semibold text-amber-900 leading-snug">
+                            ¿Ya tienes sesión en otro dispositivo?
+                          </p>
+                          <p className="text-[11.5px] text-amber-800 mt-0.5 leading-snug">
+                            Apruébalo desde ahí. Es más rápido y no depende del correo.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleStartDevice}
+                            disabled={loading}
+                            className="mt-2 w-full py-2 bg-amber-900 text-white rounded-xl text-[12.5px] font-semibold active:scale-[0.98] transition-transform flex items-center justify-center gap-1.5"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">devices</span>
+                            Iniciar sesión desde otro dispositivo
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-4 flex items-center justify-between text-[12px] gap-3">
                     <button
                       type="button"
@@ -463,38 +942,25 @@ export default function AuthModal({ isOpen, onClose }) {
                   </div>
                 </>
               ) : (
-                /* ── Pedir código ─────────────────────────────────────── */
+                /* ── Pedir código (step 'email') ─────────────────────── */
                 <>
                   <div className="flex items-start justify-between gap-3 mb-5">
                     <div className="min-w-0 flex-1">
                       <h2 className="text-[20px] sm:text-[22px] font-bold text-slate-900 leading-tight">
-                        Inicia sesión
+                        Continuar con email
                       </h2>
                       <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
-                        Sin contraseña. Te enviamos un código de 6 dígitos por email.
+                        Sin contraseña. Te enviamos un código de 6 dígitos.
                       </p>
                     </div>
                     <button
                       type="button"
-                      onClick={handleClose}
-                      aria-label="Cerrar"
+                      onClick={() => { setStep('chooser'); setError(null); setRateLimitHit(false) }}
+                      aria-label="Volver"
                       className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors active:scale-95"
                     >
-                      <span className="material-symbols-outlined text-slate-400 text-[22px]">close</span>
+                      <span className="material-symbols-outlined text-slate-400 text-[22px]">arrow_back</span>
                     </button>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 mb-5">
-                    {[
-                      { icon: 'sync',       label: 'Sincroniza tus datos' },
-                      { icon: 'cloud_done', label: 'Respaldo en la nube' },
-                      { icon: 'devices',    label: 'Desde cualquier lugar' },
-                    ].map(({ icon, label }) => (
-                      <div key={icon} className="flex flex-col items-center gap-1.5 px-1.5 py-3 bg-slate-50 rounded-2xl">
-                        <span className="material-symbols-outlined text-primary text-[20px]">{icon}</span>
-                        <span className="text-[10.5px] text-center text-slate-500 leading-tight">{label}</span>
-                      </div>
-                    ))}
                   </div>
 
                   <form onSubmit={handleSendEmail} noValidate>
@@ -527,6 +993,31 @@ export default function AuthModal({ isOpen, onClose }) {
                       {loading ? (<><Spinner /> Enviando…</>) : 'Enviar código'}
                     </button>
                   </form>
+
+                  {rateLimitHit && (
+                    <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-2xl">
+                      <div className="flex items-start gap-2">
+                        <span className="material-symbols-outlined text-amber-600 text-[20px] flex-shrink-0 mt-0.5">lightbulb</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12.5px] font-semibold text-amber-900 leading-snug">
+                            Prueba con otro dispositivo
+                          </p>
+                          <p className="text-[11.5px] text-amber-800 mt-0.5 leading-snug">
+                            Si ya iniciaste sesión en otro lado, apruébalo desde ahí sin depender del correo.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleStartDevice}
+                            disabled={loading}
+                            className="mt-2 w-full py-2 bg-amber-900 text-white rounded-xl text-[12.5px] font-semibold active:scale-[0.98] transition-transform flex items-center justify-center gap-1.5"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">devices</span>
+                            Iniciar sesión desde otro dispositivo
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <p className="mt-3 text-[11px] text-center text-slate-400 leading-snug">
                     Al continuar aceptas que usemos tu email solo para autenticación.

@@ -100,11 +100,85 @@ export function AuthProvider({ children }) {
     try {
       sessionStorage.removeItem('focus_auth_pending')
       sessionStorage.removeItem('focus_auth_resend_until')
+      sessionStorage.removeItem('focus_device_pairing')
     } catch {}
   }, [])
 
+  // ── Device pairing ─────────────────────────────────────────────────────────
+  // Vía alternativa al OTP: el dispositivo nuevo pide un code, otro dispositivo
+  // ya autenticado lo aprueba, y el nuevo canjea un token_hash por una sesión
+  // real de Supabase (sin enviar email).
+
+  const startDevicePairing = useCallback(async () => {
+    const r = await fetch('/api/auth/device/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      }),
+    })
+    const body = await r.json().catch(() => ({}))
+    if (!r.ok) {
+      const err = new Error(body?.error || 'device_start_failed')
+      err.status = r.status
+      throw err
+    }
+    return body
+  }, [])
+
+  const pollDevicePairing = useCallback(async (deviceCode) => {
+    const r = await fetch('/api/auth/device/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_code: deviceCode }),
+    })
+    const body = await r.json().catch(() => ({}))
+    if (!r.ok) {
+      const err = new Error(body?.error || 'device_poll_failed')
+      err.status = r.status
+      throw err
+    }
+    return body
+  }, [])
+
+  const approveDevicePairing = useCallback(async (userCode) => {
+    if (!supabase) throw new Error('Supabase no configurado')
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) throw new Error('no_session')
+    const r = await fetch('/api/auth/device/approve', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ user_code: userCode }),
+    })
+    const body = await r.json().catch(() => ({}))
+    if (!r.ok) {
+      const err = new Error(body?.error || 'device_approve_failed')
+      err.status = r.status
+      err.body = body
+      throw err
+    }
+    return body
+  }, [])
+
+  const exchangeDeviceToken = useCallback(async (tokenHash) => {
+    if (!supabase) throw new Error('Supabase no configurado')
+    const { data, error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: 'magiclink',
+    })
+    if (error) throw error
+    return data
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, loading, authModal, setAuthModal, signInWithEmail, verifyOtp, signOut }}>
+    <AuthContext.Provider value={{
+      user, loading, authModal, setAuthModal,
+      signInWithEmail, verifyOtp, signOut,
+      startDevicePairing, pollDevicePairing, approveDevicePairing, exchangeDeviceToken,
+    }}>
       {children}
     </AuthContext.Provider>
   )
