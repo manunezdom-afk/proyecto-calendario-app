@@ -25,12 +25,15 @@ import FirstLaunchOnboarding, { useOnboardingGate } from './components/FirstLaun
 import { useFirstRunSequence }     from './hooks/useFirstRunSequence'
 
 import CalendarView    from './views/CalendarView'
+import DayView         from './views/DayView'
 import TaskDetailView  from './views/TaskDetailView'
 import PlannerView     from './views/PlannerView'
 import TasksView       from './views/TasksView'
 import SettingsView    from './views/SettingsView'
 import MemoryView      from './views/MemoryView'
 import NovaKnowsView   from './views/NovaKnowsView'
+import CommandPalette  from './components/CommandPalette'
+import QuickAddSheet   from './components/QuickAddSheet'
 
 const LAST_OPENED_KEY = 'nova_last_opened'
 
@@ -63,7 +66,7 @@ export default function App() {
     } catch {}
   }, [user, showWelcome]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const VALID_VIEWS = ['planner', 'calendar', 'tasks', 'settings']
+  const VALID_VIEWS = ['planner', 'calendar', 'day', 'tasks', 'settings']
   const initialView = () => {
     try {
       const v = new URLSearchParams(window.location.search).get('view')
@@ -155,6 +158,30 @@ export default function App() {
   const [importExportOpen,    setImportExportOpen]    = useState(false)
   const [importExportInitialTab, setImportExportInitialTab] = useState('export')
   const [selectedEvent, setSelectedEvent] = useState(null)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [paletteQuickAdd, setPaletteQuickAdd] = useState(false)
+
+  // ── Command Palette ⌘K ────────────────────────────────────────────────────
+  useEffect(() => {
+    function onKey(e) {
+      const cmd = e.metaKey || e.ctrlKey
+      if (cmd && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault()
+        setPaletteOpen((v) => !v)
+        return
+      }
+      // "/" abre la paleta también, salvo si el foco está en un input/textarea
+      if (e.key === '/' && !paletteOpen) {
+        const tag = (e.target?.tagName || '').toLowerCase()
+        const editable = e.target?.isContentEditable
+        if (tag === 'input' || tag === 'textarea' || editable) return
+        e.preventDefault()
+        setPaletteOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [paletteOpen])
 
   // ── Morning Brief ─────────────────────────────────────────────────────────
   const [showMorningBrief,   setShowMorningBrief]   = useState(false)
@@ -273,6 +300,7 @@ export default function App() {
           onShareClick={() => setImportExportOpen(true)}
           onInboxClick={() => setInboxOpen(true)}
           inboxCount={inboxPendingCount}
+          onSearchClick={() => setPaletteOpen(true)}
         />
       </motion.div>
 
@@ -308,6 +336,15 @@ export default function App() {
                   onEditEvent={editEvent}
                   onOpenTask={(event) => openTaskDetail(event)}
                   onExportClick={() => { setImportExportInitialTab('export'); setImportExportOpen(true) }}
+                  isDesktop={isDesktop}
+                />
+              )}
+
+              {activeView === 'day' && (
+                <DayView
+                  events={events}
+                  onAddEvent={addEvent}
+                  onOpenTask={(event) => openTaskDetail(event)}
                   isDesktop={isDesktop}
                 />
               )}
@@ -516,6 +553,23 @@ export default function App() {
       />
 
       <AuthModal isOpen={authModal} onClose={() => setAuthModal(false)} />
+
+      <CommandPalette
+        isOpen={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        events={events}
+        tasks={tasks}
+        onNavigate={navigate}
+        onOpenEvent={(event) => openTaskDetail(event)}
+        onQuickAdd={() => { setPaletteOpen(false); setPaletteQuickAdd(true) }}
+      />
+
+      {paletteQuickAdd && (
+        <QuickAddSheet
+          onSave={(formData) => { addEvent(formData); setPaletteQuickAdd(false) }}
+          onCancel={() => setPaletteQuickAdd(false)}
+        />
+      )}
     </div>
     </LayoutGroup>
   )
