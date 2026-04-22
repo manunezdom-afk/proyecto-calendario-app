@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect } from 'react'
+import { useMemo, useRef, useEffect, useState } from 'react'
 import { LayoutGroup, motion } from 'framer-motion'
 import { parseEventHour } from '../utils/time'
 import { resolveEventDate } from '../utils/resolveEventDate'
@@ -6,10 +6,17 @@ import { resolveEventDate } from '../utils/resolveEventDate'
 const START_H = 8
 const END_H = 22
 const ROW_H = 48 // px per hour
-const TIME_COL = 48 // px time gutter
-const DAY_MIN_W = 92 // px min column width (mobile scroll)
+
+// Layout responsivo — en mobile comprimimos la gutter de horas y dejamos que
+// las columnas de día se estiren por igual con minmax(0, 1fr) para que los 7
+// días entren en el viewport sin scroll horizontal. En desktop mantenemos un
+// ancho mínimo por columna que permite mostrar el título completo del evento.
+const MOBILE_TIME_COL = 28   // px — suficiente para "22" / "9:00" recortado
+const DESKTOP_TIME_COL = 48
+const DESKTOP_DAY_MIN_W = 92
 
 const DAY_ABBR = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const DAY_ABBR_SHORT = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
 
 function toISO(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -26,6 +33,21 @@ function parseEndHour(timeStr, startH) {
 }
 
 export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAddAt }) {
+  // Detectamos viewport angosto para adaptar layout. Usamos matchMedia para
+  // reaccionar a rotaciones y split-view sin forzar renders innecesarios.
+  const [isNarrow, setIsNarrow] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches,
+  )
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(max-width: 639px)')
+    const handler = (e) => setIsNarrow(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  const TIME_COL = isNarrow ? MOBILE_TIME_COL : DESKTOP_TIME_COL
+
   const days = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(weekStart)
@@ -35,11 +57,11 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
         iso: toISO(d),
         dow: d.getDay(),
         num: d.getDate(),
-        abbr: DAY_ABBR[d.getDay()].toUpperCase(),
+        abbr: (isNarrow ? DAY_ABBR_SHORT : DAY_ABBR)[d.getDay()].toUpperCase(),
         isToday: toISO(d) === toISOToday(),
       }
     })
-  }, [weekStart])
+  }, [weekStart, isNarrow])
 
   const hours = []
   for (let h = START_H; h <= END_H; h++) hours.push(h)
@@ -62,19 +84,21 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
     return map
   }, [days, events])
 
-  // En mobile, auto-scroll horizontal hasta la columna de hoy (si está en la semana)
+  // Auto-scroll horizontal hasta hoy — solo aplica en desktop, donde todavía
+  // puede haber overflow si el contenedor no es lo suficientemente ancho.
+  // En mobile ya no hay scroll horizontal (las 7 columnas entran por diseño).
   const scrollerRef = useRef(null)
   useEffect(() => {
+    if (isNarrow) return
     const el = scrollerRef.current
     if (!el) return
     const todayIdx = days.findIndex((d) => d.isToday)
     if (todayIdx < 0) return
-    // Solo scrollea si no entra toda la fila en el viewport
-    const contentW = TIME_COL + days.length * DAY_MIN_W
+    const contentW = TIME_COL + days.length * DESKTOP_DAY_MIN_W
     if (el.clientWidth >= contentW) return
-    const targetLeft = TIME_COL + todayIdx * DAY_MIN_W - 8
+    const targetLeft = TIME_COL + todayIdx * DESKTOP_DAY_MIN_W - 8
     el.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' })
-  }, [days])
+  }, [days, isNarrow, TIME_COL])
 
   // Columna "ahora" — línea horizontal roja si el día de hoy está en la semana
   const now = new Date()
@@ -82,26 +106,40 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
   const showNow = nowDecimal >= START_H && nowDecimal <= END_H && days.some((d) => d.isToday)
   const nowTop = (nowDecimal - START_H) * ROW_H
 
+  // Grid template:
+  //   · Mobile: minmax(0, 1fr) × 7 — las columnas se reparten el espacio del
+  //     viewport por igual, sin piso (pueden bajar a ~45 px en un SE).
+  //   · Desktop: minmax(92px, 1fr) — piso cómodo para ver título de evento.
+  const dayColTemplate = isNarrow
+    ? 'minmax(0, 1fr)'
+    : `minmax(${DESKTOP_DAY_MIN_W}px, 1fr)`
+  const gridTemplate = `${TIME_COL}px repeat(${days.length}, ${dayColTemplate})`
+  // En mobile forzamos 100% de ancho (sin overflow horizontal). En desktop
+  // mantenemos el comportamiento original con un ancho mínimo seguro.
+  const innerWidth = isNarrow
+    ? '100%'
+    : `max(100%, ${TIME_COL + days.length * DESKTOP_DAY_MIN_W}px)`
+
   return (
     <div
       ref={scrollerRef}
-      className="bg-surface-container-lowest border border-slate-200 rounded-2xl overflow-auto"
+      className={`bg-surface-container-lowest border border-slate-200 rounded-2xl overflow-y-auto ${
+        isNarrow ? 'overflow-x-hidden' : 'overflow-x-auto'
+      }`}
       style={{ maxHeight: 'calc(100vh - 260px)' }}
     >
       <div
         className="relative"
-        style={{
-          width: `max(100%, ${TIME_COL + days.length * DAY_MIN_W}px)`,
-        }}
+        style={{ width: innerWidth }}
       >
         {/* Header row with day labels */}
         <div
           className="sticky top-0 z-20 grid bg-surface-container-lowest/95 backdrop-blur border-b border-slate-200"
-          style={{ gridTemplateColumns: `${TIME_COL}px repeat(${days.length}, minmax(${DAY_MIN_W}px, 1fr))` }}
+          style={{ gridTemplateColumns: gridTemplate }}
         >
           <div className="h-14" />
           {days.map((d) => (
-            <div key={d.iso} className="h-14 flex flex-col items-center justify-center border-l border-slate-100">
+            <div key={d.iso} className="h-14 flex flex-col items-center justify-center border-l border-slate-100 min-w-0 px-0.5">
               <span className={`text-[10px] font-bold tracking-wide ${d.isToday ? 'text-primary' : 'text-outline'}`}>
                 {d.abbr}
               </span>
@@ -120,7 +158,7 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
         <div
           className="relative grid"
           style={{
-            gridTemplateColumns: `${TIME_COL}px repeat(${days.length}, minmax(${DAY_MIN_W}px, 1fr))`,
+            gridTemplateColumns: gridTemplate,
             height: gridHeight,
           }}
         >
@@ -143,7 +181,7 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
             return (
               <div
                 key={d.iso}
-                className={`relative border-l border-slate-100 ${d.isToday ? 'bg-primary/5' : ''}`}
+                className={`relative border-l border-slate-100 min-w-0 ${d.isToday ? 'bg-primary/5' : ''}`}
               >
                 {/* Hour grid lines */}
                 {hours.map((_, i) => (
@@ -175,7 +213,9 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
                   </>
                 )}
 
-                {/* Events */}
+                {/* Events — en mobile usamos tipografías más chicas y padding
+                    mínimo. El border-l aporta identidad visual aunque el título
+                    esté muy truncado. title atributo mantiene accesibilidad. */}
                 <LayoutGroup>
                   {positioned.map(({ ev, top, height }) => (
                     <motion.button
@@ -184,14 +224,20 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
                       layout
                       type="button"
                       onClick={() => onOpenTask?.(ev)}
-                      className="absolute left-1 right-1 bg-primary/10 hover:bg-primary/20 border-l-[3px] border-primary rounded-r-md px-1.5 py-1 text-left transition-colors overflow-hidden z-[5]"
+                      className={`absolute bg-primary/10 hover:bg-primary/20 border-l-[3px] border-primary rounded-r-md text-left transition-colors overflow-hidden z-[5] ${
+                        isNarrow ? 'left-0.5 right-0.5 px-1 py-0.5' : 'left-1 right-1 px-1.5 py-1'
+                      }`}
                       initial={false}
                       animate={{ top: top + 1, height }}
                       transition={{ type: 'spring', damping: 14, stiffness: 180 }}
                       title={`${ev.title}${ev.time ? ` · ${ev.time}` : ''}`}
                     >
-                      <p className="text-[11px] font-bold text-primary leading-tight truncate">{ev.title}</p>
-                      {ev.time && (
+                      <p className={`font-bold text-primary leading-tight truncate ${
+                        isNarrow ? 'text-[10px]' : 'text-[11px]'
+                      }`}>
+                        {ev.title}
+                      </p>
+                      {ev.time && !isNarrow && (
                         <p className="text-[9px] text-primary/70 leading-tight truncate">{ev.time}</p>
                       )}
                     </motion.button>
