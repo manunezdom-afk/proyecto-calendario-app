@@ -1,103 +1,171 @@
 // Service Worker de Focus
-// Estrategia:
-//   - App shell: cache-first con fallback a red (arranque instantáneo offline)
-//   - Navegación: stale-while-revalidate → servimos el HTML cacheado al instante
-//     y refrescamos en segundo plano. Clave en iOS PWA standalone: eliminamos
-//     la ventana de pantalla blanca mientras se espera la red. Antes estaba en
-//     network-first, lo que en iOS standalone producía ~9s de blanco cuando la
-//     red era lenta o el Webkit de la PWA arrancaba frío.
-//   - Recursos estáticos (JS/CSS/imágenes): stale-while-revalidate
-//   - Llamadas a /api/: siempre red (no se cachean)
+// Estrategia de caché (rediseñada para que la PWA instalada nunca quede vieja):
+//
+//   1. Documento HTML / navegación  → NETWORK-FIRST con timeout corto.
+//      El HTML contiene referencias a los assets hasheados de la última build,
+//      así que si cacheamos HTML viejo quedamos atrapados con un bundle viejo.
+//      Siempre intentamos red primero; solo caemos al shell cacheado si no hay
+//      conexión o la red tarda demasiado (offline / captive portal).
+//
+//   2. Assets hasheados /assets/*   → CACHE-FIRST (inmutables por hash).
+//      Vite emite archivos con hash en el nombre. Cachearlos agresivamente
+//      es seguro: un cambio de código => nombre de archivo nuevo.
+//
+//   3. Iconos, fuentes, manifest    → STALE-WHILE-REVALIDATE.
+//      Pintan rápido desde caché y se refrescan en segundo plano.
+//
+//   4. /api/*                       → siempre red, no se cachea.
+//
+// Con esta combinación la PWA instalada siempre recibe el HTML fresco que
+// apunta a la build correcta, y conserva arranque instantáneo de los assets
+// estáticos hasheados. El único costo es una request de red para el HTML al
+// abrir la app, pero con timeout y fallback a caché si no hay conexión.
 
-const VERSION = 'v11'
-const STATIC_CACHE = `focus-static-${VERSION}`
-const RUNTIME_CACHE = `focus-runtime-${VERSION}`
+const VERSION = 'v12'
+const SHELL_CACHE = `focus-shell-${VERSION}`
+const ASSETS_CACHE = `focus-assets-${VERSION}`
+const CURRENT_CACHES = [SHELL_CACHE, ASSETS_CACHE]
 
-const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon.svg',
-]
+const OFFLINE_FALLBACK = '/index.html'
+const PRECACHE_URLS = [OFFLINE_FALLBACK, '/manifest.json', '/icons/icon.svg']
 
+const NAV_TIMEOUT_MS = 3500
+
+// ── Install ────────────────────────────────────────────────────────────────
+// cache: 'reload' fuerza al browser a bypassear su HTTP cache y pedir la
+// versión fresca desde el origen. Clave cuando se publica una nueva build:
+// evita que el SW precache un index.html viejo servido por el disk cache.
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(STATIC_CACHE)
-      .then((cache) => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
+    (async () => {
+      const cache = await caches.open(SHELL_CACHE)
+      await Promise.all(
+        PRECACHE_URLS.map(async (url) => {
+          try {
+            const res = await fetch(url, { cache: 'reload' })
+            if (res && res.ok) await cache.put(url, res.clone())
+          } catch {
+            // seguimos: si una URL falla no bloqueamos la instalación
+          }
+        }),
+      )
+      await self.skipWaiting()
+    })(),
   )
 })
 
+// ── Activate ───────────────────────────────────────────────────────────────
+// Borramos cualquier caché de versión anterior para que no sobrevivan assets
+// obsoletos. clients.claim() hace que el SW nuevo controle pestañas existentes
+// desde este mismo instante (la app escucha controllerchange y recarga una vez).
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((k) => k !== STATIC_CACHE && k !== RUNTIME_CACHE)
-            .map((k) => caches.delete(k))
-        )
+    (async () => {
+      const keys = await caches.keys()
+      await Promise.all(
+        keys
+          .filter((k) => !CURRENT_CACHES.includes(k))
+          .map((k) => caches.delete(k)),
       )
-      .then(() => self.clients.claim())
-      .then(() => self.clients.matchAll({ type: 'window' }))
-      .then((clients) => clients.forEach((client) => client.postMessage({ type: 'SW_UPDATED' })))
+      await self.clients.claim()
+      const clients = await self.clients.matchAll({ type: 'window' })
+      clients.forEach((client) =>
+        client.postMessage({ type: 'SW_ACTIVATED', version: VERSION }),
+      )
+    })(),
   )
 })
+
+// ── Estrategias ────────────────────────────────────────────────────────────
+
+async function networkFirstForDocument(request) {
+  const cache = await caches.open(SHELL_CACHE)
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), NAV_TIMEOUT_MS)
+
+  try {
+    const res = await fetch(request, {
+      signal: controller.signal,
+      cache: 'no-store',
+    })
+    clearTimeout(timeoutId)
+    if (res && res.ok) {
+      const copy = res.clone()
+      cache.put(OFFLINE_FALLBACK, copy).catch(() => {})
+    }
+    return res
+  } catch {
+    clearTimeout(timeoutId)
+    const cached =
+      (await cache.match(request)) || (await cache.match(OFFLINE_FALLBACK))
+    if (cached) return cached
+    return new Response(
+      '<h1>Sin conexión</h1><p>No se pudo cargar la app.</p>',
+      { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+    )
+  }
+}
+
+async function cacheFirstImmutable(request) {
+  const cache = await caches.open(ASSETS_CACHE)
+  const cached = await cache.match(request)
+  if (cached) return cached
+  try {
+    const res = await fetch(request)
+    if (res && res.ok) cache.put(request, res.clone()).catch(() => {})
+    return res
+  } catch {
+    return cached || Response.error()
+  }
+}
+
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(ASSETS_CACHE)
+  const cached = await cache.match(request)
+  const networkFetch = fetch(request)
+    .then((res) => {
+      if (res && res.ok) cache.put(request, res.clone()).catch(() => {})
+      return res
+    })
+    .catch(() => cached)
+  return cached || networkFetch
+}
+
+// ── Fetch router ───────────────────────────────────────────────────────────
 
 self.addEventListener('fetch', (event) => {
   const { request } = event
+  if (request.method !== 'GET') return
+
   const url = new URL(request.url)
-
-  // Solo procesamos mismo origen
   if (url.origin !== self.location.origin) return
-
-  // No cachear APIs
   if (url.pathname.startsWith('/api/')) return
 
-  // Navegación HTML → stale-while-revalidate
-  // Servimos el index.html cacheado al instante (first paint inmediato incluso
-  // con red lenta o caída), y revalidamos en background para la próxima apertura.
-  // Cualquier ruta de la SPA cae al mismo shell (el rewrite de Vercel también).
+  // 1. Navegación → network-first con fallback a shell cacheado.
   if (request.mode === 'navigate') {
-    event.respondWith(
-      caches.match('/index.html').then((cached) => {
-        const networkFetch = fetch(request)
-          .then((res) => {
-            if (res && res.status === 200) {
-              const copy = res.clone()
-              caches.open(STATIC_CACHE).then((c) => c.put('/index.html', copy))
-            }
-            return res
-          })
-          .catch(() => cached || caches.match('/index.html'))
-        return cached || networkFetch
-      })
-    )
+    event.respondWith(networkFirstForDocument(request))
     return
   }
 
-  // Estáticos → stale-while-revalidate
-  if (['style', 'script', 'image', 'font'].includes(request.destination)) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        const fetchPromise = fetch(request)
-          .then((res) => {
-            if (res && res.status === 200) {
-              const copy = res.clone()
-              caches.open(RUNTIME_CACHE).then((c) => c.put(request, copy))
-            }
-            return res
-          })
-          .catch(() => cached)
-        return cached || fetchPromise
-      })
+  // 2. Assets hasheados de Vite → cache-first inmutable.
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(cacheFirstImmutable(request))
+    return
+  }
+
+  // 3. Resto de estáticos (iconos, fuentes, manifest, css suelto) → SWR.
+  if (
+    ['style', 'script', 'image', 'font', 'manifest'].includes(
+      request.destination,
     )
+  ) {
+    event.respondWith(staleWhileRevalidate(request))
+    return
   }
 })
 
-// Permitir que la app fuerce la actualización
+// Permite que la app dispare la activación del SW en waiting.
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting()
 })

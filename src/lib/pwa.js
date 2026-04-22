@@ -1,10 +1,41 @@
 // ── Registro del Service Worker ─────────────────────────────────────────────
-// Solo registra en producción (Vite dev server no sirve bien el SW)
+// Solo registra en producción (Vite dev server no sirve bien el SW).
+//
+// Flujo de actualización:
+//   1. El browser detecta un sw.js distinto (Cache-Control no-store en Vercel).
+//   2. El SW nuevo pasa a estado "installed" y queda en waiting.
+//   3. Despachamos `focus:sw-update-available` por si la UI quiere reaccionar.
+//   4. Auto-apply: cuando el usuario vuelve a la app (visibilitychange →
+//      visible) o ya está en background, mandamos SKIP_WAITING. Es la ventana
+//      más segura — no está escribiendo.
+//   5. El SW nuevo se activa y toma control → `controllerchange` dispara un
+//      único reload para reflejar el bundle fresco.
+//
+// Guard clave: solo recargamos si nosotros pedimos el skipWaiting. Evita el
+// reload espurio del primer install (cuando el SW toma control por primera
+// vez sin que haya un update real).
 
 export function registerServiceWorker() {
   if (typeof window === 'undefined') return
   if (!('serviceWorker' in navigator)) return
   if (!import.meta.env.PROD) return
+
+  let refreshing = false
+  let updateApplied = false
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return
+    if (!updateApplied) return
+    refreshing = true
+    window.location.reload()
+  })
+
+  const applyUpdate = (reg) => {
+    const waiting = reg?.waiting
+    if (!waiting) return
+    updateApplied = true
+    waiting.postMessage({ type: 'SKIP_WAITING' })
+  }
 
   window.addEventListener('load', () => {
     navigator.serviceWorker
@@ -12,24 +43,64 @@ export function registerServiceWorker() {
       .then((reg) => {
         console.log('[Focus] 🛰️ Service Worker registrado', reg.scope)
 
+        const onUpdateReady = () => {
+          // Despachamos para que la UI pueda mostrar un aviso opcional.
+          window.dispatchEvent(new CustomEvent('focus:sw-update-available'))
+
+          // Si la pestaña ya está oculta, aplicá ya: la próxima vez que el
+          // usuario abra la PWA va a ver la versión nueva directamente.
+          if (document.hidden) {
+            applyUpdate(reg)
+            return
+          }
+          // Si está visible, esperamos a que pase a background y vuelva.
+          // Ese es el punto menos intrusivo para un reload silencioso.
+          const onVisible = () => {
+            if (document.hidden) return
+            document.removeEventListener('visibilitychange', onVisible)
+            applyUpdate(reg)
+          }
+          document.addEventListener('visibilitychange', onVisible)
+        }
+
+        // Caso 1: al registrar ya había un SW en waiting (usuario reabre
+        // la PWA después de una publicación reciente).
+        if (reg.waiting && navigator.serviceWorker.controller) {
+          onUpdateReady()
+        }
+
+        // Caso 2: el update aparece mientras la app ya está abierta.
         reg.addEventListener('updatefound', () => {
           const newSW = reg.installing
           if (!newSW) return
           newSW.addEventListener('statechange', () => {
-            if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-              // Nueva versión lista — se activará en la próxima apertura de la app
-              window.dispatchEvent(new CustomEvent('focus:sw-update-available'))
+            if (
+              newSW.state === 'installed' &&
+              navigator.serviceWorker.controller
+            ) {
+              onUpdateReady()
             }
           })
         })
 
-        // Chequeo periódico de updates (clave para PWA instalada donde la pestaña nunca se cierra)
+        // Chequeo proactivo de updates — crítico para PWA instalada en iOS,
+        // donde la pestaña puede vivir durante días sin que el browser
+        // revise el SW por su cuenta.
         const checkForUpdates = () => reg.update().catch(() => {})
         setInterval(checkForUpdates, 60_000)
         document.addEventListener('visibilitychange', () => {
           if (!document.hidden) checkForUpdates()
         })
         window.addEventListener('focus', checkForUpdates)
+        window.addEventListener('online', checkForUpdates)
+
+        // Mensajes desde el SW (por ejemplo SW_ACTIVATED al terminar un
+        // activate). No forzamos reload aquí: el controllerchange ya lo hace.
+        navigator.serviceWorker.addEventListener('message', (ev) => {
+          if (ev.data?.type === 'SW_ACTIVATED') {
+            console.log('[Focus] SW activado', ev.data.version)
+          }
+        })
       })
       .catch((err) => console.warn('[Focus] ⚠️ SW registration failed', err))
   })
