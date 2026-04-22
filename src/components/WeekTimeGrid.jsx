@@ -3,16 +3,23 @@ import { LayoutGroup, motion } from 'framer-motion'
 import { parseEventHour } from '../utils/time'
 import { resolveEventDate } from '../utils/resolveEventDate'
 
-const START_H = 8
-const END_H = 22
-const ROW_H = 48 // px per hour
+// Horas: grilla completa de 24 h. Antes cortaba a 8–22 (cualquier evento
+// temprano o nocturno quedaba invisible). Ahora, estilo Google Calendar:
+// mostramos 00:00–24:00, y al abrir scrolleamos a una hora razonable.
+const START_H = 0
+const END_H = 24
+const ROW_H = 48 // px por hora
+// Hora a la que hacemos el auto-scroll inicial cuando no estamos viendo hoy
+// (p. ej. navegamos a una semana futura/pasada). 7 AM deja ver la mañana
+// completa sin partir el día.
+const DEFAULT_SCROLL_HOUR = 7
 
 // Layout responsivo — en mobile comprimimos la gutter de horas y dejamos que
 // las columnas de día se estiren por igual con minmax(0, 1fr) para que los 7
 // días entren en el viewport sin scroll horizontal. En desktop mantenemos un
 // ancho mínimo por columna que permite mostrar el título completo del evento.
-const MOBILE_TIME_COL = 28   // px — suficiente para "22" / "9:00" recortado
-const DESKTOP_TIME_COL = 48
+const MOBILE_TIME_COL = 32   // px — suficiente para "24" en 24h o "11p" en 12h
+const DESKTOP_TIME_COL = 56  // un poco más ancho para "12 AM" completo
 const DESKTOP_DAY_MIN_W = 92
 
 const DAY_ABBR = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -22,6 +29,9 @@ function toISO(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// Hora de término del evento — extrae el segundo tramo del string "H:MM AM -
+// H:MM AM". Si no hay, asume 1 h por defecto (para poder posicionar alto
+// mínimo). No limita por END_H aquí; el clamp ocurre al calcular height.
 function parseEndHour(timeStr, startH) {
   if (!timeStr) return startH + 1
   const parts = String(timeStr).split('-')
@@ -30,6 +40,17 @@ function parseEndHour(timeStr, startH) {
   const end = parseEventHour(endToken.match(/^\d/) ? endToken : '')
   if (end == null) return startH + 1
   return end > startH ? end : startH + 1
+}
+
+// Labels de hora. Desktop: "12 AM" / "8 AM" / "12 PM" / "8 PM" — estilo
+// Google Calendar web. Mobile: 24 h compacto ("08", "13", "22") para que
+// entre en 32 px sin cortarse.
+function hourLabel(h, isNarrow) {
+  if (isNarrow) return String(h).padStart(2, '0')
+  if (h === 0) return '12 AM'
+  if (h === 12) return '12 PM'
+  if (h < 12) return `${h} AM`
+  return `${h - 12} PM`
 }
 
 export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAddAt }) {
@@ -67,7 +88,9 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
   for (let h = START_H; h <= END_H; h++) hours.push(h)
   const gridHeight = (END_H - START_H) * ROW_H
 
-  // Group events by day iso, then compute positions
+  // Group events by day iso, then compute positions. Los clamps son en
+  // [START_H, END_H] para que un evento a las 23:30 se vea en el fondo, y
+  // uno a las 00:00 en el tope.
   const eventsByDay = useMemo(() => {
     const map = {}
     for (const d of days) map[d.iso] = []
@@ -84,26 +107,49 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
     return map
   }, [days, events])
 
-  // Auto-scroll horizontal hasta hoy — solo aplica en desktop, donde todavía
-  // puede haber overflow si el contenedor no es lo suficientemente ancho.
-  // En mobile ya no hay scroll horizontal (las 7 columnas entran por diseño).
+  // Auto-scroll inicial (vertical + horizontal).
+  //   · Vertical: al abrir, scrolleamos a la hora relevante para que el
+  //     usuario no tenga que bajar manualmente para ver su día. Prioridad:
+  //       1. Si hoy está en la semana → scroll a (hora actual - 1) para dejar
+  //          una hora de contexto arriba.
+  //       2. Si no → scroll a DEFAULT_SCROLL_HOUR (7 AM).
+  //   · Horizontal: solo en desktop, como antes, para ir al día de hoy.
   const scrollerRef = useRef(null)
   useEffect(() => {
-    if (isNarrow) return
     const el = scrollerRef.current
     if (!el) return
+
     const todayIdx = days.findIndex((d) => d.isToday)
-    if (todayIdx < 0) return
-    const contentW = TIME_COL + days.length * DESKTOP_DAY_MIN_W
-    if (el.clientWidth >= contentW) return
-    const targetLeft = TIME_COL + todayIdx * DESKTOP_DAY_MIN_W - 8
-    el.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' })
+    const now = new Date()
+    const hourForScroll = todayIdx >= 0
+      ? Math.max(0, (now.getHours() + now.getMinutes() / 60) - 1)
+      : DEFAULT_SCROLL_HOUR
+    const targetTop = Math.max(0, (hourForScroll - START_H) * ROW_H)
+    // Scroll inmediato (no smooth) al montar — evita que el usuario vea el
+    // flash de 00:00 arriba y luego un jump. Un tick de requestAnimationFrame
+    // garantiza que el layout ya tenga dimensiones medibles.
+    requestAnimationFrame(() => {
+      if (!scrollerRef.current) return
+      scrollerRef.current.scrollTop = targetTop
+    })
+
+    if (!isNarrow && todayIdx >= 0) {
+      const contentW = TIME_COL + days.length * DESKTOP_DAY_MIN_W
+      if (el.clientWidth < contentW) {
+        const targetLeft = TIME_COL + todayIdx * DESKTOP_DAY_MIN_W - 8
+        requestAnimationFrame(() => {
+          if (!scrollerRef.current) return
+          scrollerRef.current.scrollLeft = Math.max(0, targetLeft)
+        })
+      }
+    }
   }, [days, isNarrow, TIME_COL])
 
-  // Columna "ahora" — línea horizontal roja si el día de hoy está en la semana
+  // Indicador "ahora" — línea horizontal roja en la columna de hoy. Siempre
+  // visible porque el grid cubre las 24 h.
   const now = new Date()
   const nowDecimal = now.getHours() + now.getMinutes() / 60
-  const showNow = nowDecimal >= START_H && nowDecimal <= END_H && days.some((d) => d.isToday)
+  const showNow = days.some((d) => d.isToday)
   const nowTop = (nowDecimal - START_H) * ROW_H
 
   // Grid template:
@@ -114,8 +160,6 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
     ? 'minmax(0, 1fr)'
     : `minmax(${DESKTOP_DAY_MIN_W}px, 1fr)`
   const gridTemplate = `${TIME_COL}px repeat(${days.length}, ${dayColTemplate})`
-  // En mobile forzamos 100% de ancho (sin overflow horizontal). En desktop
-  // mantenemos el comportamiento original con un ancho mínimo seguro.
   const innerWidth = isNarrow
     ? '100%'
     : `max(100%, ${TIME_COL + days.length * DESKTOP_DAY_MIN_W}px)`
@@ -132,7 +176,8 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
         className="relative"
         style={{ width: innerWidth }}
       >
-        {/* Header row with day labels */}
+        {/* Header row con labels de día — sticky para que siempre se vea
+            cuál día estás mirando aunque el scroll vertical baje. */}
         <div
           className="sticky top-0 z-20 grid bg-surface-container-lowest/95 backdrop-blur border-b border-slate-200"
           style={{ gridTemplateColumns: gridTemplate }}
@@ -162,15 +207,19 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
             height: gridHeight,
           }}
         >
-          {/* Time column */}
+          {/* Time column — labels posicionados al "top" de cada hora, offset
+              negativo para que visualmente queden centrados en la línea. */}
           <div className="relative border-r border-slate-100">
             {hours.map((h, i) => (
               <div
                 key={h}
-                className="absolute left-0 right-0 text-[10px] text-outline/60 font-semibold pl-2"
-                style={{ top: i * ROW_H - 5 }}
+                className={`absolute left-0 right-0 font-semibold text-outline/60 ${
+                  isNarrow ? 'text-[9px] pl-1 tabular-nums' : 'text-[10px] pl-2'
+                }`}
+                style={{ top: i * ROW_H - 6 }}
               >
-                {i === 0 ? '' : `${h}:00`}
+                {/* Nos saltamos el label en las 24 horas (doble medianoche) */}
+                {i === 0 || i === hours.length - 1 ? '' : hourLabel(h, isNarrow)}
               </div>
             ))}
           </div>
@@ -183,11 +232,11 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
                 key={d.iso}
                 className={`relative border-l border-slate-100 min-w-0 ${d.isToday ? 'bg-primary/5' : ''}`}
               >
-                {/* Hour grid lines */}
-                {hours.map((_, i) => (
+                {/* Hour grid lines — cada fila clickable para crear evento */}
+                {hours.slice(0, -1).map((_, i) => (
                   <div
                     key={i}
-                    className="absolute left-0 right-0 border-t border-slate-100"
+                    className="absolute left-0 right-0 border-t border-slate-100 hover:bg-primary/5 transition-colors"
                     style={{ top: i * ROW_H, height: ROW_H }}
                     onClick={() => {
                       if (!onAddAt) return
@@ -199,16 +248,22 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
                   />
                 ))}
 
-                {/* Now indicator */}
+                {/* Línea final de la grilla (cierre a 24:00) */}
+                <div
+                  className="absolute left-0 right-0 border-t border-slate-100"
+                  style={{ top: gridHeight }}
+                />
+
+                {/* Now indicator — punto + línea estilo Google */}
                 {d.isToday && showNow && (
                   <>
                     <div
-                      className="absolute left-0 right-0 h-[2px] bg-error z-10"
-                      style={{ top: nowTop }}
-                    />
-                    <div
                       className="absolute -left-1 w-2 h-2 rounded-full bg-error z-10"
                       style={{ top: nowTop - 3 }}
+                    />
+                    <div
+                      className="absolute left-0 right-0 h-[2px] bg-error z-10"
+                      style={{ top: nowTop }}
                     />
                   </>
                 )}
