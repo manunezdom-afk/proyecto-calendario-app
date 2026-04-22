@@ -180,6 +180,69 @@ export async function unsubscribeFromPush() {
   return { ok: true }
 }
 
+/**
+ * Chequea con el backend si el usuario tiene suscripciones registradas.
+ * Devuelve { ok, subscriptionCount, currentPresent }.
+ *   · subscriptionCount: cuántas rows tiene el user en push_subscriptions.
+ *   · currentPresent:    true si el endpoint local está registrado en el
+ *                        backend; false si no; null si no hay sub local.
+ * Sirve para detectar el caso "APNs revocó mi suscripción, el cron la borró
+ * por 410, pero yo localmente todavía creo que está viva".
+ */
+export async function checkSubscriptionHealth() {
+  if (!isPushSupported()) return { ok: false, reason: 'unsupported' }
+  try {
+    const reg = await navigator.serviceWorker.getRegistration()
+    const sub = reg ? await reg.pushManager.getSubscription() : null
+    const endpoint = sub?.endpoint ?? null
+
+    const token = (await supabase?.auth.getSession())?.data?.session?.access_token
+    if (!token) return { ok: false, reason: 'no_session' }
+
+    const res = await fetch('/api/push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action: 'health', endpoint }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      return { ok: false, reason: 'backend_error', error: data.error || `status ${res.status}` }
+    }
+    const data = await res.json()
+    return {
+      ok: true,
+      subscriptionCount: data.subscriptionCount ?? 0,
+      currentPresent: data.currentPresent,
+      localEndpoint: endpoint,
+    }
+  } catch (err) {
+    return { ok: false, reason: 'network_error', error: String(err) }
+  }
+}
+
+/**
+ * Fuerza una re-suscripción desde cero: desuscribe la suscripción actual del
+ * navegador (si la hay) y crea una nueva. Último recurso cuando APNs invalidó
+ * la suscripción silenciosamente y la UI local no lo detectó.
+ * Devuelve el mismo shape que subscribeToPush().
+ */
+export async function forceResubscribe() {
+  if (!isPushSupported()) return { ok: false, reason: 'unsupported' }
+  try {
+    const reg = await navigator.serviceWorker.getRegistration()
+    if (reg) {
+      const old = await reg.pushManager.getSubscription()
+      if (old) {
+        try { await old.unsubscribe() } catch {}
+      }
+    }
+  } catch {}
+  return subscribeToPush()
+}
+
 /** Si había una suscripción pendiente (hecha antes de loguearse), subirla ahora */
 export async function flushPendingSubscription() {
   const raw = localStorage.getItem('focus_pending_push_sub')

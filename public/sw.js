@@ -21,7 +21,7 @@
 // estáticos hasheados. El único costo es una request de red para el HTML al
 // abrir la app, pero con timeout y fallback a caché si no hay conexión.
 
-const VERSION = 'v13'
+const VERSION = 'v14'
 const SHELL_CACHE = `focus-shell-${VERSION}`
 const ASSETS_CACHE = `focus-assets-${VERSION}`
 const CURRENT_CACHES = [SHELL_CACHE, ASSETS_CACHE]
@@ -172,19 +172,31 @@ self.addEventListener('message', (event) => {
 
 // ── Web Push ────────────────────────────────────────────────────────────────
 // Al recibir un push del backend, mostramos una notificación nativa con acciones.
+//
+// REGLA CRÍTICA iOS: la notificación DEBE tener title y body NO vacíos. Si iOS
+// recibe un push "silent" (sin texto visible) acumula un contador interno; al
+// llegar a 2–3 silent pushes seguidos APNs revoca la suscripción sin aviso y
+// el dispositivo deja de recibir notificaciones hasta que te resuscribas. Por
+// eso aquí forzamos siempre título y body con un fallback genérico antes de
+// llamar a showNotification, incluso cuando event.data no parsea o viene vacío.
 self.addEventListener('push', (event) => {
-  if (!event.data) return
+  // Defaults: NUNCA strings vacíos.
+  const FALLBACK_TITLE = 'Focus'
+  const FALLBACK_BODY  = 'Tienes un recordatorio'
 
   let payload = {}
-  try {
-    payload = event.data.json()
-  } catch {
-    payload = { title: 'Focus', body: event.data.text() || '' }
+  if (event.data) {
+    try {
+      payload = event.data.json()
+    } catch {
+      const text = (event.data.text?.() || '').trim()
+      payload = { title: FALLBACK_TITLE, body: text || FALLBACK_BODY }
+    }
   }
 
   const {
-    title = 'Focus',
-    body = '',
+    title: rawTitle,
+    body: rawBody,
     url = '/',
     tag = 'focus-reminder',
     icon = '/icons/icon-192.png',
@@ -192,6 +204,11 @@ self.addEventListener('push', (event) => {
     actions = [],
     data = {},
   } = payload
+
+  // Forzamos strings no vacíos (evita silent push en iOS si el backend olvidó
+  // llenar title o body).
+  const title = typeof rawTitle === 'string' && rawTitle.trim() ? rawTitle : FALLBACK_TITLE
+  const body  = typeof rawBody  === 'string' && rawBody.trim()  ? rawBody  : FALLBACK_BODY
 
   event.waitUntil(
     self.registration.showNotification(title, {

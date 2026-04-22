@@ -29,6 +29,7 @@ export default async function handler(req, res) {
     case 'unsubscribe': return handleUnsubscribe(req, res, body)
     case 'snooze':      return handleSnooze(req, res, body)
     case 'test':        return handleTest(req, res, body)
+    case 'health':      return handleHealth(req, res, body)
     default:            return res.status(400).json({ error: 'invalid_action' })
   }
 }
@@ -115,6 +116,42 @@ async function handleSnooze(req, res, body) {
     console.error('[push:snooze]', err)
     return res.status(500).json({ error: 'internal' })
   }
+}
+
+// health — devuelve cuántas suscripciones tiene el usuario en el backend.
+// Lo usa el cliente al abrir la app: si el backend reporta 0 pero el navegador
+// dice que hay PushManager.getSubscription() local, significa que la
+// suscripción fue revocada (APNs 410 → delete en el cron). En ese caso el
+// cliente debe re-suscribirse con endpoint fresco.
+//
+// Además devolvemos si el endpoint que pasó el cliente en `endpoint` está
+// presente, para que el cliente verifique específicamente SU endpoint
+// (útil cuando hay varios dispositivos del mismo usuario).
+async function handleHealth(req, res, body) {
+  const userId = await getUserIdFromAuth(req)
+  if (!userId) return res.status(401).json({ error: 'unauthorized' })
+
+  const admin = getSupabaseAdmin()
+  if (!admin) return res.status(503).json({ error: 'no_backend_supabase' })
+
+  const { data: subs, error } = await admin
+    .from('push_subscriptions')
+    .select('endpoint, user_agent, last_used_at')
+    .eq('user_id', userId)
+
+  if (error) return res.status(500).json({ error: 'db_error', message: error.message })
+
+  const subscriptionCount = subs?.length ?? 0
+  const currentEndpoint = typeof body.endpoint === 'string' ? body.endpoint : null
+  const currentPresent = currentEndpoint
+    ? subs?.some((s) => s.endpoint === currentEndpoint)
+    : null
+
+  return res.status(200).json({
+    ok: true,
+    subscriptionCount,
+    currentPresent, // true | false | null
+  })
 }
 
 async function handleTest(req, res) {

@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { parseEventTime } from '../utils/parseEventTime'
-import { subscribeToPush, unsubscribeFromPush, getPushStatus } from '../lib/pushSubscription'
+import {
+  subscribeToPush,
+  unsubscribeFromPush,
+  getPushStatus,
+  checkSubscriptionHealth,
+  forceResubscribe,
+} from '../lib/pushSubscription'
 
 const LOG_KEY    = 'focus_notif_log'
 const FIRED_KEY  = 'focus_notif_fired'
@@ -67,6 +73,16 @@ export function useNotifications({ events = [] } = {}) {
   useEffect(() => {
     // Esperar a que el SW esté listo antes de verificar/crear suscripción push,
     // especialmente importante en iOS PWA donde el SW puede tardar en activarse.
+    //
+    // Este efecto es el "auto-healer" de push:
+    //   1. Si no hay suscripción local pero permiso concedido → crear suscripción.
+    //   2. Si hay suscripción local, consultar al backend si conoce nuestro
+    //      endpoint. Si el backend reporta 0 suscripciones (el cron las purgó
+    //      por 410 de APNs) o nuestro endpoint no está en la lista, forzamos
+    //      una re-suscripción con endpoint fresco para que las pushes vuelvan
+    //      a llegar. Esto cubre el caso en que iOS/APNs invalida la
+    //      suscripción sin disparar pushsubscriptionchange y la app "creía"
+    //      que tenía push funcionando.
     const check = async () => {
       if ('serviceWorker' in navigator) {
         await navigator.serviceWorker.ready.catch(() => {})
@@ -74,10 +90,27 @@ export function useNotifications({ events = [] } = {}) {
       const s = await getPushStatus().catch(() => null)
       if (!s) return
       setPushSubscribed(!!s.subscribed)
-      // Si el permiso ya está dado pero no hay suscripción activa (ej: app instalada
-      // como PWA después de haberla usado en el navegador), re-suscribir silenciosamente.
-      if (s.supported && s.permission === 'granted' && !s.subscribed) {
+
+      if (!s.supported) return
+      if (s.permission !== 'granted') return
+
+      if (!s.subscribed) {
+        // Caso 1: no hay suscripción local pero sí permiso. Crearla.
         const r = await subscribeToPush().catch(() => null)
+        if (r?.ok) setPushSubscribed(true)
+        return
+      }
+
+      // Caso 2: hay suscripción local. Confirmar con backend.
+      const h = await checkSubscriptionHealth().catch(() => null)
+      if (!h || !h.ok) return
+
+      if (h.subscriptionCount === 0 || h.currentPresent === false) {
+        // Backend no nos tiene (o no tiene nuestro endpoint específico).
+        // Forzamos re-suscribir desde cero — APNs puede haber invalidado el
+        // endpoint viejo silenciosamente.
+        console.warn('[Focus] 🔁 push suscripción huérfana — resuscribing')
+        const r = await forceResubscribe().catch(() => null)
         if (r?.ok) setPushSubscribed(true)
       }
     }

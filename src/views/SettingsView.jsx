@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getPushStatus, subscribeToPush } from '../lib/pushSubscription'
+import {
+  getPushStatus,
+  subscribeToPush,
+  forceResubscribe,
+  checkSubscriptionHealth,
+} from '../lib/pushSubscription'
 import PermissionsSection from '../components/PermissionsSection'
 import { useAppPreferences } from '../hooks/useAppPreferences'
 
@@ -48,6 +53,7 @@ function Row({ icon, label, sub, children, onClick, danger = false }) {
 function PushDiagnostic() {
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [reconnecting, setReconnecting] = useState(false)
 
   async function runTest() {
     setLoading(true)
@@ -58,8 +64,18 @@ function PushDiagnostic() {
       if (s.permission === 'denied') { setStatus({ ok: false, msg: 'Permiso de notificaciones bloqueado. Habilitalo en Ajustes del iPhone → Focus.' }); return }
       if (s.permission !== 'granted') { setStatus({ ok: false, msg: 'Permiso no concedido. Activa las notificaciones desde la pantalla principal.' }); return }
 
+      // Primero chequeamos la salud con el backend para dar diagnóstico fiel
+      // antes de subir otra vez una suscripción que podría estar muerta.
+      const h = await checkSubscriptionHealth()
+      if (h?.ok && s.subscribed && (h.subscriptionCount === 0 || h.currentPresent === false)) {
+        setStatus({
+          ok: false,
+          msg: 'El servidor no tiene tu suscripción. Probablemente APNs la invalidó. Usa "Reconectar notificaciones" abajo para crear una nueva.',
+        })
+        return
+      }
+
       if (s.subscribed) {
-        // Ya hay suscripción — intentamos subirla al backend igual por si no estaba guardada
         const r = await subscribeToPush()
         if (r.ok && r.reason !== 'saved_locally_no_session') {
           setStatus({ ok: true, msg: '✅ Suscripción activa y guardada en el servidor. Las notificaciones deberían llegar.' })
@@ -89,14 +105,44 @@ function PushDiagnostic() {
     }
   }
 
+  // Último recurso para cuando APNs invalidó la suscripción sin avisar:
+  // desuscribir localmente y volver a subscribir con endpoint fresco. Útil
+  // también después de reinstalar la PWA o cambiar de cuenta.
+  async function reconnect() {
+    setReconnecting(true)
+    setStatus(null)
+    try {
+      const r = await forceResubscribe()
+      if (r.ok && r.reason !== 'saved_locally_no_session') {
+        setStatus({ ok: true, msg: '✅ Reconectado. Nueva suscripción guardada en el servidor.' })
+      } else if (r.reason === 'permission_denied') {
+        setStatus({ ok: false, msg: 'Permiso de notificaciones denegado. Actívalo en Ajustes del sistema y vuelve a intentar.' })
+      } else {
+        setStatus({ ok: false, msg: `No se pudo reconectar: ${r.reason}${r.error ? ` — ${r.error}` : ''}` })
+      }
+    } catch (e) {
+      setStatus({ ok: false, msg: `Error inesperado: ${e.message}` })
+    } finally {
+      setReconnecting(false)
+    }
+  }
+
   return (
     <div className="px-5 py-4 border-t border-slate-50 space-y-3">
       <button
         onClick={runTest}
-        disabled={loading}
+        disabled={loading || reconnecting}
         className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-[13px] font-semibold disabled:opacity-50 active:scale-95 transition-transform"
       >
         {loading ? 'Verificando…' : 'Verificar notificaciones push'}
+      </button>
+      <button
+        onClick={reconnect}
+        disabled={loading || reconnecting}
+        className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-semibold disabled:opacity-50 active:scale-95 transition-all hover:bg-slate-50"
+        title="Crea una suscripción nueva y descarta la actual. Útil si las notificaciones dejaron de llegar."
+      >
+        {reconnecting ? 'Reconectando…' : 'Reconectar notificaciones'}
       </button>
       {status && (
         <p className={`text-[12.5px] leading-snug font-medium rounded-xl px-3 py-2.5 ${
