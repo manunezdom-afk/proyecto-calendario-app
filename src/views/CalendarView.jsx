@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import DayTimeGrid from '../components/DayTimeGrid'
 import QuickAddSheet from '../components/QuickAddSheet'
 import MonthCalendar from '../components/MonthCalendar'
 import WeekTimeGrid from '../components/WeekTimeGrid'
 import { resolveEventDate } from '../utils/resolveEventDate'
+import { eventStatusAtNow } from '../utils/eventDuration'
 
 // Descripción útil: no mostramos cuando es solo una fecha ISO (YYYY-MM-DD) —
 // data vieja generada por QuickAddSheet cuando stuffing date en description.
@@ -72,26 +73,56 @@ function DeleteButton({ onClick }) {
   )
 }
 
+// Pill reutilizable para marcar estado temporal en las cards del día.
+function StatusPill({ status }) {
+  if (status === 'past') {
+    return (
+      <span className="text-[10px] font-bold uppercase tracking-wide text-outline bg-outline-variant/40 px-2 py-0.5 rounded-full">
+        Finalizado
+      </span>
+    )
+  }
+  if (status === 'active') {
+    return (
+      <span className="text-[10px] font-bold uppercase tracking-wide text-primary bg-primary/15 px-2 py-0.5 rounded-full">
+        En curso
+      </span>
+    )
+  }
+  return null
+}
+
 // ─── Featured card (large, first in "Enfoque de Hoy") ────────────────────────
-function FeaturedEventCard({ event, onDelete, onOpen }) {
+function FeaturedEventCard({ event, status, onDelete, onOpen }) {
+  const isPast = status === 'past'
   return (
     <div
-      className="col-span-2 bg-surface-container-lowest p-6 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.04)] space-y-4 cursor-pointer hover:shadow-md transition-shadow"
+      className={`col-span-2 p-6 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.04)] space-y-4 cursor-pointer hover:shadow-md transition-shadow ${
+        isPast ? 'bg-surface-container-low opacity-70' : 'bg-surface-container-lowest'
+      }`}
       onClick={() => onOpen?.(event)}
     >
       <div className="flex justify-between items-start">
-        <div className="p-2 bg-primary-fixed-dim/30 rounded-lg text-primary">
+        <div className={`p-2 rounded-lg ${isPast ? 'bg-outline-variant/30 text-outline' : 'bg-primary-fixed-dim/30 text-primary'}`}>
           <span className="material-symbols-outlined">{event.icon || 'event'}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
-            A Continuación
-          </span>
+          {isPast ? (
+            <StatusPill status="past" />
+          ) : status === 'active' ? (
+            <StatusPill status="active" />
+          ) : (
+            <span className="text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
+              A Continuación
+            </span>
+          )}
           <DeleteButton onClick={() => onDelete(event.id)} />
         </div>
       </div>
       <div>
-        <h3 className="text-lg font-bold text-on-surface">{event.title}</h3>
+        <h3 className={`text-lg font-bold ${isPast ? 'text-outline line-through decoration-outline/40' : 'text-on-surface'}`}>
+          {event.title}
+        </h3>
         {hasMeaningfulNote(event.description) && (
           <div style={{ marginTop: '6px', padding: '5px 10px', background: '#f1f5f9', borderRadius: '6px', borderLeft: '2px solid #cbd5e1' }}>
             <p style={{ fontSize: '11px', color: '#64748b', lineHeight: '1.4' }}>{event.description}</p>
@@ -102,7 +133,7 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
         <div className="flex items-center gap-4 pt-2">
           <div className="flex items-center gap-1.5">
             <span className="material-symbols-outlined text-[18px] text-outline">schedule</span>
-            <span className="text-xs font-semibold text-on-surface">{event.time}</span>
+            <span className={`text-xs font-semibold ${isPast ? 'text-outline' : 'text-on-surface'}`}>{event.time}</span>
           </div>
         </div>
       )}
@@ -111,19 +142,29 @@ function FeaturedEventCard({ event, onDelete, onOpen }) {
 }
 
 // ─── Small card (secondary items in "Enfoque de Hoy") ────────────────────────
-function SmallEventCard({ event, onDelete, onOpen }) {
+function SmallEventCard({ event, status, onDelete, onOpen }) {
+  const isPast = status === 'past'
   return (
     <div
-      className="bg-surface-container-low p-5 rounded-xl space-y-2 relative group cursor-pointer hover:bg-surface-container transition-colors"
+      className={`p-5 rounded-xl space-y-2 relative group cursor-pointer transition-colors ${
+        isPast
+          ? 'bg-surface-container-low/60 hover:bg-surface-container-low opacity-70'
+          : 'bg-surface-container-low hover:bg-surface-container'
+      }`}
       onClick={() => onOpen?.(event)}
     >
-      <div className="flex justify-between items-start">
-        <span className="material-symbols-outlined text-secondary">
+      <div className="flex justify-between items-start gap-2">
+        <span className={`material-symbols-outlined ${isPast ? 'text-outline' : 'text-secondary'}`}>
           {event.icon || 'event'}
         </span>
-        <DeleteButton onClick={() => onDelete(event.id)} />
+        <div className="flex items-center gap-1">
+          <StatusPill status={status} />
+          <DeleteButton onClick={() => onDelete(event.id)} />
+        </div>
       </div>
-      <h3 className="text-sm font-bold text-on-surface">{event.title}</h3>
+      <h3 className={`text-sm font-bold ${isPast ? 'text-outline line-through decoration-outline/40' : 'text-on-surface'}`}>
+        {event.title}
+      </h3>
       {event.time && (
         <p className="text-[11px] text-outline font-medium">{event.time}</p>
       )}
@@ -137,19 +178,28 @@ function SmallEventCard({ event, onDelete, onOpen }) {
 }
 
 // ─── Evening row card ─────────────────────────────────────────────────────────
-function EveningEventCard({ event, onDelete, onOpen }) {
+function EveningEventCard({ event, status, onDelete, onOpen }) {
+  const isPast = status === 'past'
   return (
     <div className="flex gap-4 items-center group cursor-pointer" onClick={() => onOpen?.(event)}>
       {event.time && (
         <div className="w-16 text-right flex-shrink-0">
-          <span className="text-xs font-bold text-outline">{event.time}</span>
+          <span className={`text-xs font-bold ${isPast ? 'text-outline/60' : 'text-outline'}`}>
+            {event.time}
+          </span>
         </div>
       )}
-      <div className="flex-1 bg-surface-container-lowest hover:bg-surface-container-high transition-colors p-4 rounded-xl flex justify-between items-start">
+      <div className={`flex-1 transition-colors p-4 rounded-xl flex justify-between items-start gap-2 ${
+        isPast
+          ? 'bg-surface-container-low/60 hover:bg-surface-container-low opacity-70'
+          : 'bg-surface-container-lowest hover:bg-surface-container-high'
+      }`}>
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${event.dotColor || 'bg-outline'}`} />
+          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${isPast ? 'bg-outline-variant' : (event.dotColor || 'bg-outline')}`} />
           <div className="flex-1 min-w-0">
-            <span className="font-bold text-sm text-on-surface">{event.title}</span>
+            <span className={`font-bold text-sm ${isPast ? 'text-outline line-through decoration-outline/40' : 'text-on-surface'}`}>
+              {event.title}
+            </span>
             {hasMeaningfulNote(event.description) && (
               <div style={{ marginTop: '4px', padding: '4px 8px', background: '#f1f5f9', borderRadius: '5px', borderLeft: '2px solid #cbd5e1' }}>
                 <p style={{ fontSize: '10px', color: '#64748b', lineHeight: '1.4' }}>{event.description}</p>
@@ -157,7 +207,10 @@ function EveningEventCard({ event, onDelete, onOpen }) {
             )}
           </div>
         </div>
-        <DeleteButton onClick={() => onDelete(event.id)} />
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <StatusPill status={status} />
+          <DeleteButton onClick={() => onDelete(event.id)} />
+        </div>
       </div>
     </div>
   )
@@ -192,7 +245,7 @@ function formatWeekRange(weekStart) {
 }
 
 // ─── Main view ────────────────────────────────────────────────────────────────
-export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpenTask, onExportClick, onOpenDay, isDesktop = false }) {
+export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteEvent, onOpenTask, onExportClick, onOpenDay, isDesktop = false }) {
   const [showModal, setShowModal] = useState(false)
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('dia')           // 'dia' | 'semana' | 'mes'
@@ -201,6 +254,15 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
   // de la vista semanal — hace que el evento caiga en el día correcto aunque
   // el texto tipeado no incluya fecha explícita.
   const [pendingDate, setPendingDate] = useState(null)
+
+  // Tick para re-renderizar cada minuto y actualizar el estado temporal de
+  // los eventos (past/active/future). Los badges "Finalizado" dependen de
+  // esto. No leemos el tick — el setter alcanza para forzar el re-render.
+  const [, setNowTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setNowTick((t) => t + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   const effectiveEvents = events ?? []
 
@@ -211,6 +273,28 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
   const dayEvents = effectiveEvents.filter((e) => resolveEventDate(e) === activeDayISO)
   const focusEvents   = dayEvents.filter((e) => e.section === 'focus')
   const eveningEvents = dayEvents.filter((e) => e.section === 'evening')
+
+  // Tareas "agendadas" en el día — sólo aplican cuando activeDay es hoy, ya
+  // que el modelo de tareas no tiene fecha propia (usa categoría "hoy").
+  const dayTasks = useMemo(() => {
+    if (activeDayISO !== todayISOStr) return []
+    return (tasks || []).filter((t) => t && t.category === 'hoy')
+  }, [tasks, activeDayISO])
+
+  // Clasificación temporal combinada — un evento es past/active/future según
+  // su fecha + hora relativa a "ahora". Un item sin fecha es 'undated'.
+  // Se recalcula en cada render; el tick por minuto fuerza re-renders.
+  const now = new Date()
+  const statusOf = (ev) => eventStatusAtNow(ev, now)
+
+  // Estado global del día seleccionado. Basa toda la UI en ESTO — antes cada
+  // sección (Focus/Evening) decidía por su cuenta y terminaba mostrando
+  // "Día libre" en Focus aunque Evening tuviese eventos, que fue el bug.
+  const hasAnyItem = dayEvents.length > 0 || dayTasks.length > 0
+  const pendingTaskCount = dayTasks.filter((t) => !t.done).length
+  const allEventsPast = dayEvents.length > 0 && dayEvents.every((ev) => statusOf(ev) === 'past')
+  const isDayEmpty = !hasAnyItem
+  const isDayAllPast = hasAnyItem && pendingTaskCount === 0 && allEventsPast
 
   const handleDeleteEvent = (id) => {
     onDeleteEvent?.(id)
@@ -411,11 +495,53 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
             {isDesktop ? (
               <DayTimeGrid
                 events={dayEvents}
+                referenceDate={now}
                 onAdd={() => setShowModal(true)}
                 onOpenTask={onOpenTask}
               />
             ) : (<>
-            {/* Enfoque del día seleccionado */}
+            {/* Empty / all-past state del día — calculado sobre TODO el día,
+                no sólo sobre Focus. Antes mostrábamos "Día libre" aunque
+                hubiese eventos en Evening o tareas pendientes: bug. */}
+            {isDayEmpty && (
+              <div className="bg-surface-container-low rounded-xl p-8 flex flex-col items-center gap-3 text-center">
+                <span className="material-symbols-outlined text-3xl text-outline">event_available</span>
+                <p className="text-sm font-semibold text-outline">
+                  {activeDayISO === todayISOStr ? 'Día libre. Todo tuyo.' : 'Sin eventos en este día.'}
+                </p>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
+                >
+                  Añadir primer evento
+                </button>
+              </div>
+            )}
+
+            {isDayAllPast && (
+              <div className="bg-surface-container-low rounded-xl px-4 py-3 flex items-center gap-3">
+                <span
+                  className="material-symbols-outlined text-outline text-[20px]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  check_circle
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-on-surface leading-tight">
+                    {activeDayISO === todayISOStr ? 'No quedan eventos por hoy' : 'Todo lo de este día ya terminó'}
+                  </p>
+                  <p className="text-[11px] text-outline mt-0.5">
+                    Los eventos finalizados siguen abajo.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Enfoque del día seleccionado — sólo renderiza si el día tiene
+                eventos totales. Si Focus está vacío pero Evening tiene,
+                escondemos esta sección para no reintroducir el "Día libre"
+                engañoso. */}
+            {!isDayEmpty && focusEvents.length > 0 && (
             <section className="space-y-4">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold text-on-surface">
@@ -452,25 +578,31 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
                 </div>
               </div>
 
-              {focusEvents.length === 0 ? (
-                <p className="text-sm text-outline/70 italic px-1">Día libre</p>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  {featuredEvent && (
-                    <FeaturedEventCard
-                      event={featuredEvent}
-                      onDelete={handleDeleteEvent}
-                      onOpen={onOpenTask}
-                    />
-                  )}
-                  {smallEvents.map((ev) => (
-                    <SmallEventCard key={ev.id} event={ev} onDelete={handleDeleteEvent} onOpen={onOpenTask} />
-                  ))}
-                </div>
-              )}
+              <div className="grid grid-cols-2 gap-4">
+                {featuredEvent && (
+                  <FeaturedEventCard
+                    event={featuredEvent}
+                    status={statusOf(featuredEvent)}
+                    onDelete={handleDeleteEvent}
+                    onOpen={onOpenTask}
+                  />
+                )}
+                {smallEvents.map((ev) => (
+                  <SmallEventCard
+                    key={ev.id}
+                    event={ev}
+                    status={statusOf(ev)}
+                    onDelete={handleDeleteEvent}
+                    onOpen={onOpenTask}
+                  />
+                ))}
+              </div>
             </section>
+            )}
 
-            {/* Tarde/Noche */}
+            {/* Tarde/Noche — se mantiene visible siempre que el día tenga
+                algún item; así los eventos finalizados no desaparecen. */}
+            {!isDayEmpty && (
             <section className="space-y-4">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold text-on-surface">Tarde/Noche</h2>
@@ -484,27 +616,60 @@ export default function CalendarView({ events, onAddEvent, onDeleteEvent, onOpen
               </div>
 
               {eveningEvents.length === 0 ? (
-                <div className="bg-surface-container-low rounded-xl p-8 flex flex-col items-center gap-3 text-center">
-                  <span className="material-symbols-outlined text-3xl text-outline">nights_stay</span>
-                  <p className="text-sm font-semibold text-outline">
-                    Nada planeado para esta tarde.
-                  </p>
-                </div>
+                <p className="text-sm text-outline/70 italic px-1">Nada en la tarde/noche.</p>
               ) : (
                 <div className="space-y-2">
                   {eveningEvents.map((ev) => (
-                    <EveningEventCard key={ev.id} event={ev} onDelete={handleDeleteEvent} onOpen={onOpenTask} />
+                    <EveningEventCard
+                      key={ev.id}
+                      event={ev}
+                      status={statusOf(ev)}
+                      onDelete={handleDeleteEvent}
+                      onOpen={onOpenTask}
+                    />
                   ))}
                 </div>
               )}
             </section>
+            )}
+
+            {/* Tareas "hoy" — sólo cuando se mira el día actual y hay tareas. */}
+            {dayTasks.length > 0 && (
+              <section className="space-y-2">
+                <h2 className="text-sm font-bold text-outline uppercase tracking-wide">
+                  Tareas de hoy
+                </h2>
+                <ul className="space-y-1.5">
+                  {dayTasks.map((t) => (
+                    <li
+                      key={t.id}
+                      className={`flex items-start gap-2 bg-surface-container-lowest rounded-lg px-3 py-2 border-l-2 ${
+                        t.done ? 'border-outline-variant opacity-60' : 'border-secondary'
+                      }`}
+                    >
+                      <span
+                        className={`material-symbols-outlined text-[16px] mt-0.5 ${
+                          t.done ? 'text-outline/60' : 'text-secondary'
+                        }`}
+                        style={{ fontVariationSettings: t.done ? "'FILL' 1" : "'FILL' 0" }}
+                      >
+                        {t.done ? 'task_alt' : 'check_box_outline_blank'}
+                      </span>
+                      <span className={`text-[13px] ${t.done ? 'line-through text-outline' : 'text-on-surface'}`}>
+                        {t.label}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
             </>)}
 
             {/* FAB — oculto en desktop y en empty state mobile.
                 En mobile vive APILADO ENCIMA de la pastilla de Nova (que está
                 en safe-bottom + 116px y ~44px de alto). Así nunca se tapan
                 entre sí: pill abajo, FAB justo arriba, mismo borde derecho. */}
-            {!isDesktop && focusEvents.length > 0 && (
+            {!isDesktop && !isDayEmpty && (
             <div
               className="fixed right-4 z-[60]"
               style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 172px)' }}

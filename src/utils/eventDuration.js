@@ -186,6 +186,49 @@ export function stripEndTime(timeStr) {
 // Copy para UI cuando no hay hora de término.
 export const NO_END_TIME_LABEL = 'Sin hora de término'
 
+// ── Estado temporal del evento ─────────────────────────────────────────────
+// Clasifica un evento dentro del eje del tiempo en relación a `nowDate`.
+// Devuelve uno de:
+//   'past'    → ya pasó (día anterior, o mismo día pero la ventana terminó)
+//   'active'  → está ocurriendo ahora (dentro del rango o en la ventana de
+//               cortesía de 15 min si no hay hora de término)
+//   'future'  → aún no empieza (día posterior, o mismo día pero startH > now)
+//   'undated' → no tenemos información suficiente para clasificarlo
+//
+// El caller pasa `nowDate` para que un test (o una vista histórica) pueda
+// fijar un instante de referencia distinto a "ahora real".
+function isoDateOf(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function eventStatusAtNow(event, nowDate = new Date()) {
+  if (!event) return 'undated'
+  const dateISO = event.date
+  if (!dateISO) return 'undated'
+  const todayStr = isoDateOf(nowDate)
+  if (dateISO > todayStr) return 'future'
+  if (dateISO < todayStr) return 'past'
+  // Mismo día: clasificar por hora.
+  const range = parseTimeRange(event.time)
+  if (!range || range.startH == null) return 'undated'
+  const nowH = nowDate.getHours() + nowDate.getMinutes() / 60
+  if (range.endH != null && range.endH > range.startH) {
+    if (nowH < range.startH) return 'future'
+    if (nowH < range.endH)   return 'active'
+    return 'past'
+  }
+  // Sin hora de término: ventana de cortesía de 15 min para considerarlo
+  // "activo", luego pasa a "past". Coherente con PlannerView/activeBlock.
+  const GRACE_H = 15 / 60
+  if (nowH < range.startH) return 'future'
+  if (nowH < range.startH + GRACE_H) return 'active'
+  return 'past'
+}
+
+export function isEventPast(event, nowDate = new Date()) {
+  return eventStatusAtNow(event, nowDate) === 'past'
+}
+
 // Regla central: ¿este item puede aparecer como bloque "En curso"?
 // Debe tener hora de inicio y de término válidas, y no ser un recordatorio.
 export function canShowAsInProgress(event) {

@@ -331,6 +331,7 @@ export default function App() {
               {activeView === 'calendar' && (
                 <CalendarView
                   events={events}
+                  tasks={tasks}
                   onAddEvent={addEvent}
                   onDeleteEvent={deleteEvent}
                   onEditEvent={editEvent}
@@ -352,6 +353,7 @@ export default function App() {
               {activeView === 'day' && (
                 <DayView
                   events={events}
+                  tasks={tasks}
                   onAddEvent={addEvent}
                   onOpenTask={(event) => openTaskDetail(event)}
                   isDesktop={isDesktop}
