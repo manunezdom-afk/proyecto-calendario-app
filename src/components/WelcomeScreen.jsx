@@ -219,29 +219,27 @@ export default function WelcomeScreen({ onEnter, hasEvents = false, hasFirstTime
 }
 
 export function useWelcomeGate() {
-  const [show, setShow] = useState(() => {
-    try {
-      const today = new Date().toISOString().slice(0, 10)
-      return localStorage.getItem(WELCOME_KEY) !== today
-    } catch {
-      return false
-    }
-  })
+  // Desactivada: antes mostraba una "threshold scene" de ~1.9 s cada primer
+  // abrir del día. En iPhone PWA se sentía como lentitud (usuario no quiere
+  // saludo, quiere su calendario — como Google Calendar, que abre directo).
+  // El FirstLaunchOnboarding sigue corriendo en el primer uso vía su propio
+  // gate. Dejamos la API intacta para no tocar App.jsx ni tirar el componente
+  // (puede volver detrás de un toggle en settings si el usuario lo pide).
+  const [, setShow] = useState(false)
 
   useEffect(() => {
-    if (!show) {
-      // Si la bienvenida no se va a mostrar, limpiamos el flag de continuidad
-      // para que el body vuelva al color surface sin quedarse negro.
-      try { document.documentElement.classList.remove('focus-continuity') } catch {}
-    }
-  }, [show])
-
-  function dismiss() {
+    try { document.documentElement.classList.remove('focus-continuity') } catch {}
+    try { document.documentElement.classList.remove('focus-dark-boot') } catch {}
+    // Marcamos "ya visto hoy" para que un futuro re-activado no re-muestre
+    // retroactivamente el saludo de hoy.
     try {
       localStorage.setItem(WELCOME_KEY, new Date().toISOString().slice(0, 10))
     } catch {}
+  }, [])
+
+  function dismiss() {
     setShow(false)
   }
 
-  return { show, dismiss }
+  return { show: false, dismiss }
 }

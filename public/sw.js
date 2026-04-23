@@ -20,7 +20,7 @@
 // Resultado: cold start en PWA instalada ≈ 0 ms de espera de red para el HTML;
 // el usuario ve el bundle (ya cacheado) parseando inmediatamente.
 
-const VERSION = 'v18'
+const VERSION = 'v19'
 const SHELL_CACHE = `focus-shell-${VERSION}`
 const ASSETS_CACHE = `focus-assets-${VERSION}`
 const CURRENT_CACHES = [SHELL_CACHE, ASSETS_CACHE]

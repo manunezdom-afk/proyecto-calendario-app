@@ -56,6 +56,13 @@ export function AuthProvider({ children }) {
       )
       subscription = res.data.subscription
       if (cancelled) subscription.unsubscribe()
+    }).catch((err) => {
+      // Defensa en profundidad: `supabaseReady` ya atrapa su propio error,
+      // pero si por cualquier razón rechazara igual (bug futuro, evento
+      // inesperado), no queremos que la app quede eternamente en `loading`.
+      // eslint-disable-next-line no-console
+      console.error('[Focus] auth init failed:', err)
+      if (!cancelled) setLoading(false)
     })
 
     return () => {

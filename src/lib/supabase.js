@@ -22,23 +22,35 @@ export let supabase = null
 
 export const supabaseReady = (async () => {
   if (!url || !key) return null
-  const { createClient } = await import('@supabase/supabase-js')
-  // Config explícita:
-  // - storageKey propio: evita colisiones con otras instancias del SDK y los
-  //   warnings de Navigator LockManager al competir por la misma llave.
-  // - autoRefreshToken + persistSession: la sesión sobrevive a recargas.
-  // - detectSessionInUrl: fallback para magic-link si se activa desde el dashboard.
-  // - realtime eventsPerSecond=5: los refetches que dispara cada cambio
-  //   de tabla (useEvents/useTasks) no saturan el canal.
-  supabase = createClient(url, key, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      flowType: 'pkce',
-      storageKey: 'focus-auth',
-    },
-    realtime: { params: { eventsPerSecond: 5 } },
-  })
-  return supabase
+  try {
+    const { createClient } = await import('@supabase/supabase-js')
+    // Config explícita:
+    // - storageKey propio: evita colisiones con otras instancias del SDK y los
+    //   warnings de Navigator LockManager al competir por la misma llave.
+    // - autoRefreshToken + persistSession: la sesión sobrevive a recargas.
+    // - detectSessionInUrl: fallback para magic-link si se activa desde el dashboard.
+    // - realtime eventsPerSecond=5: los refetches que dispara cada cambio
+    //   de tabla (useEvents/useTasks) no saturan el canal.
+    supabase = createClient(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+        storageKey: 'focus-auth',
+      },
+      realtime: { params: { eventsPerSecond: 5 } },
+    })
+    return supabase
+  } catch (err) {
+    // CRÍTICO: si el dynamic import falla (SW con caché corrupta, red
+    // interrumpida, chunk missing tras un deploy), el promise NO debe
+    // rechazar — si rechazara, los consumidores (AuthContext en especial)
+    // que hacen `await supabaseReady` sin .catch quedarían colgados y
+    // `setLoading(false)` nunca se llamaría. La app se queda eternamente
+    // en el splash. Resolvemos null → la app entra en "modo offline/demo".
+    // eslint-disable-next-line no-console
+    console.error('[Focus] Supabase dynamic import failed:', err)
+    return null
+  }
 })()
