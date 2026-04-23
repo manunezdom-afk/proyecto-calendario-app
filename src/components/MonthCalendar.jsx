@@ -116,11 +116,15 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
             <button
               key={iso}
               onClick={() => handleDayClick(day)}
+              aria-label={`${day}${isToday ? ' (hoy)' : ''}${count > 0 ? `, ${count} evento${count === 1 ? '' : 's'}` : ''}`}
+              aria-pressed={isSelected}
               className={`relative flex flex-col items-center justify-center gap-0.5 h-12 rounded-2xl font-semibold text-sm transition-all active:scale-90 ${
                 isSelected
-                  ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                  ? isToday
+                    ? 'bg-primary text-white shadow-lg shadow-primary/30 ring-2 ring-primary/30 ring-offset-2 ring-offset-surface'
+                    : 'bg-primary text-white shadow-lg shadow-primary/25'
                   : isToday
-                  ? 'bg-primary/10 text-primary font-bold ring-1 ring-primary/30'
+                  ? 'bg-primary/10 text-primary font-bold ring-1 ring-primary/40'
                   : highLoad
                   ? 'bg-primary/12 text-primary hover:bg-primary/18'
                   : 'hover:bg-surface-container-low text-on-surface'
@@ -134,7 +138,7 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
                       key={i}
                       className={`w-1 h-1 rounded-full ${
                         isSelected
-                          ? 'bg-white/70'
+                          ? 'bg-white/80'
                           : ev.section === 'evening'
                           ? 'bg-secondary'
                           : 'bg-primary'
@@ -142,6 +146,13 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
                     />
                   ))}
                 </div>
+              )}
+              {isToday && !isSelected && (
+                <span
+                  className="absolute bottom-0.5 w-1 h-1 rounded-full bg-primary"
+                  aria-hidden="true"
+                  style={{ display: count > 0 ? 'none' : undefined }}
+                />
               )}
             </button>
           )

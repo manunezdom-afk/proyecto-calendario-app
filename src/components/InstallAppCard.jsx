@@ -53,7 +53,7 @@ export default function InstallAppCard({ onDismissed }) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30 }}
         transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-        className="fixed bottom-[88px] left-4 right-4 z-[55] mx-auto max-w-md rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-2xl backdrop-blur-lg lg:bottom-6 lg:left-auto lg:right-6 lg:mx-0 lg:w-[360px]"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+104px)] left-4 right-4 z-[55] mx-auto max-w-md rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-2xl backdrop-blur-lg lg:bottom-6 lg:left-auto lg:right-6 lg:mx-0 lg:w-[360px]"
       >
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 via-violet-500 to-fuchsia-500 text-white shadow-md shadow-blue-200">
@@ -108,12 +108,22 @@ export default function InstallAppCard({ onDismissed }) {
               className="fixed inset-0 z-[90] bg-slate-900/40 backdrop-blur-sm"
             />
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Cómo instalar Focus en iOS"
               initial={{ opacity: 0, y: 30, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.96 }}
               transition={{ type: 'spring', damping: 26, stiffness: 280 }}
               className="fixed left-1/2 top-1/2 z-[91] w-[min(92vw,360px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl bg-white p-6 shadow-2xl"
             >
+              <button
+                onClick={() => setIosHintOpen(false)}
+                aria-label="Cerrar"
+                className="absolute top-3 right-3 h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 active:scale-95 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
               <p className="mb-4 text-center text-[16px] font-bold text-slate-900">
                 Instalar Focus en iOS
               </p>

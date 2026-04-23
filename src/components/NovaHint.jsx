@@ -69,7 +69,7 @@ export default function NovaHint({
               <NovaOrb size={36} pulse ambient />
             </div>
             <div
-              className="relative rounded-2xl rounded-bl-md border px-4 py-3 shadow-xl"
+              className="relative rounded-2xl rounded-bl-md border pl-4 pr-9 py-3 shadow-xl"
               style={{
                 background: 'rgba(20, 18, 36, 0.92)',
                 borderColor: 'rgba(124, 107, 255, 0.25)',
@@ -78,6 +78,13 @@ export default function NovaHint({
                 color: 'rgba(255,255,255,0.92)',
               }}
             >
+              <button
+                onClick={dismiss}
+                aria-label="Descartar tip"
+                className="absolute top-1.5 right-1.5 h-7 w-7 flex items-center justify-center rounded-full text-white/50 hover:text-white/90 hover:bg-white/10 active:scale-90 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
               <p
                 className="font-headline"
                 style={{
@@ -94,7 +101,7 @@ export default function NovaHint({
                 {actionLabel && (
                   <button
                     onClick={handleAction}
-                    className="rounded-full px-3 py-1 text-[12px] font-semibold text-white transition-transform active:scale-95"
+                    className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-white transition-transform active:scale-95 min-h-[32px]"
                     style={{ background: 'var(--nova)' }}
                   >
                     {actionLabel}
@@ -102,7 +109,7 @@ export default function NovaHint({
                 )}
                 <button
                   onClick={dismiss}
-                  className="rounded-full px-2.5 py-1 text-[12px] font-medium text-white/50 hover:text-white/80 transition-colors"
+                  className="rounded-full px-2.5 py-1 text-[12px] font-medium text-white/60 hover:text-white/90 transition-colors min-h-[32px]"
                 >
                   Entendido
                 </button>

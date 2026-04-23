@@ -48,8 +48,19 @@ export default function CommandPalette({ isOpen, onClose, events = [], tasks = [
     if (!isOpen) return
     setQuery('')
     setActive(0)
-    const t = setTimeout(() => inputRef.current?.focus(), 30)
+    // En iOS el autofocus con delay pequeño a veces lo ignora Safari —
+    // 120 ms da tiempo al layout a asentarse antes del focus programático.
+    const t = setTimeout(() => inputRef.current?.focus(), 120)
     return () => clearTimeout(t)
+  }, [isOpen])
+
+  // Body scroll lock mientras el palette está abierto — evita que iOS haga
+  // rubber-band detrás del overlay cuando el usuario arrastra la lista.
+  useEffect(() => {
+    if (!isOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
   }, [isOpen])
 
   // Acciones siempre disponibles
@@ -148,7 +159,7 @@ export default function CommandPalette({ isOpen, onClose, events = [], tasks = [
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-[110] flex items-start justify-center bg-on-surface/40 backdrop-blur-sm p-4 pt-[12vh]"
+          className="fixed inset-0 z-[110] flex items-start justify-center bg-on-surface/40 backdrop-blur-sm p-4 pt-[12dvh]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -180,7 +191,7 @@ export default function CommandPalette({ isOpen, onClose, events = [], tasks = [
               <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-semibold text-outline/80">ESC</kbd>
             </div>
 
-            <div ref={listRef} className="max-h-[60vh] overflow-y-auto py-2">
+            <div ref={listRef} className="max-h-[60dvh] overflow-y-auto py-2">
               {flat.length === 0 && (
                 <div className="px-4 py-10 text-center">
                   <p className="text-sm text-outline">Sin resultados</p>
