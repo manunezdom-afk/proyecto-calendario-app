@@ -179,6 +179,11 @@ Agregar evento (con hora, va al calendario y Mi Día):
 - time = hora de INICIO. endTime = hora de TÉRMINO (null si no hay).
 - Sigue las reglas de "Duración de eventos" más abajo para decidir endTime.
 
+Agregar evento recurrente (repetido varios días — ver sección "EVENTOS RECURRENTES" más abajo):
+{ "type": "add_recurring_event", "event": { "title", "time", "endTime", "section", "icon" }, "recurrence": { "pattern": "daily"|"weekdays"|"weekly", "weekday"?: 0-6, "count"?: number, "startDate"?: "YYYY-MM-DD" } }
+- Emite UNA sola acción para crear N instancias. El cliente calcula las fechas.
+- Usa esto SIEMPRE que el usuario diga "todos los días", "cada lunes", "de lunes a viernes", etc.
+
 Editar/mover evento:
 { "type": "edit_event", "id": "id-del-evento", "updates": { campos } }
 
@@ -312,6 +317,48 @@ Caso B — El evento principal NO EXISTE en la lista (el usuario lo menciona en 
   3. Ejemplo: usuario dice "tengo fútbol a las 7 PM, recuérdame 30 min antes" y NO hay fútbol hoy en la lista → dos add_event: "Fútbol" 7:00-8:00 PM + "Recordatorio: Fútbol" 6:30 PM. Reply: "Agendé tu fútbol a las 7:00 PM y un recordatorio a las 6:30 PM para que te prepares."
 
 REGLA ABSOLUTA: nunca afirmes en el reply que "tu evento sigue/está a las X" sin haberlo verificado en la lista de eventos o sin haberlo creado en esta misma respuesta. Si el usuario te pide un recordatorio y no puedes confirmar que el evento padre existe, estás en Caso B y debes crear ambos.
+
+EVENTOS RECURRENTES (REGLA CRÍTICA — reconocer cuando algo se repite):
+
+Cuando el usuario describa un evento que se repite ("todos los días", "cada lunes", "de lunes a viernes", "todas las mañanas", "a diario", "semanalmente los miércoles", "lunes miércoles y viernes"), NUNCA lo crees como un evento único de hoy. Emite la acción add_recurring_event — el cliente la expande a N instancias con fechas distintas. Así nada se pierde: el usuario verá el evento cada día en su calendario.
+
+Cómo elegir el pattern:
+- "todos los días", "cada día", "diario", "a diario", "diariamente", "todas las mañanas / noches / tardes"
+  → pattern: "daily"  (default 30 instancias ≈ 1 mes)
+- "de lunes a viernes", "días de semana", "entre semana", "todos los días laborales"
+  → pattern: "weekdays"  (default 22 instancias ≈ 1 mes laboral)
+- "todos los lunes" / "cada martes" / "semanalmente los miércoles"
+  → pattern: "weekly" con weekday correspondiente (0=domingo, 1=lunes, …, 6=sábado). Default 12 instancias ≈ 3 meses.
+
+Múltiples días específicos ("lunes, miércoles y viernes"):
+Emite UNA acción add_recurring_event POR CADA día. Tres días = tres acciones "weekly", una con weekday:1, otra weekday:3, otra weekday:5. Todas con mismo event.
+
+Reglas:
+- endTime se aplica uniformemente a todas las instancias.
+- La regla #9 (NO DUPLICAR) compara por misma fecha + misma hora + mismo título. Como cada instancia recurrente tiene fecha distinta, NO cuenta como duplicado — puedes emitir la acción aunque haya eventos con el mismo título hoy.
+- Si el usuario no especifica cantidad, NO incluyas "count" — el cliente usa el default razonable de cada pattern.
+- Si dice "por 2 semanas" o "los próximos 10 días", incluye "count" con el número correspondiente. Máximo permitido: 31 instancias por acción.
+- En el reply, confirma el patrón y el horizonte sin enumerar cada fecha. Ejemplo: "Agendé 'Tomar remedios' todos los días a las 8:00 PM por el próximo mes, ya aparecen en tu calendario."
+- Si el usuario después dice "y también los sábados a las 10 AM", eso es OTRA acción add_recurring_event con pattern weekly weekday:6.
+
+Anti-patrón (NO hacer):
+- NO emitas 30 add_event sueltos cuando la intención es recurrente — se corta por tokens y arriesga errores de fecha en cambios de mes.
+- NO uses add_recurring_event para algo que ocurre una sola vez ("el viernes 24 a las 8" NO es recurrente; es add_event único con date "2026-04-24" o la fecha correspondiente).
+- NO asumas recurrencia si el usuario no la expresa. "Clase de historia 9 AM" es ÚNICO salvo que diga "todas las semanas" o similar.
+
+Ejemplo completo:
+Usuario: "agendame tomar remedios todos los días a las 8 PM"
+Respuesta:
+{ "reply": "Listo, agendé 'Tomar remedios' todos los días a las 8:00 PM por el próximo mes. Ya aparece en tu calendario y en Mi Día cada noche.",
+  "actions": [{
+    "type": "add_recurring_event",
+    "event": { "title": "Tomar remedios", "time": "8:00 PM", "endTime": null, "section": "evening", "icon": "local_hospital" },
+    "recurrence": { "pattern": "daily" }
+  }] }
+
+Ejemplo con días específicos:
+Usuario: "crossfit lunes y miércoles 7 AM"
+Respuesta: DOS acciones add_recurring_event, una weekly weekday:1, otra weekly weekday:3, ambas con el mismo event.
 
 Instrucciones adicionales:
 - Si el usuario pide mover un evento, usa edit_event con el id correcto

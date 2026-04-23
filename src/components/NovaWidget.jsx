@@ -8,6 +8,7 @@ import { getCachedBehavior } from '../services/behaviorAnalysis'
 import { isIOSSafari } from '../lib/permissions'
 import { readPreferenceSync } from '../hooks/useAppPreferences'
 import { novaSay } from '../utils/novaPersonality'
+import { expandRecurrence } from '../utils/expandRecurrence'
 
 // En Safari iPhone webkitSpeechRecognition existe desde iOS 14.5 y sí funciona
 // en Safari regular con permiso concedido. Antes gateábamos SR=null
@@ -420,6 +421,7 @@ export default function NovaWidget({
 
     const chipDefs = {
       add_event:      { icon: 'add_circle',  label: `Creando "${action.event?.title || ''}"` },
+      add_recurring_event: { icon: 'event_repeat', label: `Agendando "${action.event?.title || ''}" recurrente` },
       edit_event:     { icon: 'edit',        label: `Actualizando evento` },
       delete_event:   { icon: 'delete',      label: `Eliminando evento` },
       mark_task_done: { icon: 'task_alt',    label: `Completando tarea` },
@@ -435,6 +437,12 @@ export default function NovaWidget({
     }
 
     if (action.type === 'add_event')      onAddEvent?.(action.event)
+    else if (action.type === 'add_recurring_event') {
+      // Nova manda la intención recurrente; el cliente expande a N eventos
+      // con fechas concretas. Ver utils/expandRecurrence.js.
+      const expanded = expandRecurrence(action)
+      for (const ev of expanded) onAddEvent?.(ev)
+    }
     else if (action.type === 'edit_event')   onEditEvent?.(action.id, action.updates ?? {})
     else if (action.type === 'delete_event') onDeleteEvent?.(action.id)
     else if (action.type === 'mark_task_done' || action.type === 'toggle_task') onToggleTask?.(action.id)

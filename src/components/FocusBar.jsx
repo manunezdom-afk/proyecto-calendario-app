@@ -5,6 +5,7 @@ import MicButton from './MicButton'
 import { isIOSSafari } from '../lib/permissions'
 import { readPreferenceSync } from '../hooks/useAppPreferences'
 import { novaSay } from '../utils/novaPersonality'
+import { expandRecurrence } from '../utils/expandRecurrence'
 
 // En Safari iPhone webkitSpeechRecognition existe desde iOS 14.5 y sí funciona
 // en muchos contextos (Safari regular con permiso concedido). Antes gateábamos
@@ -423,6 +424,13 @@ export default function FocusBar({
         if (action.type === 'add_event' && action.event) {
           onAddEvent?.(action.event)
           if (action.event.id) appliedEventIds.push(action.event.id)
+        } else if (action.type === 'add_recurring_event') {
+          // Expandimos la intención recurrente a N add_event concretos.
+          // Los ids los asigna el hook de eventos, así que no intentamos
+          // rellenar appliedEventIds (el undo inline para recurrentes se
+          // apoya en el toast genérico de Nova).
+          const expanded = expandRecurrence(action)
+          for (const ev of expanded) onAddEvent?.(ev)
         } else if (action.type === 'edit_event' && action.id) {
           const realId = events.some(e => e.id === action.id)
             ? action.id
