@@ -121,23 +121,21 @@ function SlideIllustrationPlanner() {
   )
 }
 
-function Pill({ icon, label, color, delay, x, y }) {
+function Pill({ icon, label, color, delay }) {
   return (
     <motion.div
-      initial={{ opacity: 0, x: 0, y: 0, scale: 0.8 }}
-      animate={{ opacity: 1, x, y, scale: 1 }}
-      transition={{ delay, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-      className="absolute flex items-center gap-1.5 rounded-full border px-3 py-1.5"
+      initial={{ opacity: 0, y: 6, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+      className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 whitespace-nowrap"
       style={{
-        top: '50%', left: '50%',
         background: 'rgba(20, 18, 36, 0.85)',
         borderColor: `${color}55`,
         boxShadow: `0 0 20px ${color}33`,
-        transform: 'translate(-50%, -50%)',
       }}
     >
       <span
-        className="material-symbols-outlined"
+        className="material-symbols-outlined flex-shrink-0"
         style={{ fontSize: 16, color, fontVariationSettings: "'FILL' 1" }}
       >
         {icon}
@@ -148,38 +146,27 @@ function Pill({ icon, label, color, delay, x, y }) {
 }
 
 function SlideIllustrationTasksEvents() {
-  // En iPhone narrow los pills chocaban con el orbe del centro. Empujamos
-  // las pills más afuera (x=±110) y achicamos el orbe (52→42) para dejar
-  // margen claro entre cada elemento y el centro.
+  // Layout flex para que en iPhone narrow no se corte ningún label. Antes
+  // las pills estaban absolute con x=±110 y el texto "Eventos"/"Recordatorios"
+  // se recortaba contra el borde cuando la pantalla era angosta. Ahora fila
+  // superior con Tareas · orbe · Eventos (gap acotado), abajo Recordatorios
+  // centrado. whitespace-nowrap en las pills garantiza que el texto nunca
+  // se parta en dos líneas.
   return (
-    <div className="relative h-[220px] w-full">
-      {/* Conexión sutil entre ambos */}
-      <motion.div
-        aria-hidden="true"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 0.3 }}
-        transition={{ delay: 0.6, duration: 0.8 }}
-        style={{
-          position: 'absolute',
-          top: '50%', left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: 240, height: 1,
-          background: 'linear-gradient(90deg, transparent, rgba(124,107,255,0.5), transparent)',
-        }}
-      />
-      <Pill icon="check_box"   label="Tareas"        color="#ec4899" delay={0.1}  x={-110} y={-46} />
-      <Pill icon="event"       label="Eventos"       color="#3b82f6" delay={0.25} x={110}  y={-46} />
-      <Pill icon="alarm"       label="Recordatorios" color="#7c6bff" delay={0.45} x={0}    y={54} />
-      {/* Orbe pequeño al centro */}
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+    <div className="relative flex h-[220px] w-full flex-col items-center justify-center gap-3 px-2">
+      <div className="flex items-center justify-center gap-3">
+        <Pill icon="check_box" label="Tareas" color="#ec4899" delay={0.1} />
         <motion.div
           initial={{ opacity: 0, scale: 0.4 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.35, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="flex-shrink-0"
         >
           <NovaOrb size={42} ambient />
         </motion.div>
+        <Pill icon="event" label="Eventos" color="#3b82f6" delay={0.25} />
       </div>
+      <Pill icon="alarm" label="Recordatorios" color="#7c6bff" delay={0.45} />
     </div>
   )
 }
