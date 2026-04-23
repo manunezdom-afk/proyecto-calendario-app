@@ -9,6 +9,10 @@
     <!-- Iconos -->
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/icons/apple-touch-icon-120.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/apple-touch-icon-152.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/icons/apple-touch-icon-167.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
 
     <!-- Manifest -->
@@ -47,7 +51,7 @@
     <link
       rel="preload"
       as="style"
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1&display=block"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1&display=swap"
       onload="this.onload=null;this.rel='stylesheet'"
     />
     <noscript>
@@ -56,7 +60,7 @@
         rel="stylesheet"
       />
       <link
-        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1&display=block"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1&display=swap"
         rel="stylesheet"
       />
     </noscript>
@@ -359,7 +363,7 @@
       </div>
     </div>
     <script>
-      // Escape hatch: si a los 6 s el bundle todavía no montó React (el splash
+      // Escape hatch: si a los 4 s el bundle todavía no montó React (el splash
       // sigue visible), mostramos un botón de "Recargar". En iPhone con red
       // pésima o un SW en estado raro el usuario antes se quedaba mirando el
       // orbe sin saber si el celular se había colgado. El botón se autodestruye
@@ -368,7 +372,7 @@
         var timer = setTimeout(function () {
           var btn = document.getElementById('focus-splash-reload');
           if (btn && document.getElementById('focus-splash')) btn.classList.add('show');
-        }, 6000);
+        }, 4000);
         // Si React monta antes, el #focus-splash desaparece por el re-render
         // de createRoot; limpiamos el timer en un MutationObserver simple para
         // no dejar el timer corriendo eternamente.

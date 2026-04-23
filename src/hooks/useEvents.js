@@ -137,7 +137,27 @@ export function useEvents() {
     // Al cambiar de usuario, partimos del cache propio (no del global compartido)
     setEvents(dataService.getCachedEvents(user.id))
 
-    refetch('(init)')
+    // Diferimos el trabajo de red y la apertura del WebSocket realtime fuera
+    // del paint crítico. Abrir un canal de Supabase en el useEffect síncrono
+    // del primer render agrega ~50-100 ms de jank en iPhone (handshake TLS
+    // + parse del SDK). Corriendo en idle, el planner pinta primero con los
+    // datos de cache y la nube se reconcilia apenas hay hueco.
+    let channel = null
+    let cancelled = false
+    const kick = () => {
+      if (cancelled) return
+      refetch('(init)')
+      channel = supabase
+        .channel(`events-${user.id}`)
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'events', filter: `user_id=eq.${user.id}` },
+          () => refetch('(realtime)'),
+        )
+        .subscribe()
+    }
+    const idleHandle = typeof requestIdleCallback === 'function'
+      ? requestIdleCallback(kick, { timeout: 1500 })
+      : setTimeout(kick, 0)
 
     // Sync al volver a la pestaña. visibilitychange y focus suelen disparar a
     // la vez en iOS: el helper coalesced dedupea la ráfaga.
@@ -145,19 +165,16 @@ export function useEvents() {
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('focus', onVisibility)
 
-    // Realtime: cualquier cambio en la tabla events del user dispara refetch
-    const channel = supabase
-      .channel(`events-${user.id}`)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'events', filter: `user_id=eq.${user.id}` },
-        () => refetch('(realtime)'),
-      )
-      .subscribe()
-
     return () => {
+      cancelled = true
+      if (typeof cancelIdleCallback === 'function' && typeof idleHandle === 'number') {
+        cancelIdleCallback(idleHandle)
+      } else {
+        clearTimeout(idleHandle)
+      }
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('focus', onVisibility)
-      supabase.removeChannel(channel)
+      if (channel) supabase.removeChannel(channel)
     }
   }, [user?.id, refetch])
 

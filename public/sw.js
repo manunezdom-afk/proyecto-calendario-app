@@ -20,7 +20,7 @@
 // Resultado: cold start en PWA instalada ≈ 0 ms de espera de red para el HTML;
 // el usuario ve el bundle (ya cacheado) parseando inmediatamente.
 
-const VERSION = 'v16'
+const VERSION = 'v19'
 const SHELL_CACHE = `focus-shell-${VERSION}`
 const ASSETS_CACHE = `focus-assets-${VERSION}`
 const CURRENT_CACHES = [SHELL_CACHE, ASSETS_CACHE]
@@ -33,32 +33,110 @@ const PRECACHE_URLS = [OFFLINE_FALLBACK, '/manifest.json', '/icons/icon.svg']
 const NAV_NETWORK_TIMEOUT_MS = 3000
 // Timeout por URL del precache. Evita que un fetch colgado en iPhone deje
 // el install del SW en loop — si una URL tarda, la saltamos y continuamos.
-const PRECACHE_URL_TIMEOUT_MS = 4000
+const PRECACHE_URL_TIMEOUT_MS = 8000
+
+async function fetchWithTimeout(url, timeoutMs, init = {}) {
+  const controller = new AbortController()
+  const t = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { cache: 'reload', signal: controller.signal, ...init })
+  } catch {
+    return null
+  } finally {
+    clearTimeout(t)
+  }
+}
+
+// Una Response obtenida tras seguir un redirect (p.ej. Vercel redirigiendo
+// /index.html → /) queda con redirected=true. Cuando el SW entrega esa
+// Response como respuesta a un request navigate, el browser tira:
+//   "The script has an unsupported MIME type" / "response served by service
+//    worker has redirections"
+// y se rompe toda la navegación — pantalla en blanco.
+//
+// Solución canónica (workbox hace lo mismo): reconstruir la Response con
+// el body pero sin el flag redirected. Solo hace falta hacerlo si la
+// Response original ya viene redirigida.
+async function cleanRedirect(res) {
+  if (!res || !res.redirected) return res
+  const body = await res.blob()
+  return new Response(body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: res.headers,
+  })
+}
+
+// Extrae las URLs de assets (JS + CSS) referenciadas en el index.html. Vite
+// emite nombres con hash, así que no las podemos hardcodear acá — las leemos
+// del HTML recién fetcheado al instalar el SW.
+function extractAssetUrls(html) {
+  const urls = new Set()
+  const re = /(?:src|href)="(\/assets\/[^"]+\.(?:js|css))"/g
+  let m
+  while ((m = re.exec(html)) !== null) urls.add(m[1])
+  return [...urls]
+}
 
 // ── Install ────────────────────────────────────────────────────────────────
 // cache: 'reload' fuerza al browser a bypassear su HTTP cache y pedir la
 // versión fresca desde el origen. Clave cuando se publica una nueva build:
 // evita que el SW precache un index.html viejo servido por el disk cache.
+//
+// Además del shell y estáticos, al instalar precacheamos el bundle principal
+// (el JS/CSS con el hash actual) para que la próxima cold start no necesite
+// red para parsear la app. Antes solo cacheábamos el HTML y la primera vez
+// que el usuario abría la PWA desde home screen tenía que bajar 150+ KB gzip
+// de JS antes de poder renderizar — con iPhone en 4G variable eso se sentía
+// como pantalla en blanco. Ahora el install deja TODO listo para que la
+// segunda apertura sea verdaderamente instant.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
-      const cache = await caches.open(SHELL_CACHE)
-      await Promise.all(
+      const shell = await caches.open(SHELL_CACHE)
+      const assets = await caches.open(ASSETS_CACHE)
+
+      // 1. Precache del shell + manifest + icon base (en paralelo). Pasamos
+      //    por cleanRedirect: si Vercel redirigió /index.html → /, el
+      //    Response queda con redirected=true y servirlo después a una
+      //    navegación tira "response served by service worker has
+      //    redirections" → pantalla en blanco. Reconstruimos para limpiar
+      //    el flag antes de cachear.
+      const shellResults = await Promise.all(
         PRECACHE_URLS.map(async (url) => {
-          const controller = new AbortController()
-          const t = setTimeout(() => controller.abort(), PRECACHE_URL_TIMEOUT_MS)
-          try {
-            const res = await fetch(url, { cache: 'reload', signal: controller.signal })
-            if (res && res.ok) await cache.put(url, res.clone())
-          } catch {
-            // seguimos: si una URL falla o demora, no bloqueamos la
-            // instalación. En iPhone con red lenta esto evitaba cold starts
-            // con el SW atascado en install.
-          } finally {
-            clearTimeout(t)
+          const res = await fetchWithTimeout(url, PRECACHE_URL_TIMEOUT_MS)
+          if (res && res.ok) {
+            const clean = await cleanRedirect(res.clone())
+            await shell.put(url, clean)
+            return { url, html: url === OFFLINE_FALLBACK ? await res.text() : null }
           }
+          return null
         }),
       )
+
+      // 2. Del index.html extraemos las URLs de assets hasheados y las
+      //    cacheamos también. Esto hace que la próxima cold start no
+      //    dependa de red para los JS/CSS del bundle.
+      const htmlEntry = shellResults.find((r) => r && r.url === OFFLINE_FALLBACK)
+      if (htmlEntry?.html) {
+        try {
+          const assetUrls = extractAssetUrls(htmlEntry.html)
+          await Promise.all(
+            assetUrls.map(async (url) => {
+              const res = await fetchWithTimeout(url, PRECACHE_URL_TIMEOUT_MS)
+              if (res && res.ok) {
+                const clean = await cleanRedirect(res)
+                await assets.put(url, clean)
+              }
+            }),
+          )
+        } catch {
+          // Si el parseo falla por cualquier razón, seguimos. La app va a
+          // caer a red en la primera nav — peor que con precache pero no
+          // peor que antes de este cambio.
+        }
+      }
+
       await self.skipWaiting()
     })(),
   )
@@ -108,9 +186,12 @@ async function staleWhileRevalidateDocument(request) {
       })
       clearTimeout(t)
       if (res && res.ok) {
-        cache.put(OFFLINE_FALLBACK, res.clone()).catch(() => {})
+        // Limpiamos el redirect antes de cachear: si Vercel redirigió,
+        // servir eso a un navigate request tira error y pantalla blanca.
+        const clean = await cleanRedirect(res.clone())
+        cache.put(OFFLINE_FALLBACK, clean).catch(() => {})
       }
-      return res
+      return res.redirected ? await cleanRedirect(res) : res
     } catch {
       clearTimeout(t)
       return null
@@ -143,8 +224,11 @@ async function cacheFirstImmutable(request) {
   if (cached) return cached
   try {
     const res = await fetch(request)
-    if (res && res.ok) cache.put(request, res.clone()).catch(() => {})
-    return res
+    if (res && res.ok) {
+      const clean = await cleanRedirect(res.clone())
+      cache.put(request, clean).catch(() => {})
+    }
+    return res.redirected ? await cleanRedirect(res) : res
   } catch {
     return cached || Response.error()
   }
@@ -154,9 +238,12 @@ async function staleWhileRevalidate(request) {
   const cache = await caches.open(ASSETS_CACHE)
   const cached = await cache.match(request)
   const networkFetch = fetch(request)
-    .then((res) => {
-      if (res && res.ok) cache.put(request, res.clone()).catch(() => {})
-      return res
+    .then(async (res) => {
+      if (res && res.ok) {
+        const clean = await cleanRedirect(res.clone())
+        cache.put(request, clean).catch(() => {})
+      }
+      return res.redirected ? cleanRedirect(res) : res
     })
     .catch(() => cached)
   return cached || networkFetch

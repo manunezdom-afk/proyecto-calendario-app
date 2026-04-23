@@ -222,11 +222,27 @@ export function useNotifications({ events = [] } = {}) {
     })
   }, [events])
 
-  // Run scanner immediately and every 60 seconds
+  // Run scanner immediately and every 60 seconds.
+  //
+  // El primer scan() se difiere fuera del paint crítico: con muchos eventos
+  // en cache, el loop síncrono (parseEventTime + localStorage.setItem por
+  // cada offset) podía congelar el main thread unos cientos de ms en el
+  // primer render — lo que el usuario percibía como "pantalla en blanco".
+  // requestIdleCallback (con fallback a setTimeout) asegura que React pinta
+  // la UI antes, y el scan corre en el primer hueco de idle.
   useEffect(() => {
-    scan()
+    const deferred = typeof requestIdleCallback === 'function'
+      ? requestIdleCallback(scan, { timeout: 1500 })
+      : setTimeout(scan, 0)
     const id = setInterval(scan, 60_000)
-    return () => clearInterval(id)
+    return () => {
+      if (typeof cancelIdleCallback === 'function' && typeof deferred === 'number') {
+        cancelIdleCallback(deferred)
+      } else {
+        clearTimeout(deferred)
+      }
+      clearInterval(id)
+    }
   }, [scan])
 
   // ── Helpers ───────────────────────────────────────────────────────────────
