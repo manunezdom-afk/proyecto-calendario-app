@@ -727,7 +727,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   })()
 
   return (
-    <div className="bg-surface font-body text-on-surface min-h-screen pb-56 dark:bg-slate-900 dark:text-slate-100">
+    <div className="bg-surface font-body text-on-surface min-h-screen pb-8 dark:bg-slate-900 dark:text-slate-100">
 
       {/* Setup card legacy — reemplazado por OnboardingTour animado.
           El sistema de user_signals aprende el cronotipo solo, sin preguntar. */}
