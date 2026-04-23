@@ -5,6 +5,7 @@ import MonthCalendar from '../components/MonthCalendar'
 import WeekTimeGrid from '../components/WeekTimeGrid'
 import { resolveEventDate } from '../utils/resolveEventDate'
 import { eventStatusAtNow } from '../utils/eventDuration'
+import { isReminderItem } from '../utils/reminders'
 
 // Descripción útil: no mostramos cuando es solo una fecha ISO (YYYY-MM-DD) —
 // data vieja generada por QuickAddSheet cuando stuffing date en description.
@@ -268,9 +269,18 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
 
   // ISO del día seleccionado en la vista semana
   const activeDayISO = CALENDAR_DAYS.find((d) => d.num === activeDay)?.iso ?? todayISOStr
+  const isToday = activeDayISO === todayISOStr
 
   // Filtramos eventos por día seleccionado (resolviendo cualquier formato de fecha)
-  const dayEvents = effectiveEvents.filter((e) => resolveEventDate(e) === activeDayISO)
+  const dayEventsRaw = effectiveEvents.filter((e) => resolveEventDate(e) === activeDayISO)
+  // En "hoy", ocultamos recordatorios cuya hora ya pasó — son avisos que
+  // cumplieron su función y sólo ensucian la vista. Los eventos normales
+  // pasados se mantienen (sirven para repasar el día). En otros días no
+  // filtramos: se muestra exactamente lo guardado.
+  const nowForFilter = new Date()
+  const dayEvents = isToday
+    ? dayEventsRaw.filter((e) => !(isReminderItem(e) && eventStatusAtNow(e, nowForFilter) === 'past'))
+    : dayEventsRaw
   const focusEvents   = dayEvents.filter((e) => e.section === 'focus')
   const eveningEvents = dayEvents.filter((e) => e.section === 'evening')
 
