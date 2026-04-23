@@ -37,7 +37,13 @@ export function registerServiceWorker() {
     waiting.postMessage({ type: 'SKIP_WAITING' })
   }
 
-  window.addEventListener('load', () => {
+  // Registro del SW sin esperar al evento `load`. En iPhone PWA standalone
+  // a veces `load` se dispara antes de que adjuntemos el listener (la evaluación
+  // del module puede ir después del parseo de todos los recursos) y el listener
+  // nunca corre → el SW no se registra → al siguiente cold start se repite el
+  // problema. Registramos directo: si el navegador soporta SW, esto es seguro
+  // desde cualquier punto post-parse.
+  const register = () => {
     navigator.serviceWorker
       .register('/sw.js', { scope: '/' })
       .then((reg) => {
@@ -103,7 +109,16 @@ export function registerServiceWorker() {
         })
       })
       .catch((err) => console.warn('[Focus] ⚠️ SW registration failed', err))
-  })
+  }
+
+  // Si ya terminó de cargar, registramos ya. Si no, esperamos a load para
+  // no competir por recursos con la primera pintura de la app. iOS es quien
+  // se beneficia del path directo: el load a veces ya pasó para cuando corre.
+  if (document.readyState === 'complete') {
+    register()
+  } else {
+    window.addEventListener('load', register, { once: true })
+  }
 }
 
 // ── Install prompt (BeforeInstallPromptEvent) ──────────────────────────────

@@ -234,9 +234,34 @@
         0%, 100% { transform: scale(1);    opacity: 0.55; }
         50%      { transform: scale(1.04); opacity: 1; }
       }
+
+      /* Señal de vida para cold starts lentos en iPhone. Aparece recién a
+         los 2.2s, así que en booteos rápidos (PC, iPhone con bundle
+         cacheado) nadie la ve. Ubicada donde WelcomeScreen pinta luego su
+         hint "toca para continuar" — misma posición, tamaño y letter-spacing
+         → handoff visual continuo si React llega a montar después. */
+      #focus-splash .loading-hint {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(24px, 4vh, 36px));
+        text-align: center;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        color: rgba(255,255,255,0.4);
+        opacity: 0;
+        animation: focusSplashHint 0.5s ease-out 2.2s forwards;
+        user-select: none;
+        z-index: 1;
+      }
+      @keyframes focusSplashHint {
+        to { opacity: 0.4; }
+      }
+
       @media (prefers-reduced-motion: reduce) {
         #focus-splash .orb-halo,
         #focus-splash .orb-core::after { animation: none; }
+        #focus-splash .loading-hint { animation: none; opacity: 0.4; }
       }
     </style>
 
@@ -305,6 +330,7 @@
           <div class="spacer-hairline"></div>
           <div class="spacer-subline"></div>
         </div>
+        <p class="loading-hint">cargando…</p>
       </div>
     </div>
     <script type="module" src="/src/main.jsx"></script>
