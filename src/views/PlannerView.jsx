@@ -8,6 +8,7 @@ import MorningBrief      from '../components/MorningBrief'
 const RecurringMeetingSheet = lazy(() => import('../components/RecurringMeetingSheet'))
 import { useUserProfile } from '../hooks/useUserProfile'
 import { todayISO as todayISODate, parseTimeToDecimal } from '../utils/time'
+import { resolveEventDate } from '../utils/resolveEventDate'
 import {
   normalizeTitleKey,
   extractReminderMeta,
@@ -485,7 +486,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   const tomorrowEvents = (() => {
     const iso = tomorrowISO()
     return (events || [])
-      .filter((e) => e?.date === iso)
+      .filter((e) => resolveEventDate(e) === iso)
       .map((e) => {
         const firstTime = String(e.time || '').split('-')[0].trim()
         return { ...e, _displayTime: firstTime || '—', _h: parseTimeToDecimal(firstTime) }

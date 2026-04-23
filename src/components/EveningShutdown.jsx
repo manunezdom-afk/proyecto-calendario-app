@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import AuroraBackground from './AuroraBackground'
 import NovaOrb from './NovaOrb'
 import { splitReminders } from '../utils/reminders'
+import { resolveEventDate } from '../utils/resolveEventDate'
 
 const PHASES = ['review', 'move', 'tomorrow']
 const PHASE_LABELS = { review: 'Revisión', move: 'Pendientes', tomorrow: 'Mañana' }
@@ -291,10 +292,10 @@ export default function EveningShutdown({
   // Sólo contamos eventos principales + recordatorios independientes. Los
   // recordatorios atados a un evento ya existente se absorben en el evento
   // padre — si no, "tienes 2 cosas hoy" cuando en realidad es una sola.
-  const todayEventsRaw = events.filter(e => !e.date || e.date === todayISO)
+  const todayEventsRaw = events.filter(e => resolveEventDate(e) === todayISO)
   const { events: todayMainEvents, standaloneReminders: todayStandaloneReminders } = splitReminders(todayEventsRaw)
   const todayEvents  = [...todayMainEvents, ...todayStandaloneReminders]
-  const tomorrowEventsRaw = events.filter(e => e.date === tomorrowISO)
+  const tomorrowEventsRaw = events.filter(e => resolveEventDate(e) === tomorrowISO)
   const { events: tomorrowMainEvents, standaloneReminders: tomorrowStandaloneReminders } = splitReminders(tomorrowEventsRaw)
   const tomorrowEvents = [...tomorrowMainEvents, ...tomorrowStandaloneReminders]
 
