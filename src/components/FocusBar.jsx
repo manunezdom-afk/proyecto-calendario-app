@@ -755,7 +755,6 @@ export default function FocusBar({
             disabled={isThinking || isAnalyzingPhoto}
             enterKeyHint="send"
             autoComplete="off"
-            autoCorrect="off"
             // text-[16px] es crítico en iOS: Safari auto-zooma al enfocar
             // cualquier input con font-size < 16px, arruinando el layout.
             className="flex-1 min-w-0 bg-transparent text-[16px] text-on-surface outline-none placeholder:text-outline/50 disabled:opacity-50"
@@ -926,7 +925,6 @@ export default function FocusBar({
             disabled={isThinking || isAnalyzingPhoto}
             enterKeyHint="send"
             autoComplete="off"
-            autoCorrect="off"
             className="flex-1 min-w-0 bg-transparent text-[16px] text-white outline-none placeholder:text-white/25 disabled:opacity-50"
           />
 

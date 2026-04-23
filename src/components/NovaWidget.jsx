@@ -895,7 +895,6 @@ export default function NovaWidget({
           disabled={isLoading || isListening || isAnalyzingPhoto}
           enterKeyHint="send"
           autoComplete="off"
-          autoCorrect="off"
           className={`flex-1 min-w-0 bg-transparent outline-none text-slate-700 placeholder:text-slate-300 disabled:opacity-50 ${isDesktop ? 'text-[13px]' : 'text-[15px]'}`}
         />
 
