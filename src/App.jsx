@@ -388,6 +388,7 @@ export default function App() {
                   onAddEvent={addEvent}
                   onDeleteEvent={deleteEvent}
                   onEditEvent={editEvent}
+                  onToggleTask={toggleTask}
                   onOpenTask={(event) => openTaskDetail(event)}
                   onExportClick={() => { setImportExportInitialTab('export'); setImportExportOpen(true) }}
                   onOpenDay={(iso) => {

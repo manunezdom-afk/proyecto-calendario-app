@@ -245,7 +245,7 @@ function formatWeekRange(weekStart) {
 }
 
 // ─── Main view ────────────────────────────────────────────────────────────────
-export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteEvent, onOpenTask, onExportClick, onOpenDay, isDesktop = false }) {
+export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteEvent, onOpenTask, onToggleTask, onExportClick, onOpenDay, isDesktop = false }) {
   const [showModal, setShowModal] = useState(false)
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('dia')           // 'dia' | 'semana' | 'mes'
@@ -407,7 +407,9 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
             <WeekTimeGrid
               weekStart={weekStart}
               events={effectiveEvents}
+              tasks={tasks}
               onOpenTask={onOpenTask}
+              onToggleTask={onToggleTask}
               onAddAt={(iso) => {
                 setPendingDate(iso)
                 setShowModal(true)

@@ -53,7 +53,7 @@ function hourLabel(h, isNarrow) {
   return `${h - 12} PM`
 }
 
-export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAddAt }) {
+export default function WeekTimeGrid({ weekStart, events = [], tasks = [], onOpenTask, onToggleTask, onAddAt }) {
   // Detectamos viewport angosto para adaptar layout. Usamos matchMedia para
   // reaccionar a rotaciones y split-view sin forzar renders innecesarios.
   const [isNarrow, setIsNarrow] = useState(() =>
@@ -87,6 +87,18 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
   const hours = []
   for (let h = START_H; h <= END_H; h++) hours.push(h)
   const gridHeight = (END_H - START_H) * ROW_H
+
+  // Tareas "de hoy" — el modelo de task no tiene fecha, usa categoría.
+  // Las mostramos como una fila all-day encima de la grilla, sólo en la
+  // columna del día actual (es donde tienen sentido). Antes no se veían en
+  // ningún lado de la semanal y el usuario quedaba pensando que se le
+  // habían borrado; ahora aparecen como chips y el tap las marca hechas.
+  const todayIso = toISOToday()
+  const todayTasks = useMemo(() => {
+    const isToday = days.some((d) => d.iso === todayIso)
+    if (!isToday) return []
+    return (tasks || []).filter((t) => t && t.category === 'hoy' && !t.done)
+  }, [tasks, days, todayIso])
 
   // Group events by day iso, then compute positions. Los clamps son en
   // [START_H, END_H] para que un evento a las 23:30 se vea en el fondo, y
@@ -210,6 +222,58 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
           ))}
         </div>
 
+        {/* All-day row — sólo se renderiza si hoy está en la semana y hay
+            tareas pendientes. Usa el mismo gridTemplate que el header y el
+            body para que las columnas alineen perfecto. En mobile los chips
+            son más chicos; en desktop respiran. */}
+        {todayTasks.length > 0 && (
+          <div
+            className="grid border-b border-slate-200 bg-surface-container-lowest/60"
+            style={{ gridTemplateColumns: gridTemplate }}
+          >
+            <div className={`flex items-start justify-end ${isNarrow ? 'pr-1 pt-1.5' : 'pr-2 pt-2'}`}>
+              <span className={`font-bold text-outline/70 uppercase tracking-wide ${isNarrow ? 'text-[8px]' : 'text-[9px]'}`}>
+                Tareas
+              </span>
+            </div>
+            {days.map((d) => (
+              <div
+                key={`allday-${d.iso}`}
+                className={`border-l border-slate-100 min-w-0 ${isNarrow ? 'px-0.5 py-1' : 'px-1 py-1.5'} ${d.isToday ? 'bg-primary/[0.04]' : ''}`}
+              >
+                {d.iso === todayIso && (
+                  <div className="flex flex-col gap-1">
+                    {todayTasks.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => onToggleTask?.(t.id)}
+                        title={t.label}
+                        className={`w-full text-left bg-secondary-container/60 hover:bg-secondary-container border-l-[3px] border-secondary rounded-r-md transition-colors overflow-hidden ${
+                          isNarrow ? 'px-1 py-0.5' : 'px-1.5 py-1'
+                        }`}
+                      >
+                        <p
+                          className={`font-semibold text-on-secondary-container leading-tight ${isNarrow ? 'text-[10px]' : 'text-[11px]'}`}
+                          style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {t.label}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Body grid */}
         <div
           className="relative grid"
@@ -281,33 +345,52 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
 
                 {/* Events — en mobile usamos tipografías más chicas y padding
                     mínimo. El border-l aporta identidad visual aunque el título
-                    esté muy truncado. title atributo mantiene accesibilidad. */}
+                    esté muy apretado. Antes se forzaba una sola línea con
+                    `truncate` y en iPhone los títulos quedaban en "Reunión de..."
+                    sin contexto; ahora permitimos 2 líneas (más si el bloque
+                    del evento es alto) y rompemos por palabra para que un
+                    título largo se entienda. El attr `title` queda para
+                    accesibilidad/hover en desktop. */}
                 <LayoutGroup>
-                  {positioned.map(({ ev, top, height }) => (
-                    <motion.button
-                      key={ev.id}
-                      layoutId={`week-event-${ev.id}`}
-                      layout
-                      type="button"
-                      onClick={() => onOpenTask?.(ev)}
-                      className={`absolute bg-primary/10 hover:bg-primary/20 border-l-[3px] border-primary rounded-r-md text-left transition-colors overflow-hidden z-[5] ${
-                        isNarrow ? 'left-0.5 right-0.5 px-1 py-0.5' : 'left-1 right-1 px-1.5 py-1'
-                      }`}
-                      initial={false}
-                      animate={{ top: top + 1, height }}
-                      transition={{ type: 'spring', damping: 14, stiffness: 180 }}
-                      title={`${ev.title}${ev.time ? ` · ${ev.time}` : ''}`}
-                    >
-                      <p className={`font-bold text-primary leading-tight truncate ${
-                        isNarrow ? 'text-[10px]' : 'text-[11px]'
-                      }`}>
-                        {ev.title}
-                      </p>
-                      {ev.time && !isNarrow && (
-                        <p className="text-[9px] text-primary/70 leading-tight truncate">{ev.time}</p>
-                      )}
-                    </motion.button>
-                  ))}
+                  {positioned.map(({ ev, top, height }) => {
+                    // Cuántas líneas caben en el alto del bloque — una hora
+                    // (48 px) admite 2 cómodas; 2 h+, 3; media hora, 1.
+                    const lineClamp = height < 28 ? 1 : height < 56 ? 2 : 3
+                    return (
+                      <motion.button
+                        key={ev.id}
+                        layoutId={`week-event-${ev.id}`}
+                        layout
+                        type="button"
+                        onClick={() => onOpenTask?.(ev)}
+                        className={`absolute bg-primary/10 hover:bg-primary/20 border-l-[3px] border-primary rounded-r-md text-left transition-colors overflow-hidden z-[5] ${
+                          isNarrow ? 'left-0.5 right-0.5 px-1 py-0.5' : 'left-1 right-1 px-1.5 py-1'
+                        }`}
+                        initial={false}
+                        animate={{ top: top + 1, height }}
+                        transition={{ type: 'spring', damping: 14, stiffness: 180 }}
+                        title={`${ev.title}${ev.time ? ` · ${ev.time}` : ''}`}
+                      >
+                        <p
+                          className={`font-bold text-primary leading-tight ${
+                            isNarrow ? 'text-[10px]' : 'text-[11px]'
+                          }`}
+                          style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: lineClamp,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {ev.title}
+                        </p>
+                        {ev.time && !isNarrow && height >= 40 && (
+                          <p className="text-[9px] text-primary/70 leading-tight truncate">{ev.time}</p>
+                        )}
+                      </motion.button>
+                    )
+                  })}
                 </LayoutGroup>
               </div>
             )
