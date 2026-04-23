@@ -90,10 +90,19 @@ export default function DayTimeGrid({ events = [], onAdd, onOpenTask, referenceD
                 transition={{ type: 'spring', damping: 14, stiffness: 180 }}
                 aria-label={isPast ? `${ev.title} (finalizado)` : ev.title}
               >
-                <div className="flex items-center gap-1 min-w-0">
-                  <p className={`text-xs font-bold truncate flex-1 ${
-                    isPast ? 'text-outline line-through decoration-outline/40' : 'text-primary'
-                  }`}>
+                <div className="flex items-start gap-1 min-w-0">
+                  <p
+                    className={`text-xs font-bold flex-1 min-w-0 leading-tight ${
+                      isPast ? 'text-outline line-through decoration-outline/40' : 'text-primary'
+                    }`}
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: height < 40 ? 1 : 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     {ev.title}
                   </p>
                   {isPast && (

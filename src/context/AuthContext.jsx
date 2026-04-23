@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { dataService } from '../services/dataService'
 import { setSignalsUserId, flushSignalsQueue } from '../services/signalsService'
@@ -7,27 +7,91 @@ import { flushPendingSubscription, subscribeToPush, getPushStatus } from '../lib
 
 const AuthContext = createContext(null)
 
+// En iPhone PWA (standalone, anclada al inicio) un cold start reproduce una
+// carrera: el webview arranca, Supabase intenta refrescar el access token y
+// si la red todavía no está lista o hay un race con el reload del SW, el SDK
+// emite SIGNED_OUT con session=null aunque el refresh_token siga vivo en
+// storage. Tratar ese evento como un logout real (setUser(null)) vacía el
+// estado de eventos/tareas y gatilla el refetch con sesión stale → RLS
+// devuelve [] y sobrescribimos la caché local con vacío. Resultado que vio
+// el usuario: "me cerró sesión sola y al volver a entrar no estaban mis
+// eventos". Para evitarlo distinguimos el logout explícito (flag abajo) de
+// los SIGNED_OUT espurios y, si no fue intencional, reintentamos hidratar
+// desde storage antes de aceptar el null.
+const STORAGE_KEY = 'focus-auth'
+
+function hasStoredSession() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw)
+    return !!(parsed?.refresh_token || parsed?.access_token || parsed?.currentSession)
+  } catch {
+    return false
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser]           = useState(null)
   const [loading, setLoading]     = useState(true)
   const [authModal, setAuthModal] = useState(false)
+  // Marcamos cuando el logout viene del usuario (click en "cerrar sesión").
+  // Cualquier SIGNED_OUT que llegue sin este flag lo tratamos como ruido del
+  // SDK (refresh fallido, carrera con el SW en iOS) y no vaciamos el estado.
+  const intentionalSignOutRef = useRef(false)
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const current = session?.user ?? null
-      setUser(current)
-      setSignalsUserId(current?.id ?? null)
-      if (current) fetchBehavior(current.id).catch(() => {})
-      setLoading(false)
-    })
+    let cancelled = false
+
+    const hydrate = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (cancelled) return
+        const current = session?.user ?? null
+        // Si getSession vuelve null pero todavía hay tokens en storage, muy
+        // probablemente el refresh está en curso o falló por red. No
+        // marcamos logout: esperamos a que onAuthStateChange emita SIGNED_IN
+        // o TOKEN_REFRESHED con la sesión ya hidratada.
+        if (!current && hasStoredSession()) {
+          setLoading(false)
+          return
+        }
+        setUser(current)
+        setSignalsUserId(current?.id ?? null)
+        if (current) fetchBehavior(current.id).catch(() => {})
+      } catch {
+        // Ante cualquier error transitorio no forzamos logout. La próxima
+        // señal de onAuthStateChange decidirá el estado real.
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    hydrate()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         const newUser = session?.user ?? null
+
+        // SIGNED_OUT no intencional con tokens aún en storage: es el race de
+        // iOS PWA. Ignoramos el null y pedimos a Supabase que reintente
+        // hidratar — si la sesión está viva, el siguiente evento la trae.
+        if (event === 'SIGNED_OUT' && !intentionalSignOutRef.current && hasStoredSession()) {
+          console.warn('[Focus] ⚠️ SIGNED_OUT espurio ignorado (token todavía en storage)')
+          supabase.auth.getSession().catch(() => {})
+          return
+        }
+
+        // SIGNED_IN / TOKEN_REFRESHED / INITIAL_SESSION con null y storage
+        // aún presente: mismo caso, esperamos la próxima emisión.
+        if (!newUser && event !== 'SIGNED_OUT' && hasStoredSession()) return
+
         setUser(newUser)
         setSignalsUserId(newUser?.id ?? null)
+
+        if (event === 'SIGNED_OUT') intentionalSignOutRef.current = false
+
         if (event === 'SIGNED_IN' && newUser) {
           // Limpiamos las claves globales (sin userId) para que cualquier
           // caché residual del dispositivo — p. ej. tareas o eventos de una
@@ -49,7 +113,23 @@ export function AuthProvider({ children }) {
       }
     )
 
-    return () => subscription.unsubscribe()
+    // iOS PWA: cuando la app vuelve del background (visibilitychange) o el
+    // webview se restaura desde bfcache (pageshow), forzamos rehidratación.
+    // Sin esto, Supabase puede quedar con una sesión caducada en memoria
+    // aunque el refresh_token en storage siga vivo.
+    const reHydrate = () => {
+      if (document.hidden) return
+      supabase.auth.getSession().catch(() => {})
+    }
+    document.addEventListener('visibilitychange', reHydrate)
+    window.addEventListener('pageshow', reHydrate)
+
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', reHydrate)
+      window.removeEventListener('pageshow', reHydrate)
+    }
   }, [])
 
   // Sync cola offline al recuperar red
@@ -97,6 +177,11 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signOut = useCallback(async () => {
+    // Marcamos el logout intencional ANTES del signOut de Supabase. El
+    // listener de onAuthStateChange usa este flag para no confundir un
+    // cierre real con los SIGNED_OUT espurios que dispara el SDK en iOS
+    // PWA cuando falla un refresh en cold start.
+    intentionalSignOutRef.current = true
     if (supabase) await supabase.auth.signOut()
     setUser(null)
     // Limpiamos cualquier OTP pendiente: si quedó un code en sessionStorage

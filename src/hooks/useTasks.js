@@ -38,6 +38,25 @@ export function useTasks() {
         ? cloudTasks.filter(t => !pending.has(t.id))
         : cloudTasks
       const hydrated = hydrateTasksWithLinks(filtered, user.id)
+
+      // Misma guardia que useEvents: en iPhone PWA, un cold start con el
+      // token aún refrescándose hace que RLS devuelva [] sin error. Si la
+      // caché local tenía tareas, no las vaciamos hasta confirmar que el
+      // access_token está fresco — de otro modo el usuario ve sus tareas
+      // "desaparecer" al re-abrir la PWA.
+      if (hydrated.length === 0) {
+        const previous = dataService.getCachedTasks([], user.id)
+        if (previous && previous.length > 0) {
+          const { data: { session } } = await supabase.auth.getSession()
+          const expMs = session?.expires_at ? session.expires_at * 1000 : 0
+          const tokenFresh = !!session?.access_token && expMs - Date.now() > 30_000
+          if (!tokenFresh) {
+            console.warn(`[Focus] ⚠️ Refetch ${tag} devolvió 0 tareas con sesión stale — preservando caché local (${previous.length})`)
+            return
+          }
+        }
+      }
+
       setTasks(hydrated)
       dataService.setCachedTasks(hydrated, user.id)
       console.log(`[Focus] ☁️ ${filtered.length} tareas cargadas ${tag} (user=${user.id.slice(0,8)})`)

@@ -59,14 +59,19 @@ export function registerServiceWorker() {
             applyUpdate(reg)
             return
           }
-          // Si está visible, esperamos a que pase a background y vuelva.
-          // Ese es el punto menos intrusivo para un reload silencioso.
-          const onVisible = () => {
-            if (document.hidden) return
-            document.removeEventListener('visibilitychange', onVisible)
+          // Si está visible, aplicamos cuando pase a background. Antes el
+          // listener se disparaba al volver a visible — el reload caía justo
+          // cuando el usuario reabría la PWA, y en iPhone eso se veía como
+          // "me cerró la sesión" porque el cold start re-hidrataba Supabase
+          // mientras el SW ya estaba cambiando el controller. Ahora el
+          // reload ocurre mientras la app está oculta: al reabrir ya está
+          // la versión nueva, sin flash y sin race con el refresh del token.
+          const onHidden = () => {
+            if (!document.hidden) return
+            document.removeEventListener('visibilitychange', onHidden)
             applyUpdate(reg)
           }
-          document.addEventListener('visibilitychange', onVisible)
+          document.addEventListener('visibilitychange', onHidden)
         }
 
         // Caso 1: al registrar ya había un SW en waiting (usuario reabre

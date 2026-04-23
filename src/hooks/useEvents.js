@@ -113,6 +113,28 @@ export function useEvents() {
       const merged = pendingToKeep.length > 0
         ? [...cloudFiltered, ...pendingToKeep]
         : cloudFiltered
+
+      // Guardia contra wipe por sesión stale: si la nube devuelve [] pero
+      // la caché local del propio usuario tenía datos, no sobreescribimos.
+      // En iPhone PWA, tras un cold start con el token todavía refrescándose,
+      // las RLS filtran todas las filas y Supabase responde "" sin error —
+      // lo que antes vaciaba la caché local y dejaba al usuario sin eventos
+      // al re-hidratar. Verificamos que el token esté vivo antes de creerle
+      // al vacío; si no está fresco, preservamos lo local y el próximo
+      // refetch (visibilitychange / realtime) reintentará con token bueno.
+      if (merged.length === 0) {
+        const previous = dataService.getCachedEvents(user.id)
+        if (previous.length > 0) {
+          const { data: { session } } = await supabase.auth.getSession()
+          const expMs = session?.expires_at ? session.expires_at * 1000 : 0
+          const tokenFresh = !!session?.access_token && expMs - Date.now() > 30_000
+          if (!tokenFresh) {
+            console.warn(`[Focus] ⚠️ Refetch ${tag} devolvió 0 eventos con sesión stale — preservando caché local (${previous.length})`)
+            return
+          }
+        }
+      }
+
       setEvents(merged)
       dataService.setCachedEvents(merged, user.id)
       if (pendingToKeep.length > 0) {

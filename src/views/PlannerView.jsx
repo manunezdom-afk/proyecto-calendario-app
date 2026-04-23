@@ -732,12 +732,13 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       {/* Setup card legacy — reemplazado por OnboardingTour animado.
           El sistema de user_signals aprende el cronotipo solo, sin preguntar. */}
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8">
-        {/* Desktop: 2 columnas (timeline 2fr + insights 1fr). Mobile: stack.
-            Antes todo iba en flex-col incluso en desktop, lo que dejaba la
-            columna derecha vacía a partir de 1024px. El grid con fr permite
-            que el timeline respire y los insights queden fijos al lado. */}
-        <div className={isDesktop ? "grid grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] gap-8 items-start" : "flex flex-col gap-10"}>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 lg:pt-10">
+        {/* Desktop: timeline con max 48rem (lectura cómoda) + insights 20-26rem.
+            Mobile: stack. Antes la grilla era 2fr:1fr y en pantallas grandes
+            el timeline crecía hasta ~900 px con cards vacías y largas; ahora
+            capamos a 48rem (768px) para que la línea de lectura sea
+            equivalente a la de la vista día y los insights no se encojan. */}
+        <div className={isDesktop ? "grid grid-cols-[minmax(0,48rem)_minmax(20rem,26rem)] gap-8 xl:gap-10 items-start" : "flex flex-col gap-10"}>
 
           {/* ── Left: Timeline ────────────────────────────────────────────── */}
           <div className="min-w-0">
@@ -910,9 +911,19 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                         title="Mantén apretado para eliminar"
                       >
                         <div className="flex justify-between items-start gap-2" style={{ marginBottom: '2px' }}>
-                          <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0 }}>
-                            <h3 className={`font-bold ${isSuggestion ? 'text-secondary' : 'text-on-surface'} ${type === 'done' ? 'line-through decoration-emerald-400/60' : ''}`}
-                              style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div className="flex items-start gap-2" style={{ flex: 1, minWidth: 0 }}>
+                            <h3
+                              className={`font-bold leading-snug ${isSuggestion ? 'text-secondary' : 'text-on-surface'} ${type === 'done' ? 'line-through decoration-emerald-400/60' : ''}`}
+                              style={{
+                                flex: 1,
+                                minWidth: 0,
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                                wordBreak: 'break-word',
+                              }}
+                            >
                               {title || '(sin título)'}
                             </h3>
                           </div>
