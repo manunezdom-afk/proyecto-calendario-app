@@ -14,6 +14,21 @@ import { supabase } from './supabase'
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY
 
+// withTimeout — resuelve con la promesa dada, o rechaza con Error(label) si no
+// completa antes de `ms`. Blindamos las llamadas a navigator.serviceWorker y
+// fetch porque en iOS PWA pueden quedar colgadas indefinidamente si el SW
+// murió, perdió el worker thread, o la red cayó sin cerrar el socket. Sin esto
+// la UI se queda en "Verificando…" para siempre.
+function withTimeout(promise, ms, label = 'timeout') {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label)), ms)
+    Promise.resolve(promise).then(
+      (v) => { clearTimeout(t); resolve(v) },
+      (e) => { clearTimeout(t); reject(e) },
+    )
+  })
+}
+
 function urlBase64ToUint8Array(base64) {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4)
   const b = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -50,18 +65,36 @@ export function isIOSNotInstalled() {
   return isIOS() && !isStandalone()
 }
 
-/** Lee el estado actual: permission + subscription local */
+/** Lee el estado actual: permission + subscription local.
+ * Envuelve las llamadas al SW en timeouts — si el worker murió o se trabó,
+ * devolvemos { error } en lugar de colgar al caller. */
 export async function getPushStatus() {
   if (!isPushSupported()) {
     return { supported: false, permission: 'denied', subscribed: false }
   }
-  const reg = await navigator.serviceWorker.getRegistration()
-  const sub = reg ? await reg.pushManager.getSubscription() : null
-  return {
-    supported: true,
-    permission: Notification.permission,
-    subscribed: !!sub,
-    endpoint: sub?.endpoint || null,
+  try {
+    const reg = await withTimeout(
+      navigator.serviceWorker.getRegistration(),
+      3000,
+      'sw_getRegistration_timeout',
+    )
+    const sub = reg
+      ? await withTimeout(reg.pushManager.getSubscription(), 3000, 'sub_getSubscription_timeout')
+      : null
+    return {
+      supported: true,
+      permission: Notification.permission,
+      subscribed: !!sub,
+      endpoint: sub?.endpoint || null,
+    }
+  } catch (err) {
+    return {
+      supported: true,
+      permission: Notification.permission,
+      subscribed: false,
+      endpoint: null,
+      error: String(err?.message || err),
+    }
   }
 }
 
@@ -88,29 +121,55 @@ export async function subscribeToPush() {
   }
 
   // 2. SW registrado
-  let reg = await navigator.serviceWorker.getRegistration()
+  let reg
+  try {
+    reg = await withTimeout(
+      navigator.serviceWorker.getRegistration(),
+      3000,
+      'sw_getRegistration_timeout',
+    )
+  } catch (err) {
+    return { ok: false, reason: 'sw_register_failed', error: String(err?.message || err) }
+  }
   if (!reg) {
     try {
-      reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      reg = await withTimeout(
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }),
+        5000,
+        'sw_register_timeout',
+      )
     } catch (err) {
-      return { ok: false, reason: 'sw_register_failed', error: String(err) }
+      return { ok: false, reason: 'sw_register_failed', error: String(err?.message || err) }
     }
   }
-  // Asegurarse de que esté active
-  await navigator.serviceWorker.ready
+  // Asegurarse de que esté active — con timeout: en iOS PWA .ready puede
+  // no resolver nunca si el worker quedó zombie.
+  try {
+    await withTimeout(navigator.serviceWorker.ready, 5000, 'sw_ready_timeout')
+  } catch (err) {
+    return { ok: false, reason: 'sw_register_failed', error: String(err?.message || err) }
+  }
 
   // 3. Suscripción
   let subscription
   try {
-    subscription = await reg.pushManager.getSubscription()
+    subscription = await withTimeout(
+      reg.pushManager.getSubscription(),
+      3000,
+      'sub_getSubscription_timeout',
+    )
     if (!subscription) {
-      subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-      })
+      subscription = await withTimeout(
+        reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        }),
+        10000,
+        'sub_subscribe_timeout',
+      )
     }
   } catch (err) {
-    return { ok: false, reason: 'subscribe_failed', error: String(err) }
+    return { ok: false, reason: 'subscribe_failed', error: String(err?.message || err) }
   }
 
   // 4. Sync al backend (si hay usuario logueado)
@@ -123,18 +182,22 @@ export async function subscribeToPush() {
       return { ok: true, subscription: subJson, reason: 'saved_locally_no_session' }
     }
 
-    const res = await fetch('/api/push', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        action: 'subscribe',
-        subscription: subJson,
-        user_agent: navigator.userAgent.slice(0, 200),
+    const res = await withTimeout(
+      fetch('/api/push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: 'subscribe',
+          subscription: subJson,
+          user_agent: navigator.userAgent.slice(0, 200),
+        }),
       }),
-    })
+      10000,
+      'backend_timeout',
+    )
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
       console.error('[Focus] push subscribe failed:', res.status, data)
@@ -145,7 +208,7 @@ export async function subscribeToPush() {
     return { ok: true, subscription: subJson }
   } catch (err) {
     console.error('[Focus] push subscribe network error:', err)
-    return { ok: false, reason: 'sync_failed', error: String(err) }
+    return { ok: false, reason: 'sync_failed', error: String(err?.message || err) }
   }
 }
 
@@ -192,21 +255,38 @@ export async function unsubscribeFromPush() {
 export async function checkSubscriptionHealth() {
   if (!isPushSupported()) return { ok: false, reason: 'unsupported' }
   try {
-    const reg = await navigator.serviceWorker.getRegistration()
-    const sub = reg ? await reg.pushManager.getSubscription() : null
-    const endpoint = sub?.endpoint ?? null
+    let endpoint = null
+    try {
+      const reg = await withTimeout(
+        navigator.serviceWorker.getRegistration(),
+        3000,
+        'sw_getRegistration_timeout',
+      )
+      const sub = reg
+        ? await withTimeout(reg.pushManager.getSubscription(), 3000, 'sub_getSubscription_timeout')
+        : null
+      endpoint = sub?.endpoint ?? null
+    } catch {
+      // Si el SW no responde seguimos consultando al backend con endpoint=null
+      // — el backend sabe responder con subscriptionCount aunque no le pases
+      // endpoint específico.
+    }
 
     const token = (await supabase?.auth.getSession())?.data?.session?.access_token
     if (!token) return { ok: false, reason: 'no_session' }
 
-    const res = await fetch('/api/push', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ action: 'health', endpoint }),
-    })
+    const res = await withTimeout(
+      fetch('/api/push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'health', endpoint }),
+      }),
+      8000,
+      'health_timeout',
+    )
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
       return { ok: false, reason: 'backend_error', error: data.error || `status ${res.status}` }
@@ -220,7 +300,7 @@ export async function checkSubscriptionHealth() {
       localEndpoint: endpoint,
     }
   } catch (err) {
-    return { ok: false, reason: 'network_error', error: String(err) }
+    return { ok: false, reason: 'network_error', error: String(err?.message || err) }
   }
 }
 
@@ -233,15 +313,73 @@ export async function checkSubscriptionHealth() {
 export async function forceResubscribe() {
   if (!isPushSupported()) return { ok: false, reason: 'unsupported' }
   try {
-    const reg = await navigator.serviceWorker.getRegistration()
+    const reg = await withTimeout(
+      navigator.serviceWorker.getRegistration(),
+      3000,
+      'sw_getRegistration_timeout',
+    )
     if (reg) {
-      const old = await reg.pushManager.getSubscription()
+      const old = await withTimeout(
+        reg.pushManager.getSubscription(),
+        3000,
+        'sub_getSubscription_timeout',
+      )
       if (old) {
-        try { await old.unsubscribe() } catch {}
+        try { await withTimeout(old.unsubscribe(), 3000, 'unsubscribe_timeout') } catch {}
       }
     }
   } catch {}
   return subscribeToPush()
+}
+
+/**
+ * sendTestPush — gatilla una notificación de prueba end-to-end: pide al backend
+ * que envíe una push real a todas las suscripciones del user logueado.
+ *
+ * Requisitos en el server:
+ *   · VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY en Vercel
+ *   · El user tiene al menos 1 suscripción en push_subscriptions
+ *
+ * Retorna { ok, sent, failed, subscriptions, reason?, details? }.
+ * Reasons posibles cuando ok=false: no_session, no_subscriptions_for_user,
+ * vapid_not_configured, unauthorized, backend_error, timeout, unsupported.
+ */
+export async function sendTestPush() {
+  if (!isPushSupported()) return { ok: false, reason: 'unsupported' }
+  try {
+    const token = (await supabase?.auth.getSession())?.data?.session?.access_token
+    if (!token) return { ok: false, reason: 'no_session' }
+
+    const res = await withTimeout(
+      fetch('/api/push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'test' }),
+      }),
+      12000,
+      'test_timeout',
+    )
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      return {
+        ok: false,
+        reason: data.error || `status_${res.status}`,
+        details: data,
+      }
+    }
+    return {
+      ok: !!data.ok,
+      sent: data.sent ?? 0,
+      failed: data.failed ?? 0,
+      subscriptions: data.subscriptions ?? 0,
+      reason: data.ok ? undefined : 'no_delivery',
+    }
+  } catch (err) {
+    return { ok: false, reason: String(err?.message || err) }
+  }
 }
 
 /** Si había una suscripción pendiente (hecha antes de loguearse), subirla ahora */

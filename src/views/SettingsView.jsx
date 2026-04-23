@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import {
   getPushStatus,
-  subscribeToPush,
   forceResubscribe,
   checkSubscriptionHealth,
+  sendTestPush,
 } from '../lib/pushSubscription'
 import PermissionsSection from '../components/PermissionsSection'
 import { useAppPreferences } from '../hooks/useAppPreferences'
@@ -61,100 +61,177 @@ function Row({ icon, label, sub, children, onClick, danger = false }) {
   )
 }
 
+// PushDiagnostic — 3 acciones separadas, cada una con su propio estado.
+// Diseñado para NO colgarse: todos los helpers de pushSubscription.js usan
+// withTimeout por dentro, y cada handler está envuelto en try/finally para que
+// el flag de loading siempre se limpie aunque falle todo.
+//
+//   · Verificar       → diagnóstico puro (NO re-suscribe). Lee estado local y
+//                        lo confronta con el backend.
+//   · Reconectar      → descarta la sub actual y crea una nueva (último recurso
+//                        cuando APNs/browser la invalidó en silencio).
+//   · Enviar prueba   → pide al backend que dispare una push real a todas las
+//                        suscripciones del user. Valida end-to-end incluyendo
+//                        VAPID, red y SW.
 function PushDiagnostic() {
   const [status, setStatus] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const [reconnecting, setReconnecting] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const busy = verifying || reconnecting || testing
 
-  async function runTest() {
-    setLoading(true)
+  function msgForTimeout(label) {
+    if (/sw_/.test(label)) return 'El service worker no respondió. Cierra y vuelve a abrir la app.'
+    if (/backend|health|test/.test(label)) return 'No se pudo contactar al servidor. Revisa la conexión y reintenta.'
+    return 'La operación tardó demasiado. Reintenta en unos segundos.'
+  }
+
+  async function handleVerify() {
+    if (busy) return
+    setVerifying(true)
     setStatus(null)
     try {
       const s = await getPushStatus()
-      if (!s.supported) { setStatus({ ok: false, msg: 'Este dispositivo no soporta notificaciones push.' }); return }
-      if (s.permission === 'denied') { setStatus({ ok: false, msg: blockedPermissionMsg() }); return }
-      if (s.permission !== 'granted') { setStatus({ ok: false, msg: 'Permiso no concedido. Activa las notificaciones desde la pantalla principal.' }); return }
-
-      // Primero chequeamos la salud con el backend para dar diagnóstico fiel
-      // antes de subir otra vez una suscripción que podría estar muerta.
-      const h = await checkSubscriptionHealth()
-      if (h?.ok && s.subscribed && (h.subscriptionCount === 0 || h.currentPresent === false)) {
-        setStatus({
-          ok: false,
-          msg: 'El servidor no tiene tu suscripción. Probablemente APNs la invalidó. Usa "Reconectar notificaciones" abajo para crear una nueva.',
-        })
+      if (s.error) {
+        setStatus({ ok: false, msg: msgForTimeout(s.error) })
         return
       }
-
-      if (s.subscribed) {
-        const r = await subscribeToPush()
-        if (r.ok && r.reason !== 'saved_locally_no_session') {
-          setStatus({ ok: true, msg: '✅ Suscripción activa y guardada en el servidor. Las notificaciones deberían llegar.' })
-        } else if (r.reason === 'saved_locally_no_session') {
-          setStatus({ ok: false, msg: 'Suscripción creada pero no se pudo guardar — no hay sesión activa. Cierra sesión y vuelve a entrar.' })
-        } else {
-          setStatus({ ok: false, msg: `Error al guardar: ${r.reason} ${r.error || ''}` })
-        }
-      } else {
-        const r = await subscribeToPush()
-        if (r.ok && r.reason !== 'saved_locally_no_session') {
-          setStatus({ ok: true, msg: '✅ Suscripción creada y guardada. Las notificaciones van a funcionar.' })
-        } else if (r.reason === 'saved_locally_no_session') {
-          setStatus({ ok: false, msg: 'Creada localmente pero sin sesión para guardar en el servidor. Cierra sesión y vuelve a entrar.' })
-        } else if (r.reason === 'no_vapid_key') {
-          setStatus({ ok: false, msg: 'Falta configurar VITE_VAPID_PUBLIC_KEY en Vercel.' })
-        } else if (r.reason === 'subscribe_failed') {
-          const plat = isIOS() ? 'iOS' : (isAndroid() ? 'Android' : 'El navegador')
-          setStatus({ ok: false, msg: `${plat} rechazó la suscripción: ${r.error}` })
-        } else {
-          setStatus({ ok: false, msg: `Error: ${r.reason} — ${r.error || ''}` })
-        }
+      if (!s.supported) {
+        const hint = isIOS()
+          ? 'En iPhone hay que instalar la PWA en la pantalla de inicio.'
+          : 'Tu navegador no soporta Web Push.'
+        setStatus({ ok: false, msg: `Este dispositivo no soporta notificaciones push. ${hint}` })
+        return
       }
+      if (s.permission === 'denied') {
+        setStatus({ ok: false, msg: blockedPermissionMsg() })
+        return
+      }
+      if (s.permission !== 'granted') {
+        setStatus({ ok: false, msg: 'Permiso aún no concedido. Activa las notificaciones desde el banner al crear un evento.' })
+        return
+      }
+      if (!s.subscribed) {
+        setStatus({ ok: false, msg: 'No hay suscripción local. Usa "Reconectar notificaciones" abajo para crear una.' })
+        return
+      }
+      const h = await checkSubscriptionHealth()
+      if (!h?.ok) {
+        if (h?.reason === 'no_session') {
+          setStatus({ ok: false, msg: 'No hay sesión activa. Inicia sesión para que el servidor pueda enviarte notificaciones.' })
+        } else if (/timeout/i.test(h?.reason || '') || /timeout/i.test(h?.error || '')) {
+          setStatus({ ok: false, msg: 'No se pudo contactar al servidor. Revisa la conexión y reintenta.' })
+        } else if (h?.reason === 'network_error') {
+          setStatus({ ok: false, msg: 'No se pudo contactar al servidor. Revisa la conexión y reintenta.' })
+        } else {
+          setStatus({ ok: false, msg: `No se pudo verificar con el servidor: ${h?.reason || 'error desconocido'}` })
+        }
+        return
+      }
+      if (h.subscriptionCount === 0 || h.currentPresent === false) {
+        setStatus({ ok: false, msg: 'El servidor no tiene tu suscripción. Probablemente APNs la invalidó. Usa "Reconectar notificaciones" abajo.' })
+        return
+      }
+      setStatus({ ok: true, msg: '✅ Todo OK. Permiso activo, suscripción local y el servidor la tiene registrada.' })
     } catch (e) {
-      setStatus({ ok: false, msg: `Error inesperado: ${e.message}` })
+      const m = String(e?.message || e)
+      if (/timeout/i.test(m)) {
+        setStatus({ ok: false, msg: 'La verificación tardó demasiado. Reintenta en unos segundos.' })
+      } else {
+        setStatus({ ok: false, msg: `Error inesperado: ${m}` })
+      }
     } finally {
-      setLoading(false)
+      setVerifying(false)
     }
   }
 
-  // Último recurso para cuando APNs invalidó la suscripción sin avisar:
-  // desuscribir localmente y volver a subscribir con endpoint fresco. Útil
-  // también después de reinstalar la PWA o cambiar de cuenta.
-  async function reconnect() {
+  async function handleReconnect() {
+    if (busy) return
     setReconnecting(true)
     setStatus(null)
     try {
       const r = await forceResubscribe()
       if (r.ok && r.reason !== 'saved_locally_no_session') {
         setStatus({ ok: true, msg: '✅ Reconectado. Nueva suscripción guardada en el servidor.' })
+        return
+      }
+      if (r.reason === 'saved_locally_no_session') {
+        setStatus({ ok: false, msg: 'Suscripción creada pero sin sesión para guardar en el servidor. Inicia sesión y reintenta.' })
       } else if (r.reason === 'permission_denied') {
-        setStatus({ ok: false, msg: 'Permiso de notificaciones denegado. Actívalo en Ajustes del sistema y vuelve a intentar.' })
+        setStatus({ ok: false, msg: blockedPermissionMsg() })
+      } else if (r.reason === 'no_vapid_key') {
+        setStatus({ ok: false, msg: 'Falta configurar VITE_VAPID_PUBLIC_KEY en Vercel.' })
+      } else if (r.reason === 'unsupported') {
+        setStatus({ ok: false, msg: 'Este dispositivo no soporta notificaciones push.' })
+      } else if (/timeout/i.test(String(r.reason || r.error || ''))) {
+        setStatus({ ok: false, msg: msgForTimeout(String(r.reason || r.error || '')) })
       } else {
         setStatus({ ok: false, msg: `No se pudo reconectar: ${r.reason}${r.error ? ` — ${r.error}` : ''}` })
       }
     } catch (e) {
-      setStatus({ ok: false, msg: `Error inesperado: ${e.message}` })
+      setStatus({ ok: false, msg: `Error inesperado: ${e?.message || e}` })
     } finally {
       setReconnecting(false)
+    }
+  }
+
+  async function handleTest() {
+    if (busy) return
+    setTesting(true)
+    setStatus(null)
+    try {
+      const r = await sendTestPush()
+      if (r.ok) {
+        setStatus({ ok: true, msg: `✅ Notificación de prueba enviada (${r.sent}/${r.subscriptions}). Debería aparecer en segundos.` })
+        return
+      }
+      const reason = r.reason || ''
+      if (reason === 'no_session' || reason === 'unauthorized') {
+        setStatus({ ok: false, msg: 'No hay sesión activa. Inicia sesión para poder enviar notificaciones.' })
+      } else if (reason === 'no_subscriptions_for_user') {
+        setStatus({ ok: false, msg: 'El servidor no tiene ninguna suscripción para tu cuenta. Usa "Reconectar notificaciones" primero.' })
+      } else if (reason === 'vapid_not_configured') {
+        setStatus({ ok: false, msg: 'Faltan las VAPID keys en Vercel (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY).' })
+      } else if (reason === 'no_delivery') {
+        setStatus({ ok: false, msg: 'El servidor aceptó la prueba pero ninguna push llegó a entregarse. Probablemente la suscripción está caduca — usa "Reconectar".' })
+      } else if (reason === 'unsupported') {
+        setStatus({ ok: false, msg: 'Este dispositivo no soporta notificaciones push.' })
+      } else if (/timeout/i.test(reason)) {
+        setStatus({ ok: false, msg: 'El servidor tardó demasiado. Reintenta en unos segundos.' })
+      } else {
+        setStatus({ ok: false, msg: `No se pudo enviar la prueba: ${reason}` })
+      }
+    } catch (e) {
+      setStatus({ ok: false, msg: `Error inesperado: ${e?.message || e}` })
+    } finally {
+      setTesting(false)
     }
   }
 
   return (
     <div className="px-5 py-4 border-t border-slate-50 space-y-3">
       <button
-        onClick={runTest}
-        disabled={loading || reconnecting}
+        onClick={handleVerify}
+        disabled={busy}
         className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-[13px] font-semibold disabled:opacity-50 active:scale-95 transition-transform"
       >
-        {loading ? 'Verificando…' : 'Verificar notificaciones push'}
+        {verifying ? 'Verificando…' : 'Verificar notificaciones push'}
       </button>
       <button
-        onClick={reconnect}
-        disabled={loading || reconnecting}
+        onClick={handleReconnect}
+        disabled={busy}
         className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-semibold disabled:opacity-50 active:scale-95 transition-all hover:bg-slate-50"
         title="Crea una suscripción nueva y descarta la actual. Útil si las notificaciones dejaron de llegar."
       >
         {reconnecting ? 'Reconectando…' : 'Reconectar notificaciones'}
+      </button>
+      <button
+        onClick={handleTest}
+        disabled={busy}
+        className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-semibold disabled:opacity-50 active:scale-95 transition-all hover:bg-slate-50"
+        title="Pide al servidor que envíe una push real a todas tus suscripciones. Valida que el flow completo funciona."
+      >
+        {testing ? 'Enviando…' : 'Enviar notificación de prueba'}
       </button>
       {status && (
         <p className={`text-[12.5px] leading-snug font-medium rounded-xl px-3 py-2.5 ${
