@@ -1,37 +1,81 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <!-- Gradiente marca -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#3b82f6"/>
-      <stop offset="55%" stop-color="#7c3aed"/>
-      <stop offset="100%" stop-color="#ec4899"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
+    <!-- Fondo: radial oscuro, mismo lenguaje que la splash screen -->
+    <radialGradient id="bg" cx="0.5" cy="0.42" r="0.75">
+      <stop offset="0%"   stop-color="#1a1435"/>
+      <stop offset="70%"  stop-color="#0d0b1d"/>
+      <stop offset="100%" stop-color="#0a0a0f"/>
+    </radialGradient>
+
+    <!-- Cuerpo del orbe: gradiente de luz superior izquierda -->
+    <radialGradient id="orb" cx="0.34" cy="0.3" r="0.78">
+      <stop offset="0%"   stop-color="#d8ccff"/>
+      <stop offset="35%"  stop-color="#8d7bff"/>
+      <stop offset="75%"  stop-color="#5647c8"/>
+      <stop offset="100%" stop-color="#2e2580"/>
+    </radialGradient>
+
+    <!-- Halo atmosférico detrás del orbe -->
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%"   stop-color="#a497ff" stop-opacity="0.7"/>
+      <stop offset="40%"  stop-color="#7c6bff" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#7c6bff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Specular: brillo difuso en la parte superior izquierda -->
+    <radialGradient id="specular" cx="0.34" cy="0.26" r="0.34">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.85"/>
+      <stop offset="50%"  stop-color="#ffffff" stop-opacity="0.18"/>
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </radialGradient>
+
+    <!-- Core brillante: el "latido" del orbe -->
+    <radialGradient id="core" cx="0.38" cy="0.3" r="0.11">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="55%"  stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Rim-light inferior: un toque de azul/violeta reflejado desde el halo -->
+    <radialGradient id="rim" cx="0.5" cy="0.85" r="0.55">
+      <stop offset="0%"   stop-color="#8a77ff" stop-opacity="0.55"/>
+      <stop offset="60%"  stop-color="#8a77ff" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#8a77ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Blur grande para halo y sombra -->
+    <filter id="bigBlur" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="32"/>
+    </filter>
+
+    <!-- Clip al orbe para que specular/core no salgan de la esfera -->
+    <clipPath id="orbClip">
+      <circle cx="512" cy="500" r="312"/>
+    </clipPath>
   </defs>
 
-  <!-- Fondo maskable (zona segura = círculo interior al 80%) -->
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- Capa 1: fondo -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
 
-  <!-- Glow -->
-  <circle cx="256" cy="256" r="180" fill="url(#glow)"/>
+  <!-- Capa 2: halo atmosférico detrás -->
+  <circle cx="512" cy="500" r="400" fill="url(#halo)" filter="url(#bigBlur)"/>
 
-  <!-- Símbolo: sol/brillo (equivalente a brightness_high) -->
-  <g fill="#ffffff" transform="translate(256 256)">
-    <!-- Core -->
-    <circle r="68"/>
-    <!-- Rayos -->
-    <g>
-      <rect x="-10" y="-128" width="20" height="40" rx="10"/>
-      <rect x="-10" y="88"   width="20" height="40" rx="10"/>
-      <rect x="-128" y="-10" width="40" height="20" rx="10"/>
-      <rect x="88" y="-10"   width="40" height="20" rx="10"/>
-      <rect x="-10" y="-128" width="20" height="40" rx="10" transform="rotate(45)"/>
-      <rect x="-10" y="88"   width="20" height="40" rx="10" transform="rotate(45)"/>
-      <rect x="-128" y="-10" width="40" height="20" rx="10" transform="rotate(45)"/>
-      <rect x="88" y="-10"   width="40" height="20" rx="10" transform="rotate(45)"/>
-    </g>
+  <!-- Capa 3: sombra proyectada bajo el orbe -->
+  <ellipse cx="512" cy="830" rx="240" ry="22" fill="#000" opacity="0.45" filter="url(#bigBlur)"/>
+
+  <!-- Capa 4: cuerpo del orbe -->
+  <circle cx="512" cy="500" r="310" fill="url(#orb)"/>
+
+  <!-- Capa 5: efectos clippeados al orbe -->
+  <g clip-path="url(#orbClip)">
+    <!-- rim-light inferior -->
+    <circle cx="512" cy="500" r="310" fill="url(#rim)"/>
+    <!-- specular difuso arriba-izquierda -->
+    <circle cx="512" cy="500" r="310" fill="url(#specular)"/>
+    <!-- core brillante -->
+    <circle cx="512" cy="500" r="310" fill="url(#core)"/>
   </g>
+
+  <!-- Capa 6: anillo externo sutil para definir el borde -->
+  <circle cx="512" cy="500" r="310" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.08"/>
 </svg>
