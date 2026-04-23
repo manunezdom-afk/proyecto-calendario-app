@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { useEvents }        from './hooks/useEvents'
 import { useTasks }         from './hooks/useTasks'
@@ -7,34 +7,40 @@ import { useSuggestions }   from './hooks/useSuggestions'
 import { useAuth }          from './context/AuthContext'
 import { actionToSuggestion, applySuggestion } from './utils/actionToSuggestion'
 
+// Eager: todo lo que se pinta en el primer render del planner (landing).
+// Mantener chicos y rápidos; lo que entra aquí penaliza cada cold start.
 import TopAppBar                   from './components/TopAppBar'
 import BottomNavBar                from './components/BottomNavBar'
 import DesktopSideBar              from './components/DesktopSideBar'
 import NotificationPanel           from './components/NotificationPanel'
-import ImportExportSheet           from './components/ImportExportSheet'
 import AuthModal                   from './components/AuthModal'
 import NovaWidget                  from './components/NovaWidget'
 import MorningBrief                from './components/MorningBrief'
-import EveningShutdown             from './components/EveningShutdown'
-import SuggestionsInbox            from './components/SuggestionsInbox'
 import WelcomeScreen, { useWelcomeGate } from './components/WelcomeScreen'
 import InstallAppCard              from './components/InstallAppCard'
 import AuroraBackground            from './components/AuroraBackground'
 import NovaHint                    from './components/NovaHint'
 import FirstLaunchOnboarding, { useOnboardingGate } from './components/FirstLaunchOnboarding'
+import PlannerView                 from './views/PlannerView'
 import { useFirstRunSequence }     from './hooks/useFirstRunSequence'
 import { writeIncomingPairCode, normalizeUserCode } from './utils/devicePairing'
 
-import CalendarView    from './views/CalendarView'
-import DayView         from './views/DayView'
-import TaskDetailView  from './views/TaskDetailView'
-import PlannerView     from './views/PlannerView'
-import TasksView       from './views/TasksView'
-import SettingsView    from './views/SettingsView'
-import MemoryView      from './views/MemoryView'
-import NovaKnowsView   from './views/NovaKnowsView'
-import CommandPalette  from './components/CommandPalette'
-import QuickAddSheet   from './components/QuickAddSheet'
+// Lazy: vistas y sheets secundarias. Solo bajan cuando el usuario navega a
+// ellas, con lo que el bundle inicial en iPhone baja ~200 KB (parse+eval
+// en devices antiguos pasa de ~2 s a ~1 s). Cada una queda en su propio
+// chunk de Vite y se cachea agresivamente (mismo hash en el filename).
+const CalendarView      = lazy(() => import('./views/CalendarView'))
+const DayView           = lazy(() => import('./views/DayView'))
+const TaskDetailView    = lazy(() => import('./views/TaskDetailView'))
+const TasksView         = lazy(() => import('./views/TasksView'))
+const SettingsView      = lazy(() => import('./views/SettingsView'))
+const MemoryView        = lazy(() => import('./views/MemoryView'))
+const NovaKnowsView     = lazy(() => import('./views/NovaKnowsView'))
+const CommandPalette    = lazy(() => import('./components/CommandPalette'))
+const QuickAddSheet     = lazy(() => import('./components/QuickAddSheet'))
+const ImportExportSheet = lazy(() => import('./components/ImportExportSheet'))
+const EveningShutdown   = lazy(() => import('./components/EveningShutdown'))
+const SuggestionsInbox  = lazy(() => import('./components/SuggestionsInbox'))
 
 const LAST_OPENED_KEY = 'nova_last_opened'
 
@@ -358,7 +364,10 @@ export default function App() {
         className={`relative z-10 ${isDesktop && !isDetail ? "pb-0 pl-[72px]" : "w-full"}`}
         style={!isDesktop || isDetail ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)' } : undefined}
       >
-        {/* ── Single-view layout: cada botón del sidebar → su propia vista ── */}
+        {/* ── Single-view layout: cada botón del sidebar → su propia vista ──
+            Suspense envuelve TODO para cubrir las vistas lazy. Fallback null
+            — el micro-flash entre navegación es imperceptible porque los
+            chunks de cada vista están ya cacheados tras la primera visita. */}
         {(
           <AnimatePresence mode="wait">
             <motion.div
@@ -369,6 +378,7 @@ export default function App() {
               exit="exit"
               className="w-full"
             >
+              <Suspense fallback={null}>
               {activeView === 'planner' && <PlannerView {...plannerProps} isDesktop={isDesktop} />}
 
               {activeView === 'calendar' && (
@@ -447,6 +457,7 @@ export default function App() {
               )}
 
 
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         )}
@@ -482,15 +493,22 @@ export default function App() {
         />
       )}
 
-      {/* ── Bandeja de sugerencias ────────────────────────────────────────── */}
-      <SuggestionsInbox
-        isOpen={inboxOpen}
-        onClose={() => setInboxOpen(false)}
-        suggestions={suggestions}
-        onApprove={handleApproveSuggestion}
-        onReject={rejectSuggestion}
-        onClearResolved={clearResolvedSuggestions}
-      />
+      {/* ── Bandeja de sugerencias ──────────────────────────────────────────
+          Lazy: solo bajamos el chunk la primera vez que el usuario la abre.
+          Antes estaba eager y pesaba en el bundle inicial aunque la bandeja
+          vive oculta en cada cold start. */}
+      {inboxOpen && (
+        <Suspense fallback={null}>
+          <SuggestionsInbox
+            isOpen={inboxOpen}
+            onClose={() => setInboxOpen(false)}
+            suggestions={suggestions}
+            onApprove={handleApproveSuggestion}
+            onReject={rejectSuggestion}
+            onClearResolved={clearResolvedSuggestions}
+          />
+        </Suspense>
+      )}
 
       {/* Toast de confirmación al aprobar sugerencia ──────────────────────── */}
       <AnimatePresence>
@@ -620,12 +638,14 @@ export default function App() {
       {/* ── Evening Shutdown ─────────────────────────────────────────────── */}
       <AnimatePresence>
         {showEveningShutdown && (
-          <EveningShutdown
-            events={events}
-            tasks={tasks}
-            onClose={()     => setShowEveningShutdown(false)}
-            onEditEvent={editEvent}
-          />
+          <Suspense fallback={null}>
+            <EveningShutdown
+              events={events}
+              tasks={tasks}
+              onClose={()     => setShowEveningShutdown(false)}
+              onEditEvent={editEvent}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 
@@ -637,31 +657,41 @@ export default function App() {
         onDismiss={dismissNotif}
       />
 
-      <ImportExportSheet
-        isOpen={importExportOpen}
-        onClose={() => setImportExportOpen(false)}
-        events={events}
-        onImportEvent={addEvent}
-        initialTab={importExportInitialTab}
-      />
+      {importExportOpen && (
+        <Suspense fallback={null}>
+          <ImportExportSheet
+            isOpen={importExportOpen}
+            onClose={() => setImportExportOpen(false)}
+            events={events}
+            onImportEvent={addEvent}
+            initialTab={importExportInitialTab}
+          />
+        </Suspense>
+      )}
 
       <AuthModal isOpen={authModal} onClose={() => setAuthModal(false)} />
 
-      <CommandPalette
-        isOpen={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        events={events}
-        tasks={tasks}
-        onNavigate={navigate}
-        onOpenEvent={(event) => openTaskDetail(event)}
-        onQuickAdd={() => { setPaletteOpen(false); setPaletteQuickAdd(true) }}
-      />
+      {paletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette
+            isOpen={paletteOpen}
+            onClose={() => setPaletteOpen(false)}
+            events={events}
+            tasks={tasks}
+            onNavigate={navigate}
+            onOpenEvent={(event) => openTaskDetail(event)}
+            onQuickAdd={() => { setPaletteOpen(false); setPaletteQuickAdd(true) }}
+          />
+        </Suspense>
+      )}
 
       {paletteQuickAdd && (
-        <QuickAddSheet
-          onSave={(formData) => { addEvent(formData); setPaletteQuickAdd(false) }}
-          onCancel={() => setPaletteQuickAdd(false)}
-        />
+        <Suspense fallback={null}>
+          <QuickAddSheet
+            onSave={(formData) => { addEvent(formData); setPaletteQuickAdd(false) }}
+            onCancel={() => setPaletteQuickAdd(false)}
+          />
+        </Suspense>
       )}
     </div>
     </LayoutGroup>
