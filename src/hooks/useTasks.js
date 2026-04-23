@@ -56,24 +56,40 @@ export function useTasks() {
 
     setTasks(hydrateTasksWithLinks(dataService.getCachedTasks([], user.id), user.id))
 
-    refetch('(init)')
+    // Diferimos refetch y apertura del canal realtime para no competir con el
+    // primer paint. El cache local ya pobló las tareas — la reconciliación
+    // con la nube puede esperar al primer idle.
+    let channel = null
+    let cancelled = false
+    const kick = () => {
+      if (cancelled) return
+      refetch('(init)')
+      channel = supabase
+        .channel(`tasks-${user.id}`)
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` },
+          () => refetch('(realtime)'),
+        )
+        .subscribe()
+    }
+    const idleHandle = typeof requestIdleCallback === 'function'
+      ? requestIdleCallback(kick, { timeout: 1500 })
+      : setTimeout(kick, 0)
 
     const onVisibility = () => { if (!document.hidden) refetch('(visibilitychange)') }
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('focus', onVisibility)
 
-    const channel = supabase
-      .channel(`tasks-${user.id}`)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` },
-        () => refetch('(realtime)'),
-      )
-      .subscribe()
-
     return () => {
+      cancelled = true
+      if (typeof cancelIdleCallback === 'function' && typeof idleHandle === 'number') {
+        cancelIdleCallback(idleHandle)
+      } else {
+        clearTimeout(idleHandle)
+      }
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('focus', onVisibility)
-      supabase.removeChannel(channel)
+      if (channel) supabase.removeChannel(channel)
     }
   }, [user?.id, refetch])
 
