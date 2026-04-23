@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseReady } from '../lib/supabase'
 import { dataService } from '../services/dataService'
 import { setSignalsUserId, flushSignalsQueue } from '../services/signalsService'
 import { fetchBehavior } from '../services/behaviorAnalysis'
@@ -13,43 +13,55 @@ export function AuthProvider({ children }) {
   const [authModal, setAuthModal] = useState(false)
 
   useEffect(() => {
-    if (!supabase) { setLoading(false); return }
+    let subscription = null
+    let cancelled = false
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const current = session?.user ?? null
-      setUser(current)
-      setSignalsUserId(current?.id ?? null)
-      if (current) fetchBehavior(current.id).catch(() => {})
-      setLoading(false)
+    supabaseReady.then((sb) => {
+      if (cancelled) return
+      if (!sb) { setLoading(false); return }
+
+      sb.auth.getSession().then(({ data: { session } }) => {
+        if (cancelled) return
+        const current = session?.user ?? null
+        setUser(current)
+        setSignalsUserId(current?.id ?? null)
+        if (current) fetchBehavior(current.id).catch(() => {})
+        setLoading(false)
+      })
+
+      const res = sb.auth.onAuthStateChange(
+        async (event, session) => {
+          const newUser = session?.user ?? null
+          setUser(newUser)
+          setSignalsUserId(newUser?.id ?? null)
+          if (event === 'SIGNED_IN' && newUser) {
+            // Limpiamos las claves globales (sin userId) para que cualquier
+            // caché residual del dispositivo — p. ej. tareas o eventos de una
+            // sesión anterior — no se muestre como datos del nuevo usuario.
+            // La fuente de verdad pasa a ser únicamente Supabase.
+            dataService.clearGlobalCache()
+            await dataService.flushQueue()
+            await flushSignalsQueue()
+            await fetchBehavior(newUser.id).catch(() => {})
+            // Subir suscripción push pendiente (guardada localmente antes de login)
+            await flushPendingSubscription().catch(() => {})
+            // Si el permiso está granted pero no hay suscripción en el browser, crear una nueva
+            getPushStatus().then(async s => {
+              if (s.supported && s.permission === 'granted' && !s.subscribed) {
+                await subscribeToPush().catch(() => {})
+              }
+            }).catch(() => {})
+          }
+        }
+      )
+      subscription = res.data.subscription
+      if (cancelled) subscription.unsubscribe()
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        const newUser = session?.user ?? null
-        setUser(newUser)
-        setSignalsUserId(newUser?.id ?? null)
-        if (event === 'SIGNED_IN' && newUser) {
-          // Limpiamos las claves globales (sin userId) para que cualquier
-          // caché residual del dispositivo — p. ej. tareas o eventos de una
-          // sesión anterior — no se muestre como datos del nuevo usuario.
-          // La fuente de verdad pasa a ser únicamente Supabase.
-          dataService.clearGlobalCache()
-          await dataService.flushQueue()
-          await flushSignalsQueue()
-          await fetchBehavior(newUser.id).catch(() => {})
-          // Subir suscripción push pendiente (guardada localmente antes de login)
-          await flushPendingSubscription().catch(() => {})
-          // Si el permiso está granted pero no hay suscripción en el browser, crear una nueva
-          getPushStatus().then(async s => {
-            if (s.supported && s.permission === 'granted' && !s.subscribed) {
-              await subscribeToPush().catch(() => {})
-            }
-          }).catch(() => {})
-        }
-      }
-    )
-
-    return () => subscription.unsubscribe()
+    return () => {
+      cancelled = true
+      if (subscription) subscription.unsubscribe()
+    }
   }, [])
 
   // Sync cola offline al recuperar red
@@ -62,6 +74,7 @@ export function AuthProvider({ children }) {
   }, [user])
 
   const signInWithEmail = useCallback(async (email) => {
+    await supabaseReady
     if (!supabase) throw new Error('Supabase no configurado')
     // Flujo OTP-only: código numérico por email (largo según config Supabase). NO pasamos
     // emailRedirectTo para que Supabase no inyecte un magic-link en el
@@ -76,6 +89,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const verifyOtp = useCallback(async (email, token) => {
+    await supabaseReady
     if (!supabase) throw new Error('Supabase no configurado')
     const cleanEmail = String(email || '').trim().toLowerCase()
     // 10 dígitos de margen: Supabase puede estar configurado a 6 u 8.
@@ -97,6 +111,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signOut = useCallback(async () => {
+    await supabaseReady
     if (supabase) await supabase.auth.signOut()
     setUser(null)
     // Limpiamos cualquier OTP pendiente: si quedó un code en sessionStorage
@@ -120,6 +135,7 @@ export function AuthProvider({ children }) {
   // canjea por un token_hash que usa para abrir sesión. Sin emails.
 
   const startDevicePairing = useCallback(async () => {
+    await supabaseReady
     if (!supabase) throw new Error('Supabase no configurado')
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.access_token) throw new Error('no_session')
@@ -159,6 +175,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const exchangeDeviceToken = useCallback(async (tokenHash) => {
+    await supabaseReady
     if (!supabase) throw new Error('Supabase no configurado')
     const { data, error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
