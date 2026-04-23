@@ -732,11 +732,12 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       {/* Setup card legacy — reemplazado por OnboardingTour animado.
           El sistema de user_signals aprende el cronotipo solo, sin preguntar. */}
 
-      <main className={`${isDesktop ? 'max-w-3xl' : 'max-w-7xl'} mx-auto px-4 sm:px-6 pt-8`}>
-        {/* Desktop: stack vertical con ancho de lectura (max-w-3xl). El grid
-            2-col dejaba la derecha desbalanceada y el timeline apretado; un
-            solo hilo vertical centrado se lee mejor. Mobile: igual que siempre. */}
-        <div className="flex flex-col gap-10">
+      <main className={`${isDesktop ? 'max-w-5xl' : 'max-w-7xl'} mx-auto px-4 sm:px-6 pt-8`}>
+        {/* Desktop: stack vertical con max-w-5xl — ancho sustancioso pero
+            cómodo de leer. Antes max-w-3xl dejaba 600px en blanco a cada
+            lado; 5xl reduce ese desperdicio sin volver al grid 2-col que
+            apretaba el timeline. Mobile: igual que siempre. */}
+        <div className={isDesktop ? 'flex flex-col gap-14' : 'flex flex-col gap-10'}>
 
           {/* ── Left: Timeline ────────────────────────────────────────────── */}
           <div className="min-w-0">
@@ -745,11 +746,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 <MorningBrief inline {...morningBrief} />
               </div>
             )}
-            <header className="mb-8">
-              <p className="text-primary font-bold text-[11px] uppercase tracking-[0.14em] mb-2.5">
+            <header className={isDesktop ? 'mb-10' : 'mb-8'}>
+              <p className={`text-primary font-bold uppercase tracking-[0.14em] mb-2.5 ${isDesktop ? 'text-xs' : 'text-[11px]'}`}>
                 {formatToday()}
               </p>
-              <h2 className="text-4xl lg:text-5xl font-headline font-extrabold tracking-tight text-on-surface">
+              <h2 className={`font-headline font-extrabold tracking-tight text-on-surface ${isDesktop ? 'text-6xl' : 'text-4xl'}`}>
                 Mi Día
               </h2>
             </header>
@@ -767,7 +768,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
               seed={focusBarSeed}
             />
 
-            <div className="relative space-y-3">
+            <div className={`relative ${isDesktop ? 'space-y-4 mt-10' : 'space-y-3'}`}>
               {displayBlocks.map(({ id, eventId, taskId, time, type, title, description, priority, subtasks = [], _asReminderOnly, _isTask }) => {
                 // Tareas de hoy (sin hora): se pintan como item distinto del
                 // timeline, con etiqueta "Pendiente de hoy" y acciones ligadas
@@ -809,7 +810,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                           <LongPressZone
                             onLongPress={handleTaskLongPress}
                             className={`rounded-xl bg-surface-container-low/60 border-l-4 ${prioStyle}`}
-                            style={{ padding: '12px 14px 12px 14px', overflow: 'visible', touchAction: 'pan-y' }}
+                            style={{ padding: isDesktop ? '18px 22px 18px 20px' : '12px 14px 12px 14px', overflow: 'visible', touchAction: 'pan-y' }}
                             title="Mantén apretado para eliminar"
                           >
                             <div className="flex justify-between items-start gap-2">
@@ -905,12 +906,12 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                                       : 'border-primary shadow-[0_12px_32px_rgba(27,27,29,0.04)]'
                               }`
                         }`}
-                        style={{ padding: '14px 16px 14px 14px', overflow: 'visible', touchAction: 'pan-y' }}
+                        style={{ padding: isDesktop ? '20px 24px 20px 22px' : '14px 16px 14px 14px', overflow: 'visible', touchAction: 'pan-y' }}
                         title="Mantén apretado para eliminar"
                       >
                         <div className="flex justify-between items-start gap-2" style={{ marginBottom: '2px' }}>
                           <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0 }}>
-                            <h3 className={`font-bold ${isSuggestion ? 'text-secondary' : 'text-on-surface'} ${type === 'done' ? 'line-through decoration-emerald-400/60' : ''}`}
+                            <h3 className={`font-bold ${isSuggestion ? 'text-secondary' : 'text-on-surface'} ${type === 'done' ? 'line-through decoration-emerald-400/60' : ''} ${isDesktop ? 'text-lg' : ''}`}
                               style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {title || '(sin título)'}
                             </h3>
