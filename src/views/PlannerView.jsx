@@ -861,7 +861,13 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
                     {/* Columna de tarjeta */}
                     <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingBottom: '32px' }}>
-                      <div className={`absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface ${isSuggestion ? 'bg-secondary' : 'bg-primary'}`}
+                      <div className={`absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface transition-all ${
+                        isSuggestion
+                          ? 'bg-secondary'
+                          : isActive
+                            ? 'bg-primary scale-125 shadow-[0_0_0_4px_rgba(59,130,246,0.18)]'
+                            : 'bg-primary'
+                      }`}
                         style={{ left: '-21px', zIndex: 1 }} />
                       <SwipeableCard
                         onDelete={!isSuggestion && !_asReminderOnly ? handleDeleteBlock : undefined}
@@ -869,11 +875,17 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       >
                       <LongPressZone
                         onLongPress={!isSuggestion && !_asReminderOnly ? handleLongPressDelete : undefined}
-                        className={`rounded-xl ${
+                        className={`rounded-xl transition-all duration-200 ${
                           isSuggestion
-                            ? 'bg-surface-container-low/50 border border-dashed border-secondary/30'
-                            : `bg-surface-container-lowest shadow-[0_12px_32px_rgba(27,27,29,0.04)] border-l-4 ${
-                                type === 'done' ? 'border-emerald-400 opacity-60' : 'border-primary'
+                            ? 'bg-surface-container-low/50 border border-dashed border-secondary/30 hover:border-secondary/50'
+                            : `bg-surface-container-lowest border-l-4 hover:shadow-[0_16px_36px_rgba(27,27,29,0.08)] ${
+                                type === 'done'
+                                  ? 'border-emerald-400 opacity-60 shadow-[0_4px_12px_rgba(27,27,29,0.03)]'
+                                  : isActive
+                                    ? 'border-primary ring-1 ring-primary/20 shadow-[0_16px_40px_rgba(59,130,246,0.12)]'
+                                    : isNext
+                                      ? 'border-primary/70 shadow-[0_12px_32px_rgba(27,27,29,0.05)]'
+                                      : 'border-primary shadow-[0_12px_32px_rgba(27,27,29,0.04)]'
                               }`
                         }`}
                         style={{ padding: '14px 16px 14px 14px', overflow: 'visible', touchAction: 'pan-y' }}

@@ -141,6 +141,8 @@ export default function App() {
   } = useSuggestions()
 
   const [inboxOpen, setInboxOpen] = useState(false)
+  // Toast efímero al aprobar una sugerencia. Visible ~3.5 s sin interrumpir.
+  const [approvalToast, setApprovalToast] = useState(null)
 
   // Handlers para ejecutar una sugerencia aprobada
   const suggestionHandlers = {
@@ -154,9 +156,19 @@ export default function App() {
 
   function handleApproveSuggestion(id) {
     const s = suggestions.find((x) => x.id === id)
-    if (s) applySuggestion(s, suggestionHandlers)
+    if (s) {
+      applySuggestion(s, suggestionHandlers)
+      const label = s.title || s.summary || 'Sugerencia'
+      setApprovalToast({ id: `${id}-${Date.now()}`, label })
+    }
     approveSuggestion(id)
   }
+
+  useEffect(() => {
+    if (!approvalToast) return
+    const t = setTimeout(() => setApprovalToast(null), 3500)
+    return () => clearTimeout(t)
+  }, [approvalToast])
 
   // Callback que Nova invoca con sus propuestas → encolamos
   function handleProposeActions(actions, { reply } = {}) {
@@ -479,6 +491,42 @@ export default function App() {
         onReject={rejectSuggestion}
         onClearResolved={clearResolvedSuggestions}
       />
+
+      {/* Toast de confirmación al aprobar sugerencia ──────────────────────── */}
+      <AnimatePresence>
+        {approvalToast && (
+          <motion.div
+            key={approvalToast.id}
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, y: 24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+            className="fixed left-1/2 -translate-x-1/2 z-[80] px-4 py-3 rounded-2xl bg-slate-900/95 text-white shadow-[0_20px_48px_rgba(0,0,0,0.25)] backdrop-blur flex items-center gap-2.5 max-w-[min(92vw,420px)]"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 6.5rem)' }}
+          >
+            <span
+              className="material-symbols-outlined text-emerald-300 text-[20px]"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+              aria-hidden="true"
+            >
+              check_circle
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-300/90">Añadido</p>
+              <p className="text-[13px] font-semibold leading-tight truncate">{approvalToast.label}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setApprovalToast(null)}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              OK
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Morning Brief (solo modal en mobile; desktop: inline en PlannerView) */}
       <AnimatePresence>

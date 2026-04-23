@@ -933,27 +933,43 @@ export default function NovaWidget({
             exit={{    opacity: 0, scale: 0.7 }}
             transition={{ type: 'spring', damping: 18, stiffness: 300 }}
           >
-            <button
-              onPointerDown={onPillPointerDown}
-              onPointerUp={onPillPointerUp}
-              onPointerLeave={onPillPointerLeave}
-              className="flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-2xl text-white text-[13px] font-semibold select-none active:scale-95 transition-transform"
-              style={{
-                background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)',
-                boxShadow: '0 8px 24px rgba(59,130,246,0.35), 0 2px 8px rgba(0,0,0,0.1)',
-              }}
-              aria-label="Abrir Nova"
-            >
+            <div className="relative">
+              {/* Halo ambiental — respiración sutil cuando Nova está en reposo.
+                  pointer-events:none para no interferir con el click del botón. */}
               <motion.span
-                className="material-symbols-outlined text-[17px]"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-                animate={{ rotate: [0, 8, -8, 0] }}
-                transition={{ duration: 3, repeat: Infinity, repeatDelay: 4 }}
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 rounded-2xl"
+                style={{
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)',
+                  filter: 'blur(10px)',
+                  zIndex: 0,
+                }}
+                initial={{ opacity: 0.18, scale: 1 }}
+                animate={{ opacity: [0.18, 0.42, 0.18], scale: [1, 1.08, 1] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <button
+                onPointerDown={onPillPointerDown}
+                onPointerUp={onPillPointerUp}
+                onPointerLeave={onPillPointerLeave}
+                className="relative flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-2xl text-white text-[13px] font-semibold select-none active:scale-95 transition-transform"
+                style={{
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)',
+                  boxShadow: '0 8px 24px rgba(59,130,246,0.35), 0 2px 8px rgba(0,0,0,0.1)',
+                }}
+                aria-label="Abrir Nova"
               >
-                auto_awesome
-              </motion.span>
-              Nova
-            </button>
+                <motion.span
+                  className="material-symbols-outlined text-[17px]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                  animate={{ rotate: [0, 8, -8, 0] }}
+                  transition={{ duration: 3, repeat: Infinity, repeatDelay: 4 }}
+                >
+                  auto_awesome
+                </motion.span>
+                Nova
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

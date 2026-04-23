@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { motion, LayoutGroup } from 'framer-motion'
 
 export default function BottomNavBar({ activeView, onNavigate }) {
   const navItems = [
@@ -14,29 +14,39 @@ export default function BottomNavBar({ activeView, onNavigate }) {
       className="fixed left-1/2 -translate-x-1/2 w-[92%] max-w-md rounded-[24px] z-50 flex justify-around items-center px-2 py-3 bg-slate-50/70 backdrop-blur-2xl shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
       style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.25rem)' }}
     >
-      {navItems.map(({ id, icon, label }) => {
-        const isActive = activeView === id
-        return (
-          <button
-            key={id}
-            onClick={() => onNavigate(id)}
-            aria-label={label}
-            aria-current={isActive ? 'page' : undefined}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 min-h-[44px] px-1 font-['Inter'] text-[10.5px] font-semibold leading-tight whitespace-nowrap transition-colors duration-300 ${
-              isActive ? 'text-blue-600' : 'text-slate-400 hover:text-blue-500'
-            }`}
-          >
-            <span
-              className="material-symbols-outlined"
-              aria-hidden="true"
-              style={isActive ? { fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" } : {}}
+      <LayoutGroup id="bottom-nav">
+        {navItems.map(({ id, icon, label }) => {
+          const isActive = activeView === id
+          return (
+            <button
+              key={id}
+              onClick={() => onNavigate(id)}
+              aria-label={label}
+              aria-current={isActive ? 'page' : undefined}
+              className={`relative flex-1 flex flex-col items-center justify-center gap-1 min-h-[44px] px-1 font-['Inter'] text-[10.5px] font-semibold leading-tight whitespace-nowrap transition-colors duration-300 ${
+                isActive ? 'text-blue-600' : 'text-slate-400 hover:text-blue-500'
+              }`}
             >
-              {icon}
-            </span>
-            <span>{label}</span>
-          </button>
-        )
-      })}
+              <span
+                className="material-symbols-outlined"
+                aria-hidden="true"
+                style={isActive ? { fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" } : {}}
+              >
+                {icon}
+              </span>
+              <span>{label}</span>
+              {isActive && (
+                <motion.span
+                  layoutId="bottom-nav-dot"
+                  className="absolute -bottom-0.5 h-1 w-1 rounded-full bg-blue-600"
+                  transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+                  aria-hidden="true"
+                />
+              )}
+            </button>
+          )
+        })}
+      </LayoutGroup>
     </nav>
   )
 }

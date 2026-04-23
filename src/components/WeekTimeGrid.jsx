@@ -184,13 +184,24 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
         >
           <div className="h-14" />
           {days.map((d) => (
-            <div key={d.iso} className="h-14 flex flex-col items-center justify-center border-l border-slate-100 min-w-0 px-0.5">
+            <div
+              key={d.iso}
+              className={`relative h-14 flex flex-col items-center justify-center border-l border-slate-100 min-w-0 px-0.5 ${
+                d.isToday ? 'bg-primary/[0.04]' : ''
+              }`}
+            >
+              {d.isToday && (
+                <span
+                  className="absolute left-0 right-0 top-0 h-[2px] bg-primary"
+                  aria-hidden="true"
+                />
+              )}
               <span className={`text-[10px] font-bold tracking-wide ${d.isToday ? 'text-primary' : 'text-outline'}`}>
                 {d.abbr}
               </span>
               <span
                 className={`mt-0.5 text-sm font-bold leading-none w-7 h-7 flex items-center justify-center rounded-full ${
-                  d.isToday ? 'bg-primary text-white' : 'text-on-surface'
+                  d.isToday ? 'bg-primary text-white shadow-sm shadow-primary/30' : 'text-on-surface'
                 }`}
               >
                 {d.num}
