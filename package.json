@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/stamp-sw-version.mjs",
     "preview": "vite preview",
     "build:landing": "tailwindcss -c ./landing/tailwind.config.js -i ./landing/input.css -o ./public/landing/styles.css --minify",
     "build:og": "node scripts/build-og.mjs",
