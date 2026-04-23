@@ -4,12 +4,15 @@ import './index.css'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { registerServiceWorker } from './lib/pwa'
+import { BootErrorBoundary } from './components/BootErrorBoundary.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <BootErrorBoundary>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </BootErrorBoundary>
   </StrictMode>,
 )
 

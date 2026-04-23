@@ -7,17 +7,14 @@ import { useSuggestions }   from './hooks/useSuggestions'
 import { useAuth }          from './context/AuthContext'
 import { actionToSuggestion, applySuggestion } from './utils/actionToSuggestion'
 
-// Eager: todo lo que se pinta en el primer render del planner (landing).
+// Eager: SOLO lo que se pinta en el primer frame del planner/welcome.
 // Mantener chicos y rápidos; lo que entra aquí penaliza cada cold start.
 import TopAppBar                   from './components/TopAppBar'
 import BottomNavBar                from './components/BottomNavBar'
 import DesktopSideBar              from './components/DesktopSideBar'
-import NotificationPanel           from './components/NotificationPanel'
-import AuthModal                   from './components/AuthModal'
 import NovaWidget                  from './components/NovaWidget'
 import MorningBrief                from './components/MorningBrief'
 import WelcomeScreen, { useWelcomeGate } from './components/WelcomeScreen'
-import InstallAppCard              from './components/InstallAppCard'
 import AuroraBackground            from './components/AuroraBackground'
 import NovaHint                    from './components/NovaHint'
 import FirstLaunchOnboarding, { useOnboardingGate } from './components/FirstLaunchOnboarding'
@@ -25,10 +22,10 @@ import PlannerView                 from './views/PlannerView'
 import { useFirstRunSequence }     from './hooks/useFirstRunSequence'
 import { writeIncomingPairCode, normalizeUserCode } from './utils/devicePairing'
 
-// Lazy: vistas y sheets secundarias. Solo bajan cuando el usuario navega a
-// ellas, con lo que el bundle inicial en iPhone baja ~200 KB (parse+eval
-// en devices antiguos pasa de ~2 s a ~1 s). Cada una queda en su propio
-// chunk de Vite y se cachea agresivamente (mismo hash en el filename).
+// Lazy: vistas y sheets/paneles que solo bajan cuando el usuario interactúa.
+// Cada chunk queda bajo su propio hash de Vite (cacheable agresivo). Mover
+// estos a lazy achica el bundle eager que iPhone debe parsear en el primer
+// paint — lo que más se nota en cold start.
 const CalendarView      = lazy(() => import('./views/CalendarView'))
 const DayView           = lazy(() => import('./views/DayView'))
 const TaskDetailView    = lazy(() => import('./views/TaskDetailView'))
@@ -41,6 +38,11 @@ const QuickAddSheet     = lazy(() => import('./components/QuickAddSheet'))
 const ImportExportSheet = lazy(() => import('./components/ImportExportSheet'))
 const EveningShutdown   = lazy(() => import('./components/EveningShutdown'))
 const SuggestionsInbox  = lazy(() => import('./components/SuggestionsInbox'))
+// Modal/panels que solo aparecen cuando el usuario los abre — no necesitan
+// estar en el bundle eager.
+const NotificationPanel = lazy(() => import('./components/NotificationPanel'))
+const AuthModal         = lazy(() => import('./components/AuthModal'))
+const InstallAppCard    = lazy(() => import('./components/InstallAppCard'))
 
 const LAST_OPENED_KEY = 'nova_last_opened'
 
@@ -633,7 +635,11 @@ export default function App() {
       )}
 
       {/* ── Invitación a instalar la app — aparece desde la 3ra sesión ─── */}
-      {showInstallCard && <InstallAppCard onDismissed={firstRun.dismissInstall} />}
+      {showInstallCard && (
+        <Suspense fallback={null}>
+          <InstallAppCard onDismissed={firstRun.dismissInstall} />
+        </Suspense>
+      )}
 
       {/* ── Evening Shutdown ─────────────────────────────────────────────── */}
       <AnimatePresence>
@@ -649,13 +655,17 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <NotificationPanel
-        isOpen={notifPanelOpen}
-        onClose={() => setNotifPanelOpen(false)}
-        notifLog={notifLog}
-        onMarkAllRead={markAllRead}
-        onDismiss={dismissNotif}
-      />
+      {notifPanelOpen && (
+        <Suspense fallback={null}>
+          <NotificationPanel
+            isOpen={notifPanelOpen}
+            onClose={() => setNotifPanelOpen(false)}
+            notifLog={notifLog}
+            onMarkAllRead={markAllRead}
+            onDismiss={dismissNotif}
+          />
+        </Suspense>
+      )}
 
       {importExportOpen && (
         <Suspense fallback={null}>
@@ -669,7 +679,11 @@ export default function App() {
         </Suspense>
       )}
 
-      <AuthModal isOpen={authModal} onClose={() => setAuthModal(false)} />
+      {authModal && (
+        <Suspense fallback={null}>
+          <AuthModal isOpen={authModal} onClose={() => setAuthModal(false)} />
+        </Suspense>
+      )}
 
       {paletteOpen && (
         <Suspense fallback={null}>
