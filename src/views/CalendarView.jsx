@@ -423,6 +423,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                   setPendingDate(null)
                 }}
                 onCancel={() => { setShowModal(false); setPendingDate(null) }}
+                existingEvents={events}
               />
             )}
           </section>
@@ -692,6 +693,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
               <QuickAddSheet
                 onSave={handleSave}
                 onCancel={() => setShowModal(false)}
+                existingEvents={events}
               />
             )}
           </>

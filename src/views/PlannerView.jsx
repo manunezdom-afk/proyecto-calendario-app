@@ -317,6 +317,27 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     return () => clearInterval(id)
   }, [])
 
+  // Puente cross-view: si otra vista (p. ej. Tareas con "Nova organízame")
+  // dejó un seed pendiente en sessionStorage, lo consumimos aquí al montar
+  // el planner. Evita elevar focusBarSeed a App.jsx para un caso puntual.
+  // TTL implícito: si el seed tiene > 30s lo ignoramos — probablemente es
+  // un residuo de una navegación previa que no llegó a disparar.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('focus_pending_nova_seed')
+      if (!raw) return
+      sessionStorage.removeItem('focus_pending_nova_seed')
+      const parsed = JSON.parse(raw)
+      if (!parsed?.text) return
+      if (parsed.ts && Date.now() - parsed.ts > 30_000) return
+      setFocusBarSeed(({ n }) => ({
+        text: parsed.text,
+        n: n + 1,
+        autosubmit: !!parsed.autosubmit,
+      }))
+    } catch {}
+  }, [])
+
   // Una vez que el usuario tenga CUALQUIER evento o tarea propia, marcamos
   // los chips de onboarding como descartados. De ahí en adelante, aunque
   // borre todo, los ejemplos no reaparecen — se quedarían sintiendo fuera
@@ -1029,7 +1050,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                           <li key={chip.label}>
                             <button
                               type="button"
-                              onClick={() => setFocusBarSeed(({ n }) => ({ text: chip.prompt, n: n + 1 }))}
+                              onClick={() => setFocusBarSeed(({ n }) => ({ text: chip.prompt, n: n + 1, autosubmit: true }))}
                               className="w-full flex items-center gap-2.5 bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2.5 text-left transition-colors active:scale-[0.99]"
                             >
                               <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -1390,7 +1411,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       )}
 
       {showModal && (
-        <QuickAddSheet onSave={handleModalSave} onCancel={() => setShowModal(false)} />
+        <QuickAddSheet
+          onSave={handleModalSave}
+          onCancel={() => setShowModal(false)}
+          existingEvents={events}
+        />
       )}
     </div>
   )

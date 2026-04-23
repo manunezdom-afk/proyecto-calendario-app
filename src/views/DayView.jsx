@@ -294,6 +294,7 @@ export default function DayView({ events = [], tasks = [], onAddEvent, onOpenTas
             onSave={(d) => { handleSave(d); setQuickAddInitial('') }}
             onCancel={() => { setShowAdd(false); setQuickAddInitial('') }}
             initialText={quickAddInitial}
+            existingEvents={events}
           />
         )}
       </main>

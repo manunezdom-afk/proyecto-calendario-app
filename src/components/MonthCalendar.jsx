@@ -219,6 +219,7 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
           targetDateLabel={formatLabel(selectedDate)}
           onSave={handleSave}
           onCancel={() => setShowSheet(false)}
+          existingEvents={events}
         />
       )}
     </div>

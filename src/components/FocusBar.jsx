@@ -130,13 +130,17 @@ export default function FocusBar({
   inline = false,
   seed = null,
 }) {
-  const { memories, addMemory } = useUserMemories()
+  const { memories, addMemory, deleteMemory } = useUserMemories()
   const [text, setText]             = useState('')
   const [isListening, setIsListening] = useState(false)
   const [isThinking, setIsThinking]   = useState(false)
   const [reply, setReply]             = useState(null)   // { content, actions }
   const [isFocused, setIsFocused]     = useState(false)
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false)
+  // Lo último que Nova aplicó (IDs reales ya en el store). Se rellena al
+  // terminar handleSend y se usa para el pill "Deshacer" inline. Se limpia
+  // al cerrar la burbuja o al mandar otro turno.
+  const [lastApplied, setLastApplied] = useState(null) // { eventIds:[], taskIds:[], memoryIds:[] } | null
   // Rotación de placeholder para que la barra no se sienta muerta — cambia
   // cada 4s entre ejemplos conversacionales. Se detiene al enfocar/escuchar.
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
@@ -197,9 +201,18 @@ export default function FocusBar({
   // seed: permite sembrar texto desde afuera (chips del empty state, etc).
   // Cambia n para re-disparar aunque el text sea el mismo. Delay de 60ms
   // para que iOS Safari no ignore el focus programático en standalone.
+  //
+  // seed.autosubmit=true → disparamos handleSend inmediatamente (chips del
+  // empty state). El usuario ve el "Nova pensando..." sin tocar más nada,
+  // cerrando el loop "toco un ejemplo → pasa algo visible".
   useEffect(() => {
     if (!seed || !seed.n) return
-    setText(seed.text || '')
+    const msg = seed.text || ''
+    setText(msg)
+    if (seed.autosubmit && msg.trim()) {
+      const t = setTimeout(() => handleSendRef.current?.(msg), 80)
+      return () => clearTimeout(t)
+    }
     const t = setTimeout(() => inputRef.current?.focus(), 60)
     return () => clearTimeout(t)
   }, [seed?.n]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -350,6 +363,21 @@ export default function FocusBar({
     }
   }, [])
 
+  // Deshacer la última aplicación de Nova: borra eventos/tareas/memorias
+  // que se crearon en el último turno. No tocamos edits/toggles porque
+  // no guardamos el estado previo; el usuario puede pedir "reagendalo"
+  // y Nova lo maneja. El pill desaparece tras undo (o al cerrar reply).
+  function handleUndo() {
+    if (!lastApplied) return
+    lastApplied.eventIds?.forEach((id) => onDeleteEvent?.(id))
+    lastApplied.taskIds?.forEach((id) => onDeleteTask?.(id))
+    lastApplied.memoryIds?.forEach((id) => deleteMemory?.(id))
+    setLastApplied(null)
+    setReply(null)
+    historyRef.current = []
+    try { sessionStorage.removeItem('nova_history') } catch {}
+  }
+
   async function handleSend(input) {
     const msg = (input ?? text).trim()
     if (!msg || isThinking) return
@@ -357,6 +385,7 @@ export default function FocusBar({
     setText('')
     setIsListening(false)
     setReply(null)
+    setLastApplied(null)
     // Cerrar sesión de voz si estaba abierta — evita que onend auto-relance.
     sessionActiveRef.current = false
     clearTimeout(silenceRef.current)
@@ -377,10 +406,16 @@ export default function FocusBar({
       })
       const { reply: replyText, actions = [] } = result
 
-      // Ejecutar acciones en el calendario, tareas y memorias
+      // Ejecutar acciones en el calendario, tareas y memorias.
+      // Vamos acumulando los IDs reales de lo creado para poder ofrecer
+      // "Deshacer" inline sin pedirle a Nova que mande delete_* después.
+      const appliedEventIds = []
+      const appliedTaskIds  = []
+      const appliedMemoryIds = []
       for (const action of actions) {
         if (action.type === 'add_event' && action.event) {
           onAddEvent?.(action.event)
+          if (action.event.id) appliedEventIds.push(action.event.id)
         } else if (action.type === 'edit_event' && action.id) {
           const realId = events.some(e => e.id === action.id)
             ? action.id
@@ -402,6 +437,7 @@ export default function FocusBar({
             ? { ...action.task, linkedEventId }
             : action.task
           onAddTask?.(taskPayload)
+          if (taskPayload.id) appliedTaskIds.push(taskPayload.id)
         } else if (action.type === 'toggle_task' && action.id) {
           const realId = tasks.some(t => t.id === action.id)
             ? action.id
@@ -413,8 +449,16 @@ export default function FocusBar({
             : (tasks.find(t => (t.label || '').toLowerCase() === String(action.label || '').toLowerCase())?.id || null)
           if (realId) onDeleteTask?.(realId)
         } else if (action.type === 'remember' && action.memory) {
-          addMemory?.(action.memory)
+          const saved = addMemory?.(action.memory)
+          if (saved?.id) appliedMemoryIds.push(saved.id)
         }
+      }
+      if (appliedEventIds.length || appliedTaskIds.length || appliedMemoryIds.length) {
+        setLastApplied({
+          eventIds:  appliedEventIds,
+          taskIds:   appliedTaskIds,
+          memoryIds: appliedMemoryIds,
+        })
       }
 
       historyRef.current = [...historyRef.current, { role: 'assistant', content: replyText || '' }]
@@ -585,7 +629,7 @@ export default function FocusBar({
                       <p className="text-[14px] text-on-surface leading-relaxed">{reply.content}</p>
                       {/* Chips de acciones */}
                       {reply.actions?.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
                           {reply.actions.map((a, i) => (
                             <span
                               key={i}
@@ -595,11 +639,21 @@ export default function FocusBar({
                               {describeAction(a)}
                             </span>
                           ))}
+                          {lastApplied && (
+                            <button
+                              type="button"
+                              onClick={handleUndo}
+                              className="flex items-center gap-1 rounded-full border border-outline/20 bg-surface-container px-2.5 py-0.5 text-[11px] font-medium text-on-surface-variant hover:bg-surface-container-high transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-[12px]">undo</span>
+                              Deshacer
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
                     <button
-                      onClick={() => setReply(null)}
+                      onClick={() => { setReply(null); setLastApplied(null) }}
                       className="flex-shrink-0 text-outline/40 hover:text-outline transition-colors"
                     >
                       <span className="material-symbols-outlined text-[1rem]">close</span>
@@ -748,7 +802,7 @@ export default function FocusBar({
                   <div className="flex-1 min-w-0">
                     <p className="text-[14px] text-white/90 leading-relaxed">{reply.content}</p>
                     {reply.actions?.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {reply.actions.map((a, i) => (
                           <span
                             key={i}
@@ -760,11 +814,21 @@ export default function FocusBar({
                              a.type === 'delete_event' ? 'Evento eliminado' : a.type}
                           </span>
                         ))}
+                        {lastApplied && (
+                          <button
+                            type="button"
+                            onClick={handleUndo}
+                            className="flex items-center gap-1 rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-0.5 text-[11px] font-medium text-white/80 hover:bg-white/10 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">undo</span>
+                            Deshacer
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
                   <button
-                    onClick={() => setReply(null)}
+                    onClick={() => { setReply(null); setLastApplied(null) }}
                     className="flex-shrink-0 text-white/30 hover:text-white/60 transition-colors"
                   >
                     <span className="material-symbols-outlined text-[1rem]">close</span>

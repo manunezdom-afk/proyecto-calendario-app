@@ -236,3 +236,34 @@ export function canShowAsInProgress(event) {
   if (isReminderItem(event)) return false
   return hasValidEndTime(event)
 }
+
+// Detección de conflictos: dado un candidato {date, time} y la lista actual
+// de eventos, devuelve los que se solapan en el mismo día. Reglas:
+//   · Día debe coincidir (ISO string), o ambos "undated" — si no hay fecha
+//     en el candidato, no reportamos conflictos (no tenemos marco de tiempo).
+//   · Si el candidato no tiene hora de término (solo inicio), usamos una
+//     ventana implícita de 30 min sólo para chequear solapamiento — no la
+//     persistimos. Mejor que no avisar nada.
+//   · Ignoramos el propio evento cuando `excludeId` coincide (edit flow).
+export function findOverlappingEvents(candidate, events, { excludeId } = {}) {
+  if (!candidate || !Array.isArray(events) || events.length === 0) return []
+  const date = candidate.date
+  if (!date) return []
+  const range = parseTimeRange(candidate.time)
+  if (!range || range.startH == null) return []
+  const candStart = range.startH
+  const candEnd = range.endH != null && range.endH > range.startH
+    ? range.endH
+    : candStart + 0.5 // ventana implícita de 30 min para items sin fin explícito
+
+  return events.filter((e) => {
+    if (!e || e.id === excludeId) return false
+    if (e.date !== date) return false
+    if (isReminderItem(e)) return false
+    const r = parseTimeRange(e.time)
+    if (!r || r.startH == null) return false
+    const evStart = r.startH
+    const evEnd = r.endH != null && r.endH > r.startH ? r.endH : evStart + 0.5
+    return candStart < evEnd && evStart < candEnd
+  })
+}

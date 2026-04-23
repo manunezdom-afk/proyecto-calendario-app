@@ -11,7 +11,12 @@ const CATEGORIES = ['hoy', 'semana', 'algún día']
 const CAT_LABELS = { hoy: 'Hoy', semana: 'Esta semana', 'algún día': 'Algún día' }
 const CAT_ICONS  = { hoy: 'today', semana: 'date_range', 'algún día': 'inbox' }
 
-export default function TasksView({ tasks = [], events = [], addTask = () => {}, toggleTask = () => {}, deleteTask = () => {} }) {
+// Puente cross-view: cuando otra vista quiere disparar Nova en Mi Día,
+// escribe aquí un seed y navega al planner. PlannerView lo consume en
+// su primer render y lo borra. Evita elevar focusBarSeed a App.jsx.
+const NOVA_SEED_KEY = 'focus_pending_nova_seed'
+
+export default function TasksView({ tasks = [], events = [], addTask = () => {}, toggleTask = () => {}, deleteTask = () => {}, updateTask = () => {}, onNavigate }) {
   const [showInput, setShowInput]     = useState(false)
   const [addCategory, setAddCategory] = useState('hoy')
   const [newLabel, setNewLabel]       = useState('')
@@ -64,14 +69,52 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
     setCollapsed((prev) => ({ ...prev, [cat]: !prev[cat] }))
   }
 
+  // Cicla la categoría de la tarea al siguiente bucket (hoy → semana →
+  // algún día → hoy). Más rápido que abrir un selector y suficiente para
+  // reacomodar tareas sin drag‑and‑drop.
+  function cycleCategory(id, current) {
+    const idx = CATEGORIES.indexOf(current)
+    const next = CATEGORIES[(idx + 1) % CATEGORIES.length]
+    updateTask(id, { category: next })
+  }
+
+  // "Nova, organiza estas tareas": mandamos al usuario a Mi Día con un
+  // prompt ya armado y autosubmit. Incluimos las tareas pendientes de hoy
+  // en el mensaje para que Nova no tenga que adivinar a qué se refiere
+  // el usuario. Si no hay nada pendiente, ni ofrecemos el botón.
+  function askNovaToOrganize() {
+    const pending = tasks.filter((t) => !t.done && t.category === 'hoy')
+    if (pending.length === 0) return
+    const list = pending.map((t) => `- ${t.label} (${t.priority})`).join('\n')
+    const prompt = `Organiza estas tareas de hoy en horas concretas, teniendo en cuenta mis eventos ya agendados:\n${list}`
+    try {
+      sessionStorage.setItem(NOVA_SEED_KEY, JSON.stringify({ text: prompt, autosubmit: true, ts: Date.now() }))
+    } catch {}
+    onNavigate?.('planner')
+  }
+
+  const hasPendingToday = tasks.some((t) => !t.done && t.category === 'hoy')
+
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-44 dark:bg-slate-900 dark:text-slate-100">
       <main className="max-w-md lg:max-w-[1200px] mx-auto px-4 lg:px-10 pt-6 lg:pt-10 space-y-8">
 
         {/* ── Header + Progress + Weekly Stats (grid en desktop) ─────────── */}
         <header className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[1fr_1fr_1fr] lg:gap-5 lg:items-stretch">
-          <div className="lg:col-span-3 lg:mb-2">
+          <div className="lg:col-span-3 lg:mb-2 flex items-center gap-3 flex-wrap">
             <h1 className="text-4xl lg:text-5xl font-extrabold text-on-surface dark:text-slate-100">Tareas</h1>
+            {hasPendingToday && onNavigate && (
+              <button
+                type="button"
+                onClick={askNovaToOrganize}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-3 py-1.5 text-[12px] font-bold text-primary hover:bg-primary/15 transition-colors active:scale-[0.98]"
+              >
+                <span className="material-symbols-outlined text-[15px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  auto_awesome
+                </span>
+                Nova, organízame
+              </button>
+            )}
           </div>
 
           <div className="bg-surface-container-lowest p-5 rounded-[24px] border border-outline-variant/20 lg:col-span-2">
@@ -180,7 +223,7 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
                       <p className="text-xs text-outline/50 pl-5 py-1">Sin tareas. Pulsa + para añadir.</p>
                     )}
 
-                    {catTasks.map(({ id, label, done, priority }) => {
+                    {catTasks.map(({ id, label, done, priority, category }) => {
                       const cfg = PRIORITY_CFG[priority]
                       return (
                         <div
@@ -208,9 +251,17 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
                             {priority}
                           </span>
 
-                          <span className="material-symbols-outlined text-[14px] text-outline/30 flex-shrink-0 cursor-grab">
-                            drag_indicator
-                          </span>
+                          {/* Mover de bucket. Tap = siguiente (hoy → semana → algún día → hoy).
+                              Reemplaza al drag‑indicator decorativo anterior. */}
+                          <button
+                            type="button"
+                            onClick={() => cycleCategory(id, category)}
+                            title="Mover a otro bucket"
+                            aria-label="Mover tarea a otro bucket"
+                            className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-outline/50 hover:bg-primary/10 hover:text-primary transition-colors active:scale-90"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">swap_horiz</span>
+                          </button>
                           <button
                             onClick={() => handleDelete(id)}
                             className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-outline/40 hover:bg-error/10 hover:text-error transition-all active:scale-90"

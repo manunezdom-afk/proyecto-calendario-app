@@ -4,6 +4,7 @@ import {
   DURATION_CHIPS,
   composeTimeRange,
   NO_END_TIME_LABEL,
+  findOverlappingEvents,
 } from '../utils/eventDuration'
 import { useAppPreferences } from '../hooks/useAppPreferences'
 
@@ -15,7 +16,7 @@ const EXAMPLES = [
   '"cena con mamá a las 8"',
 ]
 
-export default function QuickAddSheet({ onSave, onCancel, targetDateLabel, initialText = '' }) {
+export default function QuickAddSheet({ onSave, onCancel, targetDateLabel, initialText = '', existingEvents = [] }) {
   const [input, setInput] = useState(initialText)
   const [parsed, setParsed] = useState(null)
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
@@ -105,6 +106,20 @@ export default function QuickAddSheet({ onSave, onCancel, targetDateLabel, initi
       dotColor: parsed.dotColor,
     })
   }
+
+  // Conflictos: calculamos contra `existingEvents` el mismo payload que se
+  // guardaría si el usuario pulsa "Añadir" ahora. No bloqueamos el flujo —
+  // el usuario sigue pudiendo confirmar — solo avisamos visiblemente. Fuente
+  // de la verdad igual que al guardar: parsed.date + resolveFinalTime().
+  const conflicts = (() => {
+    if (!parsed?.date || !parsed?.startTime) return []
+    const finalTime = resolveFinalTime()
+    if (!finalTime) return []
+    return findOverlappingEvents(
+      { date: parsed.date, time: finalTime },
+      existingEvents,
+    )
+  })()
 
   // Resumen de la duración resuelta — mostrado bajo la vista previa para que
   // el usuario vea exactamente qué va a guardar.
@@ -204,6 +219,30 @@ export default function QuickAddSheet({ onSave, onCancel, targetDateLabel, initi
         ) : input.trim().length >= 3 ? null : (
           <div className="text-center text-outline text-sm py-3 mb-5 font-medium">
             Sigue escribiendo para ver la vista previa...
+          </div>
+        )}
+
+        {/* Conflicto: avisamos sin bloquear. Si el usuario insiste, puede
+            guardar igual — quizás la superposición sea intencional (turnos
+            opcionales, doble bloque). Máximo 2 nombres para no alargar. */}
+        {conflicts.length > 0 && (
+          <div className="mb-4 flex items-start gap-2 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-3.5 py-2.5">
+            <span
+              className="material-symbols-outlined text-amber-500 text-[18px] flex-shrink-0 mt-0.5"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+              aria-hidden="true"
+            >
+              warning
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-bold text-amber-700 dark:text-amber-300">
+                {conflicts.length === 1 ? 'Pisa otro evento' : `Pisa ${conflicts.length} eventos`}
+              </p>
+              <p className="text-[12px] text-on-surface-variant leading-snug mt-0.5 truncate">
+                {conflicts.slice(0, 2).map((c) => `${c.time?.split('-')[0]?.trim() || ''} · ${c.title}`).join(' · ')}
+                {conflicts.length > 2 && ` · +${conflicts.length - 2}`}
+              </p>
+            </div>
           </div>
         )}
 

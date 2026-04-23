@@ -136,7 +136,7 @@ export default function App() {
   }, [])
 
   const { events, addEvent, deleteEvent, editEvent } = useEvents()
-  const { tasks, addTask, toggleTask, deleteTask }   = useTasks()
+  const { tasks, addTask, toggleTask, deleteTask, updateTask } = useTasks()
   const {
     suggestions,
     pendingCount: inboxPendingCount,
@@ -246,7 +246,10 @@ export default function App() {
     // Solo mostrar el brief matutino si es realmente la mañana (5 AM – 12 PM).
     // Abrir la app a las 21:00 no tiene por qué dispararlo con "¿Arrancamos?".
     const isMorning = hour >= 5 && hour < 12
-    if (last !== today && isMorning) {
+    // Si el usuario ya pulsó "Empezar el día" hoy, no volvemos a ofrecerle
+    // el brief aunque reabra la app: ya arrancó, el botón quedaría redundante.
+    const alreadyStarted = localStorage.getItem(`focus:day_started:${today}`) === '1'
+    if (last !== today && isMorning && !alreadyStarted) {
       const timer = setTimeout(() => setShowMorningBrief(true), 600)
       localStorage.setItem(LAST_OPENED_KEY, today)
       return () => clearTimeout(timer)
@@ -311,18 +314,61 @@ export default function App() {
     } : null,
   }
 
-  // Al arrancar el día desde el brief, navegamos al planner y scrolleamos
-  // al primer evento próximo (si existe) para que el usuario vea al toque
-  // con qué empezar.
+  // Al arrancar el día desde el brief, navegamos al planner, marcamos que
+  // el usuario ya "arrancó" hoy (para no volver a ofrecer el brief en el
+  // mismo día aunque vuelva a abrir), y mostramos un toast con la primera
+  // acción concreta del día: o el próximo bloque de agenda, o un empujón
+  // amable si no hay nada armado. Además scrolleamos al próximo evento
+  // con un ring de color para que el usuario vea dónde continuar.
   function handleStartDay() {
     navigate('planner')
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      localStorage.setItem(`focus:day_started:${today}`, '1')
+    } catch {}
+
+    // Próximo evento de hoy por hora. Si no hay, miramos si hay tareas
+    // pendientes para sugerir foco. Todo offline, sin pedirle nada a Nova.
+    const today = new Date().toISOString().slice(0, 10)
+    const nowMin = (() => {
+      const d = new Date()
+      return d.getHours() * 60 + d.getMinutes()
+    })()
+    const toMin = (hhmm) => {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || '')
+      return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null
+    }
+    const todayEvents = (events || [])
+      .filter((e) => (e?.date || today) === today && toMin(e?.time) != null)
+      .sort((a, b) => toMin(a.time) - toMin(b.time))
+    const nextEv = todayEvents.find((e) => toMin(e.time) >= nowMin - 5) || todayEvents[0] || null
+    const pendingTasks = (tasks || []).filter((t) => !t.done)
+
+    if (nextEv) {
+      setApprovalToast({
+        id: `day-start-${Date.now()}`,
+        label: nextEv.time ? `${nextEv.time} · ${nextEv.title}` : nextEv.title,
+      })
+    } else if (pendingTasks.length > 0) {
+      const t = pendingTasks[0]
+      setApprovalToast({
+        id: `day-start-${Date.now()}`,
+        label: `Empieza por: ${t.label}`,
+      })
+    } else {
+      setApprovalToast({
+        id: `day-start-${Date.now()}`,
+        label: 'Día libre. Pídele a Nova un plan.',
+      })
+    }
+
     setTimeout(() => {
-      const nextEvent = document.querySelector('[data-next-event]')
-      if (nextEvent) {
-        nextEvent.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        nextEvent.classList.add('ring-2', 'ring-primary', 'ring-offset-2')
+      const nextEventEl = document.querySelector('[data-next-event]')
+      if (nextEventEl) {
+        nextEventEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        nextEventEl.classList.add('ring-2', 'ring-primary', 'ring-offset-2')
         setTimeout(() => {
-          nextEvent.classList.remove('ring-2', 'ring-primary', 'ring-offset-2')
+          nextEventEl.classList.remove('ring-2', 'ring-primary', 'ring-offset-2')
         }, 2000)
       } else {
         window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -422,6 +468,8 @@ export default function App() {
                   addTask={addTask}
                   toggleTask={toggleTask}
                   deleteTask={deleteTask}
+                  updateTask={updateTask}
+                  onNavigate={navigate}
                 />
               )}
 
@@ -532,7 +580,9 @@ export default function App() {
               check_circle
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-300/90">Añadido</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-300/90">
+                {approvalToast.id?.startsWith('day-start-') ? 'Empieza por' : 'Añadido'}
+              </p>
               <p className="text-[13px] font-semibold leading-tight truncate">{approvalToast.label}</p>
             </div>
             <button
@@ -690,6 +740,7 @@ export default function App() {
           <QuickAddSheet
             onSave={(formData) => { addEvent(formData); setPaletteQuickAdd(false) }}
             onCancel={() => setPaletteQuickAdd(false)}
+            existingEvents={events}
           />
         </Suspense>
       )}
