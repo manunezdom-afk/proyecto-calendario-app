@@ -38,7 +38,7 @@ function formatDateLabel(iso) {
   return `${names[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`
 }
 
-export default function CommandPalette({ isOpen, onClose, events = [], tasks = [], onNavigate, onOpenEvent, onQuickAdd }) {
+export default function CommandPalette({ isOpen, onClose, events = [], tasks = [], memories = [], onNavigate, onOpenEvent, onQuickAdd }) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const inputRef = useRef(null)
@@ -109,8 +109,27 @@ export default function CommandPalette({ isOpen, onClose, events = [], tasks = [
       .sort((a, b) => b._s - a._s)
       .slice(0, 20)
 
-    return { actions: scoredActions, events: scoredEvents, tasks: scoredTasks }
-  }, [query, actions, events, tasks])
+    // Memorias: solo las mostramos si el usuario está buscando explícitamente
+    // (q.length > 0). No queremos saturar la lista por defecto con notas que
+    // Nova ha recordado — solo cuando el usuario pregunta por ellas.
+    const scoredMemories = q.length > 0
+      ? (memories || [])
+          .map((m) => ({
+            id: `mem-${m.id}`,
+            kind: 'memory',
+            raw: m,
+            icon: 'auto_awesome',
+            label: m.subject ? `${m.subject}: ${m.content}` : m.content,
+            hint: `Memoria · ${m.category || 'nota'}`,
+            _s: score(`${m.subject || ''} ${m.content || ''} ${m.category || ''}`, q),
+          }))
+          .filter((m) => m._s > 0)
+          .sort((a, b) => b._s - a._s)
+          .slice(0, 10)
+      : []
+
+    return { actions: scoredActions, events: scoredEvents, tasks: scoredTasks, memories: scoredMemories }
+  }, [query, actions, events, tasks, memories])
 
   // Lista aplanada para navegación con teclado
   const flat = useMemo(() => {
@@ -118,6 +137,7 @@ export default function CommandPalette({ isOpen, onClose, events = [], tasks = [
     results.actions.forEach((a) => arr.push(a))
     results.events.forEach((e) => arr.push(e))
     results.tasks.forEach((t) => arr.push(t))
+    results.memories.forEach((m) => arr.push(m))
     return arr
   }, [results])
 
@@ -136,6 +156,7 @@ export default function CommandPalette({ isOpen, onClose, events = [], tasks = [
     if (item.kind === 'action') item.run?.()
     else if (item.kind === 'event') onOpenEvent?.(item.raw)
     else if (item.kind === 'task') onNavigate?.('tasks')
+    else if (item.kind === 'memory') onNavigate?.('memory')
     onClose?.()
   }
 
@@ -184,7 +205,7 @@ export default function CommandPalette({ isOpen, onClose, events = [], tasks = [
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKey}
-                placeholder="Buscar eventos, tareas o acciones…"
+                placeholder="Buscar eventos, tareas, memoria o acciones…"
                 className="flex-1 bg-transparent text-sm font-medium text-on-surface placeholder:text-outline/60 focus:outline-none"
                 aria-label="Buscar"
               />
@@ -229,6 +250,18 @@ export default function CommandPalette({ isOpen, onClose, events = [], tasks = [
                     return (
                       <Row key={t.id} idx={idx} active={active === idx} onHover={() => setActive(idx)} onClick={() => runItem(t)}
                            icon={t.icon} label={t.label} hint={t.hint} muted={t.raw.done} />
+                    )
+                  })}
+                </Section>
+              )}
+
+              {results.memories.length > 0 && (
+                <Section title="Memoria de Nova">
+                  {results.memories.map((m, i) => {
+                    const idx = results.actions.length + results.events.length + results.tasks.length + i
+                    return (
+                      <Row key={m.id} idx={idx} active={active === idx} onHover={() => setActive(idx)} onClick={() => runItem(m)}
+                           icon={m.icon} label={m.label} hint={m.hint} />
                     )
                   })}
                 </Section>

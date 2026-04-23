@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import {
   getPushStatus,
@@ -166,13 +166,50 @@ function PushDiagnostic() {
   )
 }
 
+// Refleja el estado real de push en lugar del check verde estático. Si el
+// permiso está bloqueado o la suscripción no está guardada en el servidor, el
+// usuario ve el ámbar "Inactivo" — pista clara para usar el diagnóstico de
+// abajo. Antes este row mentía: decía "activo" aunque nunca llegara una push.
+function RemindersRow() {
+  const [state, setState] = useState('checking') // checking | active | inactive | blocked | unsupported
+  useEffect(() => {
+    let cancelled = false
+    getPushStatus()
+      .then((s) => {
+        if (cancelled) return
+        if (!s.supported) setState('unsupported')
+        else if (s.permission === 'denied') setState('blocked')
+        else if (s.permission !== 'granted' || !s.subscribed) setState('inactive')
+        else setState('active')
+      })
+      .catch(() => !cancelled && setState('inactive'))
+    return () => { cancelled = true }
+  }, [])
+
+  const copy = {
+    checking:    { sub: 'Verificando estado…',                                     icon: 'check_circle',  color: 'text-slate-300' },
+    active:      { sub: 'Recibes un aviso 10, 30 y 60 min antes de cada evento',   icon: 'check_circle',  color: 'text-emerald-400' },
+    inactive:    { sub: 'No están activas — actívalas en Permisos arriba',         icon: 'error',         color: 'text-amber-400' },
+    blocked:     { sub: 'Permiso bloqueado — reactívalo desde los ajustes del sistema', icon: 'block',    color: 'text-red-400' },
+    unsupported: { sub: 'Este dispositivo no soporta notificaciones push',         icon: 'do_not_disturb_on', color: 'text-slate-300' },
+  }[state]
+
+  return (
+    <Row icon="notifications" label="Recordatorios de eventos" sub={copy.sub}>
+      <span className={`material-symbols-outlined text-[16px] ${copy.color}`}>
+        {copy.icon}
+      </span>
+    </Row>
+  )
+}
+
 const DURATION_BEHAVIOR_OPTIONS = [
   { value: 'ask',        label: 'Preguntar cada vez',       sub: 'Muestra chips de duración antes de guardar' },
   { value: 'default30',  label: '30 minutos por defecto',   sub: 'Asume 30 min sin preguntar cuando no es claro' },
   { value: 'none',       label: 'Sin hora de término',      sub: 'Guarda solo la hora de inicio' },
 ]
 
-export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKnows }) {
+export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKnows, memoriesCount = 0 }) {
   const { user, setAuthModal, signOut } = useAuth()
   const { prefs, setPreference } = useAppPreferences()
   const currentBehavior = DURATION_BEHAVIOR_OPTIONS.find(
@@ -239,9 +276,16 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
         <Row
           icon="psychology"
           label="Memorias de Nova"
-          sub="Datos explícitos que te pedí recordar (relaciones, metas, contextos)"
+          sub={memoriesCount > 0
+            ? `${memoriesCount} ${memoriesCount === 1 ? 'memoria guardada' : 'memorias guardadas'} — relaciones, metas, contextos`
+            : 'Datos explícitos que te pido recordar (relaciones, metas, contextos)'}
           onClick={onOpenMemory}
         >
+          {memoriesCount > 0 && (
+            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 rounded-full px-2 py-0.5 min-w-[22px] text-center">
+              {memoriesCount}
+            </span>
+          )}
           <span className="material-symbols-outlined text-[16px] text-slate-300">chevron_right</span>
         </Row>
         <Row
@@ -316,13 +360,7 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
           el servidor, etc.) para desbloquear casos donde el permiso está
           concedido pero la entrega de push falla. */}
       <SectionCard title="Notificaciones">
-        <Row
-          icon="notifications"
-          label="Recordatorios de eventos"
-          sub="Recibes un aviso 10, 30 y 60 min antes de cada evento"
-        >
-          <span className="material-symbols-outlined text-[16px] text-emerald-400">check_circle</span>
-        </Row>
+        <RemindersRow />
         <PushDiagnostic />
       </SectionCard>
 

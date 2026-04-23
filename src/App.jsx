@@ -4,6 +4,7 @@ import { useEvents }        from './hooks/useEvents'
 import { useTasks }         from './hooks/useTasks'
 import { useNotifications } from './hooks/useNotifications'
 import { useSuggestions }   from './hooks/useSuggestions'
+import { useUserMemories }  from './hooks/useUserMemories'
 import { useAuth }          from './context/AuthContext'
 import { actionToSuggestion, applySuggestion } from './utils/actionToSuggestion'
 
@@ -135,8 +136,28 @@ export default function App() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
+  // Estado de conectividad. Mostramos un pill de "Sin conexión" cuando el
+  // navegador declara offline, para que el usuario sepa que sus cambios viven
+  // locales y se sincronizarán al volver. Sin esto, el silencio puede
+  // interpretarse como "se perdió lo que acabo de escribir" — matando la
+  // confianza justo cuando necesitamos que confíe en la PWA.
+  const [isOnline, setIsOnline] = useState(
+    () => typeof navigator === 'undefined' || navigator.onLine !== false,
+  )
+  useEffect(() => {
+    const on = () => setIsOnline(true)
+    const off = () => setIsOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [])
+
   const { events, addEvent, deleteEvent, editEvent } = useEvents()
   const { tasks, addTask, toggleTask, deleteTask, updateTask } = useTasks()
+  const { memories } = useUserMemories()
   const {
     suggestions,
     pendingCount: inboxPendingCount,
@@ -258,6 +279,13 @@ export default function App() {
 
   // ── Navigation ────────────────────────────────────────────────────────────
   function navigate(view) {
+    // Subviews (memory / nova-knows) no viven en el bottom nav. Si navegamos a
+    // una desde cualquier vista principal, guardamos la actual como previousView
+    // para que el botón de back vuelva al punto de origen — p.ej. desde el
+    // command palette en Planner, "volver" debe regresar al Planner, no a Ajustes.
+    if ((view === 'memory' || view === 'nova-knows') && activeView !== 'task-detail') {
+      setPreviousView(activeView)
+    }
     setActiveView(view)
     try {
       const url = new URL(window.location.href)
@@ -399,6 +427,19 @@ export default function App() {
         />
       </motion.div>
 
+      {/* Banda de offline. Discreta pero constante — el usuario necesita saber
+          que sus cambios viven locales hasta que vuelva la red, y no hay otra
+          fuente de señal obvia (las mutaciones no fallan, las guardamos en
+          cola). z-index bajo para no competir con toasts/modales. */}
+      {!isOnline && (
+        <div className="fixed left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top,0px)+56px)] z-[30] pointer-events-none">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 text-white text-[11px] font-semibold shadow-lg backdrop-blur">
+            <span className="material-symbols-outlined text-[14px]">cloud_off</span>
+            Sin conexión · guardando local
+          </div>
+        </div>
+      )}
+
       {isDesktop && !isDetail && (
         <DesktopSideBar
           activeView={navView}
@@ -479,6 +520,7 @@ export default function App() {
 
               {activeView === 'settings' && (
                 <SettingsView
+                  memoriesCount={memories.length}
                   onOpenImport={() => { setImportExportInitialTab('import'); setImportExportOpen(true) }}
                   onOpenMemory={() => { setPreviousView('settings'); setActiveView('memory') }}
                   onOpenNovaKnows={() => { setPreviousView('settings'); setActiveView('nova-knows') }}
@@ -493,7 +535,10 @@ export default function App() {
                       className="inline-flex items-center gap-1 text-[13px] font-semibold text-slate-500 hover:text-slate-800 transition-colors"
                     >
                       <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-                      Ajustes
+                      {previousView === 'planner' ? 'Mi día'
+                        : previousView === 'calendar' ? 'Calendario'
+                        : previousView === 'tasks' ? 'Tareas'
+                        : 'Ajustes'}
                     </button>
                   </div>
                   <MemoryView />
@@ -728,6 +773,7 @@ export default function App() {
             onClose={() => setPaletteOpen(false)}
             events={events}
             tasks={tasks}
+            memories={memories}
             onNavigate={navigate}
             onOpenEvent={(event) => openTaskDetail(event)}
             onQuickAdd={() => { setPaletteOpen(false); setPaletteQuickAdd(true) }}

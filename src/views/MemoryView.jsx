@@ -12,8 +12,19 @@ const CATEGORIES = [
   { id: 'context',      label: 'Contexto',      icon: 'description',      color: 'bg-slate-50 text-slate-600 border-slate-100' },
 ]
 
+// Muestra de dónde salió la memoria. Es clave para la confianza del usuario:
+// si Nova inventó algo raro, el usuario ve "Inferido" y sabe que puede borrarlo
+// sin culpa. Si lo escribió él mismo ("Tú"), tiene autoridad total.
+const SOURCE_BADGES = {
+  user_edited:  { label: 'Tú',          className: 'bg-slate-100 text-slate-600' },
+  conversation: { label: 'De una charla', className: 'bg-blue-50 text-blue-600' },
+  inferred:     { label: 'Inferido',    className: 'bg-amber-50 text-amber-700' },
+}
+
 function MemoryCard({ memory, onPin, onEdit, onDelete }) {
   const cat = CATEGORIES.find(c => c.id === memory.category) || CATEGORIES[0]
+  const srcBadge = SOURCE_BADGES[memory.source] || null
+  const lowConfidence = memory.confidence === 'low'
   return (
     <motion.div
       layout
@@ -28,13 +39,26 @@ function MemoryCard({ memory, onPin, onEdit, onDelete }) {
         </span>
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
           <span className="text-[10px] font-bold text-slate-400">
             {cat.label}
           </span>
           {memory.subject && (
             <span className="text-[10px] font-semibold text-slate-500 bg-slate-50 rounded-full px-2 py-0.5 truncate max-w-[140px]">
               {memory.subject}
+            </span>
+          )}
+          {srcBadge && (
+            <span className={`text-[9.5px] font-bold uppercase tracking-wide rounded-full px-1.5 py-0.5 ${srcBadge.className}`}>
+              {srcBadge.label}
+            </span>
+          )}
+          {lowConfidence && (
+            <span
+              className="text-[9.5px] font-bold uppercase tracking-wide rounded-full px-1.5 py-0.5 bg-rose-50 text-rose-600"
+              title="Nova no está segura — revísalo"
+            >
+              Dudoso
             </span>
           )}
           {memory.pinned && (
