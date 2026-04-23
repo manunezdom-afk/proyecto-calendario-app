@@ -128,6 +128,7 @@ export default function FocusBar({
   events = [],
   tasks = [],
   inline = false,
+  seed = null,
 }) {
   const { memories, addMemory } = useUserMemories()
   const [text, setText]             = useState('')
@@ -177,6 +178,16 @@ export default function FocusBar({
   // Ref a la última versión de handleSend: el efecto de SR se monta una sola
   // vez; sin ref llamaríamos al handleSend con props/estado desactualizados.
   const handleSendRef = useRef(null)
+
+  // seed: permite sembrar texto desde afuera (chips del empty state, etc).
+  // Cambia n para re-disparar aunque el text sea el mismo. Delay de 60ms
+  // para que iOS Safari no ignore el focus programático en standalone.
+  useEffect(() => {
+    if (!seed || !seed.n) return
+    setText(seed.text || '')
+    const t = setTimeout(() => inputRef.current?.focus(), 60)
+    return () => clearTimeout(t)
+  }, [seed?.n]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Rehidratar historial persistido (compartido con NovaWidget via sessionStorage)
   useEffect(() => {

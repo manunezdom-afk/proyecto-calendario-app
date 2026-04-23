@@ -307,6 +307,10 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   })
   const [showModal, setShowModal]         = useState(false)
   const [, setTick] = useState(0)
+  // seed de la FocusBar: los chips del empty state inyectan texto aquí y
+  // la FocusBar lo aplica + enfoca el input. n es un contador para poder
+  // re-sembrar el mismo texto y re-disparar el efecto.
+  const [focusBarSeed, setFocusBarSeed] = useState({ text: '', n: 0 })
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60_000)
@@ -748,6 +752,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
               events={events}
               tasks={tasks}
               inline
+              seed={focusBarSeed}
             />
 
             <div className="relative space-y-3">
@@ -975,25 +980,49 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
               {blocks.length === 0 && pendingTasksCount === 0 && (() => {
                 const pendingTotal = semanaCount + algoDiaCount
+                const chips = [
+                  { icon: 'fitness_center', text: 'Agenda gym mañana a las 7' },
+                  { icon: 'schedule',       text: 'Bloquea 2h de foco esta tarde' },
+                  { icon: 'event_repeat',   text: 'Agenda una reunión todos los lunes a las 9 am' },
+                ]
                 return (
                   <div className="flex gap-6">
                     <div className="w-16" />
-                    <div className="flex-1 bg-surface-container-low rounded-xl p-6 space-y-3">
-                      <p className="text-outline text-sm font-semibold">Hoy está libre.</p>
-                      <p className="text-outline/70 text-xs leading-relaxed">
-                        {pendingTotal > 0
-                          ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. Buen momento para avanzar una.`
-                          : 'Agrega un evento o pídele a Nova que arme tu agenda.'}
-                      </p>
-                      {onOpenAssistant && (
-                        <button
-                          onClick={onOpenAssistant}
-                          className="flex items-center gap-1.5 text-xs font-bold text-white bg-primary hover:bg-primary/90 px-4 py-2 rounded-full transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
-                          Hablar con Nova
-                        </button>
-                      )}
+                    <div className="flex-1 space-y-4">
+                      <div className="space-y-1">
+                        <p className="text-on-surface text-sm font-semibold">Hoy está libre.</p>
+                        <p className="text-outline/70 text-xs leading-relaxed">
+                          {pendingTotal > 0
+                            ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. ¿Por dónde empezamos?`
+                            : '¿Por dónde empezamos? Toca un ejemplo o escríbele a Nova.'}
+                        </p>
+                      </div>
+                      <ul className="space-y-2">
+                        {chips.map((chip) => (
+                          <li key={chip.text}>
+                            <button
+                              type="button"
+                              onClick={() => setFocusBarSeed(({ n }) => ({ text: chip.text, n: n + 1 }))}
+                              className="w-full flex items-center gap-3 bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2.5 text-left transition-colors active:scale-[0.99]"
+                            >
+                              <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <span
+                                  className="material-symbols-outlined text-primary text-[16px]"
+                                  style={{ fontVariationSettings: "'FILL' 1" }}
+                                >
+                                  {chip.icon}
+                                </span>
+                              </span>
+                              <span className="flex-1 min-w-0 text-[13px] font-medium text-on-surface truncate">
+                                {chip.text}
+                              </span>
+                              <span className="material-symbols-outlined text-outline/50 text-[18px] flex-shrink-0">
+                                arrow_outward
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
                 )
