@@ -980,25 +980,31 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
               {blocks.length === 0 && pendingTasksCount === 0 && (() => {
                 const pendingTotal = semanaCount + algoDiaCount
-                // label = texto corto visible en el chip (cabe en iPhone sin truncar).
-                // prompt = texto completo que se siembra en la FocusBar al tocar.
+                // Chips de onboarding: SOLO en primer uso real, cuando el
+                // usuario todavía no tiene ningún evento ni tarea. Una vez
+                // que existe data propia, los ejemplos estorban.
+                const isFirstUse = events.length === 0 && tasks.length === 0
                 const chips = [
                   { icon: 'fitness_center', label: 'Agendar gym mañana',   prompt: 'Agenda gym mañana a las 7' },
                   { icon: 'schedule',       label: 'Bloquear 2h de foco',  prompt: 'Bloquea 2h de foco esta tarde' },
                   { icon: 'event_repeat',   label: 'Reunión semanal fija', prompt: 'Agenda una reunión todos los lunes a las 9 am' },
                 ]
                 return (
-                  <div className="flex gap-6">
-                    <div className="w-16" />
-                    <div className="flex-1 space-y-4">
-                      <div className="space-y-1">
-                        <p className="text-on-surface text-sm font-semibold">Hoy está libre.</p>
-                        <p className="text-outline/70 text-xs leading-relaxed">
-                          {pendingTotal > 0
-                            ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. ¿Por dónde empezamos?`
-                            : '¿Por dónde empezamos? Toca un ejemplo o escríbele a Nova.'}
-                        </p>
-                      </div>
+                  // Sin el gutter w-16 de timeline: cuando no hay bloques, no
+                  // hay columna de horas arriba con la que alinearse, y el
+                  // gutter dejaba el contenido descentrado a la derecha en iPhone.
+                  <div className="w-full max-w-md mx-auto space-y-4">
+                    <div className="space-y-1 text-center sm:text-left">
+                      <p className="text-on-surface text-sm font-semibold">Hoy está libre.</p>
+                      <p className="text-outline/70 text-xs leading-relaxed">
+                        {isFirstUse
+                          ? '¿Por dónde empezamos? Toca un ejemplo o escríbele a Nova.'
+                          : pendingTotal > 0
+                          ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. Buen momento para avanzar una.`
+                          : 'Agrega un evento o pídele a Nova que arme tu agenda.'}
+                      </p>
+                    </div>
+                    {isFirstUse && (
                       <ul className="space-y-2">
                         {chips.map((chip) => (
                           <li key={chip.label}>
@@ -1025,7 +1031,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                           </li>
                         ))}
                       </ul>
-                    </div>
+                    )}
                   </div>
                 )
               })()}
