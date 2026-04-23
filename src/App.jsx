@@ -21,6 +21,7 @@ import WelcomeScreen, { useWelcomeGate } from './components/WelcomeScreen'
 import InstallAppCard              from './components/InstallAppCard'
 import AuroraBackground            from './components/AuroraBackground'
 import NovaHint                    from './components/NovaHint'
+import UndoToast                   from './components/UndoToast'
 import FirstLaunchOnboarding, { useOnboardingGate } from './components/FirstLaunchOnboarding'
 import PlannerView                 from './views/PlannerView'
 import { useFirstRunSequence }     from './hooks/useFirstRunSequence'
@@ -171,6 +172,18 @@ export default function App() {
   // Toast efímero al aprobar una sugerencia. Visible ~3.5 s sin interrumpir.
   const [approvalToast, setApprovalToast] = useState(null)
 
+  // Undo global — la promesa que el onboarding hace al usuario: "cualquier
+  // cambio lo puedes deshacer en un toque". Cada acción creativa que Nova
+  // aplique (crear evento/tarea/memoria, aprobar suggestion) llama a
+  // showUndo() con un mensaje humano y un callback que revierte. UndoToast
+  // vive 7s y luego desaparece; si llega otro undoable antes, reemplaza al
+  // anterior (lo pendiente se considera aceptado).
+  const [undoable, setUndoable] = useState(null)
+  const showUndo = (message, undo) => {
+    if (!undo) return
+    setUndoable({ id: `undo-${Date.now()}`, message, undo })
+  }
+
   // Handlers para ejecutar una sugerencia aprobada
   const suggestionHandlers = {
     onAddEvent: addEvent,
@@ -184,9 +197,16 @@ export default function App() {
   function handleApproveSuggestion(id) {
     const s = suggestions.find((x) => x.id === id)
     if (s) {
-      applySuggestion(s, suggestionHandlers)
-      const label = s.title || s.summary || 'Sugerencia'
-      setApprovalToast({ id: `${id}-${Date.now()}`, label })
+      const result = applySuggestion(s, suggestionHandlers)
+      // Si la aplicación es reversible (add_event/add_task), ofrecemos Deshacer.
+      // Si no, mantenemos el toast verde de siempre — p. ej. toggles/edits no
+      // tienen estado previo que podamos restaurar.
+      if (result?.undo) {
+        showUndo(result.message, result.undo)
+      } else {
+        const label = s.title || s.summary || 'Sugerencia'
+        setApprovalToast({ id: `${id}-${Date.now()}`, label })
+      }
     }
     approveSuggestion(id)
   }
@@ -334,6 +354,7 @@ export default function App() {
     onDeleteTask:      deleteTask,
     onEveningShutdown: () => setShowEveningShutdown(true),
     onNavigate:        navigate,
+    onShowUndo:        showUndo,
     morningBrief: (showMorningBrief && !showWelcome && !showOnboarding) ? {
       events,
       tasks,
@@ -603,6 +624,9 @@ export default function App() {
         </Suspense>
       )}
 
+      {/* Undo global ───────────────────────────────────────────────────────── */}
+      <UndoToast action={undoable} onDismiss={() => setUndoable(null)} />
+
       {/* Toast de confirmación al aprobar sugerencia ──────────────────────── */}
       <AnimatePresence>
         {approvalToast && (
@@ -692,7 +716,7 @@ export default function App() {
           id="welcome-intro-v1"
           delayMs={1400}
         >
-          Soy Nova. Propongo movimientos en tu día, pero nunca toco tu calendario sin tu confirmación. Háblame tocando el orbe.
+          Soy Nova. Agrego eventos, tareas y bloques al instante — y cada cambio trae un "Deshacer" visible. Háblame tocando el orbe.
         </NovaHint>
       )}
       {!gatesBlocking && hasNovaEmptyHint && (
@@ -710,7 +734,7 @@ export default function App() {
           actionLabel="Ver bandeja"
           onAction={() => setInboxOpen(true)}
         >
-          Si quieres, repaso tu día y dejo propuestas en la bandeja. Nunca toco nada sin tu confirmación.
+          Si detecto un conflicto que no puedo resolver solo, te dejo una propuesta en la bandeja para que decidas.
         </NovaHint>
       )}
 

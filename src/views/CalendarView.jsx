@@ -507,17 +507,54 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                 no sólo sobre Focus. Antes mostrábamos "Día libre" aunque
                 hubiese eventos en Evening o tareas pendientes: bug. */}
             {isDayEmpty && (
-              <div className="bg-surface-container-low rounded-xl p-8 flex flex-col items-center gap-3 text-center">
-                <span className="material-symbols-outlined text-3xl text-outline">event_available</span>
-                <p className="text-sm font-semibold text-outline">
-                  {activeDayISO === todayISOStr ? 'Día libre. Todo tuyo.' : 'Sin eventos en este día.'}
-                </p>
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
-                >
-                  Añadir primer evento
-                </button>
+              /* Empty state útil: título con personalidad + 3 CTAs. Antes era
+                 un solo botón "Añadir primer evento" con icono genérico — se
+                 sentía como un formulario vacío. Ahora el usuario ve opciones
+                 reales para activar el día sin pensar. */
+              <div className="bg-surface-container-lowest rounded-2xl p-6 flex flex-col items-center gap-4 text-center border border-outline-variant/30">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+                  <span
+                    className="material-symbols-outlined text-primary text-[26px]"
+                    style={{ fontVariationSettings: "'FILL' 1" }}
+                  >
+                    {activeDayISO === todayISOStr ? 'wb_sunny' : 'event_available'}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-base font-bold text-on-surface">
+                    {activeDayISO === todayISOStr ? 'Día libre. Todo tuyo.' : 'Sin eventos en este día.'}
+                  </p>
+                  <p className="text-[12.5px] text-outline mt-1 max-w-[280px] mx-auto">
+                    {activeDayISO === todayISOStr
+                      ? 'Bloquea tu atención, agenda algo o trae tu agenda externa.'
+                      : 'Agrega un evento o pide a Nova que planifique este día.'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-white text-xs font-bold active:scale-95 transition-all shadow-sm shadow-primary/20"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">add</span>
+                    Añadir evento
+                  </button>
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary/10 text-primary text-xs font-bold active:scale-95 transition-colors hover:bg-primary/15"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">psychology</span>
+                    Bloquear foco
+                  </button>
+                  {onExportClick && (
+                    <button
+                      onClick={onExportClick}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-semibold active:scale-95 transition-colors hover:bg-surface-container-high"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">upload_file</span>
+                      Importar agenda
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 

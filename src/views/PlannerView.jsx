@@ -297,7 +297,7 @@ function SwipeableCard({ onDelete, disabled, children }) {
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────
-export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, onAddTask, onToggleTask, onDeleteTask, events = [], tasks = [], onOpenAssistant, onEveningShutdown, onNavigate, isDesktop = false, morningBrief = null }) {
+export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, onAddTask, onToggleTask, onDeleteTask, events = [], tasks = [], onOpenAssistant, onEveningShutdown, onNavigate, onShowUndo, isDesktop = false, morningBrief = null }) {
   const [blocks, setBlocks] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -787,6 +787,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
               tasks={tasks}
               inline
               seed={focusBarSeed}
+              onShowUndo={onShowUndo}
             />
 
             <div className={`relative ${isDesktop ? 'space-y-4 mt-10' : 'space-y-3'}`}>

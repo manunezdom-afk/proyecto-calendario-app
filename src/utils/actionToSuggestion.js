@@ -149,9 +149,13 @@ export function actionToSuggestion(action, { reason, batchId, events = [], tasks
   }
 }
 
-// ── Ejecuta una suggestion aprobada llamando al callback correcto ──────────
+// Aplica una suggestion. Para creaciones (add_event / add_task) devuelve
+// `{ message, undo }` para que el caller pueda ofrecer "Deshacer" — cerrando
+// la promesa del onboarding de que todo cambio es reversible. Para los demás
+// kinds devuelve null: las ediciones no guardan estado previo, los toggles no
+// generan un mensaje útil, los deletes son la reversa de algo ya aplicado.
 export function applySuggestion(suggestion, handlers = {}) {
-  if (!suggestion) return
+  if (!suggestion) return null
   const { kind, payload = {} } = suggestion
   const {
     onAddEvent, onEditEvent, onDeleteEvent,
@@ -159,26 +163,40 @@ export function applySuggestion(suggestion, handlers = {}) {
   } = handlers
 
   switch (kind) {
-    case 'add_event':
-      onAddEvent?.(payload.event)
-      break
+    case 'add_event': {
+      const created = onAddEvent?.(payload.event)
+      if (created?.id) {
+        return {
+          message: `Añadí "${created.title || 'evento'}"`,
+          undo: () => onDeleteEvent?.(created.id),
+        }
+      }
+      return null
+    }
     case 'edit_event':
       onEditEvent?.(payload.id, payload.updates || {})
-      break
+      return null
     case 'delete_event':
       onDeleteEvent?.(payload.id)
-      break
+      return null
     case 'mark_task_done':
     case 'toggle_task':
       onToggleTask?.(payload.id)
-      break
-    case 'add_task':
-      onAddTask?.(payload.task)
-      break
+      return null
+    case 'add_task': {
+      const created = onAddTask?.(payload.task)
+      if (created?.id) {
+        return {
+          message: `Añadí la tarea "${created.label || 'nueva'}"`,
+          undo: () => onDeleteTask?.(created.id),
+        }
+      }
+      return null
+    }
     case 'delete_task':
       onDeleteTask?.(payload.id)
-      break
+      return null
     default:
-      break
+      return null
   }
 }

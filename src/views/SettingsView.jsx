@@ -258,8 +258,8 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
       <SectionCard title="Nova IA">
         <Row
           icon="auto_awesome"
-          label="Modo propuesta"
-          sub="Nova sugiere cambios — tú apruebas o rechazas cada uno"
+          label="Acción directa con Deshacer"
+          sub="Nova crea al momento y deja un botón de Deshacer tras cada cambio"
         >
           <div className="w-10 h-6 rounded-full bg-primary flex items-center justify-end px-1 flex-shrink-0">
             <div className="w-4 h-4 rounded-full bg-white shadow-sm" />

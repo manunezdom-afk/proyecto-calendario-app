@@ -230,19 +230,32 @@ function ExportTab({ events }) {
         </p>
 
         <div className="pl-7 space-y-2">
-          <button
-            onClick={() => { downloadICS(filteredEvents) }}
-            disabled={filteredEvents.length === 0}
-            className="w-full py-3.5 rounded-2xl bg-primary text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-30 active:scale-[0.98] transition-all"
-          >
-            <span className="material-symbols-outlined text-[20px]">ios_share</span>
-            Descargar {filteredEvents.length} evento{filteredEvents.length !== 1 ? 's' : ''} (.ics)
-          </button>
+          {/* Cuando no hay nada que exportar, degradamos el CTA a estado neutro
+              en lugar de dejar el botón primario con opacity-30: visualmente
+              sigue pareciendo disponible y genera frustración. El texto
+              también cambia para decir explícitamente que no hay nada. */}
+          {filteredEvents.length === 0 ? (
+            <button
+              disabled
+              className="w-full py-3.5 rounded-2xl bg-surface-container-low text-outline font-semibold flex items-center justify-center gap-2 text-sm cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-[18px]">block</span>
+              Nada que exportar con estos filtros
+            </button>
+          ) : (
+            <button
+              onClick={() => { downloadICS(filteredEvents) }}
+              className="w-full py-3.5 rounded-2xl bg-primary text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
+            >
+              <span className="material-symbols-outlined text-[20px]">ios_share</span>
+              Descargar {filteredEvents.length} evento{filteredEvents.length !== 1 ? 's' : ''} (.ics)
+            </button>
+          )}
 
           <button
             onClick={handleCopy}
             disabled={filteredEvents.length === 0}
-            className="w-full py-3 rounded-2xl bg-surface-container-low text-on-surface font-semibold flex items-center justify-center gap-2 disabled:opacity-30 text-sm active:scale-[0.98] transition-all"
+            className="w-full py-3 rounded-2xl bg-surface-container-low text-on-surface font-semibold flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed text-sm active:scale-[0.98] transition-all"
           >
             <span className="material-symbols-outlined text-[18px]">{copied ? 'check_circle' : 'content_copy'}</span>
             {copied ? '¡Copiado!' : 'Copiar como texto ICS'}

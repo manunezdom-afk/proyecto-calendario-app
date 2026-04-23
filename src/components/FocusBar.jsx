@@ -129,6 +129,7 @@ export default function FocusBar({
   tasks = [],
   inline = false,
   seed = null,
+  onShowUndo,
 }) {
   const { memories, addMemory, deleteMemory } = useUserMemories()
   const [text, setText]             = useState('')
@@ -459,6 +460,26 @@ export default function FocusBar({
           taskIds:   appliedTaskIds,
           memoryIds: appliedMemoryIds,
         })
+        // Además del pill inline de la burbuja de reply, empujamos un
+        // UndoToast global que vive 7s arriba del bottom nav. Es la red de
+        // seguridad persistente: aunque el usuario cierre la burbuja o
+        // scrollee lejos, puede revertir desde el toast flotante. El mensaje
+        // es un resumen humano ("Añadí 2 eventos y 1 tarea") para que se
+        // entienda sin abrir nada.
+        if (onShowUndo) {
+          const parts = []
+          if (appliedEventIds.length) parts.push(`${appliedEventIds.length} ${appliedEventIds.length === 1 ? 'evento' : 'eventos'}`)
+          if (appliedTaskIds.length)  parts.push(`${appliedTaskIds.length} ${appliedTaskIds.length === 1 ? 'tarea' : 'tareas'}`)
+          if (appliedMemoryIds.length) parts.push(`${appliedMemoryIds.length} ${appliedMemoryIds.length === 1 ? 'memoria' : 'memorias'}`)
+          const message = `Añadí ${parts.join(' y ')}`
+          onShowUndo(message, () => {
+            appliedEventIds.forEach((id) => onDeleteEvent?.(id))
+            appliedTaskIds.forEach((id) => onDeleteTask?.(id))
+            appliedMemoryIds.forEach((id) => deleteMemory?.(id))
+            setLastApplied(null)
+            setReply(null)
+          })
+        }
       }
 
       historyRef.current = [...historyRef.current, { role: 'assistant', content: replyText || '' }]

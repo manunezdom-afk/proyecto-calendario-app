@@ -254,7 +254,7 @@ export default function SuggestionsInbox({
                     Aquí caen las propuestas de Nova
                   </p>
                   <p className="mt-1 max-w-[280px] text-center text-[12.5px] leading-relaxed text-slate-500">
-                    Nova nunca toca tu calendario sin que apruebes. Pídele algo y verás sus sugerencias aquí.
+                    Cuando Nova detecta un conflicto o hueco que no puede resolver sola, manda una propuesta aquí para que tú decidas.
                   </p>
                   <div className="mt-5 w-full max-w-[320px] space-y-2">
                     <p className="px-1 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">

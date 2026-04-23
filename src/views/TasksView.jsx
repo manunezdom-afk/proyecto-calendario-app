@@ -219,8 +219,27 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
 
                 {isOpen && (
                   <div className="space-y-1.5 pl-1">
+                    {/* Empty state con CTA real: abre el input inline aquí
+                        mismo en lugar de redirigir al usuario a buscar el +
+                        mini en el header. Reduce un toque y recompensa la
+                        expectativa de "solo quiero agregar una tarea ya". */}
                     {catTasks.length === 0 && !(showInput && addCategory === cat) && (
-                      <p className="text-xs text-outline/50 pl-5 py-1">Sin tareas. Pulsa + para añadir.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (addCategory !== cat) setJustAddedCount(0)
+                          setAddCategory(cat)
+                          setShowInput(true)
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-outline-variant/40 bg-transparent hover:bg-primary/5 hover:border-primary/40 transition-colors text-left"
+                      >
+                        <span className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <span className="material-symbols-outlined text-[14px] text-primary">add</span>
+                        </span>
+                        <span className="text-xs font-medium text-outline">
+                          Añadir tarea a <span className="text-on-surface font-semibold">{CAT_LABELS[cat]}</span>
+                        </span>
+                      </button>
                     )}
 
                     {catTasks.map(({ id, label, done, priority, category }) => {

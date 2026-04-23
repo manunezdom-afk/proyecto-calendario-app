@@ -65,12 +65,12 @@ export default function CommandPalette({ isOpen, onClose, events = [], tasks = [
 
   // Acciones siempre disponibles
   const actions = useMemo(() => ([
-    { id: 'act-planner',  kind: 'action', label: 'Ir a Mi Día',      icon: 'view_day',       hint: 'planner',  run: () => onNavigate?.('planner') },
-    { id: 'act-calendar', kind: 'action', label: 'Ir a Calendario',  icon: 'calendar_month', hint: 'calendar', run: () => onNavigate?.('calendar') },
-    { id: 'act-day',      kind: 'action', label: 'Vista Día (hoy)',  icon: 'today',          hint: 'day',      run: () => onNavigate?.('day') },
-    { id: 'act-tasks',    kind: 'action', label: 'Ir a Tareas',      icon: 'task_alt',       hint: 'tasks',    run: () => onNavigate?.('tasks') },
-    { id: 'act-settings', kind: 'action', label: 'Ir a Ajustes',     icon: 'settings',       hint: 'settings', run: () => onNavigate?.('settings') },
-    { id: 'act-add',      kind: 'action', label: 'Crear evento…',    icon: 'add',            hint: 'nuevo',    run: () => onQuickAdd?.() },
+    { id: 'act-planner',  kind: 'action', label: 'Ir a Mi Día',      icon: 'view_day',       hint: 'Navegación', run: () => onNavigate?.('planner') },
+    { id: 'act-calendar', kind: 'action', label: 'Ir a Calendario',  icon: 'calendar_month', hint: 'Navegación', run: () => onNavigate?.('calendar') },
+    { id: 'act-day',      kind: 'action', label: 'Vista Día (hoy)',  icon: 'today',          hint: 'Navegación', run: () => onNavigate?.('day') },
+    { id: 'act-tasks',    kind: 'action', label: 'Ir a Tareas',      icon: 'task_alt',       hint: 'Navegación', run: () => onNavigate?.('tasks') },
+    { id: 'act-settings', kind: 'action', label: 'Ir a Ajustes',     icon: 'settings',       hint: 'Navegación', run: () => onNavigate?.('settings') },
+    { id: 'act-add',      kind: 'action', label: 'Crear evento…',    icon: 'add',            hint: 'Acción',     run: () => onQuickAdd?.() },
   ]), [onNavigate, onQuickAdd])
 
   // Scoring y filtrado

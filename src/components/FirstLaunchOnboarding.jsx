@@ -282,7 +282,7 @@ const SLIDES = [
     illustration: <SlideIllustrationHero />,
     eyebrow: 'Bienvenido',
     title: 'Focus es tu día, con una IA a tu lado.',
-    body: 'Nova ve tu calendario, sugiere cómo organizarlo mejor, y nunca toca nada sin que tú lo apruebes.',
+    body: 'Nova ve tu calendario, te ayuda a organizarlo y crea al momento. Cualquier cambio lo puedes deshacer en un toque.',
   },
   {
     id: 'planner',
@@ -302,8 +302,8 @@ const SLIDES = [
     id: 'nova',
     illustration: <SlideIllustrationNova />,
     eyebrow: 'Nova',
-    title: 'Propone. Tú decides.',
-    body: 'Cuando hay un conflicto o un hueco, Nova envía una propuesta a tu bandeja. Apruebas con un toque — o la descartas.',
+    title: 'Actúa rápido. Tú siempre mandas.',
+    body: 'Nova crea eventos, tareas y bloques al instante. Cada acción trae un "Deshacer" visible y puedes editarlo después sin perder ritmo.',
   },
   {
     id: 'start',

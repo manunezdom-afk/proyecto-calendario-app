@@ -38,6 +38,17 @@ export default function NovaHint({
     return () => clearTimeout(t)
   }, [id, trigger, delayMs])
 
+  // Auto-dismiss tras 14s. Si el usuario scrolleó o ignoró el hint, no vale la
+  // pena que siga tapando contenido en iPhone (donde ocupa una banda ancha
+  // sobre los chips y el bottom nav). Una vez descartado no vuelve — el copy
+  // no era crítico, solo orientativo.
+  useEffect(() => {
+    if (!visible) return
+    const t = setTimeout(() => dismiss(), 14000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible])
+
   function dismiss() {
     markShown(id)
     setVisible(false)
@@ -57,14 +68,14 @@ export default function NovaHint({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 8, scale: 0.98 }}
           transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-          className="fixed z-[60]"
+          className="fixed z-[60] pointer-events-none"
           style={{
             right: 'calc(env(safe-area-inset-right, 0px) + 18px)',
-            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 108px)',
-            maxWidth: 'min(92vw, 340px)',
+            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 92px)',
+            maxWidth: 'min(88vw, 320px)',
           }}
         >
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-2 pointer-events-auto">
             <div style={{ flexShrink: 0, marginBottom: 4 }}>
               <NovaOrb size={36} pulse ambient />
             </div>
