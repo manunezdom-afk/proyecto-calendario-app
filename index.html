@@ -110,11 +110,56 @@
         font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
         z-index: 0;
         padding-bottom: env(safe-area-inset-bottom, 0px);
+        overflow: hidden;
+      }
+      /* Aurora inline — los mismos blobs que pinta AuroraBackground variant
+         "threshold" en WelcomeScreen. Sin esta capa, al montar React los blobs
+         aparecían de golpe y el usuario percibía un "cambio" entre el splash
+         inline y la pantalla de bienvenida. Mismas dims/colores/blur/fade, y
+         los keyframes auroraDrift1/2/3 están en src/index.css — al arrancar
+         la animación comienza en translate(0,0), exactamente donde renderiza
+         React al montar. Handoff invisible.
+         Nota: sin animación aquí a propósito — en HTML puro no cargan las
+         @keyframes definidas por el bundle. Los blobs estáticos coinciden
+         con el frame 0 de la animación de React; el usuario no alcanza a
+         ver la diferencia (~100–200 ms). */
+      #focus-splash .aurora {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      #focus-splash .aurora .blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(120px);
+      }
+      #focus-splash .aurora .b1 {
+        top: -160px; left: -160px;
+        width: 560px; height: 560px;
+        background: rgba(59,130,246,0.28);
+      }
+      #focus-splash .aurora .b2 {
+        top: 15%; right: -180px;
+        width: 520px; height: 520px;
+        background: rgba(124,58,237,0.24);
+      }
+      #focus-splash .aurora .b3 {
+        bottom: 5%; left: 20%;
+        width: 480px; height: 480px;
+        background: rgba(236,72,153,0.18);
+      }
+      #focus-splash .aurora .fade {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, transparent 0%, rgba(10,10,15,0.3) 60%, rgba(10,10,15,0.85) 100%);
       }
       #focus-splash .center-col {
         display: flex;
         flex-direction: column;
         align-items: center;
+        position: relative;
+        z-index: 1;
       }
       /* Spacers invisibles que reservan el espacio del greeting + hairline +
          subline del WelcomeScreen. Sin ellos, el orbe del splash quedaría en
@@ -131,6 +176,7 @@
         left: 0;
         right: 0;
         top: calc(env(safe-area-inset-top, 0px) + clamp(28px, 6vh, 56px));
+        z-index: 1;
         text-align: center;
         font-size: clamp(11px, 1.2vw, 13px);
         letter-spacing: 0.42em;
@@ -243,6 +289,12 @@
            handoff sea invisible. Los spacers reservan el espacio que ocupará
            el greeting/hairline/subline cuando React monte. -->
       <div id="focus-splash" aria-hidden="true">
+        <div class="aurora">
+          <div class="blob b1"></div>
+          <div class="blob b2"></div>
+          <div class="blob b3"></div>
+          <div class="fade"></div>
+        </div>
         <div class="top-wordmark">Focus</div>
         <div class="center-col">
           <div class="orb-wrap">
