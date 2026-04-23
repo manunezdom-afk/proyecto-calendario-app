@@ -159,6 +159,21 @@ export default function FocusBar({
   const photoInputRef = useRef(null)
   const historyRef = useRef([])
 
+  // Si el usuario borra un evento o tarea (desde la UI o desde otro lado),
+  // las afirmaciones previas de Nova en el historial — "ya creé X", "listo, X
+  // agendado" — quedan obsoletas. Si las dejamos, en el próximo turno Nova
+  // puede leer ese contexto y responder "ya lo tienes agendado" cuando en
+  // realidad el evento ya no existe. Limpiamos el historial en cuanto
+  // detectamos que alguna colección se achicó.
+  const prevCountsRef = useRef({ e: events.length, t: tasks.length })
+  useEffect(() => {
+    const prev = prevCountsRef.current
+    if (events.length < prev.e || tasks.length < prev.t) {
+      historyRef.current = []
+    }
+    prevCountsRef.current = { e: events.length, t: tasks.length }
+  }, [events.length, tasks.length])
+
   // Sesión de voz: misma lógica que NovaWidget.
   //   · sessionActiveRef  — intención del usuario ("sigo queriendo dictar").
   //     Distingue onend natural del engine (auto-relanzamos) de stop() real.

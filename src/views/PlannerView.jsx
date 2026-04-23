@@ -317,6 +317,19 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     return () => clearInterval(id)
   }, [])
 
+  // Una vez que el usuario tenga CUALQUIER evento o tarea propia, marcamos
+  // los chips de onboarding como descartados. De ahí en adelante, aunque
+  // borre todo, los ejemplos no reaparecen — se quedarían sintiendo fuera
+  // de lugar para alguien que ya sabe cómo usar Focus.
+  useEffect(() => {
+    if (events.length === 0 && tasks.length === 0) return
+    try {
+      if (localStorage.getItem('focus_onboarding_chips_dismissed') !== '1') {
+        localStorage.setItem('focus_onboarding_chips_dismissed', '1')
+      }
+    } catch {}
+  }, [events.length, tasks.length])
+
   const { profile } = useUserProfile()
   const semanaCount  = tasks.filter((t) => t.category === 'semana'    && !t.done).length
   const algoDiaCount = tasks.filter((t) => t.category === 'algún día' && !t.done).length
@@ -980,21 +993,27 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
               {blocks.length === 0 && pendingTasksCount === 0 && (() => {
                 const pendingTotal = semanaCount + algoDiaCount
-                // Chips de onboarding: SOLO en primer uso real, cuando el
-                // usuario todavía no tiene ningún evento ni tarea. Una vez
-                // que existe data propia, los ejemplos estorban.
-                const isFirstUse = events.length === 0 && tasks.length === 0
+                // Chips de onboarding: se esconden para siempre después de
+                // que el usuario haya creado su primer evento o tarea. Usamos
+                // una flag persistente en localStorage — confiar solo en
+                // events.length === 0 los hacía reaparecer si después
+                // borraba todo, y el usuario los percibía como "no
+                // desaparecen con data real".
+                let chipsDismissed = false
+                try { chipsDismissed = localStorage.getItem('focus_onboarding_chips_dismissed') === '1' } catch {}
+                const isFirstUse = !chipsDismissed && events.length === 0 && tasks.length === 0
                 const chips = [
                   { icon: 'fitness_center', label: 'Agendar gym mañana',   prompt: 'Agenda gym mañana a las 7' },
                   { icon: 'schedule',       label: 'Bloquear 2h de foco',  prompt: 'Bloquea 2h de foco esta tarde' },
                   { icon: 'event_repeat',   label: 'Reunión semanal fija', prompt: 'Agenda una reunión todos los lunes a las 9 am' },
                 ]
                 return (
-                  // Sin el gutter w-16 de timeline: cuando no hay bloques, no
-                  // hay columna de horas arriba con la que alinearse, y el
-                  // gutter dejaba el contenido descentrado a la derecha en iPhone.
-                  <div className="w-full max-w-md mx-auto space-y-4">
-                    <div className="space-y-1 text-center sm:text-left">
+                  // Centrado estricto en iPhone: max-w-[300px] + mx-auto fuerza
+                  // la columna a ~300px centrada. Con max-w-md (448px) el bloque
+                  // ocupaba todo el ancho disponible y visualmente arrastraba
+                  // hacia la derecha porque el ojo lo comparaba con el header.
+                  <div className="w-full max-w-[300px] mx-auto space-y-4">
+                    <div className="space-y-1 text-center">
                       <p className="text-on-surface text-sm font-semibold">Hoy está libre.</p>
                       <p className="text-outline/70 text-xs leading-relaxed">
                         {isFirstUse
