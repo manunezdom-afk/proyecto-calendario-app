@@ -1,8 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import QuickAddSheet     from '../components/QuickAddSheet'
 import FocusBar          from '../components/FocusBar'
 import MorningBrief      from '../components/MorningBrief'
+// Lazy: el wizard de reunión semanal solo carga si el usuario toca el chip.
+// En cold start del planner nos ahorra ~7-8 KB.
+const RecurringMeetingSheet = lazy(() => import('../components/RecurringMeetingSheet'))
 import { useUserProfile } from '../hooks/useUserProfile'
 import { todayISO as todayISODate, parseTimeToDecimal } from '../utils/time'
 import {
@@ -311,6 +314,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   // la FocusBar lo aplica + enfoca el input. n es un contador para poder
   // re-sembrar el mismo texto y re-disparar el efecto.
   const [focusBarSeed, setFocusBarSeed] = useState({ text: '', n: 0 })
+  const [recurringSheetOpen, setRecurringSheetOpen] = useState(false)
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60_000)
@@ -336,6 +340,24 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
         autosubmit: !!parsed.autosubmit,
       }))
     } catch {}
+  }, [])
+
+  // Canal imperativo para sembrar el composer desde otra parte de la app sin
+  // depender del remount del planner. Cuando la bandeja se abre sobre el
+  // planner y el usuario toca "Editar" en la demo, App.jsx ya setActiveView
+  // es no-op, así que usamos este evento para aplicar el seed igual.
+  useEffect(() => {
+    function onSeed(e) {
+      const text = e?.detail?.text || ''
+      if (!text) return
+      setFocusBarSeed(({ n }) => ({
+        text,
+        n: n + 1,
+        autosubmit: !!e.detail?.autosubmit,
+      }))
+    }
+    window.addEventListener('focus:nova-seed', onSeed)
+    return () => window.removeEventListener('focus:nova-seed', onSeed)
   }, [])
 
   // Una vez que el usuario tenga CUALQUIER evento o tarea propia, marcamos
@@ -1027,7 +1049,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 const chips = [
                   { icon: 'fitness_center', label: 'Agendar gym mañana',   prompt: 'Agenda gym mañana a las 7' },
                   { icon: 'schedule',       label: 'Bloquear 2h de foco',  prompt: 'Bloquea 2h de foco esta tarde' },
-                  { icon: 'event_repeat',   label: 'Reunión semanal fija', prompt: 'Agenda una reunión todos los lunes a las 9 am' },
+                  // "Reunión semanal fija" abre un wizard guiado en vez de
+                  // autosubmit: una reunión recurrente requiere decisiones
+                  // (nombre, día, hora, duración) que es antinatural tipear
+                  // de un saque.
+                  { icon: 'event_repeat',   label: 'Reunión semanal fija', action: 'recurring' },
                 ]
                 return (
                   // Centrado estricto en iPhone: max-w-[300px] + mx-auto fuerza
@@ -1051,7 +1077,13 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                           <li key={chip.label}>
                             <button
                               type="button"
-                              onClick={() => setFocusBarSeed(({ n }) => ({ text: chip.prompt, n: n + 1, autosubmit: true }))}
+                              onClick={() => {
+                                if (chip.action === 'recurring') {
+                                  setRecurringSheetOpen(true)
+                                } else {
+                                  setFocusBarSeed(({ n }) => ({ text: chip.prompt, n: n + 1, autosubmit: true }))
+                                }
+                              }}
                               className="w-full flex items-center gap-2.5 bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2.5 text-left transition-colors active:scale-[0.99]"
                             >
                               <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -1417,6 +1449,28 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
           onCancel={() => setShowModal(false)}
           existingEvents={events}
         />
+      )}
+
+      {recurringSheetOpen && (
+        <Suspense fallback={null}>
+          <RecurringMeetingSheet
+            onCancel={() => setRecurringSheetOpen(false)}
+            onCreate={({ events: series, summary }) => {
+              const created = []
+              for (const ev of series) {
+                const res = onAddEvent?.(ev)
+                if (res?.id) created.push(res.id)
+              }
+              setRecurringSheetOpen(false)
+              if (created.length > 0 && onShowUndo) {
+                onShowUndo(
+                  `${summary} · ${created.length} reuniones creadas`,
+                  () => created.forEach((id) => onDeleteEvent?.(id)),
+                )
+              }
+            }}
+          />
+        </Suspense>
       )}
     </div>
   )

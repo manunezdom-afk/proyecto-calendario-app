@@ -190,7 +190,11 @@ export function useEvents() {
     })
 
     const newEvent = {
-      id: `evt-${Date.now()}`,
+      // Sufijo aleatorio para garantizar unicidad cuando se disparan varios
+      // addEvent en el mismo tick (ej: al crear 12 repeticiones de una
+      // reunión semanal). Sin él, Date.now() repetía ID y Supabase upsert
+      // colapsaba todas las filas en una.
+      id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       title: cleanGeneratedTitle(title) || title,
       time: finalTime,
       description, section, featured: false, icon, dotColor, date,

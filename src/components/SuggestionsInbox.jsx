@@ -169,6 +169,71 @@ function SuggestionCard({ suggestion, onApprove, onReject }) {
   )
 }
 
+// ── Tarjeta demo ────────────────────────────────────────────────────────────
+// Ejemplo interactivo de una propuesta de Nova. Se muestra solo cuando no hay
+// ni pendientes ni recientes, para que un usuario nuevo entienda cómo se ve
+// una propuesta sin que tenga que esperar a que Nova le genere una. El badge
+// "Ejemplo" deja claro que no es una propuesta real. Tres caminos:
+//   · Aprobar  → crea un evento real (reusa addEvent) con undo estándar.
+//   · Editar   → abre el composer con el prompt pre-cargado para que el
+//                usuario ajuste antes de crear.
+//   · Descartar→ esconde el demo permanentemente vía localStorage.
+function DemoSuggestionCard({ onApprove, onEdit, onDismiss }) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ type: 'spring', damping: 22, stiffness: 300 }}
+      className="relative rounded-2xl border border-dashed border-blue-200 bg-white p-4 shadow-sm"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-50 to-violet-50 text-blue-600">
+          <span className="material-symbols-outlined text-[19px]">psychology</span>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-nova text-[14px] font-semibold leading-snug text-slate-800">
+              Ejemplo de propuesta de Nova
+            </p>
+            <span className="mt-0.5 whitespace-nowrap rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 flex-shrink-0">
+              Ejemplo
+            </span>
+          </div>
+
+          <p className="mt-1.5 text-[12.5px] leading-snug text-slate-600">
+            Nova propone bloquear 2h de foco mañana de 9:00 a 11:00 porque tu mañana está libre.
+          </p>
+
+          <div className="mt-3 flex items-center justify-end gap-1.5">
+            <button
+              onClick={onDismiss}
+              className="rounded-full px-2.5 py-1 text-[11.5px] font-medium text-slate-500 transition-colors hover:bg-slate-100"
+            >
+              Descartar
+            </button>
+            <button
+              onClick={onEdit}
+              className="rounded-full px-2.5 py-1 text-[11.5px] font-medium text-slate-600 transition-colors hover:bg-slate-100"
+            >
+              Editar
+            </button>
+            <button
+              onClick={onApprove}
+              className="flex items-center gap-1 rounded-full bg-blue-600 px-3 py-1 text-[11.5px] font-semibold text-white transition-all hover:bg-blue-700 active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[13px]">check</span>
+              Aprobar
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
 // ── Panel principal ─────────────────────────────────────────────────────────
 export default function SuggestionsInbox({
   isOpen,
@@ -177,6 +242,10 @@ export default function SuggestionsInbox({
   onApprove,
   onReject,
   onClearResolved,
+  demoDismissed = false,
+  onApproveDemo,
+  onEditDemo,
+  onDismissDemo,
 }) {
   const { pending, resolved } = useMemo(() => {
     return {
@@ -244,8 +313,8 @@ export default function SuggestionsInbox({
             {/* Contenido */}
             <div className="flex-1 overflow-y-auto px-4 py-4">
               {pending.length === 0 && resolved.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center px-5 py-6">
-                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-violet-50">
+                <div className="flex h-full flex-col items-center px-1 py-2">
+                  <div className="mb-4 mt-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-violet-50">
                     <span className="material-symbols-outlined text-[28px] text-blue-500">
                       auto_awesome
                     </span>
@@ -256,26 +325,18 @@ export default function SuggestionsInbox({
                   <p className="mt-1 max-w-[280px] text-center text-[12.5px] leading-relaxed text-slate-500">
                     Cuando Nova detecta un conflicto o hueco que no puede resolver sola, manda una propuesta aquí para que tú decidas.
                   </p>
-                  <div className="mt-5 w-full max-w-[320px] space-y-2">
-                    <p className="px-1 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">
-                      Prueba pidiéndole
-                    </p>
-                    {[
-                      { icon: 'event', text: 'Agéndame gimnasio lunes, miércoles y viernes a las 7' },
-                      { icon: 'psychology', text: 'Bloquea 2h de foco mañana por la tarde' },
-                      { icon: 'swap_horiz', text: 'Reordena mi semana para liberar el viernes' },
-                    ].map((ex, i) => (
-                      <div
-                        key={i}
-                        className="flex items-start gap-2.5 rounded-xl bg-slate-50 px-3 py-2.5"
-                      >
-                        <span className="material-symbols-outlined mt-0.5 text-[16px] text-blue-500">
-                          {ex.icon}
-                        </span>
-                        <p className="text-[12.5px] leading-snug text-slate-600">{ex.text}</p>
-                      </div>
-                    ))}
-                  </div>
+                  {!demoDismissed && (
+                    <div className="mt-5 w-full">
+                      <p className="mb-2 px-1 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">
+                        Así se ve una propuesta
+                      </p>
+                      <DemoSuggestionCard
+                        onApprove={onApproveDemo}
+                        onEdit={onEditDemo}
+                        onDismiss={onDismissDemo}
+                      />
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">

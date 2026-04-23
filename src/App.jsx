@@ -169,6 +169,13 @@ export default function App() {
   } = useSuggestions()
 
   const [inboxOpen, setInboxOpen] = useState(false)
+  // Demo de propuesta que Nova muestra en la bandeja vacía para que un usuario
+  // nuevo entienda cómo se ve una propuesta. Se descarta permanentemente en
+  // localStorage — no queremos que reaparezca cada vez que limpie resueltos.
+  const INBOX_DEMO_KEY = 'focus_inbox_demo_dismissed_v1'
+  const [inboxDemoDismissed, setInboxDemoDismissed] = useState(() => {
+    try { return localStorage.getItem(INBOX_DEMO_KEY) === '1' } catch { return false }
+  })
   // Toast efímero al aprobar una sugerencia. Visible ~3.5 s sin interrumpir.
   const [approvalToast, setApprovalToast] = useState(null)
 
@@ -216,6 +223,65 @@ export default function App() {
     const t = setTimeout(() => setApprovalToast(null), 3500)
     return () => clearTimeout(t)
   }, [approvalToast])
+
+  // Demo de la bandeja: tres caminos que reusan la infra real (addEvent +
+  // showUndo + seed del composer). No persistimos nada "falso" — si el usuario
+  // Aprueba, el evento que se crea es 100% real y puede deshacerse con undo.
+  function dismissInboxDemo() {
+    try { localStorage.setItem(INBOX_DEMO_KEY, '1') } catch {}
+    setInboxDemoDismissed(true)
+  }
+  function handleApproveDemo() {
+    // Mañana en local, YYYY-MM-DD
+    const t = new Date()
+    t.setDate(t.getDate() + 1)
+    const tomorrowISO = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+    const created = addEvent({
+      title: 'Bloque de foco',
+      time: '9:00 AM - 11:00 AM',
+      date: tomorrowISO,
+      section: 'focus',
+      icon: 'psychology',
+      dotColor: 'bg-secondary-container',
+    })
+    if (created?.id) {
+      showUndo('Bloque de foco añadido para mañana', () => deleteEvent(created.id))
+    }
+    dismissInboxDemo()
+    setInboxOpen(false)
+  }
+  function handleEditDemo() {
+    // Seed del composer con el mismo prompt, sin autosubmit — el usuario
+    // ajusta antes de mandar. Dos rutas:
+    //   1. Si el planner ya está montado (caso común: bandeja se abre sobre
+    //      planner), disparamos un custom event que PlannerView escucha y
+    //      aplica el seed directo sobre su estado local.
+    //   2. Si no, usamos el puente sessionStorage que PlannerView consume al
+    //      montarse (para cuando el usuario abre la bandeja desde calendar
+    //      o tasks).
+    // Dejamos los dos activos porque son complementarios — el listener del
+    // evento no hará nada si planner no está montado, y la sessionStorage
+    // cubre ese caso.
+    const seedText = 'Bloquea 2h de foco mañana de 9:00 a 11:00'
+    try {
+      sessionStorage.setItem(
+        'focus_pending_nova_seed',
+        JSON.stringify({ text: seedText, ts: Date.now(), autosubmit: false }),
+      )
+    } catch {}
+    dismissInboxDemo()
+    setInboxOpen(false)
+    setActiveView('planner')
+    // Si planner ya estaba montado, activeView no cambia y el useEffect de
+    // mount no se vuelve a disparar. El custom event sí.
+    setTimeout(() => {
+      try {
+        window.dispatchEvent(new CustomEvent('focus:nova-seed', {
+          detail: { text: seedText, autosubmit: false },
+        }))
+      } catch {}
+    }, 0)
+  }
 
   // Callback que Nova invoca con sus propuestas → encolamos
   function handleProposeActions(actions, { reply } = {}) {
@@ -621,6 +687,10 @@ export default function App() {
             onApprove={handleApproveSuggestion}
             onReject={rejectSuggestion}
             onClearResolved={clearResolvedSuggestions}
+            demoDismissed={inboxDemoDismissed}
+            onApproveDemo={handleApproveDemo}
+            onEditDemo={handleEditDemo}
+            onDismissDemo={dismissInboxDemo}
           />
         </Suspense>
       )}
