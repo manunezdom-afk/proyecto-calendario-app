@@ -26,7 +26,17 @@ const ASSETS_CACHE = `focus-assets-${VERSION}`
 const CURRENT_CACHES = [SHELL_CACHE, ASSETS_CACHE]
 
 const OFFLINE_FALLBACK = '/index.html'
-const PRECACHE_URLS = [OFFLINE_FALLBACK, '/manifest.json', '/icons/icon.svg']
+const PRECACHE_URLS = [
+  OFFLINE_FALLBACK,
+  '/manifest.json',
+  '/icons/icon.svg',
+  // Iconos de notificación: el browser los pide fuera del ciclo de la app
+  // cuando muestra un push, así que precachearlos evita que el primer push
+  // se vea con el icono genérico mientras la red termina de traerlos.
+  '/icons/notif-event.svg',
+  '/icons/notif-reminder.svg',
+  '/icons/notif-task.svg',
+]
 
 // Solo se usa cuando NO hay cache (primer install). En modo SWR la red
 // refresca en background sin bloquear al usuario, así que no es crítico.
@@ -211,6 +221,38 @@ self.addEventListener('message', (event) => {
 // el dispositivo deja de recibir notificaciones hasta que te resuscribas. Por
 // eso aquí forzamos siempre título y body con un fallback genérico antes de
 // llamar a showNotification, incluso cuando event.data no parsea o viene vacío.
+
+// Defaults por tipo de notificación. El backend los incluye en cada payload,
+// pero los replicamos acá como red de seguridad: si una build vieja del
+// backend envía sólo data.kind sin icon/actions, el SW elige el visual
+// correcto en lugar de caer al icono genérico de la app.
+const NOTIF_KIND_DEFAULTS = {
+  event: {
+    icon:  '/icons/notif-event.svg',
+    badge: '/icons/notif-event.svg',
+    actions: [
+      { action: 'open',   title: 'Abrir' },
+      { action: 'snooze', title: 'Posponer 10 min' },
+    ],
+  },
+  reminder: {
+    icon:  '/icons/notif-reminder.svg',
+    badge: '/icons/notif-reminder.svg',
+    actions: [
+      { action: 'done',   title: 'Listo' },
+      { action: 'snooze', title: 'Luego' },
+    ],
+  },
+  task: {
+    icon:  '/icons/notif-task.svg',
+    badge: '/icons/notif-task.svg',
+    actions: [
+      { action: 'done', title: 'Completar' },
+      { action: 'open', title: 'Abrir' },
+    ],
+  },
+}
+
 self.addEventListener('push', (event) => {
   // Defaults: NUNCA strings vacíos.
   const FALLBACK_TITLE = 'Focus'
@@ -231,9 +273,9 @@ self.addEventListener('push', (event) => {
     body: rawBody,
     url = '/',
     tag = 'focus-reminder',
-    icon = '/icons/icon-192.png',
-    badge = '/icons/icon-192.png',
-    actions = [],
+    icon: rawIcon,
+    badge: rawBadge,
+    actions: rawActions,
     data = {},
   } = payload
 
@@ -241,6 +283,19 @@ self.addEventListener('push', (event) => {
   // llenar title o body).
   const title = typeof rawTitle === 'string' && rawTitle.trim() ? rawTitle : FALLBACK_TITLE
   const body  = typeof rawBody  === 'string' && rawBody.trim()  ? rawBody  : FALLBACK_BODY
+
+  // Resolver assets/acciones: respetamos lo que vino en el payload; si falta
+  // algo, caemos a los defaults del kind; si no hay kind, caemos al icono
+  // genérico y a las acciones clásicas (compat con pushes viejas en cola).
+  const kindDefaults = NOTIF_KIND_DEFAULTS[data?.kind] || null
+  const icon  = rawIcon  || kindDefaults?.icon  || '/icons/icon-192.png'
+  const badge = rawBadge || kindDefaults?.badge || '/icons/icon-192.png'
+  const actions = Array.isArray(rawActions) && rawActions.length > 0
+    ? rawActions
+    : (kindDefaults?.actions || [
+        { action: 'open',   title: 'Abrir' },
+        { action: 'snooze', title: 'Posponer 10 min' },
+      ])
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -251,10 +306,7 @@ self.addEventListener('push', (event) => {
       renotify: true,
       requireInteraction: false,
       data: { url, ...data },
-      actions: actions.length > 0 ? actions : [
-        { action: 'open',   title: 'Abrir' },
-        { action: 'snooze', title: 'Posponer 10 min' },
-      ],
+      actions,
     }),
   )
 })
@@ -265,6 +317,15 @@ self.addEventListener('notificationclick', (event) => {
 
   const action = event.action
   const targetUrl = event.notification.data?.url || '/'
+
+  // "Listo"/"Completar": el usuario marcó la notificación desde el propio
+  // toast. No abrimos la app — ya cumplió su función. El notification.close()
+  // de arriba alcanza; cerramos sin navegar. Si más adelante queremos
+  // registrar el "done" en el backend (para marcar tarea o desactivar
+  // recordatorios recurrentes), acá va el fetch.
+  if (action === 'done') {
+    return
+  }
 
   // Snooze: avisar al backend que reprograme +10min.
   // Adjuntamos el endpoint de la suscripción como prueba de posesión (el

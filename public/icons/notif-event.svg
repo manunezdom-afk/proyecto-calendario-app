@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="eventBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <radialGradient id="eventGlow" cx="0.5" cy="0.45" r="0.55">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#eventBg)"/>
+  <circle cx="256" cy="232" r="220" fill="url(#eventGlow)"/>
+
+  <!-- Ganchos superiores del calendario -->
+  <rect x="160" y="108" width="32" height="88" rx="16" fill="#ffffff"/>
+  <rect x="320" y="108" width="32" height="88" rx="16" fill="#ffffff"/>
+
+  <!-- Cuerpo del calendario -->
+  <rect x="104" y="160" width="304" height="256" rx="36" fill="#ffffff"/>
+
+  <!-- Franja de encabezado -->
+  <path d="M104 196 a36 36 0 0 1 36-36 h232 a36 36 0 0 1 36 36 v28 h-304 z" fill="#1d4ed8"/>
+
+  <!-- Retícula sutil -->
+  <g fill="#1d4ed8" opacity="0.12">
+    <rect x="144" y="260" width="48" height="8" rx="4"/>
+    <rect x="232" y="260" width="48" height="8" rx="4"/>
+    <rect x="320" y="260" width="48" height="8" rx="4"/>
+    <rect x="144" y="304" width="48" height="8" rx="4"/>
+    <rect x="320" y="304" width="48" height="8" rx="4"/>
+    <rect x="144" y="348" width="48" height="8" rx="4"/>
+    <rect x="232" y="348" width="48" height="8" rx="4"/>
+  </g>
+
+  <!-- Día destacado -->
+  <circle cx="256" cy="324" r="42" fill="#2563eb"/>
+</svg>

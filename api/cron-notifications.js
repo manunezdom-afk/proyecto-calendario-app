@@ -154,26 +154,80 @@ async function sendPushToUser(admin, userId, payload, logCtx = null) {
   return { sent, failed }
 }
 
-// Copy contextual: "Empieza ahora" / "En 10 min" / "En media hora" / "Dentro
-// de una hora" / "En N min". Antes todas las pushes decían "En X min: …" con
-// X truncado — si el cron se atrasó, el título era confuso ("En 2 min" cuando
-// el evento ya empezó). Esta función elige el lead acorde al tiempo real.
-function buildReminderCopy(minsLeft, ev) {
-  const m = Math.round(minsLeft)
+// Detección de tipo basada en el título. El modelo de datos no guarda un
+// flag explícito: todos los items viven en la tabla `events`, pero por
+// convención de cómo Nova / el usuario los crea, un recordatorio se
+// distingue por llevar la palabra "recordatorio" en el título ("Recordatorio:
+// pagar luz", "Clase — recordatorio 10 min"), o por arrancar con un verbo
+// imperativo corto. Si no matchea, asumimos evento agendado.
+function detectKind(ev) {
+  const t = String(ev?.title || '').trim()
+  if (!t) return 'event'
+  if (/^recordatorio\s*:/i.test(t)) return 'reminder'
+  if (/(?:—|-)\s*recordatorio\b/i.test(t)) return 'reminder'
+  if (/\brecordatorio\b/i.test(t)) return 'reminder'
+  if (/^(recordar|recuerda|revisar|enviar|llamar|pagar|comprar|confirmar|agendar)\b/i.test(t)) return 'reminder'
+  return 'event'
+}
+
+// Armado del payload por tipo. Cada tipo usa icono, cuerpo, acciones y
+// copy distintos: un EVENTO muestra el título tal cual (es un compromiso
+// agendado con hora), mientras que un RECORDATORIO antepone un prefijo
+// "Recordatorio · " y reemplaza el lead temporal por un "Ahora"/"En X min"
+// más simple — el valor del recordatorio es que aparece en el momento,
+// no saber "cuánto falta". El SW tiene defaults por kind por si el payload
+// llegara sin icon/actions, así podemos iterar el formato sin redeploy
+// del SW.
+function buildPayload(minsLeft, ev, offset) {
+  const kind = detectKind(ev)
+  const m = Math.max(0, Math.round(minsLeft))
+
+  if (kind === 'reminder') {
+    const clean = String(ev.title || '')
+      .replace(/^recordatorio\s*:\s*/i, '')
+      .replace(/\s*(?:—|-)\s*recordatorio\b.*$/i, '')
+      .trim() || 'Recordatorio'
+    const when = m <= 1 ? 'Ahora' : `En ${m} min`
+    return {
+      title: `Recordatorio · ${clean}`,
+      body: when,
+      url: '/',
+      tag: `reminder-${ev.id}-${offset}`,
+      icon: '/icons/notif-reminder.svg',
+      badge: '/icons/notif-reminder.svg',
+      actions: [
+        { action: 'done',   title: 'Listo' },
+        { action: 'snooze', title: 'Luego' },
+      ],
+      data: { eventId: ev.id, offset, kind: 'reminder' },
+    }
+  }
+
+  // Evento agendado: el valor es el lead contextual.
   let lead
   if (m <= 1) lead = 'Empieza ahora'
-  else if (m <= 5) lead = `En ${m} min`
   else if (m <= 15) lead = `En ${m} min`
   else if (m <= 35) lead = 'En media hora'
   else if (m <= 75) lead = 'Dentro de una hora'
   else lead = `En ${m} min`
 
-  const title = `${lead}: ${ev.title || 'Evento'}`
   const bodyParts = []
   if (ev.time) bodyParts.push(ev.time)
-  if (ev.section === 'focus') bodyParts.push('Focus')
-  const body = bodyParts.join(' · ') || 'Recordatorio'
-  return { title, body }
+  bodyParts.push(lead)
+
+  return {
+    title: ev.title || 'Evento',
+    body: bodyParts.join(' · '),
+    url: '/',
+    tag: `reminder-${ev.id}-${offset}`,
+    icon: '/icons/notif-event.svg',
+    badge: '/icons/notif-event.svg',
+    actions: [
+      { action: 'open',   title: 'Abrir' },
+      { action: 'snooze', title: 'Posponer 10 min' },
+    ],
+    data: { eventId: ev.id, offset, kind: 'event' },
+  }
 }
 
 export default async function handler(req, res) {
@@ -281,15 +335,7 @@ export default async function handler(req, res) {
         continue
       }
 
-      const { title, body } = buildReminderCopy(minsLeft, ev)
-      const payload = {
-        title, body,
-        url: '/',
-        tag: `reminder-${ev.id}-${offset}`,
-        icon: '/icons/icon-192.png',
-        badge: '/icons/icon-192.png',
-        data: { eventId: ev.id, offset, kind: 'event_reminder' },
-      }
+      const payload = buildPayload(minsLeft, ev, offset)
 
       const { sent, failed } = await sendPushToUser(admin, ev.user_id, payload, {
         eventId: ev.id,
