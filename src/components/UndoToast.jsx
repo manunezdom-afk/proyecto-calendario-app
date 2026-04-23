@@ -50,7 +50,7 @@ export default function UndoToast({ action, onDismiss }) {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 12, scale: 0.98 }}
           transition={{ type: 'spring', stiffness: 440, damping: 32 }}
-          className="fixed left-1/2 -translate-x-1/2 z-[85] overflow-hidden rounded-2xl bg-slate-900/95 text-white shadow-[0_20px_48px_rgba(0,0,0,0.3)] backdrop-blur max-w-[min(92vw,440px)] w-max"
+          className="fixed inset-x-4 mx-auto z-[85] overflow-hidden rounded-2xl bg-slate-900/95 text-white shadow-[0_20px_48px_rgba(0,0,0,0.3)] backdrop-blur max-w-[440px]"
           style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 6.5rem)' }}
         >
           <div className="flex items-center gap-3 px-4 py-3">
