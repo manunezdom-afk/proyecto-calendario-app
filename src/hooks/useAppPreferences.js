@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { NOVA_PERSONALITY_IDS, DEFAULT_NOVA_PERSONALITY } from '../utils/novaPersonality'
 
 // Preferencias locales del usuario que no viven en Supabase (aún).
 // Se guardan por dispositivo en localStorage. Si más adelante agregamos la
@@ -15,6 +16,22 @@ export const DEFAULT_DURATION_BEHAVIORS = ['ask', 'default30', 'none']
 
 export const DEFAULT_PREFERENCES = {
   defaultDurationBehavior: 'ask',
+  // Personalidad de Nova: afecta tono/framing de los mensajes que Nova dice
+  // al usuario. NO cambia lógica de negocio ni hechos. Ver utils/novaPersonality.js
+  novaPersonality: DEFAULT_NOVA_PERSONALITY,
+}
+
+// Validación explícita: si el localStorage tiene un valor viejo, inválido o
+// proveniente de otra app, caemos al default sin romper la sesión.
+function sanitize(raw) {
+  const out = { ...DEFAULT_PREFERENCES, ...(raw && typeof raw === 'object' ? raw : {}) }
+  if (!DEFAULT_DURATION_BEHAVIORS.includes(out.defaultDurationBehavior)) {
+    out.defaultDurationBehavior = DEFAULT_PREFERENCES.defaultDurationBehavior
+  }
+  if (!NOVA_PERSONALITY_IDS.includes(out.novaPersonality)) {
+    out.novaPersonality = DEFAULT_PREFERENCES.novaPersonality
+  }
+  return out
 }
 
 function readFromStorage() {
@@ -22,7 +39,7 @@ function readFromStorage() {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return { ...DEFAULT_PREFERENCES }
     const parsed = JSON.parse(raw)
-    return { ...DEFAULT_PREFERENCES, ...(parsed && typeof parsed === 'object' ? parsed : {}) }
+    return sanitize(parsed)
   } catch {
     return { ...DEFAULT_PREFERENCES }
   }

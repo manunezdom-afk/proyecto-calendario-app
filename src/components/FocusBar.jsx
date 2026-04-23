@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useUserMemories } from '../hooks/useUserMemories'
 import MicButton from './MicButton'
 import { isIOSSafari } from '../lib/permissions'
+import { readPreferenceSync } from '../hooks/useAppPreferences'
+import { novaSay } from '../utils/novaPersonality'
 
 // En Safari iPhone webkitSpeechRecognition existe desde iOS 14.5 y sí funciona
 // en muchos contextos (Safari regular con permiso concedido). Antes gateábamos
@@ -471,7 +473,9 @@ export default function FocusBar({
           if (appliedEventIds.length) parts.push(`${appliedEventIds.length} ${appliedEventIds.length === 1 ? 'evento' : 'eventos'}`)
           if (appliedTaskIds.length)  parts.push(`${appliedTaskIds.length} ${appliedTaskIds.length === 1 ? 'tarea' : 'tareas'}`)
           if (appliedMemoryIds.length) parts.push(`${appliedMemoryIds.length} ${appliedMemoryIds.length === 1 ? 'memoria' : 'memorias'}`)
-          const message = `Añadí ${parts.join(' y ')}`
+          const message = novaSay('added_summary', readPreferenceSync('novaPersonality'), {
+            parts: parts.join(' y '),
+          })
           onShowUndo(message, () => {
             appliedEventIds.forEach((id) => onDeleteEvent?.(id))
             appliedTaskIds.forEach((id) => onDeleteTask?.(id))
@@ -492,7 +496,7 @@ export default function FocusBar({
       const errMsg =
         err.code === 'no_api_key' || err.code === 'invalid_api_key'
           ? 'Configura tu API key en Importar/Exportar → Foto.'
-          : 'Error al conectar con la IA. Intenta de nuevo.'
+          : novaSay('error_connection', readPreferenceSync('novaPersonality'))
       setReply({ content: errMsg, actions: [] })
     } finally {
       setIsThinking(false)
@@ -525,7 +529,7 @@ export default function FocusBar({
       const extracted = Array.isArray(data?.events) ? data.events : []
 
       if (extracted.length === 0) {
-        setReply({ content: 'No encontré eventos claros en la foto. Intenta con otra o descríbelos con texto.', actions: [] })
+        setReply({ content: novaSay('photo_no_events', readPreferenceSync('novaPersonality')), actions: [] })
       } else {
         const actions = []
         for (const ev of extracted) {
@@ -543,13 +547,14 @@ export default function FocusBar({
           onAddEvent?.(newEvent)
           actions.push({ type: 'add_event', event: newEvent })
         }
+        const personality = readPreferenceSync('novaPersonality')
         const summary = extracted.length === 1
-          ? `Agregué 1 evento desde la foto: "${extracted[0].title}".`
-          : `Agregué ${extracted.length} eventos desde la foto.`
+          ? novaSay('success_photo_one', personality, { title: extracted[0].title })
+          : novaSay('success_photo_count', personality, { n: extracted.length })
         setReply({ content: summary, actions })
       }
     } catch {
-      setReply({ content: 'No pude analizar la foto. Intenta de nuevo.', actions: [] })
+      setReply({ content: novaSay('error_connection', readPreferenceSync('novaPersonality')), actions: [] })
     } finally {
       setIsAnalyzingPhoto(false)
     }

@@ -6,6 +6,8 @@ import MicButton from './MicButton'
 import { logSignal } from '../services/signalsService'
 import { getCachedBehavior } from '../services/behaviorAnalysis'
 import { isIOSSafari } from '../lib/permissions'
+import { readPreferenceSync } from '../hooks/useAppPreferences'
+import { novaSay } from '../utils/novaPersonality'
 
 // En Safari iPhone webkitSpeechRecognition existe desde iOS 14.5 y sí funciona
 // en Safari regular con permiso concedido. Antes gateábamos SR=null
@@ -471,7 +473,7 @@ export default function NovaWidget({
       const events = data?.events ?? []
 
       if (events.length === 0) {
-        setReply('No encontré eventos claros en la foto. Puedes describirlos con texto.')
+        setReply(novaSay('photo_no_events', readPreferenceSync('novaPersonality')))
       } else {
         const names = events.map(ev => `"${ev.title}"`).join(', ')
         const msg = events.length === 1
@@ -496,7 +498,7 @@ export default function NovaWidget({
         })))
       }
     } catch {
-      setReply('No pude analizar la foto. Intenta de nuevo.')
+      setReply(novaSay('error_connection', readPreferenceSync('novaPersonality')))
     } finally {
       setIsAnalyzingPhoto(false)
       URL.revokeObjectURL(preview)
@@ -519,7 +521,7 @@ export default function NovaWidget({
       })
     })
     setChips(prev => prev.map(c => c.photoEvent ? { ...c, done: true } : c))
-    setReply('¡Listo! Eventos agregados al calendario.')
+    setReply(novaSay('success_photo_multi', readPreferenceSync('novaPersonality')))
   }
 
   async function sendMessage(text) {
@@ -624,14 +626,23 @@ export default function NovaWidget({
         })
         setChips(proposalChips)
 
+        const personality = readPreferenceSync('novaPersonality')
         const suffix = otherActions.length === 1
-          ? 'Revisa la propuesta en la bandeja antes de aplicarla.'
-          : `Preparé ${otherActions.length} propuestas. Revísalas en la bandeja.`
+          ? novaSay('proposal_suffix_one', personality)
+          : novaSay('proposal_suffix_multi', personality, { n: otherActions.length })
         setReply(replyText ? `${replyText} ${suffix}` : suffix)
       } else {
         // Modo directo (fallback): ejecutar inmediatamente
         for (const action of otherActions) executeAction(action)
-        setReply(replyText || (otherActions.length > 0 || memoryActions.length > 0 ? 'Listo.' : 'No pude procesar eso.'))
+        const personality = readPreferenceSync('novaPersonality')
+        // El replyText del servidor manda; la personalidad solo entra cuando
+        // el LLM no devolvió texto narrativo (fallback de éxito/fracaso).
+        setReply(
+          replyText
+            || (otherActions.length > 0 || memoryActions.length > 0
+                ? novaSay('success_generic', personality)
+                : novaSay('failure_generic', personality))
+        )
       }
 
       historyRef.current = [...historyRef.current, { role: 'assistant', content: replyText }]
@@ -644,7 +655,7 @@ export default function NovaWidget({
     } catch (err) {
       const errMsg = err?.message && typeof err.message === 'string' && err.message.length < 200
         ? err.message
-        : 'No pude conectarme. Intenta de nuevo.'
+        : novaSay('error_connection', readPreferenceSync('novaPersonality'))
       historyRef.current = [...historyRef.current, { role: 'assistant', content: errMsg }]
       setChatHistory([...historyRef.current])
       setReply('')

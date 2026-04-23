@@ -8,6 +8,7 @@ import {
 } from '../lib/pushSubscription'
 import PermissionsSection from '../components/PermissionsSection'
 import { useAppPreferences } from '../hooks/useAppPreferences'
+import { NOVA_PERSONALITIES } from '../utils/novaPersonality'
 import { isIOS, isAndroid } from '../lib/permissions'
 
 // Copy contextual por plataforma para "dónde habilitar el permiso".
@@ -274,6 +275,11 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
   ) ?? DURATION_BEHAVIOR_OPTIONS[0]
   const [durationPickerOpen, setDurationPickerOpen] = useState(false)
 
+  const currentPersonality = NOVA_PERSONALITIES.find(
+    (p) => p.id === prefs.novaPersonality,
+  ) ?? NOVA_PERSONALITIES[0]
+  const [personalityPickerOpen, setPersonalityPickerOpen] = useState(false)
+
   return (
     <div className="max-w-lg lg:max-w-2xl mx-auto px-4 py-6 space-y-6 pb-40">
 
@@ -348,10 +354,46 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
         <Row
           icon="tune"
           label="Personalidad de Nova"
-          sub="Asistente enfocada en productividad"
+          sub={currentPersonality.description}
+          onClick={() => setPersonalityPickerOpen((v) => !v)}
         >
-          <span className="text-[12px] font-semibold text-slate-400">Focus</span>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-[12px] font-semibold text-slate-500">{currentPersonality.label}</span>
+            <span className="material-symbols-outlined text-[16px] text-slate-300">
+              {personalityPickerOpen ? 'expand_less' : 'chevron_right'}
+            </span>
+          </div>
         </Row>
+        {personalityPickerOpen && (
+          <div className="border-t border-slate-50 bg-slate-50/40">
+            {NOVA_PERSONALITIES.map((opt) => {
+              const selected = prefs.novaPersonality === opt.id
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => {
+                    setPreference('novaPersonality', opt.id)
+                    setPersonalityPickerOpen(false)
+                  }}
+                  className={`w-full flex items-start gap-3 px-5 py-3 text-left border-t border-slate-100 first:border-t-0 transition-colors hover:bg-white active:bg-slate-100 ${selected ? 'bg-white' : ''}`}
+                >
+                  <span
+                    className={`material-symbols-outlined text-[18px] mt-0.5 flex-shrink-0 ${selected ? 'text-primary' : 'text-slate-300'}`}
+                    style={{ fontVariationSettings: selected ? "'FILL' 1" : "'FILL' 0" }}
+                  >
+                    {selected ? 'radio_button_checked' : 'radio_button_unchecked'}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[13px] font-semibold leading-tight ${selected ? 'text-slate-800' : 'text-slate-600'}`}>
+                      {opt.label}
+                    </p>
+                    <p className="text-[11.5px] text-slate-400 mt-0.5 leading-tight">{opt.description}</p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </SectionCard>
 
       {/* ── Eventos ──────────────────────────────────────────────────────── */}
