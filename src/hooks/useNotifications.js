@@ -69,52 +69,90 @@ export function useNotifications({ events = [] } = {}) {
   // si la suscripción falla (p.ej. sin VAPID key), la notif local sigue
   // andando para cuando la pestaña esté visible.
   const [pushSubscribed, setPushSubscribed] = useState(false)
+  // pushDisconnected: permiso OK pero las notifs NO están llegando (sin sub
+  // local, o backend no la conoce). Distinto de `permission !== 'granted'`:
+  // acá el usuario cree que tiene notifs porque "ya aceptó", pero en realidad
+  // la pipa está rota. La UI muestra un banner para reconectar.
+  const [pushDisconnected, setPushDisconnected] = useState(false)
+  const [pushHealing, setPushHealing] = useState(false)
+  // lastDelivery: última notificación reportada por el backend. Null si nunca,
+  // o si la tabla notification_deliveries no está migrada.
+  const [lastDelivery, setLastDelivery] = useState(null)
+
+  const runHealthCheck = useCallback(async () => {
+    if ('serviceWorker' in navigator) {
+      await navigator.serviceWorker.ready.catch(() => {})
+    }
+    const s = await getPushStatus().catch(() => null)
+    if (!s) return
+    setPushSubscribed(!!s.subscribed)
+
+    if (!s.supported) { setPushDisconnected(false); return }
+    if (s.permission !== 'granted') { setPushDisconnected(false); return }
+
+    if (!s.subscribed) {
+      // Sin sub local: intento auto-crearla (silent). Si falla, marcamos
+      // disconnected para que la UI pida reconexión explícita.
+      const r = await subscribeToPush().catch(() => null)
+      if (r?.ok && r.reason !== 'saved_locally_no_session') {
+        setPushSubscribed(true)
+        setPushDisconnected(false)
+      } else {
+        setPushDisconnected(true)
+      }
+      return
+    }
+
+    // Con sub local: confirmar con backend + traer lastDelivery.
+    const h = await checkSubscriptionHealth().catch(() => null)
+    if (!h || !h.ok) { setPushDisconnected(false); return }
+
+    if (h.lastDelivery !== undefined) setLastDelivery(h.lastDelivery)
+
+    if (h.subscriptionCount === 0 || h.currentPresent === false) {
+      // Backend no nos tiene — huérfana. Probamos auto-healing primero; si
+      // no pinta, marcamos disconnected para banner explícito.
+      console.warn('[Focus] 🔁 push suscripción huérfana — resuscribing')
+      setPushHealing(true)
+      const r = await forceResubscribe().catch(() => null)
+      setPushHealing(false)
+      if (r?.ok && r.reason !== 'saved_locally_no_session') {
+        setPushSubscribed(true)
+        setPushDisconnected(false)
+      } else {
+        setPushDisconnected(true)
+      }
+    } else {
+      setPushDisconnected(false)
+    }
+  }, [])
 
   useEffect(() => {
-    // Esperar a que el SW esté listo antes de verificar/crear suscripción push,
-    // especialmente importante en iOS PWA donde el SW puede tardar en activarse.
-    //
-    // Este efecto es el "auto-healer" de push:
-    //   1. Si no hay suscripción local pero permiso concedido → crear suscripción.
-    //   2. Si hay suscripción local, consultar al backend si conoce nuestro
-    //      endpoint. Si el backend reporta 0 suscripciones (el cron las purgó
-    //      por 410 de APNs) o nuestro endpoint no está en la lista, forzamos
-    //      una re-suscripción con endpoint fresco para que las pushes vuelvan
-    //      a llegar. Esto cubre el caso en que iOS/APNs invalida la
-    //      suscripción sin disparar pushsubscriptionchange y la app "creía"
-    //      que tenía push funcionando.
-    const check = async () => {
-      if ('serviceWorker' in navigator) {
-        await navigator.serviceWorker.ready.catch(() => {})
-      }
-      const s = await getPushStatus().catch(() => null)
-      if (!s) return
-      setPushSubscribed(!!s.subscribed)
-
-      if (!s.supported) return
-      if (s.permission !== 'granted') return
-
-      if (!s.subscribed) {
-        // Caso 1: no hay suscripción local pero sí permiso. Crearla.
-        const r = await subscribeToPush().catch(() => null)
-        if (r?.ok) setPushSubscribed(true)
-        return
-      }
-
-      // Caso 2: hay suscripción local. Confirmar con backend.
-      const h = await checkSubscriptionHealth().catch(() => null)
-      if (!h || !h.ok) return
-
-      if (h.subscriptionCount === 0 || h.currentPresent === false) {
-        // Backend no nos tiene (o no tiene nuestro endpoint específico).
-        // Forzamos re-suscribir desde cero — APNs puede haber invalidado el
-        // endpoint viejo silenciosamente.
-        console.warn('[Focus] 🔁 push suscripción huérfana — resuscribing')
-        const r = await forceResubscribe().catch(() => null)
-        if (r?.ok) setPushSubscribed(true)
-      }
+    runHealthCheck()
+    // Re-chequear cuando el tab vuelve a visible. Caso real: el usuario deja
+    // la PWA en background por días, APNs invalida la sub, al volver a abrir
+    // queremos detectar eso aunque la sesión no se recargue.
+    const onVis = () => {
+      if (document.visibilityState === 'visible') runHealthCheck()
     }
-    check()
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [runHealthCheck])
+
+  // Acción explícita desde la UI para reconectar (usada por el banner).
+  const reconnectPush = useCallback(async () => {
+    setPushHealing(true)
+    try {
+      const r = await forceResubscribe()
+      if (r?.ok) {
+        setPushSubscribed(true)
+        setPushDisconnected(false)
+        return { ok: true }
+      }
+      return { ok: false, reason: r?.reason, error: r?.error }
+    } finally {
+      setPushHealing(false)
+    }
   }, [])
 
   const requestPermission = useCallback(async () => {
@@ -199,12 +237,18 @@ export function useNotifications({ events = [] } = {}) {
         // Fire native notification if permitted.
         // iOS Safari no soporta `new Notification()` — se debe usar
         // registration.showNotification() via el Service Worker.
+        //
+        // TAG UNIFICADO con backend (`reminder-${eventId}-${offset}`): el
+        // sistema de notificaciones colapsa por tag, así que si el push del
+        // cron llega al mismo tiempo que el scanner local dispara, el usuario
+        // ve UNA sola notificación. Antes los tags eran distintos y aparecían
+        // duplicadas en desktop cuando la tab estaba visible.
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           const notifOptions = {
             body,
             icon: '/icons/icon-192.png',
             badge: '/icons/icon-192.png',
-            tag: firedKey,
+            tag: `reminder-${event.id}-${offsetMin}`,
           }
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.ready
@@ -255,6 +299,10 @@ export function useNotifications({ events = [] } = {}) {
     markAllRead,
     dismiss,
     pushSubscribed,
+    pushDisconnected,
+    pushHealing,
+    lastDelivery,
+    reconnectPush,
     disablePush,
   }
 }

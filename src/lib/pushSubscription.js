@@ -216,6 +216,7 @@ export async function checkSubscriptionHealth() {
       ok: true,
       subscriptionCount: data.subscriptionCount ?? 0,
       currentPresent: data.currentPresent,
+      lastDelivery: data.lastDelivery ?? null,
       localEndpoint: endpoint,
     }
   } catch (err) {

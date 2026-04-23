@@ -20,7 +20,7 @@
 // Resultado: cold start en PWA instalada ≈ 0 ms de espera de red para el HTML;
 // el usuario ve el bundle (ya cacheado) parseando inmediatamente.
 
-const VERSION = 'v17'
+const VERSION = 'v18'
 const SHELL_CACHE = `focus-shell-${VERSION}`
 const ASSETS_CACHE = `focus-assets-${VERSION}`
 const CURRENT_CACHES = [SHELL_CACHE, ASSETS_CACHE]
@@ -266,18 +266,31 @@ self.addEventListener('notificationclick', (event) => {
   const action = event.action
   const targetUrl = event.notification.data?.url || '/'
 
-  // Snooze: avisar al backend que reprograme +10min
+  // Snooze: avisar al backend que reprograme +10min.
+  // Adjuntamos el endpoint de la suscripción como prueba de posesión (el
+  // backend lo resuelve a user_id y snoozea SOLO la notif de ese usuario).
   if (action === 'snooze') {
     event.waitUntil(
-      fetch('/api/push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'snooze',
-          eventId: event.notification.data?.eventId,
-          minutes: 10,
-        }),
-      }).catch(() => {})
+      (async () => {
+        let endpoint = null
+        try {
+          const sub = await self.registration.pushManager.getSubscription()
+          endpoint = sub?.endpoint || null
+        } catch {}
+        if (!endpoint) return
+        try {
+          await fetch('/api/push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'snooze',
+              eventId: event.notification.data?.eventId,
+              minutes: 10,
+              endpoint,
+            }),
+          })
+        } catch {}
+      })()
     )
     return
   }
@@ -298,20 +311,42 @@ self.addEventListener('notificationclick', (event) => {
   )
 })
 
-// Renovar suscripción si el navegador la invalida
+// Renovar suscripción si el navegador la invalida (APNs/FCM rotan, iOS
+// deployment de PWA, Chrome cambia de proveedor…). El SW corre aislado del
+// main thread, sin acceso al JWT de Supabase, así que el POST 'subscribe'
+// normal fallaba con 401 y la sub vieja quedaba huérfana en el backend. Ahora
+// usamos la acción 'renew' que autentica por posesión del endpoint viejo: el
+// SW manda oldEndpoint (prueba que es él) + new subscription, y el backend
+// resuelve al user_id del endpoint viejo, reemplazándola.
 self.addEventListener('pushsubscriptionchange', (event) => {
   event.waitUntil(
     (async () => {
+      const oldEndpoint = event.oldSubscription?.endpoint || null
       try {
         const newSub = await self.registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: event.oldSubscription?.options?.applicationServerKey,
         })
-        await fetch('/api/push', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'subscribe', subscription: newSub.toJSON(), renewed: true }),
-        })
+        if (!newSub) return
+
+        if (oldEndpoint) {
+          // Camino principal: renew autenticado por endpoint viejo
+          await fetch('/api/push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'renew',
+              old_endpoint: oldEndpoint,
+              subscription: newSub.toJSON(),
+            }),
+          })
+        } else {
+          // Fallback: sin oldEndpoint, la próxima vez que el cliente abra la
+          // app el auto-healer (useNotifications) detecta el mismatch contra
+          // /api/push?health y llama forceResubscribe() con token válido.
+          // No hacemos nada aquí — intentar subscribe sin auth solo generaría
+          // un 401 y ruido en logs.
+        }
       } catch {}
     })()
   )

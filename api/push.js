@@ -30,7 +30,64 @@ export default async function handler(req, res) {
     case 'snooze':      return handleSnooze(req, res, body)
     case 'test':        return handleTest(req, res, body)
     case 'health':      return handleHealth(req, res, body)
+    case 'renew':       return handleRenew(req, res, body)
     default:            return res.status(400).json({ error: 'invalid_action' })
+  }
+}
+
+// handleRenew — reemplaza una suscripción expirada por una nueva, autenticando
+// por posesión del endpoint viejo. El SW dispara pushsubscriptionchange sin
+// acceso al JWT del usuario (corre aislado del main thread, sin sesión
+// Supabase). Conocer el endpoint viejo — que es una URL opaca larga emitida
+// por FCM/APNs solo al dispositivo suscrito — es prueba suficiente de que
+// quien llama era el dueño de esa sub. Si el endpoint viejo no existe en la
+// tabla, rechazamos. Esto cierra la fuga en la que APNs/FCM rotan la sub, el
+// SW crea una nueva, pero el backend se queda con la vieja (muerta) y ya nadie
+// recibe notificaciones hasta que el usuario abre la PWA otra vez.
+async function handleRenew(req, res, body) {
+  const admin = getSupabaseAdmin()
+  if (!admin) return res.status(503).json({ error: 'no_backend_supabase' })
+
+  const oldEndpoint = typeof body.old_endpoint === 'string' ? body.old_endpoint : null
+  const sub = body.subscription
+  if (!oldEndpoint) return res.status(400).json({ error: 'missing_old_endpoint' })
+  if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+    return res.status(400).json({ error: 'invalid_subscription' })
+  }
+
+  // Resolver dueño del endpoint viejo
+  const { data: oldRow, error: findErr } = await admin
+    .from('push_subscriptions')
+    .select('user_id')
+    .eq('endpoint', oldEndpoint)
+    .maybeSingle()
+  if (findErr) return res.status(500).json({ error: 'db_error', message: findErr.message })
+  if (!oldRow?.user_id) return res.status(404).json({ error: 'old_endpoint_not_found' })
+
+  const userId = oldRow.user_id
+
+  try {
+    // Upsert por endpoint (la nueva puede colisionar si raro caso)
+    const { error: upErr } = await admin
+      .from('push_subscriptions')
+      .upsert({
+        user_id: userId,
+        endpoint: sub.endpoint,
+        p256dh: sub.keys.p256dh,
+        auth: sub.keys.auth,
+        user_agent: typeof body.user_agent === 'string' ? body.user_agent.slice(0, 200) : null,
+        last_used_at: new Date().toISOString(),
+      }, { onConflict: 'endpoint' })
+    if (upErr) return res.status(500).json({ error: 'db_error', message: upErr.message })
+
+    // Borrar la sub vieja (solo si es distinta a la nueva)
+    if (oldEndpoint !== sub.endpoint) {
+      await admin.from('push_subscriptions').delete().eq('endpoint', oldEndpoint)
+    }
+    return res.status(200).json({ ok: true })
+  } catch (err) {
+    console.error('[push:renew]', err)
+    return res.status(500).json({ error: 'internal' })
   }
 }
 
@@ -93,12 +150,19 @@ async function handleUnsubscribe(req, res, body) {
 }
 
 async function handleSnooze(req, res, body) {
-  // El SW no adjunta token, igual que antes; eventId + endpoint son prueba suficiente.
+  // Autenticamos por posesión del endpoint push. El SW, aunque corra sin JWT,
+  // sí tiene acceso a su propia PushSubscription — adjunta el endpoint en el
+  // body. Lo resolvemos a user_id y snoozamos SOLO la notificación de ese
+  // usuario. Antes se cotejaba solo por event_id, lo que permitía a cualquiera
+  // que adivinara un event_id reprogramar notificaciones ajenas.
   const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : ''
   const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
   if (!eventId || !ID_RE.test(eventId)) {
     return res.status(400).json({ error: 'missing_eventId' })
   }
+
+  const endpoint = typeof body.endpoint === 'string' ? body.endpoint : null
+  if (!endpoint) return res.status(400).json({ error: 'missing_endpoint' })
 
   const parsed = parseInt(body.minutes, 10)
   const minutes = Math.max(1, Math.min(Number.isFinite(parsed) ? parsed : 10, 1440))
@@ -106,11 +170,21 @@ async function handleSnooze(req, res, body) {
   const admin = getSupabaseAdmin()
   if (!admin) return res.status(503).json({ error: 'no_backend_supabase' })
 
+  // Resolver owner por endpoint
+  const { data: subRow, error: subErr } = await admin
+    .from('push_subscriptions')
+    .select('user_id')
+    .eq('endpoint', endpoint)
+    .maybeSingle()
+  if (subErr) return res.status(500).json({ error: 'db_error', message: subErr.message })
+  if (!subRow?.user_id) return res.status(404).json({ error: 'endpoint_not_found' })
+
   const snoozeUntil = new Date(Date.now() + minutes * 60 * 1000).toISOString()
   try {
     await admin.from('sent_notifications')
       .update({ sent_at: snoozeUntil })
       .eq('event_id', eventId)
+      .eq('user_id', subRow.user_id)
     return res.status(200).json({ ok: true, snoozeUntil, minutes })
   } catch (err) {
     console.error('[push:snooze]', err)
@@ -147,10 +221,31 @@ async function handleHealth(req, res, body) {
     ? subs?.some((s) => s.endpoint === currentEndpoint)
     : null
 
+  // Última entrega (best-effort): si la tabla notification_deliveries no
+  // existe, el query devuelve error y mandamos `lastDelivery: null`.
+  let lastDelivery = null
+  try {
+    const { data: lastRows } = await admin
+      .from('notification_deliveries')
+      .select('status, status_code, payload_title, sent_at')
+      .eq('user_id', userId)
+      .order('sent_at', { ascending: false })
+      .limit(1)
+    if (lastRows?.[0]) {
+      lastDelivery = {
+        status: lastRows[0].status,
+        statusCode: lastRows[0].status_code,
+        title: lastRows[0].payload_title,
+        sentAt: lastRows[0].sent_at,
+      }
+    }
+  } catch {}
+
   return res.status(200).json({
     ok: true,
     subscriptionCount,
     currentPresent, // true | false | null
+    lastDelivery,   // { status, statusCode, title, sentAt } | null
   })
 }
 

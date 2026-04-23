@@ -166,41 +166,98 @@ function PushDiagnostic() {
   )
 }
 
-// Refleja el estado real de push en lugar del check verde estático. Si el
-// permiso está bloqueado o la suscripción no está guardada en el servidor, el
-// usuario ve el ámbar "Inactivo" — pista clara para usar el diagnóstico de
-// abajo. Antes este row mentía: decía "activo" aunque nunca llegara una push.
+// Refleja el estado real de push en lugar del check verde estático.
+// Estados:
+//   · active           → permiso OK + sub local + backend confirma y última
+//                        entrega exitosa (o aún sin datos)
+//   · disconnected     → permiso OK pero backend no tiene la sub (o tuvo pero
+//                        la borró por 410). Síntoma: nunca llegarán notifs.
+//                        Distinto de `inactive`: el usuario cree que dijo sí.
+//   · inactive         → permiso en 'default' — aún no decidió
+//   · blocked          → permiso 'denied' en el SO
+//   · unsupported      → dispositivo no tiene Push API
+// Además expone la última entrega reportada por el backend (si la migración
+// 005 está aplicada) para que el usuario vea "última notif enviada".
 function RemindersRow() {
-  const [state, setState] = useState('checking') // checking | active | inactive | blocked | unsupported
+  const [state, setState] = useState('checking')
+  const [lastDelivery, setLastDelivery] = useState(null)
+
   useEffect(() => {
     let cancelled = false
-    getPushStatus()
-      .then((s) => {
+    async function run() {
+      try {
+        const s = await getPushStatus()
         if (cancelled) return
-        if (!s.supported) setState('unsupported')
-        else if (s.permission === 'denied') setState('blocked')
-        else if (s.permission !== 'granted' || !s.subscribed) setState('inactive')
-        else setState('active')
-      })
-      .catch(() => !cancelled && setState('inactive'))
+        if (!s.supported) { setState('unsupported'); return }
+        if (s.permission === 'denied') { setState('blocked'); return }
+        if (s.permission !== 'granted') { setState('inactive'); return }
+        if (!s.subscribed) { setState('disconnected'); return }
+        // Tenemos sub local — confirmamos con backend y pedimos última entrega
+        const h = await checkSubscriptionHealth().catch(() => null)
+        if (cancelled) return
+        if (h?.ok) {
+          if (h.lastDelivery) setLastDelivery(h.lastDelivery)
+          if (h.subscriptionCount === 0 || h.currentPresent === false) {
+            setState('disconnected')
+          } else {
+            setState('active')
+          }
+        } else {
+          // no se pudo verificar con backend — damos beneficio de la duda
+          setState('active')
+        }
+      } catch {
+        if (!cancelled) setState('inactive')
+      }
+    }
+    run()
     return () => { cancelled = true }
   }, [])
 
-  const copy = {
-    checking:    { sub: 'Verificando estado…',                                     icon: 'check_circle',  color: 'text-slate-300' },
-    active:      { sub: 'Recibes un aviso 10, 30 y 60 min antes de cada evento',   icon: 'check_circle',  color: 'text-emerald-400' },
-    inactive:    { sub: 'No están activas — actívalas en Permisos arriba',         icon: 'error',         color: 'text-amber-400' },
-    blocked:     { sub: 'Permiso bloqueado — reactívalo desde los ajustes del sistema', icon: 'block',    color: 'text-red-400' },
-    unsupported: { sub: 'Este dispositivo no soporta notificaciones push',         icon: 'do_not_disturb_on', color: 'text-slate-300' },
+  const baseCopy = {
+    checking:     { sub: 'Verificando estado…',                                          icon: 'check_circle',      color: 'text-slate-300' },
+    active:       { sub: 'Recibes un aviso 10, 30 y 60 min antes de cada evento',        icon: 'check_circle',      color: 'text-emerald-400' },
+    disconnected: { sub: 'Permiso OK pero la conexión al servidor se cortó — usa "Reconectar" abajo', icon: 'sync_problem', color: 'text-amber-400' },
+    inactive:     { sub: 'No están activas — actívalas desde el banner al crear un evento', icon: 'error',           color: 'text-amber-400' },
+    blocked:      { sub: 'Permiso bloqueado — reactívalo desde los ajustes del sistema', icon: 'block',             color: 'text-red-400' },
+    unsupported:  { sub: 'Este dispositivo no soporta notificaciones push',              icon: 'do_not_disturb_on', color: 'text-slate-300' },
   }[state]
 
+  // Si tenemos lastDelivery, enriquecemos el sub con la última entrega real
+  // ("Última notif enviada: hace 3h — 'En 10 min: Reunión'"). Fuente de
+  // verdad: backend. Si falló, lo decimos.
+  let sub = baseCopy.sub
+  if (state === 'active' && lastDelivery) {
+    const ago = timeAgo(lastDelivery.sentAt)
+    if (lastDelivery.status === 'delivered') {
+      sub = `Última notificación enviada ${ago}${lastDelivery.title ? ` · "${lastDelivery.title}"` : ''}`
+    } else if (lastDelivery.status === 'gone') {
+      sub = `La última sub de este dispositivo expiró ${ago} — reconecta abajo`
+    } else if (lastDelivery.status === 'failed') {
+      sub = `El último intento falló ${ago} (${lastDelivery.statusCode || 'error'}) — reintenta abajo`
+    }
+  }
+
   return (
-    <Row icon="notifications" label="Recordatorios de eventos" sub={copy.sub}>
-      <span className={`material-symbols-outlined text-[16px] ${copy.color}`}>
-        {copy.icon}
+    <Row icon="notifications" label="Recordatorios de eventos" sub={sub}>
+      <span className={`material-symbols-outlined text-[16px] ${baseCopy.color}`}>
+        {baseCopy.icon}
       </span>
     </Row>
   )
+}
+
+function timeAgo(iso) {
+  if (!iso) return 'hace un rato'
+  const diffMs = Date.now() - new Date(iso).getTime()
+  if (diffMs < 0) return 'recién'
+  const mins = Math.round(diffMs / 60000)
+  if (mins < 1) return 'hace instantes'
+  if (mins < 60) return `hace ${mins} min`
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `hace ${hours} h`
+  const days = Math.round(hours / 24)
+  return days === 1 ? 'ayer' : `hace ${days} días`
 }
 
 const DURATION_BEHAVIOR_OPTIONS = [

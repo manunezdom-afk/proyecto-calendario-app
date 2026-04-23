@@ -231,6 +231,7 @@ export default function App() {
     permissionState, permissionDismissed,
     requestPermission, dismissPermissionCard,
     markAllRead, dismiss: dismissNotif,
+    pushDisconnected, pushHealing, reconnectPush, lastDelivery,
   } = useNotifications({ events })
 
   // ── Permission contextual ────────────────────────────────────────────────
@@ -748,6 +749,23 @@ export default function App() {
           onDismiss={dismissPermissionCard}
         >
           Puedo avisarte 10 min antes de cada evento. ¿Activamos recordatorios?
+        </NovaHint>
+      )}
+
+      {/* ── Banner "notifs desconectadas" ──────────────────────────────────
+          permission === granted pero la sub no está en el backend (APNs la
+          invalidó, usuario cambió de cuenta, iOS reinstaló la PWA…). Antes
+          este caso era silencioso: el RemindersRow decía "activo" pero nunca
+          llegaba una push. Ahora ofrecemos reconexión explícita. */}
+      {pushDisconnected && !showOnboarding && !showWelcome && (
+        <NovaHint
+          id={pushHealing ? 'notif-reconnecting' : 'notif-disconnected-v1'}
+          delayMs={800}
+          actionLabel={pushHealing ? 'Reconectando…' : 'Reconectar'}
+          onAction={pushHealing ? undefined : reconnectPush}
+          onDismiss={() => { /* no persistimos dismiss — si sigue roto, volverá */ }}
+        >
+          Tus recordatorios push están desconectados. Un toque y los vuelvo a activar.
         </NovaHint>
       )}
 
