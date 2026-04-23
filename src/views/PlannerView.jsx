@@ -980,10 +980,12 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
               {blocks.length === 0 && pendingTasksCount === 0 && (() => {
                 const pendingTotal = semanaCount + algoDiaCount
+                // label = texto corto visible en el chip (cabe en iPhone sin truncar).
+                // prompt = texto completo que se siembra en la FocusBar al tocar.
                 const chips = [
-                  { icon: 'fitness_center', text: 'Agenda gym mañana a las 7' },
-                  { icon: 'schedule',       text: 'Bloquea 2h de foco esta tarde' },
-                  { icon: 'event_repeat',   text: 'Agenda una reunión todos los lunes a las 9 am' },
+                  { icon: 'fitness_center', label: 'Agendar gym mañana',   prompt: 'Agenda gym mañana a las 7' },
+                  { icon: 'schedule',       label: 'Bloquear 2h de foco',  prompt: 'Bloquea 2h de foco esta tarde' },
+                  { icon: 'event_repeat',   label: 'Reunión semanal fija', prompt: 'Agenda una reunión todos los lunes a las 9 am' },
                 ]
                 return (
                   <div className="flex gap-6">
@@ -999,11 +1001,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       </div>
                       <ul className="space-y-2">
                         {chips.map((chip) => (
-                          <li key={chip.text}>
+                          <li key={chip.label}>
                             <button
                               type="button"
-                              onClick={() => setFocusBarSeed(({ n }) => ({ text: chip.text, n: n + 1 }))}
-                              className="w-full flex items-center gap-3 bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2.5 text-left transition-colors active:scale-[0.99]"
+                              onClick={() => setFocusBarSeed(({ n }) => ({ text: chip.prompt, n: n + 1 }))}
+                              className="w-full flex items-center gap-2.5 bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2.5 text-left transition-colors active:scale-[0.99]"
                             >
                               <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                                 <span
@@ -1013,10 +1015,10 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                                   {chip.icon}
                                 </span>
                               </span>
-                              <span className="flex-1 min-w-0 text-[13px] font-medium text-on-surface truncate">
-                                {chip.text}
+                              <span className="flex-1 min-w-0 text-[13px] font-medium text-on-surface leading-snug break-words">
+                                {chip.label}
                               </span>
-                              <span className="material-symbols-outlined text-outline/50 text-[18px] flex-shrink-0">
+                              <span className="material-symbols-outlined text-outline/50 text-[16px] flex-shrink-0">
                                 arrow_outward
                               </span>
                             </button>
