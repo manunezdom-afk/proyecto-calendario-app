@@ -92,78 +92,105 @@
 
       /* ── Instant boot splash ───────────────────────────────────────────────
          HTML+CSS puros dentro de #root. Pinta al instante con el primer parseo
-         del HTML, sin depender del bundle JS ni de fuentes externas. Cuando
-         React monta, createRoot().render() reemplaza el contenido del root y
-         el splash desaparece. Objetivo: eliminar la ventana de pantalla blanca
-         al abrir la PWA desde el icono en iPhone. */
+         del HTML, sin depender del bundle JS ni de fuentes externas.
+
+         Diseño: espejamos el threshold scene (WelcomeScreen) para que el
+         handoff inline→React sea invisible — el usuario percibe una sola
+         pantalla de bienvenida, no dos. Por eso NO hay wordmark grande,
+         tagline ni dots: esos elementos no existen en WelcomeScreen. Tiny
+         "FOCUS" arriba + orbe central + nada más. Cuando React monta, el
+         saludo/hairline/subline fade-in encima sin que nada se mueva. */
       #focus-splash {
         position: fixed;
         inset: 0;
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        background: radial-gradient(ellipse at 50% 45%, #14121f 0%, #0a0a0f 72%);
-        color: rgba(255,255,255,0.78);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
-        letter-spacing: -0.02em;
-        font-weight: 600;
-        font-size: 15px;
+        background: radial-gradient(ellipse at 50% 42%, #15121f 0%, #0a0a0f 70%);
+        font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
         z-index: 0;
         padding-bottom: env(safe-area-inset-bottom, 0px);
       }
-      #focus-splash .orb {
-        width: 78px;
-        height: 78px;
-        border-radius: 50%;
-        margin-bottom: 22px;
-        background:
-          radial-gradient(circle at 32% 32%,
-            rgba(124,107,255,0.95) 0%,
-            rgba(124,107,255,0.55) 45%,
-            rgba(124,107,255,0) 72%);
-        box-shadow: 0 0 40px rgba(124,107,255,0.35);
-        animation: focusSplashBreath 2.4s ease-in-out infinite;
+      #focus-splash .center-col {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
       }
-      #focus-splash .wordmark {
-        font-size: 22px;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        color: rgba(255,255,255,0.92);
-        margin-bottom: 6px;
-      }
-      #focus-splash .tagline {
-        opacity: 0.5;
-        font-size: 12.5px;
+      /* Spacers invisibles que reservan el espacio del greeting + hairline +
+         subline del WelcomeScreen. Sin ellos, el orbe del splash quedaría en
+         el centro exacto de la pantalla, pero el del WelcomeScreen queda ~60px
+         más arriba (porque debajo hay contenido que empuja). Estos placeholders
+         hacen que el orbe inline aparezca en la misma posición que cuando React
+         renderiza la escena — no hay salto vertical al hacer el handoff. */
+      #focus-splash .spacer-greeting { height: 37px; }
+      #focus-splash .spacer-hairline { height: 1px; margin-top: 20px; }
+      #focus-splash .spacer-subline  { height: 23px; margin-top: 16px; }
+      /* Wordmark superior — espeja exactamente el que muestra WelcomeScreen */
+      #focus-splash .top-wordmark {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(env(safe-area-inset-top, 0px) + clamp(28px, 6vh, 56px));
+        text-align: center;
+        font-size: clamp(11px, 1.2vw, 13px);
+        letter-spacing: 0.42em;
         font-weight: 500;
-        letter-spacing: 0.02em;
-        color: rgba(255,255,255,0.7);
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.55);
+        user-select: none;
       }
-      #focus-splash .dot {
-        margin-top: 26px;
-        display: inline-flex;
-        gap: 6px;
+      /* Orbe central — reproducimos NovaOrb con radial gradients + halo */
+      #focus-splash .orb-wrap {
+        position: relative;
+        width: 84px;
+        height: 84px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 36px;
       }
-      #focus-splash .dot span {
-        width: 5px;
-        height: 5px;
+      #focus-splash .orb-halo {
+        position: absolute;
+        inset: -46px;
         border-radius: 50%;
-        background: rgba(124,107,255,0.65);
-        animation: focusSplashDot 1.2s ease-in-out infinite;
+        background: radial-gradient(circle, rgba(124,107,255,0.35) 0%, rgba(124,107,255,0.12) 40%, transparent 70%);
+        filter: blur(14px);
+        animation: focusSplashBreath 3.2s ease-in-out infinite;
       }
-      #focus-splash .dot span:nth-child(2) { animation-delay: 0.15s; }
-      #focus-splash .dot span:nth-child(3) { animation-delay: 0.3s; }
+      #focus-splash .orb-core {
+        position: relative;
+        width: 84px;
+        height: 84px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #a99bff 0%, #7c6bff 45%, #4c3fd6 100%);
+        box-shadow: 0 10px 32px -8px rgba(124,107,255,0.6), inset 0 1px 2px rgba(255,255,255,0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #focus-splash .orb-core::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 28%, rgba(255,255,255,0.55), transparent 40%);
+        mix-blend-mode: screen;
+      }
+      #focus-splash .orb-core::after {
+        content: '';
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #fff 0%, rgba(255,255,255,0.6) 60%, transparent 100%);
+        animation: focusSplashBreath 3.2s ease-in-out infinite;
+      }
       @keyframes focusSplashBreath {
-        0%, 100% { transform: scale(1);     opacity: 0.78; }
-        50%      { transform: scale(1.055); opacity: 1; }
-      }
-      @keyframes focusSplashDot {
-        0%, 100% { opacity: 0.25; transform: translateY(0); }
-        50%      { opacity: 1;    transform: translateY(-2px); }
+        0%, 100% { transform: scale(1);    opacity: 0.55; }
+        50%      { transform: scale(1.04); opacity: 1; }
       }
       @media (prefers-reduced-motion: reduce) {
-        #focus-splash .orb,
-        #focus-splash .dot span { animation: none; }
+        #focus-splash .orb-halo,
+        #focus-splash .orb-core::after { animation: none; }
       }
     </style>
 
@@ -210,12 +237,22 @@
   </head>
   <body>
     <div id="root">
-      <!-- Splash inline: se pinta al instante y React lo reemplaza al montar. -->
+      <!-- Splash inline: se pinta al instante y React lo reemplaza al montar.
+           Es idéntico en estructura al threshold scene (WelcomeScreen) — tiny
+           FOCUS arriba + orbe en la misma posición vertical — para que el
+           handoff sea invisible. Los spacers reservan el espacio que ocupará
+           el greeting/hairline/subline cuando React monte. -->
       <div id="focus-splash" aria-hidden="true">
-        <div class="orb"></div>
-        <div class="wordmark">Focus</div>
-        <div class="tagline">tu día, con Nova</div>
-        <div class="dot"><span></span><span></span><span></span></div>
+        <div class="top-wordmark">Focus</div>
+        <div class="center-col">
+          <div class="orb-wrap">
+            <span class="orb-halo"></span>
+            <span class="orb-core"></span>
+          </div>
+          <div class="spacer-greeting"></div>
+          <div class="spacer-hairline"></div>
+          <div class="spacer-subline"></div>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.jsx"></script>

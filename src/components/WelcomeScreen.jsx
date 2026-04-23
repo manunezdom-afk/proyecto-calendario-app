@@ -85,15 +85,17 @@ export default function WelcomeScreen({ onEnter, hasEvents = false, hasFirstTime
       {/* Aurora continuidad con landing */}
       <AuroraBackground variant="threshold" intensity={1} />
 
-      {/* Wordmark superior — ancla de marca, sutil */}
+      {/* Wordmark superior — ancla de marca, sutil.
+          Empieza visible (opacity 0.55) para hacer continuidad con el splash
+          inline de index.html, que también lo pinta visible. Sin entrada. */}
       <AnimatePresence>
         {phase === 'in' && (
           <motion.div
             key="wordmark"
-            initial={{ opacity: 0, y: -6 }}
+            initial={{ opacity: 0.55, y: 0 }}
             animate={{ opacity: 0.55, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
+            transition={{ duration: 0.32, ease: EASE }}
             className="absolute left-0 right-0 text-center select-none"
             style={{
               top: 'calc(env(safe-area-inset-top, 0px) + clamp(28px, 6vh, 56px))',
@@ -117,14 +119,17 @@ export default function WelcomeScreen({ onEnter, hasEvents = false, hasFirstTime
 
       {/* Contenido central */}
       <div className="relative z-10 flex flex-col items-center px-6 text-center">
+        {/* Orbe — empieza visible (scale 1, opacity 1) para alinearse con el
+            splash inline de index.html y hacer el handoff imperceptible. El
+            exit sí anima para cerrar la escena con un leve zoom. */}
         <AnimatePresence>
           {phase === 'in' && (
             <motion.div
               key="orb"
-              initial={{ scale: 0.76, opacity: 0 }}
+              initial={{ scale: 1, opacity: 1 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 1.06, opacity: 0 }}
-              transition={{ duration: 0.55, ease: EASE }}
+              transition={{ duration: 0.32, ease: EASE }}
               className="mb-9 sm:mb-10"
             >
               <NovaOrb size={typeof window !== 'undefined' && window.innerWidth >= 640 ? 96 : 84} ambient />
