@@ -732,12 +732,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       {/* Setup card legacy — reemplazado por OnboardingTour animado.
           El sistema de user_signals aprende el cronotipo solo, sin preguntar. */}
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8">
-        {/* Desktop: 2 columnas (timeline 2fr + insights 1fr). Mobile: stack.
-            Antes todo iba en flex-col incluso en desktop, lo que dejaba la
-            columna derecha vacía a partir de 1024px. El grid con fr permite
-            que el timeline respire y los insights queden fijos al lado. */}
-        <div className={isDesktop ? "grid grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] gap-8 items-start" : "flex flex-col gap-10"}>
+      <main className={`${isDesktop ? 'max-w-3xl' : 'max-w-7xl'} mx-auto px-4 sm:px-6 pt-8`}>
+        {/* Desktop: stack vertical con ancho de lectura (max-w-3xl). El grid
+            2-col dejaba la derecha desbalanceada y el timeline apretado; un
+            solo hilo vertical centrado se lee mejor. Mobile: igual que siempre. */}
+        <div className="flex flex-col gap-10">
 
           {/* ── Left: Timeline ────────────────────────────────────────────── */}
           <div className="min-w-0">
