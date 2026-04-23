@@ -53,14 +53,18 @@ export function useOnboardingGate() {
 // Animadas, livianas, sin imágenes externas. Firmamos la marca con el orbe.
 
 function SlideIllustrationHero() {
+  // Hero del tutorial — continuidad con el splash. El splash ya muestra un
+  // orbe centrado, así que aquí arrancamos con el orbe visible (opacity 1,
+  // scale 1) en vez de fade-in: el usuario no ve el frame vacío previo que
+  // parecía una segunda pantalla de carga. Solo el halo amplio hace fade
+  // sutil para dar vida sin romper la continuidad.
   return (
     <div className="relative flex h-[220px] w-full items-center justify-center">
-      {/* halo lejano */}
       <motion.div
         aria-hidden="true"
-        initial={{ opacity: 0, scale: 0.6 }}
+        initial={{ opacity: 0, scale: 0.85 }}
         animate={{ opacity: 0.8, scale: 1 }}
-        transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 1.0, ease: [0.22, 1, 0.36, 1] }}
         style={{
           position: 'absolute',
           width: 260, height: 260, borderRadius: '50%',
@@ -68,13 +72,7 @@ function SlideIllustrationHero() {
           filter: 'blur(12px)',
         }}
       />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.75 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <NovaOrb size={110} ambient />
-      </motion.div>
+      <NovaOrb size={110} ambient />
     </div>
   )
 }
@@ -150,6 +148,9 @@ function Pill({ icon, label, color, delay, x, y }) {
 }
 
 function SlideIllustrationTasksEvents() {
+  // En iPhone narrow los pills chocaban con el orbe del centro. Empujamos
+  // las pills más afuera (x=±110) y achicamos el orbe (52→42) para dejar
+  // margen claro entre cada elemento y el centro.
   return (
     <div className="relative h-[220px] w-full">
       {/* Conexión sutil entre ambos */}
@@ -162,13 +163,13 @@ function SlideIllustrationTasksEvents() {
           position: 'absolute',
           top: '50%', left: '50%',
           transform: 'translate(-50%, -50%)',
-          width: 220, height: 1,
+          width: 240, height: 1,
           background: 'linear-gradient(90deg, transparent, rgba(124,107,255,0.5), transparent)',
         }}
       />
-      <Pill icon="check_box"   label="Tareas"        color="#ec4899" delay={0.1}  x={-95} y={-42} />
-      <Pill icon="event"       label="Eventos"       color="#3b82f6" delay={0.25} x={95}  y={-42} />
-      <Pill icon="alarm"       label="Recordatorios" color="#7c6bff" delay={0.45} x={0}   y={48} />
+      <Pill icon="check_box"   label="Tareas"        color="#ec4899" delay={0.1}  x={-110} y={-46} />
+      <Pill icon="event"       label="Eventos"       color="#3b82f6" delay={0.25} x={110}  y={-46} />
+      <Pill icon="alarm"       label="Recordatorios" color="#7c6bff" delay={0.45} x={0}    y={54} />
       {/* Orbe pequeño al centro */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
         <motion.div
@@ -176,7 +177,7 @@ function SlideIllustrationTasksEvents() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.35, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         >
-          <NovaOrb size={52} ambient />
+          <NovaOrb size={42} ambient />
         </motion.div>
       </div>
     </div>
@@ -184,61 +185,67 @@ function SlideIllustrationTasksEvents() {
 }
 
 function SlideIllustrationNova() {
+  // Layout: flex row con gap — el orbe queda a la izquierda y la burbuja
+  // a la derecha, sin solaparse. Antes la burbuja estaba `absolute` con
+  // `left-1/2 ml-6` pero el orbe de 84px (radio 42) invadía esos 24 px de
+  // margen y se veía montado sobre el círculo. El flex elimina eso y se
+  // adapta a cualquier ancho sin choques.
   return (
-    <div className="relative flex h-[220px] w-full items-center justify-center">
-      {/* Propuesta en burbuja al lado del orbe */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.7 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <NovaOrb size={84} pulse ambient />
-      </motion.div>
+    <div className="relative h-[220px] w-full">
+      <div className="absolute inset-0 flex items-center justify-center gap-4 px-3">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          className="flex-shrink-0"
+        >
+          <NovaOrb size={76} pulse ambient />
+        </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, x: -10, y: 8 }}
-        animate={{ opacity: 1, x: 0, y: 0 }}
-        transition={{ delay: 0.5, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-        className="absolute left-1/2 ml-6 max-w-[200px] rounded-2xl rounded-bl-md border px-3.5 py-2.5"
-        style={{
-          background: 'rgba(20, 18, 36, 0.92)',
-          borderColor: 'rgba(124, 107, 255, 0.3)',
-          top: '38%',
-        }}
-      >
-        <div className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-white/40">
-          Nova propone
-        </div>
-        <div className="text-[12.5px] leading-snug text-white/90">
-          Tu reunión pisa el evento de las 11. ¿La muevo a las 15?
-        </div>
-        <div className="mt-2 flex items-center gap-1.5">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 1.0, duration: 0.35 }}
-            className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
-            style={{ background: 'var(--nova)' }}
-          >
-            Aprobar
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.15, duration: 0.35 }}
-            className="rounded-full border px-2 py-0.5 text-[10px] font-medium text-white/60"
-            style={{ borderColor: 'rgba(255,255,255,0.15)' }}
-          >
-            Descartar
-          </motion.div>
-        </div>
-      </motion.div>
+        <motion.div
+          initial={{ opacity: 0, x: -10, y: 8 }}
+          animate={{ opacity: 1, x: 0, y: 0 }}
+          transition={{ delay: 0.4, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          className="relative max-w-[210px] rounded-2xl rounded-bl-md border px-3.5 py-2.5"
+          style={{
+            background: 'rgba(20, 18, 36, 0.92)',
+            borderColor: 'rgba(124, 107, 255, 0.3)',
+          }}
+        >
+          <div className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-white/40">
+            Nova propone
+          </div>
+          <div className="text-[12.5px] leading-snug text-white/90">
+            Tu reunión pisa el evento de las 11. ¿La muevo a las 15?
+          </div>
+          <div className="mt-2 flex items-center gap-1.5">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.9, duration: 0.35 }}
+              className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+              style={{ background: 'var(--nova)' }}
+            >
+              Aprobar
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.05, duration: 0.35 }}
+              className="rounded-full border px-2 py-0.5 text-[10px] font-medium text-white/60"
+              style={{ borderColor: 'rgba(255,255,255,0.15)' }}
+            >
+              Descartar
+            </motion.div>
+          </div>
+        </motion.div>
+      </div>
 
       {/* Nota sutil reforzando el principio */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 0.55, y: 0 }}
-        transition={{ delay: 1.3, duration: 0.5 }}
+        transition={{ delay: 1.2, duration: 0.5 }}
         className="absolute bottom-1 left-0 right-0 text-center text-[10.5px] font-medium uppercase tracking-[0.14em] text-white/40"
       >
         Nunca mueve nada sin tu confirmación
@@ -326,6 +333,12 @@ const SLIDES = [
 export default function FirstLaunchOnboarding({ onDone }) {
   const [index, setIndex] = useState(0)
   const [leaving, setLeaving] = useState(false)
+  // `firstMount` se pone false tras el primer render. Lo usamos para que
+  // el slide inicial aparezca ya visible (sin el fade de 420 ms), que en
+  // iPhone hacía ver una pantalla negra intermedia entre el splash y el
+  // tutorial como si hubiera dos cargas seguidas.
+  const [firstMount, setFirstMount] = useState(true)
+  useEffect(() => { setFirstMount(false) }, [])
   const total = SLIDES.length
   const slide = SLIDES[index]
   const isLast = index === total - 1
@@ -425,7 +438,7 @@ export default function FirstLaunchOnboarding({ onDone }) {
         <AnimatePresence mode="wait">
           <motion.div
             key={slide.id}
-            initial={{ opacity: 0, y: 18 }}
+            initial={firstMount ? false : { opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}

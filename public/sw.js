@@ -21,7 +21,7 @@
 // estáticos hasheados. El único costo es una request de red para el HTML al
 // abrir la app, pero con timeout y fallback a caché si no hay conexión.
 
-const VERSION = 'v14'
+const VERSION = 'v15'
 const SHELL_CACHE = `focus-shell-${VERSION}`
 const ASSETS_CACHE = `focus-assets-${VERSION}`
 const CURRENT_CACHES = [SHELL_CACHE, ASSETS_CACHE]
@@ -29,7 +29,10 @@ const CURRENT_CACHES = [SHELL_CACHE, ASSETS_CACHE]
 const OFFLINE_FALLBACK = '/index.html'
 const PRECACHE_URLS = [OFFLINE_FALLBACK, '/manifest.json', '/icons/icon.svg']
 
-const NAV_TIMEOUT_MS = 3500
+// Timeout agresivo: 3500 ms dejaba al iPhone PWA viendo la pantalla de
+// carga en negro durante segundos cuando el primer byte tardaba. 1200 ms
+// cubre redes 4G normales y corta rápido al shell cacheado en casos malos.
+const NAV_TIMEOUT_MS = 1200
 
 // ── Install ────────────────────────────────────────────────────────────────
 // cache: 'reload' fuerza al browser a bypassear su HTTP cache y pedir la
