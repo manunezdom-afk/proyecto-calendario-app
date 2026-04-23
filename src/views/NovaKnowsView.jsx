@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { analyzeBehavior, getCachedBehavior, fetchBehavior } from '../services/behaviorAnalysis'
@@ -105,14 +104,13 @@ function buildInsights(b, profile) {
   return out
 }
 
-function InsightCard({ icon, gradient, title, body, delay = 0 }) {
+function InsightCard({ icon, gradient, title, body }) {
+  // Antes tenía motion.div con initial: opacity 0 — en iOS Safari PWA la
+  // animación se quedaba a veces congelada cuando AnimatePresence del padre
+  // (App.jsx) transiciona a esta vista, dejando la tarjeta invisible.
+  // El enter de la vista ya lo maneja la AnimatePresence exterior.
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.35 }}
-      className="bg-white rounded-[20px] border border-slate-100 shadow-sm p-5 flex gap-3"
-    >
+    <div className="bg-white rounded-[20px] border border-slate-100 shadow-sm p-5 flex gap-3">
       <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center flex-shrink-0 shadow-md`}>
         <span
           className="material-symbols-outlined text-white text-[20px]"
@@ -125,7 +123,7 @@ function InsightCard({ icon, gradient, title, body, delay = 0 }) {
         <p className="text-[14px] font-bold text-slate-900 leading-tight">{title}</p>
         <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">{body}</p>
       </div>
-    </motion.div>
+    </div>
   )
 }
 
@@ -202,11 +200,7 @@ export default function NovaKnowsView({ onBack }) {
 
       {/* Sin datos suficientes */}
       {!hasModel && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-[20px] border border-slate-100 p-8 text-center shadow-sm"
-        >
+        <div className="bg-white rounded-[20px] border border-slate-100 p-8 text-center shadow-sm">
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 via-violet-500 to-fuchsia-500 flex items-center justify-center mx-auto mb-4 shadow-lg">
             <span
               className="material-symbols-outlined text-white text-[28px]"
@@ -231,7 +225,7 @@ export default function NovaKnowsView({ onBack }) {
             <span className="material-symbols-outlined text-[15px]">refresh</span>
             {analyzing ? 'Analizando…' : 'Intentar analizar ahora'}
           </button>
-        </motion.div>
+        </div>
       )}
 
       {/* Modelo con datos */}
@@ -265,12 +259,7 @@ export default function NovaKnowsView({ onBack }) {
 
           {/* Weekday histogram */}
           {model.weekday_completions && model.weekday_completions.some(n => n > 0) && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white rounded-[20px] border border-slate-100 shadow-sm p-5"
-            >
+            <div className="bg-white rounded-[20px] border border-slate-100 shadow-sm p-5">
               <p className="text-[11px] font-bold text-slate-500 mb-3">
                 Tareas completadas por día
               </p>
@@ -293,7 +282,7 @@ export default function NovaKnowsView({ onBack }) {
                   )
                 })}
               </div>
-            </motion.div>
+            </div>
           )}
 
           {/* Footer actions */}

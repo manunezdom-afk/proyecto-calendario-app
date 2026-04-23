@@ -5,6 +5,20 @@ import { setSignalsUserId, flushSignalsQueue } from '../services/signalsService'
 import { fetchBehavior } from '../services/behaviorAnalysis'
 import { flushPendingSubscription, subscribeToPush, getPushStatus } from '../lib/pushSubscription'
 
+// withAuthTimeout — blindaje genérico para promesas de auth/pairing. Rechaza
+// con Error(label) si la promesa no resuelve en `ms`. Lo usamos en getSession,
+// fetch y verifyOtp para evitar que un stall de red deje la UI en "Generando
+// QR seguro…" para siempre.
+function withAuthTimeout(promise, ms, label = 'timeout') {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label)), ms)
+    Promise.resolve(promise).then(
+      (v) => { clearTimeout(t); resolve(v) },
+      (e) => { clearTimeout(t); reject(e) },
+    )
+  })
+}
+
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
@@ -120,38 +134,86 @@ export function AuthProvider({ children }) {
   // canjea por un token_hash que usa para abrir sesión. Sin emails.
 
   const startDevicePairing = useCallback(async () => {
-    if (!supabase) throw new Error('Supabase no configurado')
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.access_token) throw new Error('no_session')
-    const r = await fetch('/api/auth/device/start', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
-      }),
-    })
+    if (!supabase) {
+      const err = new Error('supabase_not_configured')
+      err.reason = 'supabase_not_configured'
+      throw err
+    }
+    // getSession() puede tardar si la red está lenta — cap a 5s
+    let session
+    try {
+      const { data } = await withAuthTimeout(supabase.auth.getSession(), 5000, 'session_timeout')
+      session = data?.session
+    } catch (err) {
+      const e = new Error(err?.message || 'session_timeout')
+      e.reason = /timeout/i.test(String(err?.message)) ? 'session_timeout' : 'session_error'
+      throw e
+    }
+    if (!session?.access_token) {
+      const err = new Error('no_session')
+      err.reason = 'no_session'
+      throw err
+    }
+    let r
+    try {
+      r = await withAuthTimeout(
+        fetch('/api/auth/device/start', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+          }),
+        }),
+        10000,
+        'backend_timeout',
+      )
+    } catch (err) {
+      const e = new Error(err?.message || 'backend_timeout')
+      e.reason = /timeout/i.test(String(err?.message)) ? 'backend_timeout' : 'network_error'
+      throw e
+    }
     const body = await r.json().catch(() => ({}))
     if (!r.ok) {
       const err = new Error(body?.error || 'device_start_failed')
       err.status = r.status
+      err.reason = body?.error || 'backend_error'
+      throw err
+    }
+    // Sanity check: el backend debe devolver user_code válido. Si no, dejamos
+    // explícito que el payload está mal en vez de renderizar un QR vacío.
+    if (typeof body?.user_code !== 'string' || body.user_code.length !== 8) {
+      const err = new Error('invalid_user_code')
+      err.reason = 'invalid_user_code'
       throw err
     }
     return body
   }, [])
 
   const claimDevicePairing = useCallback(async (userCode) => {
-    const r = await fetch('/api/auth/device/claim', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_code: userCode }),
-    })
+    let r
+    try {
+      r = await withAuthTimeout(
+        fetch('/api/auth/device/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_code: userCode }),
+        }),
+        10000,
+        'backend_timeout',
+      )
+    } catch (err) {
+      const e = new Error(err?.message || 'backend_timeout')
+      e.reason = /timeout/i.test(String(err?.message)) ? 'backend_timeout' : 'network_error'
+      throw e
+    }
     const body = await r.json().catch(() => ({}))
     if (!r.ok) {
       const err = new Error(body?.error || 'device_claim_failed')
       err.status = r.status
+      err.reason = body?.error || 'backend_error'
       err.body = body
       throw err
     }
@@ -159,13 +221,29 @@ export function AuthProvider({ children }) {
   }, [])
 
   const exchangeDeviceToken = useCallback(async (tokenHash) => {
-    if (!supabase) throw new Error('Supabase no configurado')
-    const { data, error } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: 'magiclink',
-    })
-    if (error) throw error
-    return data
+    if (!supabase) {
+      const err = new Error('supabase_not_configured')
+      err.reason = 'supabase_not_configured'
+      throw err
+    }
+    try {
+      const { data, error } = await withAuthTimeout(
+        supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'magiclink' }),
+        10000,
+        'verify_timeout',
+      )
+      if (error) {
+        const e = new Error(error.message || 'verify_failed')
+        e.reason = 'verify_failed'
+        throw e
+      }
+      return data
+    } catch (err) {
+      if (err?.reason) throw err
+      const e = new Error(err?.message || 'verify_timeout')
+      e.reason = /timeout/i.test(String(err?.message)) ? 'verify_timeout' : 'verify_failed'
+      throw e
+    }
   }, [])
 
   return (

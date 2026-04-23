@@ -2,8 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 
 // Render de un QR code a canvas. Carga `qrcode` lazy para no inflar el
 // bundle inicial — solo pesa cuando el usuario entra a "vincular otro
-// dispositivo". Si la carga falla (sin red, adblock raro), mostramos un
-// placeholder con el valor en texto en vez de romper el modal.
+// dispositivo". Si la carga falla (sin red, adblock raro) o tarda demasiado
+// mostramos el estado de error; el modal sigue mostrando el código manual.
+
+function withQRTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label)), ms)
+    Promise.resolve(promise).then(
+      (v) => { clearTimeout(t); resolve(v) },
+      (e) => { clearTimeout(t); reject(e) },
+    )
+  })
+}
 
 export default function QRCodeView({ value, size = 232, className = '' }) {
   const canvasRef = useRef(null)
@@ -16,21 +26,37 @@ export default function QRCodeView({ value, size = 232, className = '' }) {
     async function render() {
       setReady(false)
       setError(false)
-      if (!value || !canvasRef.current) return
+      // Si el value viene vacío/null, no intentamos renderizar silenciosamente —
+      // marcamos error para que el consumer sepa que el QR no está disponible
+      // y el código manual siga siendo el fallback visible.
+      if (!value || typeof value !== 'string') {
+        if (!cancelled) setError(true)
+        return
+      }
+      if (!canvasRef.current) return
       try {
-        const mod = await import('qrcode')
+        // Timeout 6s para el import lazy del chunk qrcode — si la red está
+        // flaky el chunk puede nunca llegar y la UI quedaría en el placeholder
+        // pulsante para siempre.
+        const mod = await withQRTimeout(import('qrcode'), 6000, 'qr_import_timeout')
         if (cancelled || !canvasRef.current) return
         const QR = mod.default || mod
-        await QR.toCanvas(canvasRef.current, value, {
-          width: size,
-          margin: 1,
-          errorCorrectionLevel: 'M',
-          color: { dark: '#0f172a', light: '#ffffff' },
-        })
+        // Timeout 3s para el render propiamente dicho (no debería tardar más
+        // que eso aunque la librería tenga un bug raro en iOS).
+        await withQRTimeout(
+          QR.toCanvas(canvasRef.current, value, {
+            width: size,
+            margin: 1,
+            errorCorrectionLevel: 'M',
+            color: { dark: '#0f172a', light: '#ffffff' },
+          }),
+          3000,
+          'qr_draw_timeout',
+        )
         if (!cancelled) setReady(true)
       } catch (err) {
         if (!cancelled) {
-          console.warn('[Focus] QR render failed', err)
+          console.warn('[Focus] QR render failed', err?.message || err)
           setError(true)
         }
       }

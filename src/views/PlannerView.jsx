@@ -713,7 +713,17 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       if (parent) {
         pushUniqueSubtask(parent, sub)
       } else {
-        // No parent found: render as small reminder-only card (still not a big block)
+        // No parent found: render as small reminder-only card (still not a big block).
+        // Reglas distintas a las de eventos: un recordatorio con hora que ya pasó
+        // hace rato ya cumplió su función de "avisar" — dejarlo en la lista sólo
+        // ensucia Mi Día. Si el usuario lo marcó done, no se reingresa igual.
+        // Si está pendiente y pasó más de 30 min del horario, lo ocultamos del
+        // timeline (sigue existiendo en el calendario si quieren recuperarlo).
+        const rh = parseTimeToDecimal(b?.time)
+        const minsPast = rh !== null && rh !== undefined ? (now - rh) * 60 : null
+        const isStale = minsPast !== null && minsPast > 30
+        const isDone = b?.type === 'done'
+        if (isDone || isStale) continue
         order.push({ ...b, _asReminderOnly: true, subtasks: [sub] })
       }
     }

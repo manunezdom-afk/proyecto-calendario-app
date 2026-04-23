@@ -246,7 +246,24 @@ export default function AuthModal({ isOpen, onClose }) {
         expires_at: Date.now() + (res.expires_in || 300) * 1000,
       })
     } catch (err) {
-      setError('No pudimos generar el código. Prueba de nuevo en un momento.')
+      // Mensajes específicos por reason para que el usuario sepa si es un
+      // problema de sesión, red, backend o timeout — no todo "error genérico".
+      const reason = err?.reason || ''
+      if (reason === 'no_session' || reason === 'supabase_not_configured') {
+        setError('No hay sesión activa en este dispositivo. Inicia sesión antes de vincular otro.')
+      } else if (reason === 'session_timeout') {
+        setError('Tu sesión tardó en responder. Reintenta en unos segundos.')
+      } else if (reason === 'backend_timeout') {
+        setError('La generación del QR tardó demasiado. Reintenta en un momento.')
+      } else if (reason === 'network_error') {
+        setError('No se pudo contactar al servidor. Revisa la conexión y reintenta.')
+      } else if (reason === 'invalid_user_code') {
+        setError('El servidor respondió con un código inválido. Reintenta — si persiste, avísanos.')
+      } else if (err?.status === 401 || reason === 'unauthorized') {
+        setError('Tu sesión expiró. Cierra sesión y vuelve a entrar antes de vincular.')
+      } else {
+        setError('No pudimos generar el código de vinculación. Prueba de nuevo en un momento.')
+      }
     } finally {
       setLoading(false)
       submitLock.current = false
