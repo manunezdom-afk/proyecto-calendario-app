@@ -258,6 +258,30 @@
         to { opacity: 0.4; }
       }
 
+      /* Escape hatch cuando el boot pasa los 6 s (red pésima, SW raro,
+         bundle parseando lento). Damos al usuario un botón para reintentar
+         en vez de dejarlo adivinando si el celular se colgó o no. */
+      #focus-splash-reload {
+        position: absolute;
+        left: 50%;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(60px, 9vh, 90px));
+        transform: translateX(-50%);
+        display: none;
+        padding: 10px 20px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.18);
+        background: rgba(124,107,255,0.15);
+        color: rgba(255,255,255,0.9);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        z-index: 2;
+      }
+      #focus-splash-reload.show { display: inline-block; animation: focusSplashReload 0.4s ease-out forwards; }
+      @keyframes focusSplashReload { from { opacity: 0; transform: translateX(-50%) translateY(6px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
       @media (prefers-reduced-motion: reduce) {
         #focus-splash .orb-halo,
         #focus-splash .orb-core::after { animation: none; }
@@ -331,8 +355,35 @@
           <div class="spacer-subline"></div>
         </div>
         <p class="loading-hint">cargando…</p>
+        <button id="focus-splash-reload" type="button" onclick="location.reload()">Recargar</button>
       </div>
     </div>
+    <script>
+      // Escape hatch: si a los 6 s el bundle todavía no montó React (el splash
+      // sigue visible), mostramos un botón de "Recargar". En iPhone con red
+      // pésima o un SW en estado raro el usuario antes se quedaba mirando el
+      // orbe sin saber si el celular se había colgado. El botón se autodestruye
+      // en cuanto React monta (reemplaza #root).
+      (function () {
+        var timer = setTimeout(function () {
+          var btn = document.getElementById('focus-splash-reload');
+          if (btn && document.getElementById('focus-splash')) btn.classList.add('show');
+        }, 6000);
+        // Si React monta antes, el #focus-splash desaparece por el re-render
+        // de createRoot; limpiamos el timer en un MutationObserver simple para
+        // no dejar el timer corriendo eternamente.
+        try {
+          var root = document.getElementById('root');
+          var obs = new MutationObserver(function () {
+            if (!document.getElementById('focus-splash')) {
+              clearTimeout(timer);
+              obs.disconnect();
+            }
+          });
+          obs.observe(root, { childList: true, subtree: false });
+        } catch (_) {}
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

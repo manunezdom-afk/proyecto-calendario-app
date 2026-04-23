@@ -1,27 +1,26 @@
 // Service Worker de Focus
-// Estrategia de caché (rediseñada para que la PWA instalada nunca quede vieja):
+// Estrategia de caché (ajustada tras medir cold start en iPhone con red lenta):
 //
-//   1. Documento HTML / navegación  → NETWORK-FIRST con timeout corto.
-//      El HTML contiene referencias a los assets hasheados de la última build,
-//      así que si cacheamos HTML viejo quedamos atrapados con un bundle viejo.
-//      Siempre intentamos red primero; solo caemos al shell cacheado si no hay
-//      conexión o la red tarda demasiado (offline / captive portal).
+//   1. Documento HTML / navegación  → STALE-WHILE-REVALIDATE.
+//      Antes era network-first: en iPhone PWA, con red 4G variable, el usuario
+//      veía pantalla negra hasta 1200 ms esperando el HTML. Ahora servimos el
+//      shell cacheado al instante y refrescamos en background. La próxima
+//      navegación ya trae el HTML nuevo. Si además hubo un deploy (assets con
+//      hash distinto), la app detecta update del SW y recarga una vez controlled.
+//      Primer install (sin cache): caemos a network con timeout amplio (3s).
 //
 //   2. Assets hasheados /assets/*   → CACHE-FIRST (inmutables por hash).
 //      Vite emite archivos con hash en el nombre. Cachearlos agresivamente
 //      es seguro: un cambio de código => nombre de archivo nuevo.
 //
 //   3. Iconos, fuentes, manifest    → STALE-WHILE-REVALIDATE.
-//      Pintan rápido desde caché y se refrescan en segundo plano.
 //
 //   4. /api/*                       → siempre red, no se cachea.
 //
-// Con esta combinación la PWA instalada siempre recibe el HTML fresco que
-// apunta a la build correcta, y conserva arranque instantáneo de los assets
-// estáticos hasheados. El único costo es una request de red para el HTML al
-// abrir la app, pero con timeout y fallback a caché si no hay conexión.
+// Resultado: cold start en PWA instalada ≈ 0 ms de espera de red para el HTML;
+// el usuario ve el bundle (ya cacheado) parseando inmediatamente.
 
-const VERSION = 'v15'
+const VERSION = 'v16'
 const SHELL_CACHE = `focus-shell-${VERSION}`
 const ASSETS_CACHE = `focus-assets-${VERSION}`
 const CURRENT_CACHES = [SHELL_CACHE, ASSETS_CACHE]
@@ -29,10 +28,12 @@ const CURRENT_CACHES = [SHELL_CACHE, ASSETS_CACHE]
 const OFFLINE_FALLBACK = '/index.html'
 const PRECACHE_URLS = [OFFLINE_FALLBACK, '/manifest.json', '/icons/icon.svg']
 
-// Timeout agresivo: 3500 ms dejaba al iPhone PWA viendo la pantalla de
-// carga en negro durante segundos cuando el primer byte tardaba. 1200 ms
-// cubre redes 4G normales y corta rápido al shell cacheado en casos malos.
-const NAV_TIMEOUT_MS = 1200
+// Solo se usa cuando NO hay cache (primer install). En modo SWR la red
+// refresca en background sin bloquear al usuario, así que no es crítico.
+const NAV_NETWORK_TIMEOUT_MS = 3000
+// Timeout por URL del precache. Evita que un fetch colgado en iPhone deje
+// el install del SW en loop — si una URL tarda, la saltamos y continuamos.
+const PRECACHE_URL_TIMEOUT_MS = 4000
 
 // ── Install ────────────────────────────────────────────────────────────────
 // cache: 'reload' fuerza al browser a bypassear su HTTP cache y pedir la
@@ -44,11 +45,17 @@ self.addEventListener('install', (event) => {
       const cache = await caches.open(SHELL_CACHE)
       await Promise.all(
         PRECACHE_URLS.map(async (url) => {
+          const controller = new AbortController()
+          const t = setTimeout(() => controller.abort(), PRECACHE_URL_TIMEOUT_MS)
           try {
-            const res = await fetch(url, { cache: 'reload' })
+            const res = await fetch(url, { cache: 'reload', signal: controller.signal })
             if (res && res.ok) await cache.put(url, res.clone())
           } catch {
-            // seguimos: si una URL falla no bloqueamos la instalación
+            // seguimos: si una URL falla o demora, no bloqueamos la
+            // instalación. En iPhone con red lenta esto evitaba cold starts
+            // con el SW atascado en install.
+          } finally {
+            clearTimeout(t)
           }
         }),
       )
@@ -81,33 +88,53 @@ self.addEventListener('activate', (event) => {
 
 // ── Estrategias ────────────────────────────────────────────────────────────
 
-async function networkFirstForDocument(request) {
+// Stale-while-revalidate para navegación: servimos el shell cacheado al
+// instante (sin esperar red) y en paralelo refrescamos la copia del cache
+// para la próxima visita. Si el HTML trae un hash de assets distinto (deploy
+// nuevo), el SW detecta el update por su lado y App.jsx recarga una vez
+// cuando el controlador cambie. Resultado: cold start percibido ≈ 0 ms.
+async function staleWhileRevalidateDocument(request) {
   const cache = await caches.open(SHELL_CACHE)
+  const cached =
+    (await cache.match(request)) || (await cache.match(OFFLINE_FALLBACK))
 
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), NAV_TIMEOUT_MS)
-
-  try {
-    const res = await fetch(request, {
-      signal: controller.signal,
-      cache: 'no-store',
-    })
-    clearTimeout(timeoutId)
-    if (res && res.ok) {
-      const copy = res.clone()
-      cache.put(OFFLINE_FALLBACK, copy).catch(() => {})
+  const networkFetch = (async () => {
+    const controller = new AbortController()
+    const t = setTimeout(() => controller.abort(), NAV_NETWORK_TIMEOUT_MS)
+    try {
+      const res = await fetch(request, {
+        signal: controller.signal,
+        cache: 'no-store',
+      })
+      clearTimeout(t)
+      if (res && res.ok) {
+        cache.put(OFFLINE_FALLBACK, res.clone()).catch(() => {})
+      }
+      return res
+    } catch {
+      clearTimeout(t)
+      return null
     }
-    return res
-  } catch {
-    clearTimeout(timeoutId)
-    const cached =
-      (await cache.match(request)) || (await cache.match(OFFLINE_FALLBACK))
-    if (cached) return cached
-    return new Response(
-      '<h1>Sin conexión</h1><p>No se pudo cargar la app.</p>',
-      { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
-    )
+  })()
+
+  // Si hay cache, servimos YA. La red corre en background y se guarda para
+  // la próxima navegación. Si no hay cache (primer install), esperamos red
+  // con el timeout amplio y servimos lo que llegue, o un fallback mínimo.
+  if (cached) {
+    networkFetch.catch(() => {})
+    return cached
   }
+
+  const fresh = await networkFetch
+  if (fresh) return fresh
+  return new Response(
+    '<!doctype html><meta charset="utf-8"><title>Focus</title>' +
+    '<body style="background:#0a0a0f;color:#fff;font-family:system-ui;padding:24px">' +
+    '<h1>Sin conexión</h1><p>No se pudo cargar Focus. Verifica tu red y vuelve a abrir.</p>' +
+    '<button onclick="location.reload()" style="margin-top:12px;padding:10px 20px;border-radius:999px;' +
+    'background:#7c6bff;color:#fff;border:0;font-weight:600">Reintentar</button></body>',
+    { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+  )
 }
 
 async function cacheFirstImmutable(request) {
@@ -145,9 +172,11 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return
   if (url.pathname.startsWith('/api/')) return
 
-  // 1. Navegación → network-first con fallback a shell cacheado.
+  // 1. Navegación → stale-while-revalidate (shell cacheado al instante +
+  //    refresh en background). En primer install sin cache, cae a red con
+  //    timeout amplio. Ver la función para el razonamiento completo.
   if (request.mode === 'navigate') {
-    event.respondWith(networkFirstForDocument(request))
+    event.respondWith(staleWhileRevalidateDocument(request))
     return
   }
 
