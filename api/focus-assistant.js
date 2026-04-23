@@ -4,6 +4,7 @@ import { buildWeatherContext } from './_lib/weather.js'
 import { buildDateContext } from './_lib/dateContext.js'
 import { buildSystemPrompt } from './_lib/systemPrompt.js'
 import { safeParseAssistantJSON } from './_lib/neutralize.js'
+import { normalizeNovaPersonality } from './_lib/personality.js'
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -21,6 +22,10 @@ export default async function handler(req, res) {
 
   const body = req.body || {}
   const { message, location = null, contacts = [], profile = null, behavior = null } = body
+
+  // novaPersonality entra por el body — si el cliente es viejo o manda un
+  // valor inválido, normalize() cae al default 'focus' sin romper la request.
+  const novaPersonality = normalizeNovaPersonality(body.novaPersonality)
 
   if (!message?.trim()) return res.status(400).json({ error: 'no_message' })
   if (message.length > 4000) {
@@ -45,6 +50,7 @@ export default async function handler(req, res) {
 
   const systemPrompt = buildSystemPrompt({
     dateContext, weatherContext, contacts, profile, behavior, memories, events, tasks,
+    novaPersonality,
   })
 
   const anthropic = new Anthropic({ apiKey, timeout: 25_000, maxRetries: 1 })

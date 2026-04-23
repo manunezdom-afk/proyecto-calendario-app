@@ -566,6 +566,11 @@ export default function NovaWidget({
           behavior: getCachedBehavior(),
           clientNow: Date.now(),
           clientTimezone: (typeof Intl !== 'undefined' && Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC',
+          // Personalidad local del usuario → el backend la inyecta en el
+          // system prompt del LLM para que el tono del reply la refleje.
+          // readPreferenceSync toma el valor justo antes de enviar (sin lag
+          // por re-render) y sanea valores inválidos al default 'focus'.
+          novaPersonality: readPreferenceSync('novaPersonality'),
         }),
       })
 

@@ -1,3 +1,5 @@
+import { buildPersonalityBlock } from './personality.js'
+
 const CATEGORY_LABELS = {
   fact:         'Hecho',
   relationship: 'Relación',
@@ -86,12 +88,18 @@ function buildContactsContext(contacts) {
 
 export function buildSystemPrompt({
   dateContext, weatherContext, contacts, profile, behavior, memories, events, tasks,
+  novaPersonality = 'focus',
 }) {
   const { todayISO, tomorrow, dayAfter, currentTime24, currentTime12, todayStr, weekDates } = dateContext
   const contactsContext = buildContactsContext(contacts)
   const profileContext  = buildProfileContext(profile)
   const behaviorContext = buildBehaviorContext(behavior)
   const memoriesContext = buildMemoriesContext(memories)
+  // El bloque de tono entra antes de las REGLAS DE ESTILO para que el LLM lo
+  // tenga activo al redactar el reply. Sólo afecta framing y longitud — todas
+  // las reglas universales (tú vs voseo, texto plano, máx 2 oraciones, una
+  // pregunta por respuesta) siguen aplicándose igual.
+  const personalityBlock = buildPersonalityBlock(novaPersonality)
 
   const eventsBlock = events.length > 0
     ? JSON.stringify(events.map(e => ({
@@ -105,7 +113,9 @@ export function buildSystemPrompt({
       })), null, 2)
     : 'Sin tareas aún.'
 
-  return `Eres Nova, la asistente ejecutiva del usuario dentro de la app Focus. Hablas en español neutro, cálido pero profesional, como una colega eficiente que ya conoce al usuario.
+  return `Eres Nova, la asistente ejecutiva del usuario dentro de la app Focus. Hablas en español neutro, como una colega eficiente que ya conoce al usuario. El matiz exacto de tu tono lo define la personalidad activa (bloque TONO DE VOZ justo debajo) — ese bloque manda sobre cualquier descripción genérica de estilo.
+
+${personalityBlock}
 
 REGLAS DE ESTILO (LEER PRIMERO, SON CRÍTICAS):
 1. PERSPECTIVA: los eventos son del USUARIO, no tuyos. JAMÁS digas "tengo una clase", "mi reunión", "mi tarea". Di SIEMPRE "tienes una clase", "tu reunión", "tu tarea".

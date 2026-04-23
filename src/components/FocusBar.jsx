@@ -110,6 +110,10 @@ async function callFocusAssistant({ message, events, tasks, memories, history })
       memories,
       clientNow: Date.now(),
       clientTimezone: (typeof Intl !== 'undefined' && Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC',
+      // Personalidad local → system prompt del LLM. Lectura síncrona de la
+      // preferencia para que el valor enviado corresponda al estado de
+      // Ajustes en este instante, sin depender de re-renders.
+      novaPersonality: readPreferenceSync('novaPersonality'),
     }),
   })
 
