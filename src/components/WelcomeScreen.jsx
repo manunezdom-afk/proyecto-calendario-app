@@ -13,7 +13,8 @@ function getGreeting() {
   return 'Buenas noches'
 }
 
-function getSubline({ hasEvents, hasFirstTime }) {
+function getSubline({ firstLaunch, hasEvents, hasFirstTime }) {
+  if (firstLaunch) return 'Primero una vuelta rápida.'
   if (hasFirstTime) return 'Empecemos por hoy.'
   if (hasEvents)    return 'Revisé tu día.'
   return 'Estás aquí.'
@@ -31,9 +32,18 @@ const ENTER_HOLD_MS = 1900
  * 650–1200ms: hairline se expande + subline aparece
  * 1900ms:    fade-out suave hacia la siguiente pantalla
  */
-export default function WelcomeScreen({ onEnter, hasEvents = false, hasFirstTime = false }) {
+export default function WelcomeScreen({
+  onEnter,
+  hasEvents = false,
+  hasFirstTime = false,
+  firstLaunch = false,
+  keepDarkBootOnExit = false,
+}) {
   const greeting = useMemo(getGreeting, [])
-  const subline  = useMemo(() => getSubline({ hasEvents, hasFirstTime }), [hasEvents, hasFirstTime])
+  const subline  = useMemo(
+    () => getSubline({ firstLaunch, hasEvents, hasFirstTime }),
+    [firstLaunch, hasEvents, hasFirstTime],
+  )
   const continuity = useMemo(readContinuity, [])
   const [phase, setPhase] = useState('in') // 'in' | 'out'
 
@@ -46,16 +56,17 @@ export default function WelcomeScreen({ onEnter, hasEvents = false, hasFirstTime
     if (phase !== 'out') return
     // Arranca el fade oscuro→claro: removemos los flags que fuerzan bg negro
     // al inicio del exit para que el body pinte el color claro de la app
-    // mientras el overlay se transparenta. Transición continua, sin corte.
+    // mientras el overlay se transparenta. Si después viene el onboarding,
+    // mantenemos dark-boot para que la secuencia siga oscura y no haya flash.
     try {
       document.documentElement.classList.remove('focus-continuity')
-      document.documentElement.classList.remove('focus-dark-boot')
+      if (!keepDarkBootOnExit) document.documentElement.classList.remove('focus-dark-boot')
     } catch {}
     const id = setTimeout(() => {
       onEnter?.()
     }, 320)
     return () => clearTimeout(id)
-  }, [phase, onEnter])
+  }, [phase, onEnter, keepDarkBootOnExit])
 
   useEffect(() => {
     function onKey(e) {

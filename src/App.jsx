@@ -57,16 +57,17 @@ const pageVariants = {
 export default function App() {
   const { authModal, setAuthModal, user } = useAuth()
   const { show: showOnboarding, complete: completeOnboarding } = useOnboardingGate()
-  // El welcome es la "threshold scene" que saluda una vez por día. Si el
-  // onboarding va a mostrarse, suprimimos el welcome: no queremos encadenar
-  // dos pantallas oscuras en el primer uso.
+  // El welcome es la "threshold scene" que saluda una vez por día. En primer
+  // uso lo mostramos antes del onboarding para que el link no "caiga" directo
+  // en una pantalla de instrucciones: splash → bienvenida breve → tutorial.
   const { show: showWelcomeRaw, dismiss: dismissWelcome } = useWelcomeGate()
-  const showWelcome = showWelcomeRaw && !showOnboarding
+  const showWelcome = showWelcomeRaw
+  const showOnboardingNow = showOnboarding && !showWelcome
 
   // Si el usuario recargó con un OTP pendiente (sessionStorage), reabrimos
   // el modal en cuanto la bienvenida termina — evita que el flujo se pierda.
   useEffect(() => {
-    if (user || showWelcome) return
+    if (user || showWelcome || showOnboardingNow) return
     try {
       const raw = sessionStorage.getItem('focus_auth_pending')
       if (raw) {
@@ -75,7 +76,7 @@ export default function App() {
         if (fresh && !authModal) setAuthModal(true)
       }
     } catch {}
-  }, [user, showWelcome]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, showWelcome, showOnboardingNow]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Deep-link de vinculación: ?pair=XXXXXXXX en la URL.
   //
@@ -324,7 +325,7 @@ export default function App() {
     !permissionDismissed &&
     (events?.length ?? 0) > 0 &&
     !showWelcome &&
-    !showOnboarding
+    !showOnboardingNow
 
   const [notifPanelOpen,      setNotifPanelOpen]      = useState(false)
   const [importExportOpen,    setImportExportOpen]    = useState(false)
@@ -362,7 +363,7 @@ export default function App() {
   useEffect(() => {
     // No apilamos el brief arriba del onboarding — sería demasiado en el
     // primer uso. El brief empieza a aparecer desde el día siguiente.
-    if (showOnboarding) return
+    if (showOnboardingNow) return
     const today = new Date().toISOString().slice(0, 10)
     const last  = localStorage.getItem(LAST_OPENED_KEY)
     const hour  = new Date().getHours()
@@ -377,7 +378,7 @@ export default function App() {
       localStorage.setItem(LAST_OPENED_KEY, today)
       return () => clearTimeout(timer)
     }
-  }, [showOnboarding])
+  }, [showOnboardingNow])
 
   // ── Navigation ────────────────────────────────────────────────────────────
   function navigate(view) {
@@ -419,7 +420,7 @@ export default function App() {
   const firstRun = useFirstRunSequence()
   // Todos los flotantes (hints, install card, brief) esperan a que tanto el
   // onboarding como el welcome terminen. Así la primera impresión no satura.
-  const gatesBlocking = showWelcome || showOnboarding
+  const gatesBlocking = showWelcome || showOnboardingNow
   const showInstallCard = firstRun.step === 'install' && !gatesBlocking
   const hasNovaConflictHint = (events?.length ?? 0) >= 2
   const hasNovaEmptyHint = (events?.length ?? 0) === 0 && activeView === 'planner'
@@ -437,7 +438,7 @@ export default function App() {
     onEveningShutdown: () => setShowEveningShutdown(true),
     onNavigate:        navigate,
     onShowUndo:        showUndo,
-    morningBrief: (showMorningBrief && !showWelcome && !showOnboarding) ? {
+    morningBrief: (showMorningBrief && !showWelcome && !showOnboardingNow) ? {
       events,
       tasks,
       onStart:      () => { setShowMorningBrief(false); handleStartDay() },
@@ -753,7 +754,7 @@ export default function App() {
 
       {/* ── Morning Brief (solo modal en mobile; desktop: inline en PlannerView) */}
       <AnimatePresence>
-        {showMorningBrief && !isDesktop && !showWelcome && !showOnboarding && (
+        {showMorningBrief && !isDesktop && !showWelcome && !showOnboardingNow && (
           <MorningBrief
             events={events}
             tasks={tasks}
@@ -769,19 +770,23 @@ export default function App() {
           <WelcomeScreen
             onEnter={() => {
               dismissWelcome()
-              // Al terminar la threshold dark, liberamos el dark-boot para
-              // que la app (bg surface) se pinte en una sola transición.
-              try { document.documentElement.classList.remove('focus-dark-boot') } catch {}
+              if (!showOnboarding) {
+                // Si no viene onboarding después, liberamos el dark-boot para
+                // que la app (bg surface) se pinte en una sola transición.
+                try { document.documentElement.classList.remove('focus-dark-boot') } catch {}
+              }
             }}
             hasEvents={(events?.length ?? 0) > 0}
             hasFirstTime={(events?.length ?? 0) === 0 && (tasks?.length ?? 0) === 0}
+            firstLaunch={showOnboarding}
+            keepDarkBootOnExit={showOnboarding}
           />
         )}
       </AnimatePresence>
 
       {/* ── First-launch onboarding — tutorial animado de primer uso ───────── */}
       <AnimatePresence>
-        {showOnboarding && (
+        {showOnboardingNow && (
           <FirstLaunchOnboarding
             onDone={() => {
               // Cierre atómico: el hook ya persiste "completado" y marca el
@@ -825,7 +830,7 @@ export default function App() {
       )}
 
       {/* ── Permiso de notificaciones — contextual, tras crear un evento ── */}
-      {contextualPermission && !showOnboarding && (
+      {contextualPermission && !showOnboardingNow && (
         <NovaHint
           id="notif-permission-v1"
           delayMs={1500}
@@ -842,7 +847,7 @@ export default function App() {
           invalidó, usuario cambió de cuenta, iOS reinstaló la PWA…). Antes
           este caso era silencioso: el RemindersRow decía "activo" pero nunca
           llegaba una push. Ahora ofrecemos reconexión explícita. */}
-      {pushDisconnected && !showOnboarding && !showWelcome && (
+      {pushDisconnected && !showOnboardingNow && !showWelcome && (
         <NovaHint
           id={pushHealing ? 'notif-reconnecting' : 'notif-disconnected-v1'}
           delayMs={800}

@@ -458,6 +458,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     setShowModal(false)
   }
 
+  function seedNova(text, { autosubmit = true, context = null } = {}) {
+    if (!text) return
+    setFocusBarSeed(({ n }) => ({ text, n: n + 1, autosubmit, context }))
+  }
+
   // ── Datos personalizados ─────────────────────────────────────────────────
   // Contadores de "Tu Día" cuentan SOLO entidades principales. Un recordatorio
   // asociado a un evento (ej: "Recordatorio: Reunión con Juan" para la reunión
@@ -782,18 +787,39 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     return order
   })()
 
+  const hasAnyDayActivity = displayBlocks.length > 0 || pendingTasksCount > 0
+  const desktopNovaActions = [
+    {
+      icon: 'auto_awesome',
+      title: 'Planificar mi día',
+      body: 'Convierte un día vacío en bloques concretos.',
+      prompt: 'Planifica mi día con 2 bloques de foco, una pausa y una tarea rápida.',
+    },
+    {
+      icon: 'notifications_active',
+      title: 'Crear recordatorio',
+      body: 'Para salidas, llamadas o pendientes urgentes.',
+      prompt: 'Recuérdame en 20 min revisar lo más importante.',
+    },
+    {
+      icon: 'event_repeat',
+      title: 'Rutina semanal',
+      body: 'Reuniones y hábitos repetidos sin escribir todo.',
+      action: 'recurring',
+    },
+  ]
+
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-8 dark:bg-slate-900 dark:text-slate-100">
 
       {/* Setup card legacy — reemplazado por OnboardingTour animado.
           El sistema de user_signals aprende el cronotipo solo, sin preguntar. */}
 
-      <main className={`${isDesktop ? 'max-w-5xl' : 'max-w-7xl'} mx-auto px-4 sm:px-6 pt-8`}>
-        {/* Desktop: stack vertical con max-w-5xl — ancho sustancioso pero
-            cómodo de leer. Antes max-w-3xl dejaba 600px en blanco a cada
-            lado; 5xl reduce ese desperdicio sin volver al grid 2-col que
-            apretaba el timeline. Mobile: igual que siempre. */}
-        <div className={isDesktop ? 'flex flex-col gap-14' : 'flex flex-col gap-10'}>
+      <main className={`${isDesktop ? 'max-w-7xl' : 'max-w-7xl'} mx-auto px-4 sm:px-6 pt-8`}>
+        {/* Desktop: dos columnas para que Focus no se sienta como mobile
+            estirado. La derecha explica y activa el potencial de Nova; mobile
+            conserva el flujo vertical original. */}
+        <div className={isDesktop ? 'grid grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px] gap-8 xl:gap-10 items-start' : 'flex flex-col gap-10'}>
 
           {/* ── Left: Timeline ────────────────────────────────────────────── */}
           <div className="min-w-0">
@@ -809,6 +835,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
               <h2 className={`font-headline font-extrabold tracking-tight text-on-surface ${isDesktop ? 'text-6xl' : 'text-4xl'}`}>
                 Mi Día
               </h2>
+              {isDesktop && (
+                <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-outline/75">
+                  Captura cualquier cosa en lenguaje natural. Nova lo convierte en agenda, tareas y recordatorios con deshacer siempre visible.
+                </p>
+              )}
             </header>
 
             <FocusBar
@@ -1073,23 +1104,42 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   { icon: 'event_repeat',   label: 'Reunión semanal fija', action: 'recurring' },
                 ]
                 return (
-                  // Centrado estricto en iPhone: max-w-[300px] + mx-auto fuerza
-                  // la columna a ~300px centrada. Con max-w-md (448px) el bloque
-                  // ocupaba todo el ancho disponible y visualmente arrastraba
-                  // hacia la derecha porque el ojo lo comparaba con el header.
-                  <div className="w-full max-w-[300px] mx-auto space-y-4">
-                    <div className="space-y-1 text-center">
-                      <p className="text-on-surface text-sm font-semibold">Hoy está libre.</p>
-                      <p className="text-outline/70 text-xs leading-relaxed">
+                  <div className={`w-full mx-auto ${isDesktop ? 'max-w-none' : 'max-w-[300px]'} space-y-4`}>
+                    <div className={`${isDesktop ? 'rounded-[28px] border border-primary/10 bg-gradient-to-br from-white via-primary/5 to-secondary/10 px-6 py-6 shadow-[0_22px_60px_rgba(27,27,29,0.06)]' : 'space-y-1 text-center'}`}>
+                      <div className={isDesktop ? 'flex items-start gap-4' : ''}>
+                        {isDesktop && (
+                          <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-primary/20">
+                            <span className="material-symbols-outlined text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                          </span>
+                        )}
+                        <div className={isDesktop ? 'min-w-0 flex-1' : ''}>
+                          <p className={`${isDesktop ? 'font-headline text-2xl font-extrabold tracking-tight text-on-surface' : 'text-on-surface text-sm font-semibold'}`}>
+                            {isDesktop ? 'Tienes el día abierto. Podemos armarlo en 10 segundos.' : 'Hoy está libre.'}
+                          </p>
+                          <p className={`${isDesktop ? 'mt-2 max-w-xl text-sm leading-relaxed text-outline/75' : 'text-outline/70 text-xs leading-relaxed'}`}>
                         {isFirstUse
-                          ? '¿Por dónde empezamos? Toca un ejemplo o escríbele a Nova.'
+                          ? isDesktop
+                            ? 'Dile a Nova qué tienes en la cabeza: una reunión, una tarea, un recordatorio o simplemente “planifica mi día”.'
+                            : '¿Por dónde empezamos? Toca un ejemplo o escríbele a Nova.'
                           : pendingTotal > 0
                           ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. Buen momento para avanzar una.`
                           : 'Agrega un evento o pídele a Nova que arme tu agenda.'}
-                      </p>
+                          </p>
+                          {isDesktop && (
+                            <button
+                              type="button"
+                              onClick={() => seedNova('Planifica mi día con 2 bloques de foco, una pausa y una tarea rápida.')}
+                              className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-slate-950 px-5 py-2.5 text-sm font-bold text-white shadow-[0_18px_42px_rgba(15,23,42,0.22)] transition-transform hover:scale-[1.01] active:scale-[0.98]"
+                            >
+                              <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                              Planificar mi día con Nova
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     {isFirstUse && (
-                      <ul className="space-y-2">
+                      <ul className={isDesktop ? 'grid grid-cols-3 gap-3' : 'space-y-2'}>
                         {chips.map((chip) => (
                           <li key={chip.label}>
                             <button
@@ -1098,23 +1148,23 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                                 if (chip.action === 'recurring') {
                                   setRecurringSheetOpen(true)
                                 } else {
-                                  setFocusBarSeed(({ n }) => ({ text: chip.prompt, n: n + 1, autosubmit: true, context: null }))
+                                  seedNova(chip.prompt)
                                 }
                               }}
-                              className="w-full flex items-center gap-2.5 bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2.5 text-left transition-colors active:scale-[0.99]"
+                              className={`${isDesktop ? 'min-h-[108px] flex-col items-start justify-between rounded-2xl px-4 py-4' : 'flex items-center gap-2.5 rounded-xl px-3 py-2.5'} w-full bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/20 text-left transition-colors active:scale-[0.99]`}
                             >
-                              <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <span className={`${isDesktop ? 'w-10 h-10 rounded-xl' : 'w-8 h-8 rounded-lg'} bg-primary/10 flex items-center justify-center flex-shrink-0`}>
                                 <span
-                                  className="material-symbols-outlined text-primary text-[16px]"
+                                  className={`material-symbols-outlined text-primary ${isDesktop ? 'text-[20px]' : 'text-[16px]'}`}
                                   style={{ fontVariationSettings: "'FILL' 1" }}
                                 >
                                   {chip.icon}
                                 </span>
                               </span>
-                              <span className="flex-1 min-w-0 text-[13px] font-medium text-on-surface leading-snug break-words">
+                              <span className={`${isDesktop ? 'text-[14px] font-bold' : 'flex-1 min-w-0 text-[13px] font-medium'} text-on-surface leading-snug break-words`}>
                                 {chip.label}
                               </span>
-                              <span className="material-symbols-outlined text-outline/50 text-[16px] flex-shrink-0">
+                              <span className={`material-symbols-outlined text-outline/50 ${isDesktop ? 'self-end text-[18px]' : 'text-[16px] flex-shrink-0'}`}>
                                 arrow_outward
                               </span>
                             </button>
@@ -1186,7 +1236,52 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
           </div>
 
           {/* ── Right: Insights personalizados ────────────────────────────── */}
-          <div className="w-full space-y-5">
+          <div className={`w-full space-y-5 ${isDesktop ? 'lg:sticky lg:top-28' : ''}`}>
+
+            {isDesktop && (
+              <div className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.07)]">
+                <div className="relative px-6 py-6">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(59,130,246,0.16),transparent_36%),radial-gradient(circle_at_90%_20%,rgba(124,107,255,0.12),transparent_34%)]" aria-hidden="true" />
+                  <div className="relative">
+                    <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/10 bg-primary/5 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-primary">
+                      <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>psychology</span>
+                      Nova en tu día
+                    </div>
+                    <h3 className="font-headline text-2xl font-extrabold leading-tight tracking-tight text-slate-950">
+                      No es solo guardar eventos. Es quitarte decisiones pequeñas.
+                    </h3>
+                    <p className="mt-3 text-sm leading-relaxed text-slate-500">
+                      Escríbele como piensas: “tengo que salir en 20 min”, “bloquea foco”, “mueve la reunión si choca”. Focus lo vuelve acción.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 px-4 pb-4">
+                  {desktopNovaActions.map((action) => (
+                    <button
+                      key={action.title}
+                      type="button"
+                      onClick={() => {
+                        if (action.action === 'recurring') setRecurringSheetOpen(true)
+                        else seedNova(action.prompt)
+                      }}
+                      className="group flex w-full items-start gap-3 rounded-2xl border border-transparent px-3 py-3 text-left transition-all hover:border-primary/10 hover:bg-slate-50 active:scale-[0.99]"
+                    >
+                      <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white shadow-lg shadow-slate-950/10">
+                        <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>{action.icon}</span>
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-slate-900">{action.title}</span>
+                        <span className="mt-0.5 block text-xs leading-snug text-slate-500">{action.body}</span>
+                      </span>
+                      <span className="material-symbols-outlined mt-2 text-[17px] text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary">
+                        arrow_forward
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ── Card 1: Próximo Bloque ────────────────────────────────── */}
             {blocks.length > 0 && (
@@ -1427,7 +1522,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
             )}
 
             {/* ── Cerrar el día ─────────────────────────────────────────── */}
-            {onEveningShutdown && (
+            {onEveningShutdown && hasAnyDayActivity && (
               <button
                 onClick={onEveningShutdown}
                 className="w-full flex items-center justify-center gap-2.5 py-4 rounded-[20px] border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700 hover:bg-slate-50 transition-all active:scale-[0.98] group"
