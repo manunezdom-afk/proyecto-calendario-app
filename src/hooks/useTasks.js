@@ -23,30 +23,32 @@ function hydrateTasksWithLinks(rawTasks, userId) {
 // Supabase rechazó la escritura.
 const PENDING_UPSERT_TTL_MS = 15_000
 
+function createTaskId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `tsk-${crypto.randomUUID()}`
+  }
+  return `tsk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 export function useTasks() {
   const { user } = useAuth()
   // Mismo patrón que useEvents: si el usuario borra y un refetch llega antes
   // de que Supabase confirme el DELETE, ignoramos la tarea "resucitada".
   const pendingDeletesRef = useRef(new Set())
-
-  // Tareas recién creadas cuyo upsert puede estar en vuelo. Si el refetch
-  // devuelve la nube antes de que Supabase confirme la nueva tarea,
-  // preservamos la tarea local — de otro modo "desaparecía" y reaparecía
-  // en el siguiente tick, muy confuso para el usuario.
-  // Map<id, { task, markedAt }>
+  // Tareas recién creadas/editadas cuyo upsert puede estar en vuelo. Sin este
+  // escudo, un refetch de realtime/visibilitychange puede traer un snapshot
+  // anterior y borrar la tarea local unos segundos después de crearla.
   const pendingUpsertsRef = useRef(new Map())
 
-  const markPendingUpsert = (task) => {
+  function markPendingUpsert(task) {
     if (!task?.id) return
     pendingUpsertsRef.current.set(task.id, { task, markedAt: Date.now() })
   }
 
-  const sweepStalePending = () => {
+  function sweepStalePending() {
     const now = Date.now()
     for (const [id, { markedAt }] of pendingUpsertsRef.current) {
-      if (now - markedAt > PENDING_UPSERT_TTL_MS) {
-        pendingUpsertsRef.current.delete(id)
-      }
+      if (now - markedAt > PENDING_UPSERT_TTL_MS) pendingUpsertsRef.current.delete(id)
     }
   }
 
@@ -136,18 +138,7 @@ export function useTasks() {
 
   function addTask({ label, priority = 'Media', category = 'hoy', linkedEventId = null }) {
     const cleanLabel = cleanGeneratedTitle(label) || label
-    // Sufijo aleatorio en base36 para garantizar unicidad aunque se disparen
-    // varios addTask en el mismo ms (caso típico: Nova crea evento + tarea
-    // asociada en la misma respuesta, o usuario hace tap rápido doble).
-    // Sin él, `tsk-${Date.now()}` podía colapsar dos tareas en un solo id
-    // y Supabase upsert sobrescribía una con la otra.
-    const t = {
-      id: `tsk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      label: cleanLabel,
-      done: false,
-      priority,
-      category,
-    }
+    const t = { id: createTaskId(), label: cleanLabel, done: false, priority, category }
     if (linkedEventId) t.linkedEventId = linkedEventId
     console.log(`[Focus] ➕ addTask: "${cleanLabel}"${linkedEventId ? ` (ligada a ${linkedEventId})` : ''}`)
     setTasks(prev => [...prev, t])
@@ -166,6 +157,7 @@ export function useTasks() {
       })
       const updated = next.find(t => t.id === id)
       if (updated) {
+        markPendingUpsert(updated)
         if (user) dataService.upsertTask(updated, user.id).catch(console.warn)
         // Señal: solo al marcar como completa (no al desmarcar)
         if (updated.done) {
@@ -184,6 +176,7 @@ export function useTasks() {
 
   function deleteTask(id) {
     pendingDeletesRef.current.add(id)
+    pendingUpsertsRef.current.delete(id)
     setTasks(prev => prev.filter(t => t.id !== id))
     clearTaskLink(id, user?.id)
     if (user) {
@@ -200,7 +193,10 @@ export function useTasks() {
       const next = prev.map(t => t.id === id ? { ...t, ...updates } : t)
       if (user) {
         const updated = next.find(t => t.id === id)
-        if (updated) dataService.upsertTask(updated, user.id).catch(console.warn)
+        if (updated) {
+          markPendingUpsert(updated)
+          dataService.upsertTask(updated, user.id).catch(console.warn)
+        }
       }
       return next
     })

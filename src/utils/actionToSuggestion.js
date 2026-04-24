@@ -124,11 +124,11 @@ export function actionToSuggestion(action, { reason, batchId, events = [], tasks
         changeBody = `Hora: ${target?.time || '—'} → ${updates.time}`
       } else if (updates.date && updates.date !== target?.date) {
         changeBody = `Fecha: ${formatDateReadable(target?.date)} → ${formatDateReadable(updates.date)}`
-      } else if (updates.title && updates.title !== target?.title) {
-        changeBody = `Título: "${target?.title}" → "${updates.title}"`
       } else if (Array.isArray(updates.reminderOffsets)) {
         const label = describeReminderOffsets(updates.reminderOffsets)
-        changeBody = label || 'Avisos actualizados'
+        changeBody = label || 'Recordatorios desactivados'
+      } else if (updates.title && updates.title !== target?.title) {
+        changeBody = `Título: "${target?.title}" → "${updates.title}"`
       } else {
         changeBody = Object.keys(updates).join(', ') || 'actualización menor'
       }

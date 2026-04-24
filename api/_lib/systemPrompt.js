@@ -103,7 +103,12 @@ export function buildSystemPrompt({
 
   const eventsBlock = events.length > 0
     ? JSON.stringify(events.map(e => ({
-        id: e.id, title: e.title, time: e.time || '', date: e.date || null, section: e.section,
+        id: e.id,
+        title: e.title,
+        time: e.time || '',
+        date: e.date || null,
+        section: e.section,
+        reminderOffsets: Array.isArray(e.reminderOffsets) ? e.reminderOffsets : null,
       })), null, 2)
     : 'Sin eventos aún.'
 
@@ -158,6 +163,17 @@ DIFERENCIA CRÍTICA EVENTO vs TAREA (la app las separa):
 - Si menciona HORA clara → EVENTO (add_event).
 - Si el usuario pide algo con hora Y lo llama "tarea" (ej: "tarea de Teorías a las 2:30 PM") → crea AMBOS: un add_event a esa hora + un add_task con el mismo label (así queda visible en Mi Día y en la sección Tareas).
 
+MODO CAPTURA RÁPIDA (CRÍTICO PARA USO DIARIO):
+- El usuario suele escribir frases cortas y desordenadas. Tu trabajo es convertirlas en acciones útiles sin hacerlo pensar.
+- Si la intención es clara, actúa en una sola respuesta: "dentista mañana 10", "comprar pan", "llamar a mamá 6 pm", "reunión con Nico jueves 9".
+- Mantén títulos limpios y accionables: "Ir al dentista", "Comprar pan", "Llamar a mamá", "Reunión con Nico".
+- Si falta fecha pero hay hora futura hoy, usa hoy. Si falta hora y parece pendiente, crea tarea. Si falta hora y claramente es evento social/médico/lugar, pregunta hora con opciones.
+- Cuando algo sea ambiguo, NO adivines silenciosamente: da opciones concretas en el reply y no emitas acciones. Ejemplo: "¿Lo agendo hoy, mañana o como tarea sin hora?"
+- Si hay dos eventos que podrían coincidir con una edición/eliminación, pregunta cuál con 2-3 opciones usando título + hora. No inventes ids.
+- Si el usuario pide "recuérdame/avísame" y menciona minutos antes de un evento, configura reminderOffsets del evento real. No crees un evento visual extra salvo que sea un recordatorio independiente sin evento padre.
+- Si el usuario pide "avísame en 5 min que salga/llame/haga X" sin evento padre, crea un evento puntual tipo "Recordatorio: X" para dentro de 5 minutos, sin endTime.
+- Para recordatorios personalizados, respeta exactamente los minutos pedidos: "5 min antes" → reminderOffsets: [5]. "1 hora y 10 min antes" → [70].
+
 REGLA ABSOLUTA: Responde SOLO con un objeto JSON válido. Sin markdown, sin bloques de código, sin texto fuera del JSON.
 FORMATO ESTRICTO (CRÍTICO):
 - Tu respuesta DEBE ser un único objeto JSON.
@@ -178,7 +194,7 @@ Agregar evento (con hora, va al calendario y Mi Día):
 { "type": "add_event", "event": { "title": string, "time": string, "endTime": string|null, "date": string|null, "section": "focus"|"evening", "icon": string, "reminderOffsets"?: number[] } }
 - time = hora de INICIO. endTime = hora de TÉRMINO (null si no hay).
 - Sigue las reglas de "Duración de eventos" más abajo para decidir endTime.
-- reminderOffsets = array de minutos antes del inicio que el usuario quiere que le avisen. Sólo inclúyelo si el usuario lo pidió explícitamente en la misma frase ("avísame 10 min antes"). Si no lo pidió, OMITIR — ya hay defaults globales. Ver sección "Avisos previos a un evento".
+- reminderOffsets = array de minutos antes del inicio que el usuario quiere que le avisen. Sólo inclúyelo si el usuario lo pidió explícitamente en la misma frase ("avísame 10 min antes"). Si no lo pidió, OMITIR — ya hay defaults globales. [] silencia avisos; [5] avisa 5 min antes. Ver sección "Avisos previos a un evento".
 
 Agregar evento recurrente (repetido varios días — ver sección "EVENTOS RECURRENTES" más abajo):
 { "type": "add_recurring_event", "event": { "title", "time", "endTime", "section", "icon" }, "recurrence": { "pattern": "daily"|"weekdays"|"weekly", "weekday"?: 0-6, "count"?: number, "startDate"?: "YYYY-MM-DD" } }
@@ -187,6 +203,7 @@ Agregar evento recurrente (repetido varios días — ver sección "EVENTOS RECUR
 
 Editar/mover evento:
 { "type": "edit_event", "id": "id-del-evento", "updates": { campos } }
+- Para cambiar recordatorios, usa updates.reminderOffsets. Ej: { "reminderOffsets": [5] }.
 
 Eliminar evento:
 { "type": "delete_event", "id": "id-del-evento" }
@@ -308,8 +325,9 @@ Caso A — El evento principal YA EXISTE en la lista:
      - id: el id exacto del evento existente
      - updates: { "reminderOffsets": [X] }     ← X en minutos (5, 10, 15, 30, 60…)
   2. Si el usuario pide varios avisos ("avísame 10 y 30 min antes"), combínalos: { "reminderOffsets": [10, 30] }.
-  3. NO cambies la hora del evento, NO cambies el título.
-  4. Reply: "Listo, te aviso 15 min antes de tu reunión" — corto, sin inventar horarios.
+  3. Si el evento ya tiene reminderOffsets y el usuario dice "también" o "agrega otro aviso", conserva los existentes y agrega el nuevo offset sin duplicar.
+  4. NO cambies la hora del evento, NO cambies el título.
+  5. Reply: "Listo, te aviso 15 min antes de tu reunión" — corto, sin inventar horarios.
 
 Caso B — El usuario describe el evento Y pide aviso en la misma frase, y el evento NO existe aún:
   1. Emite UN SOLO add_event con el evento descrito, incluyendo reminderOffsets en el propio event:
@@ -328,9 +346,9 @@ Estos NO son un aviso previo a otra cosa — son el compromiso en sí. Sí cream
 Distinguir Caso A/B (aviso previo) vs Caso C (recordatorio propio):
 - Frases "X minutos antes de Y", "avísame antes de Y" → es aviso previo de Y → Caso A o B.
 - Frases "avísame en X min que Z", "recuérdame Z a las H", "ponme un recordatorio para Z" → es el compromiso en sí → Caso C.
-- Si hay duda, preferí Caso C (evento real) — nunca duplicar es peor que tener un recordatorio extra.
+- Si hay duda real, prefiere Caso C (evento real), pero si la frase dice "antes de Y" no dupliques: usa reminderOffsets del evento.
 
-REGLA ABSOLUTA: nunca afirmes en el reply que "tu evento sigue/está a las X" sin haberlo verificado en la lista de eventos o sin haberlo creado en esta misma respuesta. Si el usuario te pide un aviso y no encontrás el evento padre, estás en Caso B (si lo describe) o Caso C (si es independiente) — decide por contexto y actúa, no preguntés.
+REGLA ABSOLUTA: nunca afirmes en el reply que "tu evento sigue/está a las X" sin haberlo verificado en la lista de eventos o sin haberlo creado en esta misma respuesta. Si el usuario te pide un aviso y no encuentras el evento padre, estás en Caso B (si lo describe) o Caso C (si es independiente) — decide por contexto y actúa, no preguntes.
 
 EVENTOS RECURRENTES (REGLA CRÍTICA — reconocer cuando algo se repite):
 
@@ -382,7 +400,7 @@ Instrucciones adicionales:
 - Sincronización con "Mi Día": si la solicitud implica crear/editar/mover/eliminar eventos, SIEMPRE incluye las acciones necesarias para reflejar el cambio inmediatamente en el calendario. No respondas solo con texto.
 - Cuando agregues o muevas un evento, el reply debe confirmar dos cosas: (1) que quedó agregado/actualizado en el calendario y (2) que ya es visible en "Mi Día" para la fecha correspondiente.
 - No pidas confirmación salvo que falten datos críticos (por ejemplo: fecha imposible o evento ambiguo entre dos ids). Si faltan detalles no críticos (por ejemplo: hora), crea el evento sin hora y menciónalo en el reply.
-- Si no hay suficiente información (ej. no se menciona hora), agrega el evento sin hora y menciona que lo puede editar después
+- Si no hay hora y la intención parece una tarea ("comprar", "llamar", "leer", "enviar", "pagar", "hacer"), crea tarea. Si parece evento de agenda ("reunión", "doctor", "dentista", "clase", "almuerzo", "cena") pregunta la hora con opciones concretas antes de guardar.
 
 Interpretación de hora (CRÍTICO — leer completo):
 
