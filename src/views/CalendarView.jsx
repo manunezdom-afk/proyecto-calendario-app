@@ -8,6 +8,8 @@ import { resolveEventDate } from '../utils/resolveEventDate'
 import { eventStatusAtNow } from '../utils/eventDuration'
 import { isReminderItem } from '../utils/reminders'
 import EmptyState from '../components/EmptyState'
+import ContextActionSheet from '../components/ContextActionSheet'
+import { useLongPress } from '../hooks/useLongPress'
 
 // Descripción útil: no mostramos cuando es solo una fecha ISO (YYYY-MM-DD) —
 // data vieja generada por QuickAddSheet cuando stuffing date en description.
@@ -96,10 +98,12 @@ function StatusPill({ status }) {
 }
 
 // ─── Featured card (large, first in "Enfoque de Hoy") ────────────────────────
-function FeaturedEventCard({ event, status, onDelete, onOpen }) {
+function FeaturedEventCard({ event, status, onDelete, onOpen, onLongPress }) {
   const isPast = status === 'past'
+  const longPress = useLongPress({ onLongPress: () => onLongPress?.(event) })
   return (
     <div
+      {...longPress}
       className={`col-span-2 p-6 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.04)] space-y-4 cursor-pointer hover:shadow-md transition-shadow ${
         isPast ? 'bg-surface-container-low opacity-70' : 'bg-surface-container-lowest'
       }`}
@@ -145,10 +149,12 @@ function FeaturedEventCard({ event, status, onDelete, onOpen }) {
 }
 
 // ─── Small card (secondary items in "Enfoque de Hoy") ────────────────────────
-function SmallEventCard({ event, status, onDelete, onOpen }) {
+function SmallEventCard({ event, status, onDelete, onOpen, onLongPress }) {
   const isPast = status === 'past'
+  const longPress = useLongPress({ onLongPress: () => onLongPress?.(event) })
   return (
     <div
+      {...longPress}
       className={`p-5 rounded-xl space-y-2 relative group cursor-pointer transition-colors ${
         isPast
           ? 'bg-surface-container-low/60 hover:bg-surface-container-low opacity-70'
@@ -181,10 +187,11 @@ function SmallEventCard({ event, status, onDelete, onOpen }) {
 }
 
 // ─── Evening row card ─────────────────────────────────────────────────────────
-function EveningEventCard({ event, status, onDelete, onOpen }) {
+function EveningEventCard({ event, status, onDelete, onOpen, onLongPress }) {
   const isPast = status === 'past'
+  const longPress = useLongPress({ onLongPress: () => onLongPress?.(event) })
   return (
-    <div className="flex gap-4 items-center group cursor-pointer" onClick={() => onOpen?.(event)}>
+    <div {...longPress} className="flex gap-4 items-center group cursor-pointer" onClick={() => onOpen?.(event)}>
       {event.time && (
         <div className="w-16 text-right flex-shrink-0">
           <span className={`text-xs font-bold ${isPast ? 'text-outline/60' : 'text-outline'}`}>
@@ -248,7 +255,7 @@ function formatWeekRange(weekStart) {
 }
 
 // ─── Main view ────────────────────────────────────────────────────────────────
-export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteEvent, onOpenTask, onExportClick, onOpenDay, isDesktop = false }) {
+export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteEvent, onEditEvent, onOpenTask, onExportClick, onOpenDay, isDesktop = false }) {
   const [showModal, setShowModal] = useState(false)
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('dia')           // 'dia' | 'semana' | 'mes'
@@ -310,6 +317,23 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
 
   const handleDeleteEvent = (id) => {
     onDeleteEvent?.(id)
+  }
+
+  // Context menu del long-press. Almacena el evento seleccionado; null = cerrado.
+  const [contextEvent, setContextEvent] = useState(null)
+
+  function handleDuplicate(ev) {
+    if (!ev) return
+    const { id, _dismissed, ...rest } = ev
+    onAddEvent?.({ ...rest })
+  }
+
+  function handleMoveToTomorrow(ev) {
+    if (!ev?.id || !onEditEvent) return
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    onEditEvent(ev.id, { date: iso })
   }
 
   // First focus event becomes the featured card (if any)
@@ -675,6 +699,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                     status={statusOf(featuredEvent)}
                     onDelete={handleDeleteEvent}
                     onOpen={onOpenTask}
+                    onLongPress={setContextEvent}
                   />
                 )}
                 {smallEvents.map((ev) => (
@@ -684,6 +709,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                     status={statusOf(ev)}
                     onDelete={handleDeleteEvent}
                     onOpen={onOpenTask}
+                    onLongPress={setContextEvent}
                   />
                 ))}
               </div>
@@ -722,6 +748,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                       status={statusOf(ev)}
                       onDelete={handleDeleteEvent}
                       onOpen={onOpenTask}
+                      onLongPress={setContextEvent}
                     />
                   ))}
                 </div>
@@ -796,6 +823,22 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
             )}
 
       </main>
+
+      {/* Menú de acciones rápidas de long-press. Vive a nivel de CalendarView
+          para compartir estado entre todas las cards (featured/small/evening)
+          y leer onEditEvent/onAddEvent sin drill-through. */}
+      <ContextActionSheet
+        open={!!contextEvent}
+        title={contextEvent?.title || ''}
+        subtitle={[contextEvent?.time, contextEvent?.date].filter(Boolean).join(' · ')}
+        onClose={() => setContextEvent(null)}
+        actions={contextEvent ? [
+          { icon: 'edit',          label: 'Editar',           onClick: () => onOpenTask?.(contextEvent) },
+          { icon: 'content_copy',  label: 'Duplicar',         onClick: () => handleDuplicate(contextEvent) },
+          { icon: 'arrow_forward', label: 'Mover a mañana',   onClick: () => handleMoveToTomorrow(contextEvent) },
+          { icon: 'delete',        label: 'Eliminar',         tone: 'danger', onClick: () => handleDeleteEvent(contextEvent.id) },
+        ] : []}
+      />
     </div>
   )
 }
