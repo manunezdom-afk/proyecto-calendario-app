@@ -98,8 +98,11 @@ export default function TaskDetailView({ event, onBack, onSave, onDelete }) {
                 onClick={() => setShowTimePicker(true)}
                 className="w-full bg-surface-container-low rounded-xl p-4 text-on-surface font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all flex items-center justify-between gap-2"
               >
-                <span className={time ? '' : 'text-outline/60'}>
-                  {time || '8:30 AM'}
+                {/* Antes mostrábamos "8:30 AM" en gris como placeholder; el
+                    usuario lo leía como si fuera un valor real asignado. Si
+                    no hay hora, decimos explícitamente que está por elegir. */}
+                <span className={time ? '' : 'text-outline/60 italic'}>
+                  {time || 'Elegir hora'}
                 </span>
                 <span className="material-symbols-outlined text-outline text-[18px]">schedule</span>
               </button>

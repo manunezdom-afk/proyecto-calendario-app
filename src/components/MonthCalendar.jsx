@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import QuickAddSheet from './QuickAddSheet'
 import { resolveEventDate } from '../utils/resolveEventDate'
+import EmptyState from './EmptyState'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -176,10 +177,13 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
           </div>
 
           {selectedEvents.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-6 text-center">
-              <span className="material-symbols-outlined text-4xl text-outline/30">event_available</span>
-              <p className="text-sm text-outline font-medium">Sin eventos. Toca "Añadir".</p>
-            </div>
+            <EmptyState
+              illustration="calendar-empty"
+              title="Sin eventos en este día"
+              body="Tocá Añadir para agendar algo, o dejálo libre."
+              tone="muted"
+              compact
+            />
           ) : (
             <div className="space-y-2">
               {selectedEvents.map((ev) => (

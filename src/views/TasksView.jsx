@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import WeeklyStatsCard from '../components/WeeklyStatsCard'
+import TaskCheckmark from '../components/TaskCheckmark'
 
 const PRIORITY_CFG = {
   Alta:      { color: 'text-error',     bg: 'bg-error/10',     dot: 'bg-error',     ring: 'ring-error/30' },
@@ -158,14 +159,13 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
               <span className="ml-auto text-[10px] text-outline font-bold">Método MIT</span>
             </div>
 
-            {topThree.map(({ id, label, priority }, i) => {
+            {topThree.map(({ id, label, priority, done }, i) => {
               const cfg = PRIORITY_CFG[priority]
               const isTop = i === 0
               return (
-                <button
+                <div
                   key={id}
-                  onClick={() => handleToggle(id)}
-                  className={`w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all active:scale-[0.98] ${
+                  className={`w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all ${
                     isTop ? 'bg-primary/8 ring-1 ring-primary/25' : 'bg-surface-container-lowest ring-1 ring-outline-variant/15'
                   }`}
                 >
@@ -176,8 +176,8 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
                     <p className="font-semibold text-on-surface text-sm truncate">{label}</p>
                     <span className={`text-[10px] font-bold ${cfg.color}`}>Prioridad {priority}</span>
                   </div>
-                  <span className="material-symbols-outlined text-outline-variant text-[20px]">radio_button_unchecked</span>
-                </button>
+                  <TaskCheckmark done={done} onToggle={() => handleToggle(id)} size={20} />
+                </div>
               )
             })}
           </section>
@@ -253,14 +253,7 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
                               : 'border-outline-variant/20 bg-surface-container-lowest'
                           }`}
                         >
-                          <button onClick={() => handleToggle(id)} className="flex-shrink-0 active:scale-90 transition-transform">
-                            <span
-                              className={`material-symbols-outlined text-[18px] transition-colors ${done ? 'text-primary' : 'text-outline-variant hover:text-primary'}`}
-                              style={done ? { fontVariationSettings: "'FILL' 1" } : {}}
-                            >
-                              {done ? 'check_circle' : 'radio_button_unchecked'}
-                            </span>
-                          </button>
+                          <TaskCheckmark done={done} onToggle={() => handleToggle(id)} size={18} />
 
                           <span className={`flex-1 text-sm font-medium ${done ? 'line-through text-outline' : 'text-on-surface'}`}>
                             {label}

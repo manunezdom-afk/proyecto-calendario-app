@@ -128,6 +128,48 @@ function extractFraction(textAfterHour) {
 function extractTime(text, isMorning = false) {
   // Order matters: most specific first.
 
+  // 0. Rango "de X a Y" — captura tanto inicio como fin en una sola pasada.
+  //    Acepta variantes: "de 8 a 9", "de las 8 a las 9", "de 8:30 a 9:30",
+  //    "de 2 a 4 de la tarde", "de 14 a 15". Si hay sufijo de periodo
+  //    ("de la tarde/noche/mañana"), aplica a ambas horas. Si no, ambas
+  //    heredan el mismo lado del día (si resolveHour mete el inicio en
+  //    PM y el fin en 24h sigue siendo menor, se asume que el fin también
+  //    es PM).
+  const rangeReg = /de\s+(?:las?\s+)?(\d{1,2})(?::(\d{2}))?\s+a(?:l)?\s+(?:las?\s+)?(\d{1,2})(?::(\d{2}))?(?:\s+de\s+la\s+(tarde|noche|ma[ñn]ana|madrugada))?/i
+  const mRange = text.match(rangeReg)
+  if (mRange) {
+    const hS = parseInt(mRange[1], 10)
+    const mS = parseInt(mRange[2] || '0', 10)
+    const hE = parseInt(mRange[3], 10)
+    const mE = parseInt(mRange[4] || '0', 10)
+    const period = (mRange[5] || '').toLowerCase()
+
+    let h24Start, h24End
+    if (period === 'tarde' || period === 'noche') {
+      h24Start = hS === 12 ? 12 : hS + 12
+      h24End   = hE === 12 ? 12 : hE + 12
+    } else if (period === 'madrugada' || period === 'mañana' || period === 'manana') {
+      h24Start = hS % 12
+      h24End   = hE % 12
+    } else {
+      // Sin sufijo explícito: la hora de inicio pasa por la heurística
+      // estándar; la de fin hereda el mismo "lado" del día, corrigiendo
+      // hacia PM si el fin quedaría antes del inicio numéricamente.
+      h24Start = resolveHour(hS, mS, isMorning)
+      h24End = resolveHour(hE, mE, isMorning)
+      if (h24End <= h24Start) {
+        // "de 8 a 9" resuelto como 8 AM → 9 AM es ok (8 < 9). Pero
+        // "de 9 a 10" con inicio 9 AM → fin 10 AM es ok. Caso problemático:
+        // "de 11 a 1" (11 AM → 1 PM) — resolveHour(1) devuelve 13 (PM), ok.
+        // Caso "de 2 a 4" sin periodo — resolveHour pone ambos en PM (14, 16).
+        // Si aun así end ≤ start, forzamos end+12.
+        h24End = (h24End + 12) % 24 || 24
+      }
+    }
+
+    return { h24: h24Start, min: mS, h24End, minEnd: mE, fullMatch: mRange[0] }
+  }
+
   // 1. "a las X de la tarde/noche" → PM
   const pmReg = /a\s+las?\s+(\d{1,2})(?::(\d{2}))?\s+de\s+la\s+(tarde|noche)/i
   let m = text.match(pmReg)
@@ -291,15 +333,26 @@ export function parseEvent(rawText) {
     text = text.replace(timeResult.fullMatch, '')
   }
 
-  // Duración explícita en el texto ("por 2 horas", "media hora"). La
-  // extraemos ANTES de limpiar el título para que no quede colgada en el
-  // nombre del evento, y para usarla como fuente canónica si está presente.
-  const explicitDuration = extractExplicitDurationMinutes(withoutIntent)
-  if (explicitDuration !== null) {
-    text = text
-      .replace(/(?:por|durante|de)\s+(?:\d+(?:[.,]\d+)?\s+)?(?:horas?|h|min|minutos)(?:\s+y\s+media)?/i, '')
-      .replace(/\bmedia\s+hora\b/i, '')
-      .replace(/\b(?:un\s+)?cuarto\s+de\s+hora\b/i, '')
+  // Duración explícita: primero chequeamos si el timeResult trae un rango
+  // ("de X a Y"). Si sí, ese rango es la fuente canónica y calculamos los
+  // minutos directamente. Si no, buscamos patrones tipo "por 2 horas" o
+  // "media hora" en el texto original. La regla se aplica ANTES de limpiar
+  // el título para que ese fragmento no quede colgando en el nombre.
+  let explicitDuration = null
+  if (timeResult && Number.isFinite(timeResult.h24End)) {
+    const startDec = timeResult.h24 + (timeResult.min || 0) / 60
+    const endDec = timeResult.h24End + (timeResult.minEnd || 0) / 60
+    const delta = Math.round((endDec - startDec) * 60)
+    if (delta > 0 && delta <= 24 * 60) explicitDuration = delta
+  }
+  if (explicitDuration === null) {
+    explicitDuration = extractExplicitDurationMinutes(withoutIntent)
+    if (explicitDuration !== null) {
+      text = text
+        .replace(/(?:por|durante|de)\s+(?:\d+(?:[.,]\d+)?\s+)?(?:horas?|h|min|minutos)(?:\s+y\s+media)?/i, '')
+        .replace(/\bmedia\s+hora\b/i, '')
+        .replace(/\b(?:un\s+)?cuarto\s+de\s+hora\b/i, '')
+    }
   }
 
   // Extract date

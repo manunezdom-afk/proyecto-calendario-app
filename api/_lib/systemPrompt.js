@@ -238,6 +238,7 @@ Un evento NUNCA debe ser "eterno". Siempre intenta dejar una hora de término co
 Prioridad para decidir la duración:
 1. DURACIÓN EXPLÍCITA del usuario → úsala tal cual.
    Ejemplos: "reunión de 30 min", "gym por 1 hora y media", "clase hasta las 11:00", "almuerzo media hora".
+   RANGO "de X a Y" es un caso explícito también: "futbol de 8 a 9" → time "8:00 AM", endTime "9:00 AM". "reunión de 2 a 4 de la tarde" → time "2:00 PM", endTime "4:00 PM". Si el usuario da rango, NUNCA inventes otra hora intermedia ni uses duración inferida.
    Calcula endTime = time + duración, o usa directamente la hora de término mencionada.
 
 2. INFERENCIA POR TIPO de evento (usar si NO hubo duración explícita y el tipo es reconocible):

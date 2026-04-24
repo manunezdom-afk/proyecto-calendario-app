@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import DayTimeGrid from '../components/DayTimeGrid'
 import QuickAddSheet from '../components/QuickAddSheet'
 import MonthCalendar from '../components/MonthCalendar'
@@ -6,6 +7,7 @@ import WeekTimeGrid from '../components/WeekTimeGrid'
 import { resolveEventDate } from '../utils/resolveEventDate'
 import { eventStatusAtNow } from '../utils/eventDuration'
 import { isReminderItem } from '../utils/reminders'
+import EmptyState from '../components/EmptyState'
 
 // Descripción útil: no mostramos cuando es solo una fecha ISO (YYYY-MM-DD) —
 // data vieja generada por QuickAddSheet cuando stuffing date en description.
@@ -514,10 +516,46 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                 onImport={onExportClick}
                 onOpenTask={onOpenTask}
               />
-            ) : (<>
-            {/* Empty / all-past state del día — calculado sobre TODO el día,
-                no sólo sobre Focus. Antes mostrábamos "Día libre" aunque
-                hubiese eventos en Evening o tareas pendientes: bug. */}
+            ) : (
+            /* Swipe horizontal entre días. Arrastrar el contenido del día
+               a izquierda/derecha más de 60 px cambia al día vecino en la
+               tira visible. Se escuda contra scrolls verticales (drag="x"
+               sólo captura eje horizontal). La AnimatePresence cruza el
+               contenido nuevo con una leve slide-in para dar feedback de
+               "cambiaste de día". Si estamos en el primer/último día de
+               la semana visible, el swipe en esa dirección rebota por
+               dragElastic sin cambiar nada. */
+            (() => {
+              const days = CALENDAR_DAYS
+              const activeIdx = days.findIndex((d) => d.num === activeDay)
+              const canPrev = activeIdx > 0
+              const canNext = activeIdx < days.length - 1
+              function goDelta(delta) {
+                const next = activeIdx + delta
+                if (next < 0 || next >= days.length) return
+                setActiveDay(days[next].num)
+              }
+              return (
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={activeDayISO}
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.2}
+                  onDragEnd={(_, info) => {
+                    const THRESHOLD = 60
+                    if (info.offset.x < -THRESHOLD && canNext) goDelta(1)
+                    else if (info.offset.x > THRESHOLD && canPrev) goDelta(-1)
+                  }}
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  style={{ touchAction: 'pan-y' }}
+                >
+                {/* Empty / all-past state del día — calculado sobre TODO el día,
+                    no sólo sobre Focus. Antes mostrábamos "Día libre" aunque
+                    hubiese eventos en Evening o tareas pendientes: bug. */}
             {isDayEmpty && (
               /* Empty state útil: título con personalidad + 3 CTAs. Antes era
                  un solo botón "Añadir primer evento" con icono genérico — se
@@ -668,7 +706,13 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
               </div>
 
               {eveningEvents.length === 0 ? (
-                <p className="text-sm text-outline/70 italic px-1">Nada en la tarde/noche.</p>
+                <EmptyState
+                  illustration="moon-stars"
+                  title="Tarde/noche libre"
+                  body="Un buen espacio para desconectar, leer algo o simplemente nada."
+                  tone="violet"
+                  compact
+                />
               ) : (
                 <div className="space-y-2">
                   {eveningEvents.map((ev) => (
@@ -745,8 +789,11 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                 existingEvents={events}
               />
             )}
-          </>
-        )}
+                </motion.div>
+              </AnimatePresence>
+              )
+            })()
+            )}
 
       </main>
     </div>
