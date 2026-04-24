@@ -520,7 +520,7 @@ export default function App() {
           fuente de señal obvia (las mutaciones no fallan, las guardamos en
           cola). z-index bajo para no competir con toasts/modales. */}
       {!isOnline && (
-        <div className="fixed left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top,0px)+56px)] z-[30] pointer-events-none">
+        <div className="fixed inset-x-0 top-[calc(env(safe-area-inset-top,0px)+56px)] z-[30] pointer-events-none flex justify-center px-4">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 text-white text-[11px] font-semibold shadow-lg backdrop-blur">
             <span className="material-symbols-outlined text-[14px]">cloud_off</span>
             Sin conexión · guardando local
@@ -709,7 +709,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-            className="fixed left-1/2 -translate-x-1/2 z-[80] px-4 py-3 rounded-2xl bg-slate-900/95 text-white shadow-[0_20px_48px_rgba(0,0,0,0.25)] backdrop-blur flex items-center gap-2.5 max-w-[min(92vw,420px)]"
+            className="fixed inset-x-4 mx-auto z-[80] px-4 py-3 rounded-2xl bg-slate-900/95 text-white shadow-[0_20px_48px_rgba(0,0,0,0.25)] backdrop-blur flex items-center gap-2.5 max-w-[420px]"
             style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 6.5rem)' }}
           >
             <span

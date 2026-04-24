@@ -107,6 +107,7 @@ export default function InstallAppCard({ onDismissed }) {
               onClick={() => setIosHintOpen(false)}
               className="fixed inset-0 z-[90] bg-slate-900/40 backdrop-blur-sm"
             />
+            <div className="fixed inset-0 z-[91] flex items-center justify-center p-4 pointer-events-none">
             <motion.div
               role="dialog"
               aria-modal="true"
@@ -115,7 +116,7 @@ export default function InstallAppCard({ onDismissed }) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.96 }}
               transition={{ type: 'spring', damping: 26, stiffness: 280 }}
-              className="fixed left-1/2 top-1/2 z-[91] w-[min(92vw,360px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl bg-white p-6 shadow-2xl"
+              className="w-full max-w-[360px] rounded-3xl bg-white p-6 shadow-2xl pointer-events-auto relative"
             >
               <button
                 onClick={() => setIosHintOpen(false)}
@@ -148,6 +149,7 @@ export default function InstallAppCard({ onDismissed }) {
                 Entendido
               </button>
             </motion.div>
+            </div>
           </>
         )}
       </AnimatePresence>

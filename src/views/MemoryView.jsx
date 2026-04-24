@@ -121,12 +121,13 @@ function EditDialog({ memory, onClose, onSave }) {
         onClick={onClose}
         className="fixed inset-0 z-[90] bg-slate-900/40 backdrop-blur-sm"
       />
+      <div className="fixed inset-0 z-[91] flex items-center justify-center p-4 pointer-events-none">
       <motion.div
         initial={{ opacity: 0, y: 30, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.96 }}
         transition={{ type: 'spring', damping: 26, stiffness: 280 }}
-        className="fixed left-1/2 top-1/2 z-[91] w-[min(92vw,440px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl bg-white p-6 shadow-2xl"
+        className="w-full max-w-[440px] rounded-3xl bg-white p-6 shadow-2xl pointer-events-auto"
       >
         <p className="mb-5 text-[16px] font-bold text-slate-900">
           {isNew ? 'Nueva memoria' : 'Editar memoria'}
@@ -192,6 +193,7 @@ function EditDialog({ memory, onClose, onSave }) {
           </button>
         </div>
       </motion.div>
+      </div>
     </>
   )
 }
@@ -302,29 +304,31 @@ export default function MemoryView() {
               onClick={() => setDeletingId(null)}
               className="fixed inset-0 z-[90] bg-slate-900/40 backdrop-blur-sm"
             />
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.96 }}
-              className="fixed left-1/2 top-1/2 z-[91] w-[min(90vw,360px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl bg-white p-6 shadow-2xl text-center"
-            >
-              <p className="text-[15px] font-bold text-slate-900 mb-2">¿Eliminar esta memoria?</p>
-              <p className="text-[12.5px] text-slate-500 mb-5">Nova dejará de recordarlo en futuras conversaciones.</p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setDeletingId(null)}
-                  className="flex-1 rounded-full bg-slate-100 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-200"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={doDelete}
-                  className="flex-1 rounded-full bg-rose-600 py-2.5 text-[13px] font-semibold text-white hover:bg-rose-700"
-                >
-                  Eliminar
-                </button>
-              </div>
-            </motion.div>
+            <div className="fixed inset-0 z-[91] flex items-center justify-center p-4 pointer-events-none">
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.96 }}
+                className="w-full max-w-[360px] rounded-3xl bg-white p-6 shadow-2xl text-center pointer-events-auto"
+              >
+                <p className="text-[15px] font-bold text-slate-900 mb-2">¿Eliminar esta memoria?</p>
+                <p className="text-[12.5px] text-slate-500 mb-5">Nova dejará de recordarlo en futuras conversaciones.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDeletingId(null)}
+                    className="flex-1 rounded-full bg-slate-100 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-200"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={doDelete}
+                    className="flex-1 rounded-full bg-rose-600 py-2.5 text-[13px] font-semibold text-white hover:bg-rose-700"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
           </>
         )}
       </AnimatePresence>
