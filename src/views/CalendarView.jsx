@@ -786,7 +786,6 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                 </ul>
               </section>
             )}
-            </>)}
 
             {/* FAB — oculto en desktop y en empty state mobile.
                 En mobile vive APILADO ENCIMA de la pastilla de Nova (que está
@@ -821,6 +820,8 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
               )
             })()
             )}
+          </>
+        )}
 
       </main>
 
