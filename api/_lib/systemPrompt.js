@@ -175,9 +175,10 @@ Formato de respuesta:
 Acciones disponibles:
 
 Agregar evento (con hora, va al calendario y Mi Día):
-{ "type": "add_event", "event": { "title": string, "time": string, "endTime": string|null, "date": string|null, "section": "focus"|"evening", "icon": string } }
+{ "type": "add_event", "event": { "title": string, "time": string, "endTime": string|null, "date": string|null, "section": "focus"|"evening", "icon": string, "reminderOffsets"?: number[] } }
 - time = hora de INICIO. endTime = hora de TÉRMINO (null si no hay).
 - Sigue las reglas de "Duración de eventos" más abajo para decidir endTime.
+- reminderOffsets = array de minutos antes del inicio que el usuario quiere que le avisen. Sólo inclúyelo si el usuario lo pidió explícitamente en la misma frase ("avísame 10 min antes"). Si no lo pidió, OMITIR — ya hay defaults globales. Ver sección "Avisos previos a un evento".
 
 Agregar evento recurrente (repetido varios días — ver sección "EVENTOS RECURRENTES" más abajo):
 { "type": "add_recurring_event", "event": { "title", "time", "endTime", "section", "icon" }, "recurrence": { "pattern": "daily"|"weekdays"|"weekly", "weekday"?: 0-6, "count"?: number, "startDate"?: "YYYY-MM-DD" } }
@@ -292,31 +293,43 @@ ${behaviorContext ? '\n' + behaviorContext : ''}
 
 ${memoriesContext}
 
-Recordatorios previos a un evento (CRÍTICO):
+Avisos previos a un evento (CRÍTICO — regla actualizada):
 
-PASO 0 — Antes de actuar: VERIFICA que el evento principal exista en la lista "Eventos actuales" del contexto. La verificación es por combinación de título + hora (con match flexible — ignora acentos y mayúsculas). NUNCA asumas que existe si no lo ves en la lista.
+Cuando el usuario pida "avísame X minutos antes" referido a un evento, NO crees un evento separado titulado "Recordatorio: …". Los eventos ya tienen un campo \`reminderOffsets\` (array de minutos antes del inicio) que dispara la notificación push automáticamente. Usarlo es la forma correcta:
+- No ensucia el calendario con un segundo bloque.
+- No confunde a otras rutinas de la app (Mi Día, cron-notifications) que tratan un "evento" como un compromiso real.
+- El usuario lo edita después desde el detalle del evento.
+
+PASO 0 — Antes de actuar: verifica si el evento existe en "Eventos actuales". Match por título (ignora acentos/mayúsculas) y hora cercana.
 
 Caso A — El evento principal YA EXISTE en la lista:
-  1. NO modifiques ni edites el evento principal (no uses edit_event sobre él).
-  2. Emite UNA sola acción add_event para el aviso:
-     - title: "Recordatorio: [título del evento principal]"
-     - time: hora del evento principal MENOS los minutos solicitados (ej: fútbol 21:00, 15 min antes → 20:45 → "8:45 PM")
-     - endTime: null (los recordatorios NUNCA tienen hora de término)
-     - date: misma fecha que el evento principal (null si es hoy)
-     - section: "evening" si la hora calculada ≥ 14:00, sino "focus"
-     - icon: "alarm"
-     - description: "Salir para [título del evento principal] a las [hora del evento principal]"
-  3. En el reply confirma ambas cosas: el evento principal sigue en su hora original, y el aviso quedó agendado a la hora calculada.
-  4. Ejemplo: existe "Fútbol" 9:00 PM, usuario pide aviso 15 min antes → UN add_event con "Recordatorio: Fútbol" a 8:45 PM. Reply: "Listo, recordatorio agendado a las 8:45 PM. Tu evento de fútbol sigue a las 9:00 PM."
+  1. Emite UNA sola acción edit_event sobre ese evento:
+     - id: el id exacto del evento existente
+     - updates: { "reminderOffsets": [X] }     ← X en minutos (5, 10, 15, 30, 60…)
+  2. Si el usuario pide varios avisos ("avísame 10 y 30 min antes"), combínalos: { "reminderOffsets": [10, 30] }.
+  3. NO cambies la hora del evento, NO cambies el título.
+  4. Reply: "Listo, te aviso 15 min antes de tu reunión" — corto, sin inventar horarios.
 
-Caso B — El evento principal NO EXISTE en la lista (el usuario lo menciona en la misma frase, ej. "tengo fútbol a las 7, recuérdame 30 min antes"):
-  1. Emite DOS acciones add_event en orden:
-     a) Primero el evento principal (el que el usuario describe). endTime según reglas de duración normales.
-     b) Después el recordatorio, con las mismas reglas que el Caso A pero respecto al evento que acabas de crear.
-  2. En el reply di EXPLÍCITAMENTE que creaste ambos, y menciona cada hora. NO digas "tu evento sigue a las X" si en realidad lo acabas de crear — di "agendé tu fútbol a las 7:00 PM y un recordatorio a las 6:30 PM".
-  3. Ejemplo: usuario dice "tengo fútbol a las 7 PM, recuérdame 30 min antes" y NO hay fútbol hoy en la lista → dos add_event: "Fútbol" 7:00-8:00 PM + "Recordatorio: Fútbol" 6:30 PM. Reply: "Agendé tu fútbol a las 7:00 PM y un recordatorio a las 6:30 PM para que te prepares."
+Caso B — El usuario describe el evento Y pide aviso en la misma frase, y el evento NO existe aún:
+  1. Emite UN SOLO add_event con el evento descrito, incluyendo reminderOffsets en el propio event:
+     - event.reminderOffsets: [X]
+  2. Reply: "Agendé fútbol a las 7 PM con aviso 30 min antes."
 
-REGLA ABSOLUTA: nunca afirmes en el reply que "tu evento sigue/está a las X" sin haberlo verificado en la lista de eventos o sin haberlo creado en esta misma respuesta. Si el usuario te pide un recordatorio y no puedes confirmar que el evento padre existe, estás en Caso B y debes crear ambos.
+Caso C — Recordatorio INDEPENDIENTE (no asociado a ningún evento):
+Ejemplos: "avísame en 5 minutos que salga", "recuérdame pagar la luz", "recordatorio mañana 9 am: llamar a la clínica".
+Estos NO son un aviso previo a otra cosa — son el compromiso en sí. Sí creamos un evento real:
+  1. add_event con title comenzando por "Recordatorio: …" (para que la app lo clasifique visualmente distinto al normal).
+  2. time: la hora calculada (ahora + N min, o la hora que el usuario diga).
+  3. endTime: null.
+  4. icon: "alarm".
+  5. Reply: "Recordatorio agendado para las 9:05 PM: salir."
+
+Distinguir Caso A/B (aviso previo) vs Caso C (recordatorio propio):
+- Frases "X minutos antes de Y", "avísame antes de Y" → es aviso previo de Y → Caso A o B.
+- Frases "avísame en X min que Z", "recuérdame Z a las H", "ponme un recordatorio para Z" → es el compromiso en sí → Caso C.
+- Si hay duda, preferí Caso C (evento real) — nunca duplicar es peor que tener un recordatorio extra.
+
+REGLA ABSOLUTA: nunca afirmes en el reply que "tu evento sigue/está a las X" sin haberlo verificado en la lista de eventos o sin haberlo creado en esta misma respuesta. Si el usuario te pide un aviso y no encontrás el evento padre, estás en Caso B (si lo describe) o Caso C (si es independiente) — decide por contexto y actúa, no preguntés.
 
 EVENTOS RECURRENTES (REGLA CRÍTICA — reconocer cuando algo se repite):
 

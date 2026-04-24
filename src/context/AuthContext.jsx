@@ -29,11 +29,42 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
 
+    // Sincroniza colas que pueden haber quedado pendientes entre sesiones:
+    // escrituras offline, señales, suscripción push y modelo de behavior.
+    // Se llama tanto al SIGNED_IN de un login nuevo como al hidratar una
+    // sesión ya existente (getSession). Antes sólo corría en SIGNED_IN,
+    // así que al abrir la app con sesión persistida las cosas quedaban
+    // en la cola hasta que el usuario interactuara con la red.
+    async function syncOnSession(u, { freshLogin }) {
+      try {
+        if (freshLogin) {
+          // Al login nuevo limpiamos las claves globales (sin userId) para
+          // que cualquier caché residual de una sesión anterior no se
+          // muestre como datos del usuario recién entrado.
+          dataService.clearGlobalCache()
+        }
+        await dataService.flushQueue()
+        await flushSignalsQueue()
+        await fetchBehavior(u.id).catch(() => {})
+        await flushPendingSubscription().catch(() => {})
+        const s = await getPushStatus()
+        if (s.supported && s.permission === 'granted' && !s.subscribed) {
+          await subscribeToPush().catch(() => {})
+        }
+      } catch (err) {
+        console.warn('[Focus] session sync falló:', err)
+      }
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       const current = session?.user ?? null
       setUser(current)
       setSignalsUserId(current?.id ?? null)
-      if (current) fetchBehavior(current.id).catch(() => {})
+      if (current) {
+        fetchBehavior(current.id).catch(() => {})
+        // Sesión ya existente al abrir la app: sincronizar colas.
+        syncOnSession(current, { freshLogin: false })
+      }
       setLoading(false)
     })
 
@@ -43,22 +74,7 @@ export function AuthProvider({ children }) {
         setUser(newUser)
         setSignalsUserId(newUser?.id ?? null)
         if (event === 'SIGNED_IN' && newUser) {
-          // Limpiamos las claves globales (sin userId) para que cualquier
-          // caché residual del dispositivo — p. ej. tareas o eventos de una
-          // sesión anterior — no se muestre como datos del nuevo usuario.
-          // La fuente de verdad pasa a ser únicamente Supabase.
-          dataService.clearGlobalCache()
-          await dataService.flushQueue()
-          await flushSignalsQueue()
-          await fetchBehavior(newUser.id).catch(() => {})
-          // Subir suscripción push pendiente (guardada localmente antes de login)
-          await flushPendingSubscription().catch(() => {})
-          // Si el permiso está granted pero no hay suscripción en el browser, crear una nueva
-          getPushStatus().then(async s => {
-            if (s.supported && s.permission === 'granted' && !s.subscribed) {
-              await subscribeToPush().catch(() => {})
-            }
-          }).catch(() => {})
+          await syncOnSession(newUser, { freshLogin: true })
         }
       }
     )
@@ -95,9 +111,6 @@ export function AuthProvider({ children }) {
     // 10 dígitos de margen: Supabase puede estar configurado a 6 u 8.
     // Truncar a 6 acá invalidaba códigos de 8 dígitos antes de enviarlos.
     const cleanToken = String(token || '').replace(/\D/g, '').slice(0, 10)
-    // TEMP LOG: confirmar qué llega a Supabase. Remover tras validar.
-    // eslint-disable-next-line no-console
-    console.log('[OTP supabase]', { cleanEmail, cleanToken, len: cleanToken.length })
     // La validación de longitud vive en el UI (AuthModal). Acá solo pasamos
     // a Supabase el valor limpio — si viniera corto, Supabase retorna su
     // propio error de token inválido, que humanizeAuthError ya mapea.

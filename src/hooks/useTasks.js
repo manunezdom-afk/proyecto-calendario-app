@@ -17,11 +17,38 @@ function hydrateTasksWithLinks(rawTasks, userId) {
   return rawTasks.map(t => (links[t.id] ? { ...t, linkedEventId: links[t.id] } : t))
 }
 
+// TTL para preservar una tarea local cuya upsert a Supabase aún puede estar
+// viajando. Pasado ese tiempo asumimos que el refetch ya debería reflejarla
+// y la soltamos del escudo — evita que tareas zombies queden eternamente si
+// Supabase rechazó la escritura.
+const PENDING_UPSERT_TTL_MS = 15_000
+
 export function useTasks() {
   const { user } = useAuth()
   // Mismo patrón que useEvents: si el usuario borra y un refetch llega antes
   // de que Supabase confirme el DELETE, ignoramos la tarea "resucitada".
   const pendingDeletesRef = useRef(new Set())
+
+  // Tareas recién creadas cuyo upsert puede estar en vuelo. Si el refetch
+  // devuelve la nube antes de que Supabase confirme la nueva tarea,
+  // preservamos la tarea local — de otro modo "desaparecía" y reaparecía
+  // en el siguiente tick, muy confuso para el usuario.
+  // Map<id, { task, markedAt }>
+  const pendingUpsertsRef = useRef(new Map())
+
+  const markPendingUpsert = (task) => {
+    if (!task?.id) return
+    pendingUpsertsRef.current.set(task.id, { task, markedAt: Date.now() })
+  }
+
+  const sweepStalePending = () => {
+    const now = Date.now()
+    for (const [id, { markedAt }] of pendingUpsertsRef.current) {
+      if (now - markedAt > PENDING_UPSERT_TTL_MS) {
+        pendingUpsertsRef.current.delete(id)
+      }
+    }
+  }
 
   // Sin usuario arrancamos vacío: la caché global (focus_tasks sin userId)
   // solía dejar "tareas fantasma" de sesiones anteriores flotando al iniciar
@@ -34,13 +61,36 @@ export function useTasks() {
       const cloudTasks = await dataService.fetchTasks(user.id)
       if (!cloudTasks) return
       const pending = pendingDeletesRef.current
-      const filtered = pending.size > 0
+      const cloudFiltered = pending.size > 0
         ? cloudTasks.filter(t => !pending.has(t.id))
         : cloudTasks
-      const hydrated = hydrateTasksWithLinks(filtered, user.id)
+
+      // Preservar upserts pendientes: si el cloud ya trae el id, el escudo
+      // cumplió su función y lo soltamos. Si no, mantenemos la tarea local
+      // dentro del TTL para que un refetch rápido (realtime, visibility)
+      // no borre una tarea recién creada que aún está viajando al backend.
+      sweepStalePending()
+      const cloudIds = new Set(cloudFiltered.map(t => t.id))
+      const pendingToKeep = []
+      for (const [id, { task }] of pendingUpsertsRef.current) {
+        if (cloudIds.has(id)) {
+          pendingUpsertsRef.current.delete(id)
+        } else {
+          pendingToKeep.push(task)
+        }
+      }
+      const merged = pendingToKeep.length > 0
+        ? [...cloudFiltered, ...pendingToKeep]
+        : cloudFiltered
+
+      const hydrated = hydrateTasksWithLinks(merged, user.id)
       setTasks(hydrated)
       dataService.setCachedTasks(hydrated, user.id)
-      console.log(`[Focus] ☁️ ${filtered.length} tareas cargadas ${tag} (user=${user.id.slice(0,8)})`)
+      if (pendingToKeep.length > 0) {
+        console.log(`[Focus] ☁️ ${cloudFiltered.length} tareas + ${pendingToKeep.length} pendientes ${tag}`)
+      } else {
+        console.log(`[Focus] ☁️ ${cloudFiltered.length} tareas cargadas ${tag} (user=${user.id.slice(0,8)})`)
+      }
     } catch (err) {
       console.warn('[Focus] ⚠️ No se pudo cargar tareas de Supabase', err)
     }
@@ -86,10 +136,23 @@ export function useTasks() {
 
   function addTask({ label, priority = 'Media', category = 'hoy', linkedEventId = null }) {
     const cleanLabel = cleanGeneratedTitle(label) || label
-    const t = { id: `tsk-${Date.now()}`, label: cleanLabel, done: false, priority, category }
+    // Sufijo aleatorio en base36 para garantizar unicidad aunque se disparen
+    // varios addTask en el mismo ms (caso típico: Nova crea evento + tarea
+    // asociada en la misma respuesta, o usuario hace tap rápido doble).
+    // Sin él, `tsk-${Date.now()}` podía colapsar dos tareas en un solo id
+    // y Supabase upsert sobrescribía una con la otra.
+    const t = {
+      id: `tsk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      label: cleanLabel,
+      done: false,
+      priority,
+      category,
+    }
     if (linkedEventId) t.linkedEventId = linkedEventId
     console.log(`[Focus] ➕ addTask: "${cleanLabel}"${linkedEventId ? ` (ligada a ${linkedEventId})` : ''}`)
     setTasks(prev => [...prev, t])
+    // Proteger contra refetch que llegue antes de que Supabase confirme.
+    markPendingUpsert(t)
     if (user) dataService.upsertTask(t, user.id).catch(console.warn)
     if (linkedEventId) setTaskLink(t.id, linkedEventId, user?.id)
     return t

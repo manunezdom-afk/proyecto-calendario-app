@@ -2,8 +2,11 @@
 // Convierte una acción emitida por Nova (add_event/edit_event/delete_event/
 // mark_task_done) en una "suggestion" con preview legible para la bandeja.
 
+import { expandRecurrence } from './expandRecurrence'
+
 const ICON_BY_KIND = {
   add_event: 'add_circle',
+  add_recurring_event: 'event_repeat',
   edit_event: 'edit_calendar',
   delete_event: 'delete',
   add_task: 'check_box',
@@ -11,6 +14,21 @@ const ICON_BY_KIND = {
   mark_task_done: 'task_alt',
   delete_task: 'delete',
 }
+
+function describeReminderOffsets(offsets) {
+  if (!Array.isArray(offsets) || offsets.length === 0) return ''
+  if (offsets.length === 1) return `Aviso ${offsets[0]} min antes`
+  const sorted = [...offsets].sort((a, b) => a - b)
+  return `Avisos ${sorted.join(', ')} min antes`
+}
+
+const PATTERN_LABELS = {
+  daily: 'todos los días',
+  weekdays: 'de lunes a viernes',
+  weekly: 'cada semana',
+}
+
+const WEEKDAY_LABELS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
 
 const DAY_NAMES_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 const MONTH_NAMES_ES = [
@@ -62,11 +80,33 @@ export function actionToSuggestion(action, { reason, batchId, events = [], tasks
   switch (action.type) {
     case 'add_event': {
       const ev = action.event || {}
+      const parts = [describeEvent(ev)]
+      const reminderLabel = describeReminderOffsets(ev.reminderOffsets)
+      if (reminderLabel) parts.push(reminderLabel)
       return {
         ...base,
         payload: { event: ev },
         previewTitle: `Crear: ${ev.title || 'evento sin título'}`,
-        previewBody: describeEvent(ev),
+        previewBody: parts.filter(Boolean).join(' · '),
+      }
+    }
+
+    case 'add_recurring_event': {
+      const ev = action.event || {}
+      const rec = action.recurrence || {}
+      const patternLabel = rec.pattern === 'weekly' && Number.isInteger(rec.weekday)
+        ? `cada ${WEEKDAY_LABELS[rec.weekday]}`
+        : (PATTERN_LABELS[rec.pattern] || rec.pattern || '')
+      const bodyParts = [patternLabel]
+      if (ev.time) bodyParts.push(ev.time)
+      const reminderLabel = describeReminderOffsets(ev.reminderOffsets)
+      if (reminderLabel) bodyParts.push(reminderLabel)
+      return {
+        ...base,
+        kind: 'add_recurring_event',
+        payload: { event: ev, recurrence: rec },
+        previewTitle: `Crear recurrente: ${ev.title || 'evento'}`,
+        previewBody: bodyParts.filter(Boolean).join(' · ') || 'Sin detalles',
       }
     }
 
@@ -75,7 +115,10 @@ export function actionToSuggestion(action, { reason, batchId, events = [], tasks
       const updates = action.updates || {}
       const title = updates.title || target?.title || 'evento'
 
-      // Describe el cambio más relevante (hora > fecha > título)
+      // Describe el cambio más relevante: hora > fecha > título > aviso >
+      // fallback a lista de campos. El aviso (reminderOffsets) es el caso
+      // común cuando el usuario pide "avísame X min antes" — antes caía a
+      // "actualización menor" que no decía nada al usuario en la bandeja.
       let changeBody = ''
       if (updates.time && updates.time !== target?.time) {
         changeBody = `Hora: ${target?.time || '—'} → ${updates.time}`
@@ -83,6 +126,9 @@ export function actionToSuggestion(action, { reason, batchId, events = [], tasks
         changeBody = `Fecha: ${formatDateReadable(target?.date)} → ${formatDateReadable(updates.date)}`
       } else if (updates.title && updates.title !== target?.title) {
         changeBody = `Título: "${target?.title}" → "${updates.title}"`
+      } else if (Array.isArray(updates.reminderOffsets)) {
+        const label = describeReminderOffsets(updates.reminderOffsets)
+        changeBody = label || 'Avisos actualizados'
       } else {
         changeBody = Object.keys(updates).join(', ') || 'actualización menor'
       }
@@ -169,6 +215,31 @@ export function applySuggestion(suggestion, handlers = {}) {
         return {
           message: `Añadí "${created.title || 'evento'}"`,
           undo: () => onDeleteEvent?.(created.id),
+        }
+      }
+      return null
+    }
+    case 'add_recurring_event': {
+      // Expandimos la intención recurrente a N eventos concretos y
+      // capturamos los ids reales para que el undo borre todas las
+      // instancias de una vez — de otro modo el usuario terminaba con
+      // 30 eventos sin forma rápida de revertir.
+      const expanded = expandRecurrence({
+        type: 'add_recurring_event',
+        event: payload.event,
+        recurrence: payload.recurrence,
+      })
+      const ids = []
+      let title = payload.event?.title || 'evento'
+      for (const ev of expanded) {
+        const created = onAddEvent?.(ev)
+        if (created?.id) ids.push(created.id)
+        if (created?.title) title = created.title
+      }
+      if (ids.length > 0) {
+        return {
+          message: `Añadí "${title}" (${ids.length} ${ids.length === 1 ? 'instancia' : 'instancias'})`,
+          undo: () => { for (const id of ids) onDeleteEvent?.(id) },
         }
       }
       return null

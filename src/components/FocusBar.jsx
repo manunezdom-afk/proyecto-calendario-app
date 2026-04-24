@@ -425,15 +425,22 @@ export default function FocusBar({
       const appliedMemoryIds = []
       for (const action of actions) {
         if (action.type === 'add_event' && action.event) {
-          onAddEvent?.(action.event)
-          if (action.event.id) appliedEventIds.push(action.event.id)
+          // onAddEvent (useEvents.addEvent) devuelve el evento creado con su
+          // id real asignado por el hook. Nova no manda id, así que sin
+          // capturar el retorno el undo no sabía qué borrar y el toast de
+          // "Deshacer" era ineficaz.
+          const created = onAddEvent?.(action.event)
+          if (created?.id) appliedEventIds.push(created.id)
         } else if (action.type === 'add_recurring_event') {
-          // Expandimos la intención recurrente a N add_event concretos.
-          // Los ids los asigna el hook de eventos, así que no intentamos
-          // rellenar appliedEventIds (el undo inline para recurrentes se
-          // apoya en el toast genérico de Nova).
+          // Expandimos la intención recurrente a N add_event concretos,
+          // capturando el id real de cada uno para que el undo inline pueda
+          // revertir TODAS las instancias (antes el undo no las cubría y el
+          // usuario quedaba con 30 eventos sin forma de deshacer rápido).
           const expanded = expandRecurrence(action)
-          for (const ev of expanded) onAddEvent?.(ev)
+          for (const ev of expanded) {
+            const created = onAddEvent?.(ev)
+            if (created?.id) appliedEventIds.push(created.id)
+          }
         } else if (action.type === 'edit_event' && action.id) {
           const realId = events.some(e => e.id === action.id)
             ? action.id
@@ -454,8 +461,11 @@ export default function FocusBar({
           const taskPayload = linkedEventId
             ? { ...action.task, linkedEventId }
             : action.task
-          onAddTask?.(taskPayload)
-          if (taskPayload.id) appliedTaskIds.push(taskPayload.id)
+          // useTasks.addTask devuelve la tarea creada con id real. Antes
+          // tomábamos taskPayload.id que venía de Nova (undefined), así
+          // el undo no borraba la tarea. Ahora capturamos el retorno.
+          const createdTask = onAddTask?.(taskPayload)
+          if (createdTask?.id) appliedTaskIds.push(createdTask.id)
         } else if (action.type === 'toggle_task' && action.id) {
           const realId = tasks.some(t => t.id === action.id)
             ? action.id
