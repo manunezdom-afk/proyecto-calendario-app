@@ -169,7 +169,7 @@ export default function TaskDetailView({ event, onBack, onSave, onDelete }) {
                 ? 'Usa los recordatorios por defecto (10 min, 30 min y 1 h antes).'
                 : silenced
                 ? 'Este evento no te enviará recordatorios.'
-                : 'Se avisará antes del evento con los tiempos elegidos.'}
+                : 'Focus avisará con el tono adecuado para este evento y los tiempos elegidos.'}
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
               {REMINDER_PRESETS.map((p) => {

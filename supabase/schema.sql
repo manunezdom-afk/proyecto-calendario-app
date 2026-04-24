@@ -214,6 +214,10 @@ CREATE TABLE IF NOT EXISTS public.sent_notifications (
   event_id   TEXT NOT NULL,
   offset_min INTEGER NOT NULL,
   sent_at    TIMESTAMPTZ DEFAULT NOW(),
+  kind       TEXT,
+  title      TEXT,
+  body       TEXT,
+  payload    JSONB,
   UNIQUE (user_id, event_id, offset_min)
 );
 
@@ -223,6 +227,8 @@ CREATE POLICY "Users read own sent notifications"
   ON public.sent_notifications FOR SELECT USING (auth.uid() = user_id);
 CREATE INDEX IF NOT EXISTS sent_notif_user_evt_idx
   ON public.sent_notifications (user_id, event_id);
+CREATE INDEX IF NOT EXISTS sent_notif_user_kind_idx
+  ON public.sent_notifications (user_id, kind, sent_at DESC);
 
 -- ── calendar_feeds: tokens para URLs suscribibles de calendario ──────────────
 -- Cada usuario puede tener 1+ "feeds" — URL públicas con un token que

@@ -7,25 +7,15 @@ import {
   checkSubscriptionHealth,
   forceResubscribe,
 } from '../lib/pushSubscription'
+import {
+  DEFAULT_REMINDER_OFFSETS,
+  buildSmartNotificationPayload,
+  normalizeReminderOffsets,
+} from '../utils/smartNotifications'
 
 const LOG_KEY    = 'focus_notif_log'
 const FIRED_KEY  = 'focus_notif_fired'
 const DISMISS_KEY = 'focus_notif_dismissed'
-
-// Default minutes before event to fire each reminder (if event has no custom offsets)
-const DEFAULT_OFFSETS = [10, 30, 60]
-
-function offsetLabel(min) {
-  if (min >= 1440) {
-    const d = Math.round(min / 1440)
-    return d === 1 ? 'mañana' : `en ${d} días`
-  }
-  if (min >= 60) {
-    const h = Math.round(min / 60)
-    return h === 1 ? 'en 1 hora' : `en ${h} horas`
-  }
-  return `en ${min} minutos`
-}
 
 function todayISO() {
   const d = new Date()
@@ -197,9 +187,8 @@ export function useNotifications({ events = [] } = {}) {
       const eventTime = parseEventTime(event.time, eventDate)
       if (!eventTime) return
 
-      // Per-event offsets: null/undefined → use defaults; [] = silenced; array = custom
-      const rawOffsets = event.reminderOffsets
-      const offsets = Array.isArray(rawOffsets) ? rawOffsets : DEFAULT_OFFSETS
+      // Per-event offsets: null/undefined -> defaults; [] = silenced; array = custom.
+      const offsets = normalizeReminderOffsets(event.reminderOffsets, DEFAULT_REMINDER_OFFSETS)
       if (offsets.length === 0) return
 
       offsets.forEach((offsetMin) => {
@@ -217,18 +206,22 @@ export function useNotifications({ events = [] } = {}) {
         firedRef.current[firedKey] = true
         try { localStorage.setItem(FIRED_KEY, JSON.stringify(firedRef.current)) } catch (_) {}
 
-        // Build notification content
-        const label = offsetLabel(offsetMin)
-        const title = `${event.title} ${label}`
-        const body  = event.time ? `Comienza a las ${event.time.split(' - ')[0]}` : ''
+        const minsLeft = Math.max(0, Math.round((eventTime.getTime() - nowMs) / 60_000))
+        const payload = buildSmartNotificationPayload(event, {
+          offset: offsetMin,
+          minsLeft,
+          startsAt: eventTime,
+        })
 
         // Append to in-app log
         const entry = {
           id: `notif-${Date.now()}-${event.id}`,
           eventId: event.id,
-          title,
-          body,
-          icon: event.icon || 'event',
+          title: payload.title,
+          body: payload.body,
+          icon: payload.appIcon || event.icon || 'event',
+          kind: payload.data?.kind || 'event_reminder',
+          offset: offsetMin,
           timestamp: Date.now(),
           read: false,
         }
@@ -245,23 +238,25 @@ export function useNotifications({ events = [] } = {}) {
         // duplicadas en desktop cuando la tab estaba visible.
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           const notifOptions = {
-            body,
+            body: payload.body,
             icon: '/icons/icon-192.png',
             badge: '/icons/icon-192.png',
-            tag: `reminder-${event.id}-${offsetMin}`,
+            tag: payload.tag || `reminder-${event.id}-${offsetMin}`,
+            data: payload.data,
+            actions: payload.actions,
           }
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.ready
-              .then(reg => reg.showNotification(title, notifOptions))
+              .then(reg => reg.showNotification(payload.title, notifOptions))
               .catch(() => {
-                try { new Notification(title, notifOptions) } catch (_) {}
+                try { new Notification(payload.title, notifOptions) } catch (_) {}
               })
           } else {
-            try { new Notification(title, notifOptions) } catch (_) {}
+            try { new Notification(payload.title, notifOptions) } catch (_) {}
           }
         }
 
-        console.log(`[Focus] 🔔 Notification fired: "${title}"`)
+        console.log(`[Focus] 🔔 Notification fired: "${payload.title}"`)
       })
     })
   }, [events])

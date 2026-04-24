@@ -294,7 +294,7 @@ function RemindersRow() {
 
   const baseCopy = {
     checking:     { sub: 'Verificando estado…',                                          icon: 'check_circle',      color: 'text-slate-300' },
-    active:       { sub: 'Recibes un aviso 10, 30 y 60 min antes de cada evento',        icon: 'check_circle',      color: 'text-emerald-400' },
+    active:       { sub: 'Focus adapta cada aviso al tipo de evento y respeta tus tiempos personalizados', icon: 'check_circle', color: 'text-emerald-400' },
     disconnected: { sub: 'Permiso OK pero la conexión al servidor se cortó — usa "Reconectar" abajo', icon: 'sync_problem', color: 'text-amber-400' },
     inactive:     { sub: 'No están activas — actívalas desde el banner al crear un evento', icon: 'error',           color: 'text-amber-400' },
     blocked:      { sub: 'Permiso bloqueado — reactívalo desde los ajustes del sistema', icon: 'block',             color: 'text-red-400' },
@@ -317,7 +317,7 @@ function RemindersRow() {
   }
 
   return (
-    <Row icon="notifications" label="Recordatorios de eventos" sub={sub}>
+    <Row icon="notifications" label="Notificaciones inteligentes" sub={sub}>
       <span className={`material-symbols-outlined text-[16px] ${baseCopy.color}`}>
         {baseCopy.icon}
       </span>

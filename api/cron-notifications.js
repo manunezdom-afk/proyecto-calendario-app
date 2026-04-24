@@ -7,30 +7,20 @@
  * Auth: header 'Authorization: Bearer <CRON_SECRET>' — shared secret.
  *
  * Algoritmo:
- * 1. Lee eventos de Supabase que empiecen en los próximos 65 min
- * 2. Para cada event × offset (10/30/60 min antes), chequea si ya se envió
- *    (sent_notifications) y si el timing cuadra con ahora ± 2.5 min
- * 3. Fetchea las push_subscriptions del user_id y manda la push
- * 4. Registra en sent_notifications
+ * 1. Lee eventos de Supabase que puedan tener recordatorios próximos
+ * 2. Para cada event × reminder_offset, chequea si ya se envió
+ * 3. Reserva la combinación en sent_notifications para evitar carreras
+ * 4. Envía la push, registra telemetría y guarda el copy enviado
  */
 
 import webpush from 'web-push'
 import { getSupabaseAdmin } from './_supabaseAdmin.js'
-
-const DEFAULT_OFFSETS = [10, 30, 60] // usado cuando event.reminder_offsets = null
-// Hasta cuántos minutos TARDE puede dispararse un recordatorio después de su
-// momento ideal. Antes era ±2.5 min, pero el scheduler (GitHub Actions schedule
-// o Vercel Hobby) puede atrasarse hasta varias horas. Ampliamos la ventana
-// para offsets chicos especialmente, porque "en 10 min" tarde es mejor que
-// silencio — el usuario prefiere recibir algo antes del evento aunque no sean
-// exactamente 10. La función fallbackMaxLate() acota por proporción del
-// offset para evitar que "en 60 min" se dispare con el evento ya encima.
-function maxLateFor(offset) {
-  if (offset <= 10) return 9                   // 9/10 — hasta 1 min antes
-  if (offset <= 30) return 20                  // 2/3
-  if (offset <= 60) return 35                  // ~60%
-  return Math.max(40, Math.round(offset * 0.5)) // offsets largos: mitad
-}
+import {
+  DEFAULT_REMINDER_OFFSETS,
+  buildSmartNotificationPayload,
+  maxLateMinutesForOffset,
+  normalizeReminderOffsets,
+} from '../src/utils/smartNotifications.js'
 
 function configureWebPush() {
   const pub = process.env.VAPID_PUBLIC_KEY
@@ -41,7 +31,7 @@ function configureWebPush() {
   return true
 }
 
-// Parsea "HH:MM" o "HH:MM – HH:MM" en la timezone del usuario → Date absoluta.
+// Parsea "HH:MM" o "HH:MM – HH:MM" en la timezone del usuario -> Date absoluta.
 // timezone: IANA string (ej. "America/Santiago"). Si no se pasa, asume UTC.
 function buildEventDate(eventDate, timeStr, timezone = 'UTC') {
   if (!eventDate || !timeStr) return null
@@ -55,20 +45,23 @@ function buildEventDate(eventDate, timeStr, timezone = 'UTC') {
   if (ap === 'PM' && h !== 12) h += 12
   if (ap === 'AM' && h === 12) h = 0
   if (h < 0 || h > 23 || mn < 0 || mn > 59) return null
-  // Calculamos el timestamp UTC que corresponde a esa hora local en la zona del usuario.
-  // Estrategia: construir un Date como si fuera UTC, luego ajustar por el offset de la tz.
+
   const asUtc = Date.UTC(y, mo - 1, d, h, mn, 0, 0)
   try {
-    // Queremos saber qué hora local es ese instante en la tz del usuario, y medir la diferencia.
     const localStr = new Intl.DateTimeFormat('en-US', {
       timeZone: timezone,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
     }).formatToParts(new Date(asUtc))
-    const parts = Object.fromEntries(localStr.filter(p => p.type !== 'literal').map(p => [p.type, p.value]))
+    const parts = Object.fromEntries(
+      localStr.filter(p => p.type !== 'literal').map(p => [p.type, p.value]),
+    )
     const localH = parseInt(parts.hour, 10) === 24 ? 0 : parseInt(parts.hour, 10)
     const localM = parseInt(parts.minute, 10)
-    // offset en minutos: (hora local - hora UTC) módulo 1440
     const utcTotal = h * 60 + mn
     const localTotal = localH * 60 + localM
     let deltaMin = localTotal - utcTotal
@@ -91,7 +84,8 @@ async function sendPushToUser(admin, userId, payload, logCtx = null) {
     .eq('user_id', userId)
   if (error || !subs?.length) return { sent: 0, failed: 0 }
 
-  let sent = 0, failed = 0
+  let sent = 0
+  let failed = 0
   const deadEndpoints = []
   const deliveryRows = []
 
@@ -145,8 +139,7 @@ async function sendPushToUser(admin, userId, payload, logCtx = null) {
     await admin.from('push_subscriptions').delete().in('endpoint', deadEndpoints)
   }
 
-  // Telemetría: tabla notification_deliveries (opcional — si no existe, el
-  // error se silencia para no romper el cron).
+  // Tabla opcional: si la migración no existe, no rompemos el cron.
   if (deliveryRows.length > 0) {
     admin.from('notification_deliveries').insert(deliveryRows).then(() => {}, () => {})
   }
@@ -154,84 +147,39 @@ async function sendPushToUser(admin, userId, payload, logCtx = null) {
   return { sent, failed }
 }
 
-// Detección de tipo basada en el título. El modelo de datos no guarda un
-// flag explícito: todos los items viven en la tabla `events`, pero por
-// convención de cómo Nova / el usuario los crea, un recordatorio se
-// distingue por llevar la palabra "recordatorio" en el título ("Recordatorio:
-// pagar luz", "Clase — recordatorio 10 min"), o por arrancar con un verbo
-// imperativo corto. Si no matchea, asumimos evento agendado.
-function detectKind(ev) {
-  const t = String(ev?.title || '').trim()
-  if (!t) return 'event'
-  if (/^recordatorio\s*:/i.test(t)) return 'reminder'
-  if (/(?:—|-)\s*recordatorio\b/i.test(t)) return 'reminder'
-  if (/\brecordatorio\b/i.test(t)) return 'reminder'
-  if (/^(recordar|recuerda|revisar|enviar|llamar|pagar|comprar|confirmar|agendar)\b/i.test(t)) return 'reminder'
-  return 'event'
-}
-
-// Armado del payload por tipo. Cada tipo usa icono, cuerpo, acciones y
-// copy distintos: un EVENTO muestra el título tal cual (es un compromiso
-// agendado con hora), mientras que un RECORDATORIO antepone un prefijo
-// "Recordatorio · " y reemplaza el lead temporal por un "Ahora"/"En X min"
-// más simple — el valor del recordatorio es que aparece en el momento,
-// no saber "cuánto falta". El SW tiene defaults por kind por si el payload
-// llegara sin icon/actions, así podemos iterar el formato sin redeploy
-// del SW.
-function buildPayload(minsLeft, ev, offset) {
-  const kind = detectKind(ev)
-  const m = Math.max(0, Math.round(minsLeft))
-
-  if (kind === 'reminder') {
-    const clean = String(ev.title || '')
-      .replace(/^recordatorio\s*:\s*/i, '')
-      .replace(/\s*(?:—|-)\s*recordatorio\b.*$/i, '')
-      .trim() || 'Recordatorio'
-    const when = m <= 1 ? 'Ahora' : `En ${m} min`
-    return {
-      title: `Recordatorio · ${clean}`,
-      body: when,
-      url: '/',
-      tag: `reminder-${ev.id}-${offset}`,
-      icon: '/icons/notif-reminder.svg',
-      badge: '/icons/notif-reminder.svg',
-      actions: [
-        { action: 'done',   title: 'Listo' },
-        { action: 'snooze', title: 'Luego' },
-      ],
-      data: { eventId: ev.id, offset, kind: 'reminder' },
-    }
+async function recordSentNotification(admin, row) {
+  const extended = {
+    user_id: row.user_id,
+    event_id: row.event_id,
+    offset_min: row.offset_min,
+    sent_at: row.sent_at,
+    kind: row.kind,
+    title: row.title,
+    body: row.body,
+    payload: row.payload,
   }
 
-  // Evento agendado: el valor es el lead contextual.
-  let lead
-  if (m <= 1) lead = 'Empieza ahora'
-  else if (m <= 15) lead = `En ${m} min`
-  else if (m <= 35) lead = 'En media hora'
-  else if (m <= 75) lead = 'Dentro de una hora'
-  else lead = `En ${m} min`
-
-  const bodyParts = []
-  if (ev.time) bodyParts.push(ev.time)
-  bodyParts.push(lead)
-
-  return {
-    title: ev.title || 'Evento',
-    body: bodyParts.join(' · '),
-    url: '/',
-    tag: `reminder-${ev.id}-${offset}`,
-    icon: '/icons/notif-event.svg',
-    badge: '/icons/notif-event.svg',
-    actions: [
-      { action: 'open',   title: 'Abrir' },
-      { action: 'snooze', title: 'Posponer 10 min' },
-    ],
-    data: { eventId: ev.id, offset, kind: 'event' },
+  const base = {
+    user_id: row.user_id,
+    event_id: row.event_id,
+    offset_min: row.offset_min,
+    sent_at: row.sent_at,
   }
+
+  const options = { onConflict: 'user_id,event_id,offset_min' }
+  const { error } = await admin.from('sent_notifications').upsert(extended, options)
+  if (!error) return
+
+  // Compatibilidad con proyectos que aún no aplicaron la migración de metadata.
+  if (/kind|title|body|payload/i.test(error.message || '')) {
+    await admin.from('sent_notifications').upsert(base, options).then(() => {}, () => {})
+    return
+  }
+
+  console.warn('[cron] sent_notifications upsert failed', error.message)
 }
 
 export default async function handler(req, res) {
-  // Auth: shared secret
   const authHeader = req.headers?.authorization || req.headers?.Authorization
   const expected = process.env.CRON_SECRET
   if (!expected) return res.status(503).json({ error: 'no_cron_secret_configured' })
@@ -247,21 +195,18 @@ export default async function handler(req, res) {
   if (!admin) return res.status(503).json({ error: 'no_supabase_admin' })
 
   const now = new Date()
-  const horizon = new Date(now.getTime() + 65 * 60 * 1000) // 65 min hacia adelante
   const todayISO = now.toISOString().slice(0, 10)
   const yesterdayISO = new Date(now.getTime() - 86400000).toISOString().slice(0, 10)
   const tomorrowISO = new Date(now.getTime() + 86400000).toISOString().slice(0, 10)
+  const dayAfterTomorrowISO = new Date(now.getTime() + 2 * 86400000).toISOString().slice(0, 10)
 
-  // Traemos eventos del rango [ayer, hoy, mañana] para cubrir cruces de medianoche
-  // en distintas zonas horarias.
   const { data: events, error: evErr } = await admin
     .from('events')
-    .select('id, user_id, title, time, date, section, icon, reminder_offsets')
-    .in('date', [yesterdayISO, todayISO, tomorrowISO])
+    .select('id, user_id, title, time, date, section, icon, description, reminder_offsets, timezone')
+    .in('date', [yesterdayISO, todayISO, tomorrowISO, dayAfterTomorrowISO])
 
   if (evErr) return res.status(500).json({ error: 'events_fetch', message: evErr.message })
 
-  // Cachear timezones por user_id (evita queries repetidas)
   const userTzCache = new Map()
   async function getUserTz(userId) {
     if (userTzCache.has(userId)) return userTzCache.get(userId)
@@ -272,33 +217,24 @@ export default async function handler(req, res) {
     return tz
   }
 
-  let checked = 0, pushes = 0, failures = 0
+  let checked = 0
+  let pushes = 0
+  let failures = 0
   const actionsSummary = []
 
   for (const ev of (events || [])) {
     const eventDate = ev.date || todayISO
-    const tz = await getUserTz(ev.user_id)
+    const tz = ev.timezone || (await getUserTz(ev.user_id))
     const when = buildEventDate(eventDate, ev.time, tz)
-    if (!when || when < now) continue
-    const minsLeft = minutesUntil(when)
-    if (minsLeft > 75) continue
+    if (!when) continue
 
-    // Respetar reminder_offsets del evento:
-    //   · null/undefined → usar defaults [10, 30, 60]
-    //   · []             → el usuario silenció recordatorios, skip total
-    //   · array          → usar tal cual (solo offsets en rango 1..1440)
-    const raw = ev.reminder_offsets
-    let offsets
-    if (!Array.isArray(raw)) offsets = DEFAULT_OFFSETS
-    else if (raw.length === 0) continue
-    else offsets = raw.filter((x) => Number.isFinite(x) && x >= 1 && x <= 1440)
+    const minsLeft = minutesUntil(when)
+    const offsets = normalizeReminderOffsets(ev.reminder_offsets, DEFAULT_REMINDER_OFFSETS)
     if (offsets.length === 0) continue
+    if (minsLeft > Math.max(...offsets)) continue
 
     checked++
 
-    // RACE: antes de disparar, idempotency via upsert con pre-check.
-    // Primero levantamos todos los sent_rows de este evento para minimizar
-    // queries.
     const { data: sentRows } = await admin
       .from('sent_notifications')
       .select('offset_min, sent_at')
@@ -307,20 +243,16 @@ export default async function handler(req, res) {
     const sentByOffset = new Map((sentRows || []).map(r => [r.offset_min, r.sent_at]))
 
     for (const offset of offsets) {
-      const maxLate = maxLateFor(offset)
+      const maxLate = maxLateMinutesForOffset(offset)
       if (minsLeft > offset) continue
       if (minsLeft < offset - maxLate) continue
 
       const existingSentAt = sentByOffset.get(offset)
       if (existingSentAt) {
-        if (new Date(existingSentAt) > now) continue // snoozed
-        continue                                      // already sent
+        if (new Date(existingSentAt) > now) continue
+        continue
       }
 
-      // Lease preventivo — insert con onConflict: no-op para cubrir la race
-      // en la que dos corridas simultáneas del cron lean la misma ausencia.
-      // Si falla el insert (constraint violation), otra corrida ganó y
-      // skipeamos.
       const leaseRes = await admin
         .from('sent_notifications')
         .insert({
@@ -329,13 +261,13 @@ export default async function handler(req, res) {
           offset_min: offset,
           sent_at: new Date().toISOString(),
         })
-      if (leaseRes.error) {
-        // Conflict (otro cron ya reservó) o error real. En ambos casos
-        // skipeamos; la otra corrida enviará la notif.
-        continue
-      }
+      if (leaseRes.error) continue
 
-      const payload = buildPayload(minsLeft, ev, offset)
+      const payload = buildSmartNotificationPayload(ev, {
+        offset,
+        minsLeft,
+        startsAt: when,
+      })
 
       const { sent, failed } = await sendPushToUser(admin, ev.user_id, payload, {
         eventId: ev.id,
@@ -345,17 +277,34 @@ export default async function handler(req, res) {
       failures += failed
 
       if (sent === 0) {
-        // Todas las subs fallaron — liberar el lease para que un cron futuro
-        // pueda reintentar (por ejemplo si era un error 5xx temporal).
         await admin.from('sent_notifications')
           .delete()
           .eq('user_id', ev.user_id)
           .eq('event_id', ev.id)
           .eq('offset_min', offset)
           .then(() => {}, () => {})
-      } else {
-        actionsSummary.push({ event_id: ev.id, user_id: ev.user_id, offset, sent })
+        continue
       }
+
+      await recordSentNotification(admin, {
+        user_id: ev.user_id,
+        event_id: ev.id,
+        offset_min: offset,
+        sent_at: new Date().toISOString(),
+        kind: payload.data?.kind || 'event_reminder',
+        title: payload.title,
+        body: payload.body,
+        payload,
+      })
+
+      actionsSummary.push({
+        event_id: ev.id,
+        user_id: ev.user_id,
+        offset,
+        kind: payload.data?.kind,
+        title: payload.title,
+        sent,
+      })
     }
   }
 
