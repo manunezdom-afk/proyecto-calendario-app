@@ -18,9 +18,39 @@ import { getSupabaseAdmin } from './_supabaseAdmin.js'
 import {
   DEFAULT_REMINDER_OFFSETS,
   buildSmartNotificationPayload,
+  classifyMoment,
   maxLateMinutesForOffset,
   normalizeReminderOffsets,
 } from '../src/utils/smartNotifications.js'
+import { pickSubjectForEvent } from '../src/utils/memoryInjection.js'
+
+// Devuelve la hora local (0..23) del usuario dadas su timezone IANA y una
+// fecha de referencia. Usado para decidir si un push cae dentro de su
+// ventana de "no molestar".
+function getLocalHour(date, timezone) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone || 'UTC',
+      hour: '2-digit',
+      hour12: false,
+    }).formatToParts(date)
+    const h = parts.find((p) => p.type === 'hour')?.value
+    const n = parseInt(h, 10)
+    return Number.isFinite(n) ? (n === 24 ? 0 : n) : null
+  } catch {
+    return null
+  }
+}
+
+// Quiet hours por usuario. Si start > end, la ventana cruza medianoche
+// (ej. 22→7 cubre [22..23] ∪ [0..6]). Null/Null = no molestar desactivado.
+function isWithinQuietHours(hour, start, end) {
+  if (hour == null) return false
+  if (start == null || end == null) return false
+  if (start === end) return false
+  if (start < end) return hour >= start && hour < end
+  return hour >= start || hour < end
+}
 
 function configureWebPush() {
   const pub = process.env.VAPID_PUBLIC_KEY
@@ -207,14 +237,45 @@ export default async function handler(req, res) {
 
   if (evErr) return res.status(500).json({ error: 'events_fetch', message: evErr.message })
 
-  const userTzCache = new Map()
-  async function getUserTz(userId) {
-    if (userTzCache.has(userId)) return userTzCache.get(userId)
+  // Cachea el perfil completo por user_id para esta corrida del cron. Con
+  // esto leemos timezone, personalidad y quiet hours en una sola query y no
+  // machacamos Supabase cuando el mismo usuario tiene múltiples eventos.
+  const userProfileCache = new Map()
+  async function getUserProfile(userId) {
+    if (userProfileCache.has(userId)) return userProfileCache.get(userId)
     const { data } = await admin
-      .from('user_profiles').select('timezone').eq('id', userId).maybeSingle()
-    const tz = data?.timezone || 'UTC'
-    userTzCache.set(userId, tz)
-    return tz
+      .from('user_profiles')
+      .select('timezone, nova_personality, quiet_start, quiet_end')
+      .eq('id', userId)
+      .maybeSingle()
+    const profile = {
+      timezone: data?.timezone || 'UTC',
+      personality: data?.nova_personality || 'focus',
+      quietStart: Number.isInteger(data?.quiet_start) ? data.quiet_start : null,
+      quietEnd: Number.isInteger(data?.quiet_end) ? data.quiet_end : null,
+    }
+    userProfileCache.set(userId, profile)
+    return profile
+  }
+
+  // Memorias por usuario (mismo espíritu: una sola query por cron run). Si
+  // la tabla está vacía o la fetcheada falla, devolvemos un array vacío y
+  // pickSubjectForEvent sencillamente no inyecta nada.
+  const userMemoriesCache = new Map()
+  async function getUserMemories(userId) {
+    if (userMemoriesCache.has(userId)) return userMemoriesCache.get(userId)
+    try {
+      const { data } = await admin
+        .from('user_memories')
+        .select('category, subject, content')
+        .eq('user_id', userId)
+      const memories = Array.isArray(data) ? data : []
+      userMemoriesCache.set(userId, memories)
+      return memories
+    } catch {
+      userMemoriesCache.set(userId, [])
+      return []
+    }
   }
 
   let checked = 0
@@ -222,9 +283,12 @@ export default async function handler(req, res) {
   let failures = 0
   const actionsSummary = []
 
+  let quietSkipped = 0
+
   for (const ev of (events || [])) {
     const eventDate = ev.date || todayISO
-    const tz = ev.timezone || (await getUserTz(ev.user_id))
+    const profile = await getUserProfile(ev.user_id)
+    const tz = ev.timezone || profile.timezone
     const when = buildEventDate(eventDate, ev.time, tz)
     if (!when) continue
 
@@ -263,10 +327,37 @@ export default async function handler(req, res) {
         })
       if (leaseRes.error) continue
 
+      // Quiet hours del usuario. Si la hora local actual cae dentro de la
+      // ventana de "no molestar", skippeamos — excepto cuando el evento ya
+      // es inminente (imminent/late), porque avisar de algo que empieza
+      // ahora vale más que respetar el silencio.
+      const moment = classifyMoment(minsLeft)
+      const localHour = getLocalHour(now, tz)
+      const inQuiet = isWithinQuietHours(localHour, profile.quietStart, profile.quietEnd)
+      const canOverrideQuiet = moment === 'imminent' || moment === 'late'
+      if (inQuiet && !canOverrideQuiet) {
+        quietSkipped += 1
+        // Liberamos el lease: si más tarde, fuera del horario silencioso,
+        // el evento todavía cae en maxLate para este offset, el próximo
+        // cron reintenta.
+        await admin.from('sent_notifications')
+          .delete()
+          .eq('user_id', ev.user_id)
+          .eq('event_id', ev.id)
+          .eq('offset_min', offset)
+          .then(() => {}, () => {})
+        continue
+      }
+
+      const memories = await getUserMemories(ev.user_id)
+      const subject = pickSubjectForEvent(ev, memories)
+
       const payload = buildSmartNotificationPayload(ev, {
         offset,
         minsLeft,
         startsAt: when,
+        personality: profile.personality,
+        subject,
       })
 
       const { sent, failed } = await sendPushToUser(admin, ev.user_id, payload, {
@@ -313,6 +404,7 @@ export default async function handler(req, res) {
     checked,
     pushes,
     failures,
+    quiet_skipped: quietSkipped,
     actions: actionsSummary,
     now: now.toISOString(),
   })

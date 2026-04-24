@@ -10,6 +10,7 @@ import PermissionsSection from '../components/PermissionsSection'
 import { useAppPreferences } from '../hooks/useAppPreferences'
 import { NOVA_PERSONALITIES } from '../utils/novaPersonality'
 import { isIOS, isAndroid } from '../lib/permissions'
+import { supabase } from '../lib/supabase'
 
 // Copy contextual por plataforma para "dónde habilitar el permiso".
 // El usuario ve "Ajustes de Android" en Android, "Ajustes del iPhone" en iOS,
@@ -265,6 +266,151 @@ function PushDiagnostic() {
 //   · blocked          → permiso 'denied' en el SO
 //   · unsupported      → dispositivo no tiene Push API
 // Además expone la última entrega reportada por el backend (si la migración
+// Genera labels "00:00" "01:00" ... "23:00" para los selects de quiet hours.
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({
+  value: h,
+  label: `${String(h).padStart(2, '0')}:00`,
+}))
+
+// QuietHoursRow — permite al usuario fijar una ventana "no molestar" (en
+// hora local). Se escribe en user_profiles.quiet_start/quiet_end y el cron
+// la respeta antes de disparar cada push. Quedan avisos inminentes (≤ 5
+// min) igual, por diseño: algo que empieza ahora no debería dormir.
+function QuietHoursRow() {
+  const { user } = useAuth()
+  const [start, setStart] = useState(null)
+  const [end, setEnd] = useState(null)
+  const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!user?.id || !supabase) { setLoaded(true); return }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('quiet_start, quiet_end')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (cancelled) return
+        if (!error && data) {
+          setStart(Number.isInteger(data.quiet_start) ? data.quiet_start : null)
+          setEnd(Number.isInteger(data.quiet_end) ? data.quiet_end : null)
+        }
+      } catch {} finally {
+        if (!cancelled) setLoaded(true)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [user?.id])
+
+  const enabled = start != null && end != null
+
+  async function persist(nextStart, nextEnd) {
+    if (!user?.id || !supabase) return
+    setSaving(true)
+    try {
+      await supabase
+        .from('user_profiles')
+        .upsert(
+          { id: user.id, quiet_start: nextStart, quiet_end: nextEnd },
+          { onConflict: 'id' },
+        )
+    } catch {} finally {
+      setSaving(false)
+    }
+  }
+
+  function toggle() {
+    if (enabled) {
+      setStart(null); setEnd(null); persist(null, null)
+    } else {
+      // Default razonable: 22:00 a 07:00 (cruza medianoche).
+      setStart(22); setEnd(7); persist(22, 7)
+    }
+  }
+
+  function updateStart(v) {
+    const n = Number(v)
+    setStart(n)
+    if (end != null) persist(n, end)
+  }
+
+  function updateEnd(v) {
+    const n = Number(v)
+    setEnd(n)
+    if (start != null) persist(start, n)
+  }
+
+  if (!user) {
+    return (
+      <div className="flex items-start gap-3 px-5 py-3 border-t border-slate-50">
+        <span className="material-symbols-outlined text-slate-400 text-[18px] mt-0.5">bedtime</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold text-slate-600">No molestar</p>
+          <p className="text-[11.5px] text-slate-400 leading-snug">
+            Inicia sesión para configurar tu ventana de silencio.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="border-t border-slate-50">
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={saving || !loaded}
+        className="w-full flex items-start gap-3 px-5 py-3 text-left hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-60"
+      >
+        <span
+          className={`material-symbols-outlined text-[18px] mt-0.5 ${enabled ? 'text-primary' : 'text-slate-400'}`}
+          style={{ fontVariationSettings: enabled ? "'FILL' 1" : "'FILL' 0" }}
+        >
+          bedtime
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold text-slate-700">No molestar</p>
+          <p className="text-[11.5px] text-slate-400 leading-snug">
+            {enabled
+              ? 'Focus silencia los avisos en esta ventana. Lo inminente (≤ 5 min) sigue llegando.'
+              : 'Activa una ventana de silencio para que los recordatorios no te interrumpan de noche.'}
+          </p>
+        </div>
+        <span className={`flex-shrink-0 mt-1 w-9 h-5 rounded-full transition-colors ${enabled ? 'bg-primary' : 'bg-slate-200'}`}>
+          <span className={`block w-4 h-4 rounded-full bg-white shadow-sm mt-0.5 transition-transform ${enabled ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+        </span>
+      </button>
+      {enabled && (
+        <div className="flex items-center gap-2 px-5 pb-4 pt-1">
+          <select
+            value={start}
+            onChange={(e) => updateStart(e.target.value)}
+            disabled={saving}
+            className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            {HOUR_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>Desde {o.label}</option>
+            ))}
+          </select>
+          <select
+            value={end}
+            onChange={(e) => updateEnd(e.target.value)}
+            disabled={saving}
+            className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            {HOUR_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>Hasta {o.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // 005 está aplicada) para que el usuario vea "última notif enviada".
 function RemindersRow() {
   const [state, setState] = useState('checking')
@@ -547,6 +693,7 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
           concedido pero la entrega de push falla. */}
       <SectionCard title="Notificaciones">
         <RemindersRow />
+        <QuietHoursRow />
         <PushDiagnostic />
       </SectionCard>
 

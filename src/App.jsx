@@ -3,6 +3,8 @@ import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { useEvents }        from './hooks/useEvents'
 import { useTasks }         from './hooks/useTasks'
 import { useNotifications } from './hooks/useNotifications'
+import { useAppBadge }      from './hooks/useAppBadge'
+import { useNovaPersonalitySync } from './hooks/useNovaPersonalitySync'
 import { useSuggestions }   from './hooks/useSuggestions'
 import { useUserMemories }  from './hooks/useUserMemories'
 import { useAuth }          from './context/AuthContext'
@@ -159,6 +161,15 @@ export default function App() {
   const { events, addEvent, deleteEvent, editEvent } = useEvents()
   const { tasks, addTask, toggleTask, deleteTask, updateTask } = useTasks()
   const { memories } = useUserMemories()
+
+  // Badge del icono de la app (iOS PWA y browsers de escritorio compatibles):
+  // refleja lo que queda por atender hoy para que la app "llame" al usuario
+  // sin tener que estar abierta. Con sesión cerrada se limpia.
+  useAppBadge(events, tasks, Boolean(user))
+
+  // Sincroniza la personalidad de Nova entre localStorage y user_profiles
+  // para que el cron pueda adaptar el tono de los push.
+  useNovaPersonalitySync(user)
   const {
     suggestions,
     pendingCount: inboxPendingCount,

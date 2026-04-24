@@ -3,14 +3,22 @@
 
 -- ── user_profiles ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.user_profiles (
-  id            UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  chronotype    TEXT,
-  role          TEXT,
-  setup_done    BOOLEAN  DEFAULT FALSE,
-  snoozed_until BIGINT,
-  timezone      TEXT     DEFAULT 'UTC',
-  created_at    TIMESTAMPTZ DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ DEFAULT NOW()
+  id               UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  chronotype       TEXT,
+  role             TEXT,
+  setup_done       BOOLEAN  DEFAULT FALSE,
+  snoozed_until    BIGINT,
+  timezone         TEXT     DEFAULT 'UTC',
+  -- Personalidad activa de Nova (ver api/_lib/personality.js). Controla el
+  -- tono del copy tanto del chat como de las push notifications.
+  nova_personality TEXT     NOT NULL DEFAULT 'focus'
+    CHECK (nova_personality IN ('focus', 'cercana', 'estrategica')),
+  -- Quiet hours en hora local del usuario. NULL = no molestar desactivado.
+  -- Si quiet_start > quiet_end, la ventana cruza medianoche (ej. 22→7).
+  quiet_start      SMALLINT CHECK (quiet_start IS NULL OR (quiet_start BETWEEN 0 AND 23)),
+  quiet_end        SMALLINT CHECK (quiet_end   IS NULL OR (quiet_end   BETWEEN 0 AND 23)),
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;

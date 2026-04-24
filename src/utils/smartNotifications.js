@@ -2,11 +2,16 @@ export const DEFAULT_REMINDER_OFFSETS = [10, 30, 60]
 
 const MAX_OFFSET_MIN = 1440
 
+// Personalidades soportadas por la voz del copy (espejo de
+// api/_lib/personality.js). Si el valor recibido no es uno de estos, caemos
+// a 'focus' silenciosamente.
+const SUPPORTED_PERSONALITIES = new Set(['focus', 'cercana', 'estrategica'])
+
 function normalizeText(value) {
   return String(value || '')
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
 }
 
 function getStartTimeLabel(time) {
@@ -17,6 +22,10 @@ function getStartTimeLabel(time) {
 
 function uniqueSorted(values) {
   return [...new Set(values)].sort((a, b) => a - b)
+}
+
+function resolvePersonality(value) {
+  return SUPPORTED_PERSONALITIES.has(value) ? value : 'focus'
 }
 
 export function normalizeReminderOffsets(value, fallback = DEFAULT_REMINDER_OFFSETS) {
@@ -59,6 +68,22 @@ export function formatReminderLead(minutes) {
   return `en ${formatDurationShort(min)}`
 }
 
+// Momento del push respecto al evento. Permite que el copy varíe no sólo
+// por "qué" (kind) sino por "cuán cerca estamos" — la ansiedad de "arranca
+// en 2 min" no es la misma que "en 45 min, sin prisa".
+//   · far      offset > 30 min
+//   · near     5 < offset ≤ 30 min
+//   · imminent 0 < offset ≤ 5 min
+//   · late     minsLeft ≤ 0 (cron llegó tarde, el evento ya empezó)
+export function classifyMoment(minsLeft) {
+  const m = Number(minsLeft)
+  if (!Number.isFinite(m)) return 'near'
+  if (m <= 0) return 'late'
+  if (m <= 5) return 'imminent'
+  if (m <= 30) return 'near'
+  return 'far'
+}
+
 export function classifySmartNotification(event = {}, offset = 0, minsLeft = offset) {
   const title = normalizeText(event.title)
   const icon = normalizeText(event.icon)
@@ -87,64 +112,160 @@ export function classifySmartNotification(event = {}, offset = 0, minsLeft = off
   return 'event_reminder'
 }
 
+// Describe el adelanto/atraso del push en palabras — sensible al momento.
+// "en 10 min" es aceptable para far/near, pero sentí la urgencia de
+// imminent y el realismo de late. "arranca en 2 min" y "empezó hace 3 min"
+// son marcadamente distintos al neutro "en X min".
+function formatMomentLead(minsLeft, moment) {
+  const absMin = Math.max(0, Math.round(Math.abs(Number(minsLeft) || 0)))
+  if (moment === 'late') {
+    if (absMin <= 1) return 'empezó ahora'
+    return `empezó hace ${formatDurationShort(absMin)}`
+  }
+  if (moment === 'imminent') {
+    if (absMin <= 1) return 'arranca en 1 min'
+    return `arranca en ${formatDurationShort(absMin)}`
+  }
+  return formatReminderLead(minsLeft)
+}
+
+// Concatena "X con Y" si hay sujeto conocido. Ej: "Reunión" + "Ana" →
+// "Reunión con Ana". Conservador: si el título ya contiene el sujeto (match
+// case-insensitive), no lo repetimos.
+function titleWithSubject(title, subject) {
+  if (!subject) return title
+  const t = normalizeText(title)
+  const s = normalizeText(subject)
+  if (!s || t.includes(s)) return title
+  return `${title} con ${subject}`
+}
+
+// ── Copy por (kind, personality, moment) ───────────────────────────────────
+//
+// Tres personalidades × 7 kinds × 3 momentos relevantes = matriz amplia. En
+// vez de hardcodear 63 variantes, partimos de un "core" por kind y aplicamos
+// matices por personalidad + momento. Mantener los tres tonos distintos sin
+// caer en caricatura es la parte delicada; los ejemplos del sistema de Nova
+// (ver api/_lib/personality.js) son la referencia estilística.
+//
+// Reglas transversales:
+//   · Máximo 2 oraciones.
+//   · Texto plano (sin emojis, sin listas, sin markdown).
+//   · El título carga el "qué + cuándo"; el body agrega el "qué hacer".
+function buildCopyForKind({ kind, personality, title, subject, minsLeft, moment, startTime }) {
+  const p = resolvePersonality(personality)
+  const lead = formatMomentLead(minsLeft, moment)
+  const niceTitle = titleWithSubject(title, subject)
+  const startFragment = startTime ? `Empieza a las ${startTime}.` : ''
+
+  // Helper interno: algunas cosas son comunes; el matiz es qué frase elige
+  // cada personalidad para el body.
+  const say = {
+    focus: {
+      focus_start:     () => ({ t: `${niceTitle} empieza ahora`, b: 'Protege el bloque. Empieza por lo crítico.' }),
+      focus_reminder:  () => ({ t: `${niceTitle} ${lead}`,       b: 'Deja listo lo que vas a trabajar.' }),
+      meeting_prep:    () => ({ t: `${niceTitle} ${lead}`,       b: 'Prepara lo importante antes de entrar.' }),
+      leave_now:       () => ({ t: `${niceTitle} ${lead}`,       b: 'Buen momento para salir.' }),
+      event_start:     () => ({ t: `${niceTitle} empieza ahora`, b: startFragment || 'Abre Focus para el detalle.' }),
+      day_before:      () => ({ t: `${niceTitle} es mañana`,     b: startTime ? `Programado a las ${startTime}.` : 'Queda para mañana.' }),
+      event_reminder:  () => ({ t: `${niceTitle} ${lead}`,       b: startFragment || 'Abre Focus para el detalle.' }),
+    },
+    cercana: {
+      focus_start:     () => ({ t: `Tu bloque de foco empieza ya`, b: `${niceTitle}. Cuídalo, empieza por lo importante.` }),
+      focus_reminder:  () => ({ t: `Tu bloque de foco ${lead}`,    b: `${niceTitle}. Ten a mano lo que vas a trabajar.` }),
+      meeting_prep:    () => ({ t: `Tu ${niceTitle} ${lead}`,      b: 'Una pasada rápida a lo clave antes de entrar.' }),
+      leave_now:       () => ({ t: `Tu ${niceTitle} ${lead}`,      b: 'Si te mueves, este es buen momento.' }),
+      event_start:     () => ({ t: `${niceTitle} empieza ya`,      b: startFragment || 'Abre Focus cuando puedas.' }),
+      day_before:      () => ({ t: `Mañana tienes ${niceTitle}`,   b: startTime ? `Lo dejaste a las ${startTime}.` : 'Quedó para mañana.' }),
+      event_reminder:  () => ({ t: `Tu ${niceTitle} ${lead}`,      b: startFragment || 'Te aviso cuando esté cerca.' }),
+    },
+    estrategica: {
+      focus_start:     () => ({ t: `${niceTitle} empieza ahora`,   b: 'Empieza con el punto crítico del bloque.' }),
+      focus_reminder:  () => ({ t: `${niceTitle} ${lead}`,         b: 'Define la primera tarea antes de entrar al bloque.' }),
+      meeting_prep:    () => ({ t: `${niceTitle} ${lead}`,         b: 'Entra con el punto decisivo ya pensado.' }),
+      leave_now:       () => ({ t: `${niceTitle} ${lead}`,         b: 'Salir ahora deja margen para imprevistos.' }),
+      event_start:     () => ({ t: `${niceTitle} empieza ahora`,   b: startFragment || 'Abre Focus para el detalle.' }),
+      day_before:      () => ({ t: `${niceTitle} es mañana`,       b: startTime ? `A las ${startTime}. Deja el día preparado.` : 'Deja el día preparado.' }),
+      event_reminder:  () => ({ t: `${niceTitle} ${lead}`,         b: startFragment || 'Prioriza lo que depende de este bloque.' }),
+    },
+  }
+
+  const builder = (say[p] && say[p][kind]) || say.focus.event_reminder
+  const { t, b } = builder()
+
+  // Matices puntuales por momento que se aplican después del builder.
+  // 'late' merece un body distinto del original — avisarte de algo que
+  // "en realidad ya empezó" suena raro con el copy normal.
+  if (moment === 'late') {
+    return {
+      title: `${niceTitle} ${lead}`,
+      body: p === 'cercana'
+        ? 'Ya arrancó. Si lo dejaste pasar, muévelo cuando puedas.'
+        : p === 'estrategica'
+        ? 'Se cruzó. Decide si entras tarde o lo reagendas.'
+        : 'Ya empezó. Entra o muévelo.',
+      iconName: iconForKind(kind),
+    }
+  }
+
+  return { title: t, body: b, iconName: iconForKind(kind) }
+}
+
+function iconForKind(kind) {
+  switch (kind) {
+    case 'focus_start':
+    case 'focus_reminder':
+      return 'psychology'
+    case 'meeting_prep':
+      return 'groups'
+    case 'leave_now':
+      return 'directions_walk'
+    case 'day_before':
+      return 'event_available'
+    default:
+      return 'event'
+  }
+}
+
+// Entry point que llama el cron (o cualquier dispatcher local).
+//
+// Nuevas opciones respecto a la versión anterior:
+//   · personality: 'focus' | 'cercana' | 'estrategica' (default 'focus')
+//   · subject:     string | null — sujeto extraído de user_memories. Cuando
+//                  existe y no está ya en el título, se inyecta: "Reunión"
+//                  + "Ana" → "Reunión con Ana".
+//
+// Cambio de tag: pasamos de `reminder-${eventId}-${offset}` (una entrada
+// por offset) a `reminder-${eventId}` (el SO reemplaza la anterior). Así en
+// iPhone el usuario ve UNA sola notificación que se actualiza, en vez de 3
+// apiladas cuando un evento tiene offsets [30, 10, 0].
 export function buildSmartNotificationPayload(event = {}, options = {}) {
   const {
     offset = 10,
     minsLeft = offset,
     startsAt = null,
+    personality = 'focus',
+    subject = null,
   } = options
 
   const title = String(event.title || 'Evento').trim() || 'Evento'
   const startTime = getStartTimeLabel(event.time)
-  const actualMins = Math.max(0, Math.round(Number(minsLeft) || 0))
-  const lead = formatReminderLead(actualMins)
-  const kind = classifySmartNotification(event, offset, actualMins)
+  const actualMins = Math.round(Number(minsLeft))
+  const moment = classifyMoment(actualMins)
+  const kind = classifySmartNotification(event, offset, Math.max(0, actualMins))
 
-  const baseBody = startTime
-    ? `Empieza a las ${startTime}.`
-    : 'Abre Focus para ver el detalle.'
+  const copy = buildCopyForKind({
+    kind,
+    personality: resolvePersonality(personality),
+    title,
+    subject: subject && String(subject).trim() ? String(subject).trim() : null,
+    minsLeft: actualMins,
+    moment,
+    startTime,
+  })
 
-  const copyByKind = {
-    focus_start: {
-      title: 'Tu bloque de foco empieza ahora',
-      body: `${title}. Protege este espacio y empieza por lo importante.`,
-      iconName: 'psychology',
-    },
-    focus_reminder: {
-      title: `Bloque de foco ${lead}`,
-      body: `${title}. Deja listo lo que necesitas antes de empezar.`,
-      iconName: 'psychology',
-    },
-    meeting_prep: {
-      title: `${title} ${lead}`,
-      body: 'Prepara lo importante antes de entrar.',
-      iconName: 'groups',
-    },
-    leave_now: {
-      title: `${title} ${lead}`,
-      body: 'Si tienes que moverte, este es buen momento para salir.',
-      iconName: event.icon || 'directions_walk',
-    },
-    event_start: {
-      title: `${title} empieza ahora`,
-      body: baseBody,
-      iconName: event.icon || 'event',
-    },
-    day_before: {
-      title: `${title} es mañana`,
-      body: startTime ? `Lo tienes programado a las ${startTime}.` : 'Lo tienes programado para mañana.',
-      iconName: event.icon || 'event_available',
-    },
-    event_reminder: {
-      title: `${title} ${lead}`,
-      body: baseBody,
-      iconName: event.icon || 'event',
-    },
-  }
-
-  const copy = copyByKind[kind] || copyByKind.event_reminder
   const eventId = event.id
-  const tag = eventId ? `reminder-${eventId}-${offset}` : `focus-${kind}-${Date.now()}`
+  const tag = eventId ? `reminder-${eventId}` : `focus-${kind}-${Date.now()}`
 
   return {
     title: copy.title,
@@ -161,6 +282,9 @@ export function buildSmartNotificationPayload(event = {}, options = {}) {
       eventId,
       offset,
       kind,
+      moment,
+      personality: resolvePersonality(personality),
+      subject: subject || null,
       eventTitle: title,
       startsAt: startsAt instanceof Date ? startsAt.toISOString() : startsAt,
       section: event.section || null,
