@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import TimePickerSheet from '../components/TimePickerSheet'
 
 const REMINDER_PRESETS = [
   { min: 5,    label: '5 min' },
@@ -23,6 +24,7 @@ export default function TaskDetailView({ event, onBack, onSave, onDelete }) {
     Array.isArray(event?.reminderOffsets) ? [...event.reminderOffsets] : null,
   )
   const [saved, setSaved] = useState(false)
+  const [showTimePicker, setShowTimePicker] = useState(false)
 
   const usingDefaults = reminderOffsets === null
   const silenced = Array.isArray(reminderOffsets) && reminderOffsets.length === 0
@@ -91,13 +93,16 @@ export default function TaskDetailView({ event, onBack, onSave, onDelete }) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-outline">Hora</label>
-              <input
-                type="text"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                placeholder="8:30 AM"
-                className="w-full bg-surface-container-low rounded-xl p-4 text-on-surface font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
-              />
+              <button
+                type="button"
+                onClick={() => setShowTimePicker(true)}
+                className="w-full bg-surface-container-low rounded-xl p-4 text-on-surface font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all flex items-center justify-between gap-2"
+              >
+                <span className={time ? '' : 'text-outline/60'}>
+                  {time || '8:30 AM'}
+                </span>
+                <span className="material-symbols-outlined text-outline text-[18px]">schedule</span>
+              </button>
             </div>
             <div className="space-y-2">
               <label className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-outline">Fecha</label>
@@ -239,6 +244,16 @@ export default function TaskDetailView({ event, onBack, onSave, onDelete }) {
           </div>
         </form>
       </main>
+
+      {showTimePicker && (
+        <TimePickerSheet
+          initialValue={time}
+          outputFormat="12h"
+          onClose={() => setShowTimePicker(false)}
+          onSave={(v) => { setTime(v); setShowTimePicker(false) }}
+          onClear={() => setTime('')}
+        />
+      )}
     </div>
   )
 }

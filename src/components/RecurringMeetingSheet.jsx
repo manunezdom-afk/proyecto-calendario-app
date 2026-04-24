@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { pushModal, popModal } from '../utils/modalStack'
+import WheelTimePicker from './WheelTimePicker'
 
 // Wizard conversacional para crear una reunión semanal fija. El usuario entra
 // por el chip del empty state del planner y avanza en 4 pasos (nombre → día y
@@ -200,29 +201,11 @@ export default function RecurringMeetingSheet({ onCreate, onCancel }) {
               <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-outline">
                 Hora de inicio
               </p>
-              <div className="flex items-center gap-2">
-                <select
-                  value={hour}
-                  onChange={(e) => setHour(parseInt(e.target.value, 10))}
-                  className="flex-1 rounded-xl border border-outline-variant bg-surface-container-lowest px-3 py-3 text-[14px] text-on-surface outline-none focus:border-primary"
-                >
-                  {Array.from({ length: 24 }, (_, h) => (
-                    <option key={h} value={h}>
-                      {format12(h, 0).split(' ')[0]} {h < 12 ? 'AM' : 'PM'}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-on-surface">:</span>
-                <select
-                  value={minute}
-                  onChange={(e) => setMinute(parseInt(e.target.value, 10))}
-                  className="flex-1 rounded-xl border border-outline-variant bg-surface-container-lowest px-3 py-3 text-[14px] text-on-surface outline-none focus:border-primary"
-                >
-                  {[0, 15, 30, 45].map((m) => (
-                    <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
-                  ))}
-                </select>
-              </div>
+              <WheelTimePicker
+                initialValue={`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`}
+                minuteStep={5}
+                onChange={(_hm, parts) => { setHour(parts.hour); setMinute(parts.minute) }}
+              />
             </div>
           </div>
         )}
