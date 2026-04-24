@@ -1,8 +1,8 @@
 {
-  "name": "focus-landing",
+  "name": "focus-os-landing",
   "version": "1.0.0",
   "private": true,
-  "description": "Landing page for Focus · Calendario con IA",
+  "description": "Landing page for FOCUS OS · Ecosistema de productividad con IA",
   "scripts": {
     "build": "echo 'Static site, no build needed'"
   }
