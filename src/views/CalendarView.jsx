@@ -719,9 +719,9 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                 En mobile vive APILADO ENCIMA de la pastilla de Nova (que está
                 en safe-bottom + 116px y ~44px de alto). Así nunca se tapan
                 entre sí: pill abajo, FAB justo arriba, mismo borde derecho. */}
-            {!isDesktop && !isDayEmpty && (
+            {!isDesktop && !isDayEmpty && !showModal && (
             <div
-              className="fixed right-4 z-[60]"
+              className="fixed right-4 z-[40]"
               style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 172px)' }}
             >
               <button

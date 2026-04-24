@@ -1447,7 +1447,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       {/* FAB — solo visible cuando hay bloques y en mobile.
           Bottom calculado para que jamás pise el bottom nav:
           safe-area + 20 (nav offset) + ~80 (alto nav) + 16 (gap) ≈ 116 + safe. */}
-      {blocks.length > 0 && !isDesktop && (
+      {blocks.length > 0 && !isDesktop && !showModal && (
         <button
           onClick={() => setShowModal(true)}
           style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 116px)' }}
