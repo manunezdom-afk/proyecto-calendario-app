@@ -788,12 +788,19 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       {/* Setup card legacy — reemplazado por OnboardingTour animado.
           El sistema de user_signals aprende el cronotipo solo, sin preguntar. */}
 
-      <main className={`${isDesktop ? 'max-w-5xl' : 'max-w-7xl'} mx-auto px-4 sm:px-6 pt-8`}>
-        {/* Desktop: stack vertical con max-w-5xl — ancho sustancioso pero
-            cómodo de leer. Antes max-w-3xl dejaba 600px en blanco a cada
-            lado; 5xl reduce ese desperdicio sin volver al grid 2-col que
-            apretaba el timeline. Mobile: igual que siempre. */}
-        <div className={isDesktop ? 'flex flex-col gap-14' : 'flex flex-col gap-10'}>
+      <main className={`${isDesktop ? 'max-w-5xl xl:max-w-7xl' : 'max-w-7xl'} mx-auto px-4 sm:px-6 pt-8`}>
+        {/* Layouts:
+            - mobile/lg (<1280): stack vertical — timeline arriba, panel abajo.
+            - xl (≥1280): grid 2-col "timeline + sticky right panel". El
+              right panel queda sticky para que Próximo Bloque, Tu Día y
+              Nova sigan visibles mientras el usuario scrollea el timeline. */}
+        <div
+          className={
+            isDesktop
+              ? 'flex flex-col gap-14 xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-x-10 xl:gap-y-6 xl:items-start'
+              : 'flex flex-col gap-10'
+          }
+        >
 
           {/* ── Left: Timeline ────────────────────────────────────────────── */}
           <div className="min-w-0">
@@ -1072,57 +1079,104 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   // de un saque.
                   { icon: 'event_repeat',   label: 'Reunión semanal fija', action: 'recurring' },
                 ]
+                // Copy y data para ambas variantes — mismo texto, distintos layouts
+                const title = 'Hoy está libre.'
+                const subtitle = isFirstUse
+                  ? '¿Por dónde empezamos? Toca un ejemplo o escríbele a Nova.'
+                  : pendingTotal > 0
+                    ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. Buen momento para avanzar una.`
+                    : 'Agrega un evento o pídele a Nova que arme tu agenda.'
+
+                const desktopCards = isDesktop ? [
+                  { icon: 'psychology', title: 'Bloquear foco', sub: 'Reserva 2h sin notificaciones', prompt: 'Bloquea 2h de foco esta tarde' },
+                  { icon: 'groups', title: 'Agregar reunión', sub: 'Con participantes y recordatorio', prompt: 'Agenda una reunión mañana a las 10' },
+                  { icon: 'auto_awesome', title: 'Planifica con Nova', sub: 'Deja que arme tu día por ti', prompt: 'Arma mi día para que rinda bien' },
+                ] : []
+
+                const handleChip = (chip) => {
+                  if (chip.action === 'recurring') {
+                    setRecurringSheetOpen(true)
+                  } else {
+                    setFocusBarSeed(({ n }) => ({ text: chip.prompt, n: n + 1, autosubmit: true, context: null }))
+                  }
+                }
+
                 return (
-                  // Centrado estricto en iPhone: max-w-[300px] + mx-auto fuerza
-                  // la columna a ~300px centrada. Con max-w-md (448px) el bloque
-                  // ocupaba todo el ancho disponible y visualmente arrastraba
-                  // hacia la derecha porque el ojo lo comparaba con el header.
-                  <div className="w-full max-w-[300px] mx-auto space-y-4">
-                    <div className="space-y-1 text-center">
-                      <p className="text-on-surface text-sm font-semibold">Hoy está libre.</p>
-                      <p className="text-outline/70 text-xs leading-relaxed">
-                        {isFirstUse
-                          ? '¿Por dónde empezamos? Toca un ejemplo o escríbele a Nova.'
-                          : pendingTotal > 0
-                          ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. Buen momento para avanzar una.`
-                          : 'Agrega un evento o pídele a Nova que arme tu agenda.'}
-                      </p>
-                    </div>
-                    {isFirstUse && (
-                      <ul className="space-y-2">
-                        {chips.map((chip) => (
-                          <li key={chip.label}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (chip.action === 'recurring') {
-                                  setRecurringSheetOpen(true)
-                                } else {
-                                  setFocusBarSeed(({ n }) => ({ text: chip.prompt, n: n + 1, autosubmit: true, context: null }))
-                                }
-                              }}
-                              className="w-full flex items-center gap-2.5 bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2.5 text-left transition-colors active:scale-[0.99]"
-                            >
-                              <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                <span
-                                  className="material-symbols-outlined text-primary text-[16px]"
-                                  style={{ fontVariationSettings: "'FILL' 1" }}
-                                >
-                                  {chip.icon}
+                  <>
+                    {/* Mobile / lg: layout estrecho con 3 chips verticales */}
+                    <div className={`w-full max-w-[300px] mx-auto space-y-4 ${isDesktop ? 'xl:hidden' : ''}`}>
+                      <div className="space-y-1 text-center">
+                        <p className="text-on-surface text-sm font-semibold">{title}</p>
+                        <p className="text-outline/70 text-xs leading-relaxed">{subtitle}</p>
+                      </div>
+                      {isFirstUse && (
+                        <ul className="space-y-2">
+                          {chips.map((chip) => (
+                            <li key={chip.label}>
+                              <button
+                                type="button"
+                                onClick={() => handleChip(chip)}
+                                className="w-full flex items-center gap-2.5 bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2.5 text-left transition-colors active:scale-[0.99]"
+                              >
+                                <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                  <span
+                                    className="material-symbols-outlined text-primary text-[16px]"
+                                    style={{ fontVariationSettings: "'FILL' 1" }}
+                                  >
+                                    {chip.icon}
+                                  </span>
                                 </span>
-                              </span>
-                              <span className="flex-1 min-w-0 text-[13px] font-medium text-on-surface leading-snug break-words">
-                                {chip.label}
-                              </span>
-                              <span className="material-symbols-outlined text-outline/50 text-[16px] flex-shrink-0">
-                                arrow_outward
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
+                                <span className="flex-1 min-w-0 text-[13px] font-medium text-on-surface leading-snug break-words">
+                                  {chip.label}
+                                </span>
+                                <span className="material-symbols-outlined text-outline/50 text-[16px] flex-shrink-0">
+                                  arrow_outward
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    {/* Desktop xl: bloque ancho con 3 tarjetas grandes. Se
+                        percibe como un empty state intencional, no un hueco. */}
+                    {isDesktop && (
+                      <div className="hidden xl:block w-full">
+                        <div className="mb-6">
+                          <p className="text-on-surface text-xl font-bold font-headline">{title}</p>
+                          <p className="text-outline text-sm mt-1 max-w-xl">{subtitle}</p>
+                        </div>
+                        {isFirstUse && (
+                          <div className="grid grid-cols-3 gap-4">
+                            {desktopCards.map((card) => (
+                              <button
+                                key={card.title}
+                                type="button"
+                                onClick={() => handleChip({ prompt: card.prompt })}
+                                className="group text-left p-5 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 hover:border-primary/50 hover:shadow-[0_12px_30px_rgba(27,27,29,0.06)] transition-all active:scale-[0.99]"
+                              >
+                                <span className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                                  <span
+                                    className="material-symbols-outlined text-primary text-[22px]"
+                                    style={{ fontVariationSettings: "'FILL' 1" }}
+                                  >
+                                    {card.icon}
+                                  </span>
+                                </span>
+                                <p className="text-[15px] font-bold text-on-surface leading-snug mb-1">
+                                  {card.title}
+                                </p>
+                                <p className="text-[12.5px] text-outline leading-snug">
+                                  {card.sub}
+                                </p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     )}
-                  </div>
+                  </>
                 )
               })()}
 
@@ -1185,8 +1239,57 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
             </div>
           </div>
 
-          {/* ── Right: Insights personalizados ────────────────────────────── */}
-          <div className="w-full space-y-5">
+          {/* ── Right: Insights personalizados ──────────────────────────────
+              En xl vive como panel sticky (top-20 = altura topbar + 1rem)
+              con su propio scroll interno si supera el viewport. En lg/mobile
+              el padre es flex-col y este div fluye como hermano normal. */}
+          <div className="w-full space-y-5 xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:pr-1">
+
+            {/* ── Card: Nova panel (solo xl) ──────────────────────────────
+                Reemplaza al orbe flotante en desktop grande. El input real
+                sigue siendo la FocusBar en la columna izquierda; aquí
+                damos ejemplos rápidos y un atajo claro a lo que Nova puede
+                hacer "ahora mismo". */}
+            {isDesktop && (
+              <div className="hidden xl:block bg-gradient-to-br from-primary/5 via-white to-secondary/5 dark:from-primary/10 dark:via-slate-900 dark:to-secondary/10 rounded-[24px] p-5 border border-outline-variant/20">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="material-symbols-outlined text-primary text-[20px]"
+                      style={{ fontVariationSettings: "'FILL' 1" }}
+                    >
+                      auto_awesome
+                    </span>
+                    <h4 className="font-headline font-bold text-on-surface">Nova</h4>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-white/60 dark:bg-slate-800 text-slate-500 font-semibold">
+                    ⌘K
+                  </span>
+                </div>
+                <p className="text-[12.5px] text-outline leading-snug mb-3">
+                  Dime qué quieres. Siempre confirmas antes de aplicar.
+                </p>
+                <div className="space-y-1.5">
+                  {[
+                    { icon: 'event',      text: 'Agenda gym mañana a las 7' },
+                    { icon: 'psychology', text: 'Bloquea 2h de foco esta tarde' },
+                    { icon: 'swap_horiz', text: 'Libérame el viernes' },
+                  ].map((ex) => (
+                    <button
+                      key={ex.text}
+                      type="button"
+                      onClick={() => setFocusBarSeed(({ n }) => ({ text: ex.text, n: n + 1, autosubmit: false, context: null }))}
+                      className="w-full flex items-center gap-2 text-left px-2.5 py-2 rounded-xl bg-white/70 dark:bg-slate-800/70 hover:bg-primary/10 hover:text-primary text-slate-600 dark:text-slate-300 transition-colors active:scale-[0.99]"
+                    >
+                      <span className="material-symbols-outlined text-[15px] text-primary flex-shrink-0">
+                        {ex.icon}
+                      </span>
+                      <span className="text-[12px] font-medium truncate">{ex.text}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ── Card 1: Próximo Bloque ────────────────────────────────── */}
             {blocks.length > 0 && (
@@ -1349,9 +1452,12 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
             </div>
             )}
 
-            {/* ── Card 2: Tu Día ────────────────────────────────────────── */}
-            {blocks.length > 0 && !isDesktop && (
-            <div className="bg-surface-container-high/40 backdrop-blur-sm rounded-[24px] p-5 space-y-4">
+            {/* ── Card 2: Tu Día ──────────────────────────────────────────
+                Oculta en lg desktop (single-col) para no recargar el stack
+                vertical; visible a partir de xl en el panel derecho. En
+                mobile sigue visible. */}
+            {blocks.length > 0 && (
+            <div className={`bg-surface-container-high/40 backdrop-blur-sm rounded-[24px] p-5 space-y-4 ${isDesktop ? 'hidden xl:block' : ''}`}>
               <div className="flex items-center justify-between">
                 <h4 className="font-headline font-bold text-on-surface">Tu Día</h4>
                 <span className="text-[10px] font-bold text-outline">HOY</span>

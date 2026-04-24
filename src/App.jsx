@@ -527,6 +527,8 @@ export default function App() {
           onInboxClick={() => setInboxOpen(true)}
           inboxCount={inboxPendingCount}
           onSearchClick={() => setPaletteOpen(true)}
+          onNewClick={() => setPaletteQuickAdd(true)}
+          isDesktop={isDesktop && !isDetail}
         />
       </motion.div>
 
@@ -547,11 +549,14 @@ export default function App() {
         <DesktopSideBar
           activeView={navView}
           onNavigate={navigate}
+          onNew={() => setPaletteQuickAdd(true)}
+          onInboxClick={() => setInboxOpen(true)}
+          inboxCount={inboxPendingCount}
         />
       )}
 
       <main
-        className={`relative z-10 ${isDesktop && !isDetail ? "pb-0 pl-[72px]" : "w-full"}`}
+        className={`relative z-10 ${isDesktop && !isDetail ? "pb-0 pl-[72px] xl:pl-[248px]" : "w-full"}`}
         style={!isDesktop || isDetail ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)' } : undefined}
       >
         {/* ── Single-view layout: cada botón del sidebar → su propia vista ──
