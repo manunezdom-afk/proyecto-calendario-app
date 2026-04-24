@@ -9,6 +9,7 @@ import { isIOSSafari } from '../lib/permissions'
 import { readPreferenceSync } from '../hooks/useAppPreferences'
 import { novaSay } from '../utils/novaPersonality'
 import { expandRecurrence } from '../utils/expandRecurrence'
+import { subscribeModalStack } from '../utils/modalStack'
 
 // En Safari iPhone webkitSpeechRecognition existe desde iOS 14.5 y sí funciona
 // en Safari regular con permiso concedido. Antes gateábamos SR=null
@@ -85,6 +86,15 @@ export default function NovaWidget({
   const [location, setLocation]     = useState(null)
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false)
   const [photoPreview, setPhotoPreview]         = useState(null)
+  const [modalCount, setModalCount]             = useState(0)
+
+  // Escondemos la pastilla de Nova mientras haya algún sheet/modal abierto
+  // (QuickAdd, RecurringMeeting, etc.): superponerla sobre el contenido del
+  // sheet no aporta — el usuario está en una tarea concreta — y además la
+  // ocultamos sólo cuando Nova NO está abierta, porque si Nova sí está
+  // abierta la pastilla es la forma de cerrarla.
+  useEffect(() => subscribeModalStack(setModalCount), [])
+  const hidePillForModal = modalCount > 0 && !isOpen
   const [chatHistory, setChatHistory] = useState(() => {
     try {
       const raw = sessionStorage.getItem('nova_history')
@@ -945,7 +955,7 @@ export default function NovaWidget({
     <>
       {/* Pastilla cerrada — posición fija bottom-right, mismo layout en desktop y mobile */}
       <AnimatePresence>
-        {!isOpen && (
+        {!isOpen && !hidePillForModal && (
           <motion.div
             key="pill-wrap"
             id="nova-widget"

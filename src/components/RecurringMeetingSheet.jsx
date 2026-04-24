@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { pushModal, popModal } from '../utils/modalStack'
 
 // Wizard conversacional para crear una reunión semanal fija. El usuario entra
 // por el chip del empty state del planner y avanza en 4 pasos (nombre → día y
@@ -79,6 +80,13 @@ export default function RecurringMeetingSheet({ onCreate, onCancel }) {
     }
   }, [step])
 
+  // Registro como modal activo para ocultar flotantes (Nova pill, FABs)
+  // mientras el wizard de recurrente esté abierto.
+  useEffect(() => {
+    pushModal()
+    return () => popModal()
+  }, [])
+
   const dayLabel = DAYS.find(d => d.value === weekday)?.label || 'Lunes'
   const [endH, endM] = addMinutes(hour, minute, duration)
   const timeRange = `${format12(hour, minute)} - ${format12(endH, endM)}`
@@ -114,12 +122,15 @@ export default function RecurringMeetingSheet({ onCreate, onCancel }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-[70] flex items-end justify-center"
       onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
     >
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onCancel} />
 
-      <div className="relative w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-surface rounded-t-[32px] px-6 pt-5 pb-10 shadow-2xl z-10">
+      <div
+        className="relative w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-surface rounded-t-[32px] px-6 pt-5 shadow-2xl z-10"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2.5rem)' }}
+      >
         <div className="w-10 h-1 bg-outline-variant rounded-full mx-auto mb-5" />
 
         <div className="mb-5 flex items-center gap-2.5">

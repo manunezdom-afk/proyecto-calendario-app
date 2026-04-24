@@ -7,6 +7,7 @@ import {
   findOverlappingEvents,
 } from '../utils/eventDuration'
 import { useAppPreferences } from '../hooks/useAppPreferences'
+import { pushModal, popModal } from '../utils/modalStack'
 
 const EXAMPLES = [
   '"futbol a las 5"',
@@ -35,6 +36,13 @@ export default function QuickAddSheet({ onSave, onCancel, targetDateLabel, initi
   // Auto-focus input on mount
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 80)
+  }, [])
+
+  // Registramos el sheet como modal activo para que los flotantes (Nova pill,
+  // FABs) se escondan mientras esté abierto. Se desregistra al desmontar.
+  useEffect(() => {
+    pushModal()
+    return () => popModal()
   }, [])
 
   // Live NLP parse as the user types
@@ -139,14 +147,17 @@ export default function QuickAddSheet({ onSave, onCancel, targetDateLabel, initi
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-[70] flex items-end justify-center"
       onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
     >
       {/* Scrim */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onCancel} />
 
       {/* Sheet */}
-      <div className="relative w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-surface rounded-t-[32px] px-6 pt-5 pb-10 shadow-2xl z-10">
+      <div
+        className="relative w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-surface rounded-t-[32px] px-6 pt-5 shadow-2xl z-10"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2.5rem)' }}
+      >
 
         {/* Handle bar */}
         <div className="w-10 h-1 bg-outline-variant rounded-full mx-auto mb-6" />
