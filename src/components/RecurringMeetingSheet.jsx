@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { pushModal, popModal } from '../utils/modalStack'
 
 // Wizard conversacional para crear una reunión semanal fija. El usuario entra
@@ -120,7 +121,7 @@ export default function RecurringMeetingSheet({ onCreate, onCancel }) {
 
   const canAdvance = step === 1 ? name.trim().length > 0 : true
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[70] flex items-end justify-center"
       onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
@@ -327,6 +328,7 @@ export default function RecurringMeetingSheet({ onCreate, onCancel }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

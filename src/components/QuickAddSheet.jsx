@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { parseEvent } from '../utils/parseEvent'
 import {
   DURATION_CHIPS,
@@ -145,7 +146,7 @@ export default function QuickAddSheet({ onSave, onCancel, targetDateLabel, initi
     return null
   })()
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[70] flex items-end justify-center"
       onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
@@ -317,6 +318,7 @@ export default function QuickAddSheet({ onSave, onCancel, targetDateLabel, initi
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
