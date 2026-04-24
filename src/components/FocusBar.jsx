@@ -143,6 +143,7 @@ export default function FocusBar({
   const [isListening, setIsListening] = useState(false)
   const [isThinking, setIsThinking]   = useState(false)
   const [reply, setReply]             = useState(null)   // { content, actions }
+  const [composerContext, setComposerContext] = useState(null)
   const [isFocused, setIsFocused]     = useState(false)
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false)
   // Lo último que Nova aplicó (IDs reales ya en el store). Se rellena al
@@ -217,6 +218,7 @@ export default function FocusBar({
     if (!seed || !seed.n) return
     const msg = seed.text || ''
     setText(msg)
+    setComposerContext(seed.context || null)
     if (seed.autosubmit && msg.trim()) {
       const t = setTimeout(() => handleSendRef.current?.(msg), 80)
       return () => clearTimeout(t)
@@ -391,6 +393,7 @@ export default function FocusBar({
     if (!msg || isThinking) return
 
     setText('')
+    setComposerContext(null)
     setIsListening(false)
     setReply(null)
     setLastApplied(null)
@@ -629,6 +632,11 @@ export default function FocusBar({
     }
   }
 
+  function handleTextChange(value) {
+    setText(value)
+    if (!value.trim()) setComposerContext(null)
+  }
+
   const isActive = isFocused || !!text || isListening
   const hasText  = text.trim().length > 0
 
@@ -703,6 +711,53 @@ export default function FocusBar({
           )}
         </AnimatePresence>
 
+        <AnimatePresence>
+          {composerContext && (
+            <motion.div
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3 shadow-sm"
+            >
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <span className="material-symbols-outlined text-[18px]">edit_note</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-bold text-on-surface">
+                    {composerContext.label || 'Editando propuesta'}
+                  </p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-outline">
+                    {composerContext.body || 'Revisa el texto y guarda cuando esté listo.'}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setComposerContext(null)
+                    setText('')
+                    setTimeout(() => inputRef.current?.focus(), 40)
+                  }}
+                  className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-outline hover:bg-surface-container transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => hasText && handleSend()}
+                  disabled={!hasText || isThinking}
+                  className="rounded-full bg-primary px-3.5 py-1.5 text-[12px] font-bold text-white shadow-sm shadow-primary/20 disabled:opacity-40"
+                >
+                  Guardar cambios
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Input bar
             Layout: [cam] [input..............] [MIC] [send]
             - Cámara a la izquierda (acción secundaria de media).
@@ -747,7 +802,7 @@ export default function FocusBar({
           <input
             ref={inputRef}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => handleTextChange(e.target.value)}
             onFocus={() => {
               setIsFocused(true)
               // iOS PWA a veces no desplaza el input al abrir el teclado.
@@ -920,7 +975,7 @@ export default function FocusBar({
           <input
             ref={inputRef}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => handleTextChange(e.target.value)}
             onFocus={() => {
               setIsFocused(true)
               setTimeout(() => {

@@ -209,25 +209,35 @@ function PushDiagnostic() {
   }
 
   return (
-    <div className="px-5 py-4 border-t border-slate-50 space-y-3">
+    <div
+      className="px-5 py-4 border-t border-slate-50 space-y-3"
+      role="group"
+      aria-label="Diagnóstico avanzado de notificaciones push"
+    >
       <button
+        type="button"
         onClick={handleVerify}
         disabled={busy}
+        aria-label="Verificar notificaciones push"
         className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-[13px] font-semibold disabled:opacity-50 active:scale-95 transition-transform"
       >
         {verifying ? 'Verificando…' : 'Verificar notificaciones push'}
       </button>
       <button
+        type="button"
         onClick={handleReconnect}
         disabled={busy}
+        aria-label="Reconectar notificaciones push"
         className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-semibold disabled:opacity-50 active:scale-95 transition-all hover:bg-slate-50"
         title="Crea una suscripción nueva y descarta la actual. Útil si las notificaciones dejaron de llegar."
       >
         {reconnecting ? 'Reconectando…' : 'Reconectar notificaciones'}
       </button>
       <button
+        type="button"
         onClick={handleTest}
         disabled={busy}
+        aria-label="Enviar notificación push de prueba"
         className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-semibold disabled:opacity-50 active:scale-95 transition-all hover:bg-slate-50"
         title="Pide al servidor que envíe una push real a todas tus suscripciones. Valida que el flow completo funciona."
       >
@@ -236,7 +246,7 @@ function PushDiagnostic() {
       {status && (
         <p className={`text-[12.5px] leading-snug font-medium rounded-xl px-3 py-2.5 ${
           status.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
-        }`}>
+        }`} role="status" aria-live="polite">
           {status.msg}
         </p>
       )}

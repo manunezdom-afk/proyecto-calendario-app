@@ -30,6 +30,16 @@ export default function NovaHint({
   onAction,
 }) {
   const [visible, setVisible] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(max-width: 639px)')
+    const sync = () => setIsMobile(mq.matches)
+    sync()
+    mq.addEventListener?.('change', sync)
+    return () => mq.removeEventListener?.('change', sync)
+  }, [])
 
   useEffect(() => {
     if (!trigger) return
@@ -69,13 +79,20 @@ export default function NovaHint({
           exit={{ opacity: 0, y: 8, scale: 0.98 }}
           transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           className="fixed z-[60] pointer-events-none"
-          style={{
-            right: 'calc(env(safe-area-inset-right, 0px) + 18px)',
-            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 92px)',
-            maxWidth: 'min(88vw, 320px)',
-          }}
+          style={isMobile
+            ? {
+                left: 'calc(env(safe-area-inset-left, 0px) + 14px)',
+                right: 'calc(env(safe-area-inset-right, 0px) + 14px)',
+                top: 'calc(env(safe-area-inset-top, 0px) + 72px)',
+                maxWidth: 'none',
+              }
+            : {
+                right: 'calc(env(safe-area-inset-right, 0px) + 18px)',
+                bottom: 'calc(env(safe-area-inset-bottom, 0px) + 92px)',
+                maxWidth: 'min(88vw, 320px)',
+              }}
         >
-          <div className="flex items-end gap-2 pointer-events-auto">
+          <div className="flex items-start sm:items-end gap-2 pointer-events-auto">
             <div style={{ flexShrink: 0, marginBottom: 4 }}>
               <NovaOrb size={36} pulse ambient />
             </div>

@@ -38,6 +38,24 @@ function formatDateLabel(iso) {
   return `${names[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`
 }
 
+function formatTaskHint(task) {
+  if (task.done) return 'Hecha'
+  const priorityMap = {
+    alta: 'Prioridad alta',
+    media: 'Prioridad media',
+    baja: 'Prioridad baja',
+  }
+  const categoryMap = {
+    hoy: 'Hoy',
+    manana: 'Mañana',
+    mañana: 'Mañana',
+    semana: 'Esta semana',
+    inbox: 'Bandeja',
+    nuevo: 'Nueva',
+  }
+  return priorityMap[task.priority] || categoryMap[task.category] || ''
+}
+
 export default function CommandPalette({ isOpen, onClose, events = [], tasks = [], memories = [], onNavigate, onOpenEvent, onQuickAdd }) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
@@ -102,7 +120,7 @@ export default function CommandPalette({ isOpen, onClose, events = [], tasks = [
         raw: t,
         icon: t.done ? 'check_circle' : 'radio_button_unchecked',
         label: t.label || 'Sin título',
-        hint: t.done ? 'Hecha' : t.priority || t.category || '',
+        hint: formatTaskHint(t),
         _s: score(`${t.label} ${t.priority || ''} ${t.category || ''}`, q),
       }))
       .filter((t) => t._s > 0)

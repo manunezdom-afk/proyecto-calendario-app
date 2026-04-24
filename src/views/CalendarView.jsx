@@ -510,6 +510,8 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                 events={dayEvents}
                 referenceDate={now}
                 onAdd={() => setShowModal(true)}
+                onFocusBlock={() => setShowModal(true)}
+                onImport={onExportClick}
                 onOpenTask={onOpenTask}
               />
             ) : (<>

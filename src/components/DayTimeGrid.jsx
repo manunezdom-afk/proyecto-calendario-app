@@ -15,7 +15,16 @@ function parseEndHour(timeStr, startH) {
   return end > startH ? end : startH + 1
 }
 
-export default function DayTimeGrid({ events = [], onAdd, onOpenTask, referenceDate }) {
+export default function DayTimeGrid({
+  events = [],
+  onAdd,
+  onOpenTask,
+  onImport,
+  onFocusBlock,
+  referenceDate,
+  emptyTitle = 'Día libre. Todo tuyo.',
+  emptyBody = 'Bloquea tu atención, agenda algo o trae tu agenda externa.',
+}) {
   const hours = []
   for (let h = START_H; h <= END_H; h++) hours.push(h)
   const gridHeight = (END_H - START_H) * ROW_H
@@ -42,6 +51,7 @@ export default function DayTimeGrid({ events = [], onAdd, onOpenTask, referenceD
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold tracking-tight text-on-surface">Día</h2>
         <button
+          type="button"
           onClick={onAdd}
           className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
         >
@@ -63,6 +73,53 @@ export default function DayTimeGrid({ events = [], onAdd, onOpenTask, referenceD
             <div className="flex-1 border-t border-outline-variant/15" />
           </div>
         ))}
+
+        {events.length === 0 && (
+          <div className="absolute inset-x-6 inset-y-8 z-10 flex items-center justify-center pointer-events-none">
+            <div className="pointer-events-auto max-w-md rounded-[28px] border border-outline-variant/30 bg-surface-container-lowest px-6 py-6 text-center shadow-xl shadow-slate-900/5">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20">
+                <span
+                  className="material-symbols-outlined text-[28px] text-primary"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  wb_sunny
+                </span>
+              </div>
+              <p className="mt-4 text-base font-extrabold text-on-surface">{emptyTitle}</p>
+              <p className="mx-auto mt-1 max-w-[300px] text-[12.5px] leading-snug text-outline">
+                {emptyBody}
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={onAdd}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm shadow-primary/20 transition-transform active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-[15px]">add</span>
+                  Añadir evento
+                </button>
+                <button
+                  type="button"
+                  onClick={onFocusBlock || onAdd}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-4 py-2 text-xs font-bold text-primary transition-colors hover:bg-primary/15 active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-[15px]">psychology</span>
+                  Bloquear foco
+                </button>
+                {onImport && (
+                  <button
+                    type="button"
+                    onClick={onImport}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-container px-4 py-2 text-xs font-semibold text-on-surface-variant transition-colors hover:bg-surface-container-high active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">upload_file</span>
+                    Importar agenda
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <LayoutGroup>
           {positioned.map(({ ev, top, height, status }) => {

@@ -263,10 +263,14 @@ export default function App() {
     // evento no hará nada si planner no está montado, y la sessionStorage
     // cubre ese caso.
     const seedText = 'Bloquea 2h de foco mañana de 9:00 a 11:00'
+    const seedContext = {
+      label: 'Editando propuesta de Nova',
+      body: 'Ajusta esta propuesta antes de guardarla en tu calendario.',
+    }
     try {
       sessionStorage.setItem(
         'focus_pending_nova_seed',
-        JSON.stringify({ text: seedText, ts: Date.now(), autosubmit: false }),
+        JSON.stringify({ text: seedText, ts: Date.now(), autosubmit: false, context: seedContext }),
       )
     } catch {}
     dismissInboxDemo()
@@ -277,7 +281,7 @@ export default function App() {
     setTimeout(() => {
       try {
         window.dispatchEvent(new CustomEvent('focus:nova-seed', {
-          detail: { text: seedText, autosubmit: false },
+          detail: { text: seedText, autosubmit: false, context: seedContext },
         }))
       } catch {}
     }, 0)
@@ -818,7 +822,7 @@ export default function App() {
           onAction={requestPermission}
           onDismiss={dismissPermissionCard}
         >
-          Puedo avisarte 10 min antes de cada evento. ¿Activamos recordatorios?
+          Puedo avisarte con recordatorios inteligentes según cada evento. ¿Activamos notificaciones?
         </NovaHint>
       )}
 

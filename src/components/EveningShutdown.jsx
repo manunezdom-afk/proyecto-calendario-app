@@ -284,6 +284,7 @@ export default function EveningShutdown({
 }) {
   const [phaseIdx, setPhaseIdx] = useState(0)
   const [elapsed,  setElapsed]  = useState(0)
+  const [showFullReview, setShowFullReview] = useState(false)
   const { user } = useAuth()
   const { profile } = useUserProfile()
 
@@ -295,15 +296,18 @@ export default function EveningShutdown({
   const todayEventsRaw = events.filter(e => resolveEventDate(e) === todayISO)
   const { events: todayMainEvents, standaloneReminders: todayStandaloneReminders } = splitReminders(todayEventsRaw)
   const todayEvents  = [...todayMainEvents, ...todayStandaloneReminders]
+  const todayTasks = tasks.filter(t => t.category === 'hoy')
+  const hasNoActivity = todayEvents.length === 0 && todayTasks.length === 0
   const tomorrowEventsRaw = events.filter(e => resolveEventDate(e) === tomorrowISO)
   const { events: tomorrowMainEvents, standaloneReminders: tomorrowStandaloneReminders } = splitReminders(tomorrowEventsRaw)
   const tomorrowEvents = [...tomorrowMainEvents, ...tomorrowStandaloneReminders]
 
   // 90-second soft timer
   useEffect(() => {
+    if (hasNoActivity && !showFullReview) return undefined
     const id = setInterval(() => setElapsed(t => Math.min(t + 1, MAX_SECONDS)), 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [hasNoActivity, showFullReview])
 
   // Al cerrar el Evening Shutdown (cuando el usuario completa el ritual),
   // analizamos las señales del día y actualizamos el modelo de comportamiento.
@@ -324,8 +328,85 @@ export default function EveningShutdown({
     setPhaseIdx(i => Math.min(i + 1, PHASES.length - 1))
   }
 
+  function prepareTomorrow() {
+    setPhaseIdx(PHASES.indexOf('tomorrow'))
+    setElapsed(0)
+    setShowFullReview(true)
+  }
+
   const currentPhase = PHASES[phaseIdx]
   const timerPct = (elapsed / MAX_SECONDS) * 100
+
+  if (hasNoActivity && !showFullReview) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+        className="fixed inset-0 z-[200] flex items-end"
+        style={{ background: 'radial-gradient(ellipse at 50% 80%, #142034 0%, #05060a 70%)' }}
+      >
+        <AuroraBackground variant="threshold" intensity={0.35} />
+        <motion.div
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={0.2}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 140 || info.velocity.y > 560) onClose?.()
+          }}
+          initial={{ y: '100%' }}
+          animate={{ y: 0 }}
+          exit={{ y: '100%' }}
+          transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+          className="relative z-10 w-full rounded-t-[28px] border-t border-white/10 bg-white/[0.06] px-6 pb-6 pt-3 backdrop-blur-2xl"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.5rem)' }}
+        >
+          <div className="flex justify-center">
+            <div className="h-1 w-10 rounded-full bg-white/25" aria-hidden />
+          </div>
+
+          <div className="mt-5 flex items-start gap-3">
+            <NovaOrb size={38} ambient={false} />
+            <div className="min-w-0 flex-1">
+              <p className="font-nova text-[18px] font-medium text-white/90">
+                No hubo mucho que cerrar hoy
+              </p>
+              <p className="mt-1 text-[13px] leading-relaxed text-white/50">
+                Tu día está limpio. Puedes cerrarlo sin ritual largo o usar este momento para preparar mañana.
+              </p>
+            </div>
+          </div>
+
+          {tomorrowEvents.length > 0 && (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/40">Mañana ya tienes</p>
+              <p className="mt-1 text-sm font-semibold text-white/85">
+                {tomorrowEvents.length} {tomorrowEvents.length === 1 ? 'evento planificado' : 'eventos planificados'}
+              </p>
+            </div>
+          )}
+
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-white/10 px-4 py-3 text-[13px] font-semibold text-white/60 transition-colors hover:bg-white/10"
+            >
+              Cerrar
+            </button>
+            <button
+              type="button"
+              onClick={prepareTomorrow}
+              className="rounded-2xl bg-white px-4 py-3 text-[13px] font-bold text-slate-950 shadow-lg shadow-black/20 transition-transform active:scale-[0.98]"
+            >
+              Preparar mañana
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    )
+  }
 
   return (
     <motion.div

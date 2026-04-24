@@ -314,7 +314,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   // seed de la FocusBar: los chips del empty state inyectan texto aquí y
   // la FocusBar lo aplica + enfoca el input. n es un contador para poder
   // re-sembrar el mismo texto y re-disparar el efecto.
-  const [focusBarSeed, setFocusBarSeed] = useState({ text: '', n: 0 })
+  const [focusBarSeed, setFocusBarSeed] = useState({ text: '', n: 0, context: null })
   const [recurringSheetOpen, setRecurringSheetOpen] = useState(false)
 
   useEffect(() => {
@@ -339,6 +339,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
         text: parsed.text,
         n: n + 1,
         autosubmit: !!parsed.autosubmit,
+        context: parsed.context || null,
       }))
     } catch {}
   }, [])
@@ -355,6 +356,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
         text,
         n: n + 1,
         autosubmit: !!e.detail?.autosubmit,
+        context: e.detail?.context || null,
       }))
     }
     window.addEventListener('focus:nova-seed', onSeed)
@@ -1096,7 +1098,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                                 if (chip.action === 'recurring') {
                                   setRecurringSheetOpen(true)
                                 } else {
-                                  setFocusBarSeed(({ n }) => ({ text: chip.prompt, n: n + 1, autosubmit: true }))
+                                  setFocusBarSeed(({ n }) => ({ text: chip.prompt, n: n + 1, autosubmit: true, context: null }))
                                 }
                               }}
                               className="w-full flex items-center gap-2.5 bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2.5 text-left transition-colors active:scale-[0.99]"
