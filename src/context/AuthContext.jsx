@@ -163,7 +163,11 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signOut = useCallback(async () => {
-    if (supabase) await supabase.auth.signOut()
+    // Limpiamos UI primero (optimistic). Antes hacíamos
+    // `await supabase.auth.signOut()` y luego `setUser(null)`, así que si la
+    // llamada a /auth/v1/logout se colgaba (sesión expirada en el server,
+    // extensión bloqueando, SW interceptando, red flaky en desktop), el
+    // setUser nunca corría y el botón "Cerrar sesión" parecía no funcionar.
     setUser(null)
     // Limpiamos cualquier OTP pendiente: si quedó un code en sessionStorage
     // de una sesión anterior, al reabrir el login veríamos el paso 'code'
@@ -178,6 +182,15 @@ export function AuthProvider({ children }) {
     // usuario que siguieron en estado React al salir ya no se persisten al
     // cierre y no pueden aparecer como "tareas pendientes" en el próximo login.
     dataService.clearGlobalCache()
+    if (!supabase) return
+    try {
+      // Cap a 4s — si Supabase no responde, igual seguimos con la limpieza
+      // local para no dejar tokens persistidos que reabran la sesión al
+      // próximo getSession().
+      await withAuthTimeout(supabase.auth.signOut(), 4000, 'signout_timeout')
+    } catch {
+      try { await supabase.auth.signOut({ scope: 'local' }) } catch {}
+    }
   }, [])
 
   // ── Device pairing ─────────────────────────────────────────────────────────
