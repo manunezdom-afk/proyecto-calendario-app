@@ -7,7 +7,7 @@
   "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/((?!api/|landing|icons/|assets/|sw\\.js|manifest\\.json|.*\\.(?:js|css|png|jpg|jpeg|svg|ico|webp|woff2?|ttf|map)).*)",
+      "source": "/((?!api/|icons/|assets/|sw\\.js|manifest\\.json|.*\\.(?:js|css|png|jpg|jpeg|svg|ico|webp|woff2?|ttf|map)).*)",
       "destination": "/index.html"
     }
   ],
