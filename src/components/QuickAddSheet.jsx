@@ -8,7 +8,10 @@ import {
   findOverlappingEvents,
 } from '../utils/eventDuration'
 import { useAppPreferences } from '../hooks/useAppPreferences'
+import { useVoiceDictation } from '../hooks/useVoiceDictation'
+import { isIOSSafari } from '../lib/permissions'
 import { pushModal, popModal } from '../utils/modalStack'
+import MicButton from './MicButton'
 
 const EXAMPLES = [
   '"futbol a las 5"',
@@ -25,8 +28,36 @@ export default function QuickAddSheet({ onSave, onCancel, targetDate, targetDate
   // Duración elegida por el usuario en esta sesión del sheet. null significa
   // "sin seleccionar aún"; 0 = sin hora de término (explícito); >0 = minutos.
   const [chosenDuration, setChosenDuration] = useState(null)
+  // Mensaje cuando el dictado falla por permiso/no-soporte. Se muestra debajo
+  // del input. Nullable; se limpia al teclear o reintentar.
+  const [voiceError, setVoiceError] = useState(null)
   const inputRef = useRef(null)
   const { prefs } = useAppPreferences()
+
+  // Dictado por voz. El usuario puede llenar el input hablando y luego
+  // confirmar con "Añadir" — la NLP corre igual sobre lo dictado, así que
+  // "futbol mañana a las 5" funciona dictado o tipeado.
+  const dictation = useVoiceDictation({
+    onTranscript: (text) => setInput(text),
+    onFinalize:   (text) => setInput(text),
+    onError: (code) => {
+      if (code === 'unsupported') {
+        setVoiceError(
+          isIOSSafari()
+            ? 'En iPhone puedes dictar con el micrófono del teclado: pulsa el icono sobre el teclado.'
+            : 'Este navegador no soporta dictado por voz. Escribe el evento.',
+        )
+      } else if (code === 'not-allowed' || code === 'service-not-allowed') {
+        setVoiceError(
+          isIOSSafari()
+            ? 'En iPhone, si el dictado web no arranca usa el micrófono del teclado.'
+            : 'Permiso de micrófono denegado. Ábrelo en los ajustes del sistema.',
+        )
+      } else if (code === 'audio-capture') {
+        setVoiceError('No se pudo acceder al micrófono. Otra app puede estar usándolo.')
+      }
+    },
+  })
 
   // Cycle placeholder examples
   useEffect(() => {
@@ -104,6 +135,9 @@ export default function QuickAddSheet({ onSave, onCancel, targetDate, targetDate
   function handleConfirm() {
     if (!parsed) return
     if (needsDurationStep && chosenDuration === null) return
+    // Si el usuario confirma mientras la sesión de voz sigue abierta,
+    // cerramos la captura para liberar el mic antes de notificar al padre.
+    if (dictation.isListening) dictation.stop()
     const finalTime = resolveFinalTime()
     onSave({
       title: parsed.title,
@@ -180,29 +214,57 @@ export default function QuickAddSheet({ onSave, onCancel, targetDate, targetDate
           )}
         </div>
 
-        {/* Text input */}
-        <div className="flex items-center gap-3 bg-surface-container-low rounded-2xl px-4 py-3 mb-5 border border-outline-variant/30 focus-within:border-primary transition-colors">
-          <span className="material-symbols-outlined text-outline text-xl flex-shrink-0">edit</span>
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && parsed && !(needsDurationStep && chosenDuration === null)) {
-                handleConfirm()
-              }
-            }}
-            placeholder={`Ej: ${EXAMPLES[placeholderIdx]}`}
-            className="flex-1 bg-transparent text-on-surface placeholder:text-outline/50 text-base font-medium focus:outline-none"
-          />
-          {input && (
-            <button
-              onClick={() => setInput('')}
-              className="flex-shrink-0 text-outline hover:text-on-surface transition-colors"
-            >
-              <span className="material-symbols-outlined text-[18px]">close</span>
-            </button>
+        {/* Input + dictado por voz.
+            Layout: [edit] [input.....] [X si hay texto] [MIC].
+            El mic vive a la derecha como acción primaria de entrada
+            (mismo lugar que en FocusBar y NovaWidget), así el usuario
+            asocia la posición con "habla aquí" en toda la app. */}
+        <div className="mb-5">
+          <div
+            className={`flex items-center gap-2 bg-surface-container-low rounded-2xl px-4 py-2.5 border transition-colors ${
+              dictation.isListening
+                ? 'border-[#7c6bff]/50 shadow-[0_0_0_3px_rgba(124,107,255,0.12)]'
+                : 'border-outline-variant/30 focus-within:border-primary'
+            }`}
+          >
+            <span className="material-symbols-outlined text-outline text-xl flex-shrink-0">edit</span>
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => { setInput(e.target.value); if (voiceError) setVoiceError(null) }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && parsed && !(needsDurationStep && chosenDuration === null)) {
+                  handleConfirm()
+                }
+              }}
+              placeholder={dictation.isListening ? 'Escuchando…' : `Ej: ${EXAMPLES[placeholderIdx]}`}
+              disabled={dictation.isListening}
+              className="flex-1 min-w-0 bg-transparent text-on-surface placeholder:text-outline/50 text-base font-medium focus:outline-none disabled:opacity-70"
+            />
+            {input && !dictation.isListening && (
+              <button
+                type="button"
+                onClick={() => setInput('')}
+                aria-label="Limpiar texto"
+                className="flex-shrink-0 text-outline hover:text-on-surface transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            )}
+            <MicButton
+              isListening={dictation.isListening}
+              commitProgress={dictation.commitProgress}
+              onToggle={() => {
+                if (voiceError) setVoiceError(null)
+                dictation.toggle()
+              }}
+            />
+          </div>
+          {voiceError && (
+            <p className="mt-2 text-[12px] text-amber-600 dark:text-amber-400 px-1 leading-snug">
+              {voiceError}
+            </p>
           )}
         </div>
 
