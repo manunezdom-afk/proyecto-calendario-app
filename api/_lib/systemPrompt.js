@@ -202,6 +202,19 @@ Agregar tarea (sin hora, va a la pestaña Tareas):
 - Si el usuario menciona una subtarea para un evento o tarea que estás creando en la misma respuesta (aún no tiene id), omite ambos campos — la tarea irá a su categoría normal y luego puede vincularse manualmente.
 - REGLA CRÍTICA: NO inventes la vinculación. Si decís en el reply "vinculada a X" pero NO incluís linkedEventId/parentTaskId real, mentís al usuario. O incluís el id correcto, o no menciones la vinculación en el reply.
 
+Cambiar color de un tipo (evento, tarea, recordatorio):
+{ "type": "set_color_preference", "kind": "event"|"task"|"reminder", "color": "blue"|"violet"|"emerald"|"amber"|"rose"|"slate" }
+- Úsalo cuando el usuario pida cambiar el color de un TIPO entero (no de un evento puntual). Ejemplos: "ponme las tareas en verde", "cámbiame el color de los eventos a rosa", "los recordatorios en gris".
+- Mapeo de nombres a colores válidos:
+  · azul / celeste / blue → "blue"
+  · violeta / morado / púrpura / lila / violet → "violet"
+  · verde / esmeralda / emerald / green → "emerald"
+  · ámbar / amarillo / naranja / amber / yellow / orange → "amber"
+  · rosa / rosado / pink / rose → "rose"
+  · gris / grafito / slate / gray → "slate"
+- Si el usuario pide un color FUERA de esa paleta (ej. "rojo"), elige el más cercano (rojo → "rose") o pregunta una vez con las opciones disponibles.
+- Si el usuario dice "los colores por defecto" o "restablece colores", emite tres acciones: { "type": "set_color_preference", "kind": "event", "color": "blue" }, { "kind": "task", "color": "violet" }, { "kind": "reminder", "color": "amber" }.
+
 Marcar tarea como hecha:
 { "type": "toggle_task", "id": "id-de-la-tarea" }
 

@@ -20,6 +20,8 @@ import {
   isMainEntity,
 } from '../utils/reminders'
 import { parseTimeRange, NO_END_TIME_LABEL } from '../utils/eventDuration'
+import { useColorPrefs, COLOR_BY_ID } from '../utils/colorPrefs'
+import { useAuth } from '../context/AuthContext'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
@@ -302,6 +304,15 @@ function SwipeableCard({ onDelete, disabled, children }) {
 
 // ── Componente ─────────────────────────────────────────────────────────────
 export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, onAddTask, onToggleTask, onDeleteTask, events = [], tasks = [], onOpenAssistant, onEveningShutdown, onNavigate, onShowUndo, isDesktop = false, morningBrief = null }) {
+  // Color prefs por tipo (evento/tarea/recordatorio). Se actualiza en vivo
+  // cuando el usuario los cambia en Ajustes o vía Nova.
+  const { user: _authUser } = useAuth()
+  const colorPrefs = useColorPrefs(_authUser?.id)
+  const eventDotHex    = COLOR_BY_ID[colorPrefs.event]?.dot
+  const taskDotHex     = COLOR_BY_ID[colorPrefs.task]?.dot
+  const reminderDotHex = COLOR_BY_ID[colorPrefs.reminder]?.dot
+  const taskTintColor  = COLOR_BY_ID[colorPrefs.task]?.tint
+  const taskBorderHex  = COLOR_BY_ID[colorPrefs.task]?.dot
   const [blocks, setBlocks] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -874,11 +885,13 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 // timeline, con etiqueta "Pendiente de hoy" y acciones ligadas
                 // a los handlers de tareas (no a los de eventos).
                 if (_isTask) {
-                  const prioStyle = priority === 'Alta'
-                    ? 'border-error'
-                    : priority === 'Baja'
-                      ? 'border-outline-variant'
-                      : 'border-secondary'
+                  // Border-left de la tarea: usa el color preferido para tareas,
+                  // con un tinte según prioridad (Alta más saturado, Baja más
+                  // claro). Antes era hardcodeado a clases Material — ahora
+                  // respeta la preferencia del usuario.
+                  const taskBorderColor = priority === 'Baja'
+                    ? `${taskBorderHex}66`  // 40% opacity
+                    : taskBorderHex
                   const handleToggle = () => { if (taskId) onToggleTask?.(taskId) }
                   const handleTaskDelete = () => { if (taskId) onDeleteTask?.(taskId) }
                   const handleTaskLongPress = () => {
@@ -903,14 +916,14 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
                       <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingBottom: '24px' }}>
                         <div
-                          className="absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface bg-outline-variant"
-                          style={{ left: '-21px', zIndex: 1 }}
+                          className="absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface"
+                          style={{ left: '-21px', zIndex: 1, backgroundColor: taskDotHex }}
                         />
                         <SwipeableCard onDelete={handleTaskDelete}>
                           <LongPressZone
                             onLongPress={handleTaskLongPress}
-                            className={`rounded-xl bg-surface-container-low/60 border-l-4 ${prioStyle}`}
-                            style={{ padding: isDesktop ? '18px 22px 18px 20px' : '12px 14px 12px 14px', overflow: 'visible', touchAction: 'pan-y' }}
+                            className="rounded-xl bg-surface-container-low/60 border-l-4"
+                            style={{ padding: isDesktop ? '18px 22px 18px 20px' : '12px 14px 12px 14px', overflow: 'visible', touchAction: 'pan-y', borderLeftColor: taskBorderColor }}
                             title="Mantén apretado para eliminar"
                           >
                             <div className="flex justify-between items-start gap-2">
@@ -1012,15 +1025,18 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     {/* Columna de tarjeta */}
                     <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingBottom: '32px' }}>
                       <div className={`absolute top-4 w-2 h-2 rounded-full ring-4 ring-surface transition-all ${
-                        isSuggestion
-                          ? 'bg-secondary'
-                          : _asReminderOnly
-                            ? 'bg-amber-500'
-                            : isActive
-                              ? 'bg-primary scale-125 shadow-[0_0_0_4px_rgba(59,130,246,0.18)]'
-                              : 'bg-primary'
+                        isSuggestion ? 'bg-secondary' : isActive ? 'scale-125' : ''
                       }`}
-                        style={{ left: '-21px', zIndex: 1 }} />
+                        style={{
+                          left: '-21px',
+                          zIndex: 1,
+                          backgroundColor: isSuggestion
+                            ? undefined
+                            : (_asReminderOnly ? reminderDotHex : eventDotHex),
+                          boxShadow: isActive && !isSuggestion
+                            ? `0 0 0 4px ${reminderDotHex && _asReminderOnly ? COLOR_BY_ID[colorPrefs.reminder]?.tint : COLOR_BY_ID[colorPrefs.event]?.tint}`
+                            : undefined,
+                        }} />
                       <SwipeableCard
                         onDelete={!isSuggestion ? handleDeleteBlock : undefined}
                         disabled={isSuggestion}
@@ -1031,18 +1047,33 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                           isSuggestion
                             ? 'bg-surface-container-low/50 border border-dashed border-secondary/30 hover:border-secondary/50'
                             : _asReminderOnly
-                              ? 'bg-amber-50/70 border-l-4 border-amber-400 hover:shadow-[0_12px_28px_rgba(217,119,6,0.08)]'
+                              ? 'border-l-4 hover:shadow-[0_12px_28px_rgba(217,119,6,0.08)]'
                               : `bg-surface-container-lowest border-l-4 hover:shadow-[0_16px_36px_rgba(27,27,29,0.08)] ${
                                   type === 'done'
-                                    ? 'border-emerald-400 opacity-60 shadow-[0_4px_12px_rgba(27,27,29,0.03)]'
+                                    ? 'opacity-60 shadow-[0_4px_12px_rgba(27,27,29,0.03)]'
                                     : isActive
-                                      ? 'border-primary ring-1 ring-primary/20 shadow-[0_16px_40px_rgba(59,130,246,0.12)]'
+                                      ? 'ring-1 shadow-[0_16px_40px_rgba(59,130,246,0.12)]'
                                       : isNext
-                                        ? 'border-primary/70 shadow-[0_12px_32px_rgba(27,27,29,0.05)]'
-                                        : 'border-primary shadow-[0_12px_32px_rgba(27,27,29,0.04)]'
+                                        ? 'shadow-[0_12px_32px_rgba(27,27,29,0.05)]'
+                                        : 'shadow-[0_12px_32px_rgba(27,27,29,0.04)]'
                                 }`
                         }`}
-                        style={{ padding: isDesktop ? '20px 24px 20px 22px' : '14px 16px 14px 14px', overflow: 'visible', touchAction: 'pan-y' }}
+                        style={{
+                          padding: isDesktop ? '20px 24px 20px 22px' : '14px 16px 14px 14px',
+                          overflow: 'visible',
+                          touchAction: 'pan-y',
+                          // Border-left + bg pintado por preferencia del usuario.
+                          // 'done' siempre verde (semántica universal de "hecho");
+                          // suggestion respeta su look discreto sin pintar.
+                          ...(isSuggestion
+                            ? {}
+                            : type === 'done'
+                              ? { borderLeftColor: '#34d399' }
+                              : _asReminderOnly
+                                ? { borderLeftColor: reminderDotHex, backgroundColor: COLOR_BY_ID[colorPrefs.reminder]?.tint }
+                                : { borderLeftColor: isNext ? `${eventDotHex}b3` : eventDotHex }
+                          ),
+                        }}
                         title="Mantén apretado para eliminar"
                       >
                         <div className="flex justify-between items-start gap-2" style={{ marginBottom: '2px' }}>

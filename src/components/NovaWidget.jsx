@@ -10,6 +10,8 @@ import { readPreferenceSync } from '../hooks/useAppPreferences'
 import { novaSay } from '../utils/novaPersonality'
 import { expandRecurrence } from '../utils/expandRecurrence'
 import { subscribeModalStack } from '../utils/modalStack'
+import { setColorPref, COLOR_BY_ID } from '../utils/colorPrefs'
+import { useAuth } from '../context/AuthContext'
 
 // En Safari iPhone webkitSpeechRecognition existe desde iOS 14.5 y sí funciona
 // en Safari regular con permiso concedido. Antes gateábamos SR=null
@@ -75,6 +77,10 @@ export default function NovaWidget({
   onOpenInbox,
   isDesktop = false,
 }) {
+  // Auth: para el set_color_preference necesitamos el userId al persistir
+  // las prefs por usuario en localStorage. NovaWidget ya vive dentro del
+  // AuthProvider, así que useAuth resuelve sin riesgo de null context.
+  const { user: _authUser } = useAuth()
   const { profile } = useUserProfile()
   const { memories, addMemory } = useUserMemories()
   const [isOpen, setIsOpen]         = useState(false)
@@ -438,6 +444,9 @@ export default function NovaWidget({
       toggle_task:    { icon: 'task_alt',    label: `Completando tarea` },
       add_task:       { icon: 'check_box',   label: `Añadiendo tarea "${action.task?.label || ''}"` },
       delete_task:    { icon: 'delete',      label: `Eliminando tarea` },
+      set_color_preference: { icon: 'palette', label: `Cambiando color de ${
+        action.kind === 'event' ? 'eventos' : action.kind === 'task' ? 'tareas' : 'recordatorios'
+      }` },
     }
 
     const def = chipDefs[action.type]
@@ -459,7 +468,14 @@ export default function NovaWidget({
     else if (action.type === 'add_task')     onAddTask?.(action.task)
     else if (action.type === 'delete_task')  onDeleteTask?.(action.id)
     else if (action.type === 'remember')     addMemory?.(action.memory)
-  }, [onAddEvent, onEditEvent, onDeleteEvent, onToggleTask, onAddTask, onDeleteTask, addMemory])
+    else if (action.type === 'set_color_preference') {
+      // Persistimos el cambio en localStorage. setColorPref valida kind+colorId
+      // y dispara el evento custom que las vistas escuchan para re-renderizar
+      // sin necesidad de reload.
+      const ok = setColorPref(action.kind, action.color, _authUser?.id)
+      if (!ok) console.warn(`[Nova] set_color_preference inválido: kind=${action.kind} color=${action.color}`)
+    }
+  }, [onAddEvent, onEditEvent, onDeleteEvent, onToggleTask, onAddTask, onDeleteTask, addMemory, _authUser?.id])
 
   async function handlePhoto(e) {
     const file = e.target.files?.[0]

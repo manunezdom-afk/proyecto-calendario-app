@@ -11,6 +11,13 @@ import { useAppPreferences } from '../hooks/useAppPreferences'
 import { NOVA_PERSONALITIES } from '../utils/novaPersonality'
 import { isIOS, isAndroid } from '../lib/permissions'
 import { supabase } from '../lib/supabase'
+import {
+  COLOR_PALETTE,
+  COLOR_BY_ID,
+  useColorPrefs,
+  setColorPref,
+  resetColorPrefs,
+} from '../utils/colorPrefs'
 
 // Copy contextual por plataforma para "dónde habilitar el permiso".
 // El usuario ve "Ajustes de Android" en Android, "Ajustes del iPhone" en iOS,
@@ -74,6 +81,76 @@ function Row({ icon, label, sub, children, onClick, danger = false }) {
 //   · Enviar prueba   → pide al backend que dispare una push real a todas las
 //                        suscripciones del user. Valida end-to-end incluyendo
 //                        VAPID, red y SW.
+// ── Colores del calendario ─────────────────────────────────────────────────
+// El usuario elige un color para cada tipo (evento, tarea, recordatorio).
+// Los cambios se persisten en localStorage y se reflejan en vivo en todas
+// las vistas (Mi Día, calendario semanal, vista de día) gracias al evento
+// custom 'focus:color-prefs-changed' que dispara setColorPref.
+function ColorsRow() {
+  const { user } = useAuth()
+  const prefs = useColorPrefs(user?.id)
+  const kinds = [
+    { key: 'event',    label: 'Eventos',       hint: 'Compromisos con hora (reuniones, gym, comidas)' },
+    { key: 'task',     label: 'Tareas',        hint: 'Pendientes sin hora específica' },
+    { key: 'reminder', label: 'Recordatorios', hint: 'Avisos puntuales (llamar, salir, retirar)' },
+  ]
+  return (
+    <div className="px-5 py-4">
+      <p className="text-[12.5px] font-semibold text-slate-700 mb-1">Colores del calendario</p>
+      <p className="text-[11.5px] leading-snug text-slate-500 mb-4">
+        Elige un color por tipo para distinguirlos de un vistazo en la semana. También puedes
+        pedírselo a Nova: "ponme las tareas en verde".
+      </p>
+      <div className="space-y-4">
+        {kinds.map((k) => {
+          const activeId = prefs[k.key]
+          return (
+            <div key={k.key} className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-slate-700 leading-tight">{k.label}</p>
+                  <p className="text-[11px] leading-snug text-slate-500">{k.hint}</p>
+                </div>
+                <span className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">
+                  {COLOR_BY_ID[activeId]?.name}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {COLOR_PALETTE.map((c) => {
+                  const isActive = c.id === activeId
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setColorPref(k.key, c.id, user?.id)}
+                      title={c.name}
+                      aria-label={`${k.label}: ${c.name}`}
+                      aria-pressed={isActive}
+                      className="w-9 h-9 rounded-full transition-transform active:scale-90"
+                      style={{
+                        backgroundColor: c.dot,
+                        outline: isActive ? `3px solid ${c.ring}` : '3px solid transparent',
+                        outlineOffset: '2px',
+                      }}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <button
+        type="button"
+        onClick={() => resetColorPrefs(user?.id)}
+        className="mt-5 text-[12px] font-semibold text-slate-500 hover:text-slate-700 transition-colors"
+      >
+        Restablecer a los colores por defecto
+      </button>
+    </div>
+  )
+}
+
 function PushDiagnostic() {
   const [status, setStatus] = useState(null)
   const [verifying, setVerifying] = useState(false)
@@ -678,6 +755,14 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
             })}
           </div>
         )}
+      </SectionCard>
+
+      {/* ── Colores ──────────────────────────────────────────────────────── */}
+      {/* El usuario elige un color por tipo (evento/tarea/recordatorio) para
+          escanear el calendario visualmente. Persiste en localStorage; las
+          vistas se actualizan en vivo vía evento custom. */}
+      <SectionCard title="Apariencia">
+        <ColorsRow />
       </SectionCard>
 
       {/* ── Permisos ─────────────────────────────────────────────────────── */}

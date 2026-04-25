@@ -1,5 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion'
+import { useColorPrefs, COLOR_BY_ID } from '../utils/colorPrefs'
+import { useAuth } from '../context/AuthContext'
 
 const SWIPE_THRESHOLD = 96
 const HAPTIC_APPROVE  = 12
@@ -235,6 +237,47 @@ function DemoSuggestionCard({ onApprove, onEdit, onDismiss }) {
 }
 
 // ── Panel principal ─────────────────────────────────────────────────────────
+// Leyenda de los colores que distinguen evento / tarea / recordatorio en
+// el calendario. Lee las preferencias actuales del usuario y muestra el
+// color real que está usando — no etiquetas hardcodeadas.
+function ColorLegend() {
+  const { user } = useAuth()
+  const prefs = useColorPrefs(user?.id)
+  const items = [
+    { kind: 'Evento',       colorId: prefs.event,    hint: 'Compromisos con hora (reuniones, gym, comidas)' },
+    { kind: 'Tarea',        colorId: prefs.task,     hint: 'Pendientes sin hora específica' },
+    { kind: 'Recordatorio', colorId: prefs.reminder, hint: 'Avisos puntuales (llamar, salir, retirar)' },
+  ]
+  return (
+    <div className="mt-5 w-full rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4">
+      <p className="mb-2 text-[10.5px] font-bold uppercase tracking-wide text-slate-500">
+        Colores del calendario
+      </p>
+      <ul className="space-y-2">
+        {items.map((it) => {
+          const c = COLOR_BY_ID[it.colorId]
+          return (
+            <li key={it.kind} className="flex items-start gap-2.5">
+              <span
+                aria-hidden="true"
+                className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                style={{ backgroundColor: c?.dot }}
+              />
+              <div className="min-w-0">
+                <p className="text-[12.5px] font-semibold text-slate-700 leading-tight">{it.kind}</p>
+                <p className="text-[11px] leading-snug text-slate-500">{it.hint}</p>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+      <p className="mt-3 text-[10.5px] leading-snug text-slate-400">
+        Los puedes cambiar en Ajustes o pidiéndoselo a Nova.
+      </p>
+    </div>
+  )
+}
+
 export default function SuggestionsInbox({
   isOpen,
   onClose,
@@ -323,8 +366,15 @@ export default function SuggestionsInbox({
                     Aquí caen las propuestas de Nova
                   </p>
                   <p className="mt-1 max-w-[280px] text-center text-[12.5px] leading-relaxed text-slate-500">
-                    Cuando Nova detecta un conflicto o hueco que no puede resolver sola, manda una propuesta aquí para que tú decidas.
+                    Cuando Nova detecta un conflicto o un espacio libre que no puede resolver sola, manda una propuesta aquí para que tú decidas.
                   </p>
+
+                  {/* Leyenda de colores: explica qué representa cada color en
+                      el calendario para que el usuario pueda escanear la
+                      semana visualmente. Los colores se pueden personalizar
+                      desde Ajustes (o pidiéndoselo a Nova). */}
+                  <ColorLegend />
+
                   {!demoDismissed && (
                     <div className="mt-5 w-full">
                       <p className="mb-2 px-1 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">

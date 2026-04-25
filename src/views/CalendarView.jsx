@@ -10,6 +10,8 @@ import { isReminderItem } from '../utils/reminders'
 import EmptyState from '../components/EmptyState'
 import ContextActionSheet from '../components/ContextActionSheet'
 import { useLongPress } from '../hooks/useLongPress'
+import { useColorPrefs, COLOR_BY_ID } from '../utils/colorPrefs'
+import { useAuth } from '../context/AuthContext'
 
 // Descripción útil: no mostramos cuando es solo una fecha ISO (YYYY-MM-DD) —
 // data vieja generada por QuickAddSheet cuando stuffing date en description.
@@ -101,12 +103,18 @@ function StatusPill({ status }) {
 function FeaturedEventCard({ event, status, onDelete, onOpen, onLongPress }) {
   const isPast = status === 'past'
   const longPress = useLongPress({ onLongPress: () => onLongPress?.(event) })
+  // Color por tipo (evento vs recordatorio) leído desde prefs del usuario.
+  const { user: _u } = useAuth()
+  const _prefs = useColorPrefs(_u?.id)
+  const _isRem = isReminderItem(event)
+  const kindColor = COLOR_BY_ID[_isRem ? _prefs.reminder : _prefs.event]?.dot
   return (
     <div
       {...longPress}
-      className={`col-span-2 p-6 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.04)] space-y-4 cursor-pointer hover:shadow-md transition-shadow ${
+      className={`col-span-2 p-6 rounded-xl shadow-[0_12px_32px_rgba(27,27,29,0.04)] space-y-4 cursor-pointer hover:shadow-md transition-shadow border-l-4 ${
         isPast ? 'bg-surface-container-low opacity-70' : 'bg-surface-container-lowest'
       }`}
+      style={{ borderLeftColor: kindColor }}
       onClick={() => onOpen?.(event)}
     >
       <div className="flex justify-between items-start">
@@ -152,14 +160,19 @@ function FeaturedEventCard({ event, status, onDelete, onOpen, onLongPress }) {
 function SmallEventCard({ event, status, onDelete, onOpen, onLongPress }) {
   const isPast = status === 'past'
   const longPress = useLongPress({ onLongPress: () => onLongPress?.(event) })
+  const { user: _u } = useAuth()
+  const _prefs = useColorPrefs(_u?.id)
+  const _isRem = isReminderItem(event)
+  const kindColor = COLOR_BY_ID[_isRem ? _prefs.reminder : _prefs.event]?.dot
   return (
     <div
       {...longPress}
-      className={`p-5 rounded-xl space-y-2 relative group cursor-pointer transition-colors ${
+      className={`p-5 rounded-xl space-y-2 relative group cursor-pointer transition-colors border-l-4 ${
         isPast
           ? 'bg-surface-container-low/60 hover:bg-surface-container-low opacity-70'
           : 'bg-surface-container-low hover:bg-surface-container'
       }`}
+      style={{ borderLeftColor: kindColor }}
       onClick={() => onOpen?.(event)}
     >
       <div className="flex justify-between items-start gap-2">
@@ -190,6 +203,9 @@ function SmallEventCard({ event, status, onDelete, onOpen, onLongPress }) {
 function EveningEventCard({ event, status, onDelete, onOpen, onLongPress }) {
   const isPast = status === 'past'
   const longPress = useLongPress({ onLongPress: () => onLongPress?.(event) })
+  const { user: _u } = useAuth()
+  const _prefs = useColorPrefs(_u?.id)
+  const _kindColor = COLOR_BY_ID[isReminderItem(event) ? _prefs.reminder : _prefs.event]?.dot
   return (
     <div {...longPress} className="flex gap-4 items-center group cursor-pointer" onClick={() => onOpen?.(event)}>
       {event.time && (
@@ -199,13 +215,17 @@ function EveningEventCard({ event, status, onDelete, onOpen, onLongPress }) {
           </span>
         </div>
       )}
-      <div className={`flex-1 transition-colors p-4 rounded-xl flex justify-between items-start gap-2 ${
+      <div className={`flex-1 transition-colors p-4 rounded-xl flex justify-between items-start gap-2 border-l-4 ${
         isPast
           ? 'bg-surface-container-low/60 hover:bg-surface-container-low opacity-70'
           : 'bg-surface-container-lowest hover:bg-surface-container-high'
-      }`}>
+      }`}
+      style={{ borderLeftColor: isPast ? 'rgba(0,0,0,0.08)' : _kindColor }}>
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${isPast ? 'bg-outline-variant' : (event.dotColor || 'bg-outline')}`} />
+          <div
+            className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5"
+            style={{ backgroundColor: isPast ? '#cbd5e1' : _kindColor }}
+          />
           <div className="flex-1 min-w-0">
             <span className={`font-bold text-sm ${isPast ? 'text-outline line-through decoration-outline/40' : 'text-on-surface'}`}>
               {event.title}
@@ -256,6 +276,13 @@ function formatWeekRange(weekStart) {
 
 // ─── Main view ────────────────────────────────────────────────────────────────
 export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteEvent, onEditEvent, onOpenTask, onExportClick, onOpenDay, isDesktop = false }) {
+  // Color prefs por tipo. Reactivas: cuando el usuario las cambia desde
+  // Ajustes (o vía Nova), las vistas semanal y de día se redibujan.
+  const { user: _authUserCV } = useAuth()
+  const colorPrefs = useColorPrefs(_authUserCV?.id)
+  const eventDotHex    = COLOR_BY_ID[colorPrefs.event]?.dot
+  const reminderDotHex = COLOR_BY_ID[colorPrefs.reminder]?.dot
+
   const [showModal, setShowModal] = useState(false)
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('dia')           // 'dia' | 'semana' | 'mes'
