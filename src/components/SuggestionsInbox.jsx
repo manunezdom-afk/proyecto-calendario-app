@@ -323,7 +323,7 @@ export default function SuggestionsInbox({
                     Aquí caen las propuestas de Nova
                   </p>
                   <p className="mt-1 max-w-[280px] text-center text-[12.5px] leading-relaxed text-slate-500">
-                    Cuando Nova detecta un conflicto o hueco que no puede resolver sola, manda una propuesta aquí para que tú decidas.
+                    Cuando Nova detecta un conflicto o espacio que no puede resolver sola, manda una propuesta aquí para que tú decidas.
                   </p>
                   {!demoDismissed && (
                     <div className="mt-5 w-full">
