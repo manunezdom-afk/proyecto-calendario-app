@@ -92,17 +92,30 @@ export function AuthProvider({ children }) {
   }, [user])
 
   const signInWithEmail = useCallback(async (email) => {
-    if (!supabase) throw new Error('Supabase no configurado')
-    // Flujo OTP-only: código numérico por email (largo según config Supabase). NO pasamos
-    // emailRedirectTo para que Supabase no inyecte un magic-link en el
-    // correo — así el usuario nunca sale de la app. La redirect de
-    // cualquier link embebido usa el Site URL del proyecto (usefocus.me).
+    // Flujo OTP-only via /api/auth/email/send-otp: el backend genera el
+    // código con admin.generateLink y lo manda por Resend desde nuestro
+    // dominio. No usamos supabase.auth.signInWithOtp porque el SMTP por
+    // defecto de Supabase tiene rate-limit de ~3-4/h y cae a Spam.
     const clean = String(email || '').trim().toLowerCase()
-    const { error } = await supabase.auth.signInWithOtp({
-      email: clean,
-      options: { shouldCreateUser: true },
-    })
-    if (error) throw error
+    let r
+    try {
+      r = await fetch('/api/auth/email/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: clean }),
+      })
+    } catch {
+      throw new Error('network')
+    }
+    if (r.status === 429) {
+      const err = new Error('rate limit exceeded')
+      err.status = 429
+      throw err
+    }
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}))
+      throw new Error(body?.error || 'send_otp_failed')
+    }
   }, [])
 
   const signInWithPassword = useCallback(async (email, password) => {
