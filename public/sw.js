@@ -253,6 +253,65 @@ const NOTIF_KIND_DEFAULTS = {
   },
 }
 
+const SMART_KIND_DEFAULTS = {
+  focus_start: {
+    icon: '/icons/notif-reminder.svg',
+    badge: '/icons/notif-reminder.svg',
+    actions: [
+      { action: 'open', title: 'Empezar' },
+      { action: 'snooze', title: '5 min' },
+    ],
+  },
+  focus_reminder: {
+    icon: '/icons/notif-reminder.svg',
+    badge: '/icons/notif-reminder.svg',
+    actions: [
+      { action: 'open', title: 'Empezar' },
+      { action: 'snooze', title: 'Luego' },
+    ],
+  },
+  meeting_prep: {
+    icon: '/icons/notif-event.svg',
+    badge: '/icons/notif-event.svg',
+    actions: [
+      { action: 'open', title: 'Preparar' },
+      { action: 'snooze', title: 'Luego' },
+    ],
+  },
+  leave_now: {
+    icon: '/icons/notif-reminder.svg',
+    badge: '/icons/notif-reminder.svg',
+    actions: [
+      { action: 'open', title: 'Ver' },
+      { action: 'snooze', title: '5 min' },
+    ],
+  },
+  event_start: {
+    icon: '/icons/notif-event.svg',
+    badge: '/icons/notif-event.svg',
+    actions: [
+      { action: 'open', title: 'Abrir' },
+      { action: 'snooze', title: '5 min' },
+    ],
+  },
+  event_reminder: {
+    icon: '/icons/notif-event.svg',
+    badge: '/icons/notif-event.svg',
+    actions: [
+      { action: 'open', title: 'Abrir' },
+      { action: 'snooze', title: 'Luego' },
+    ],
+  },
+  day_before: {
+    icon: '/icons/notif-event.svg',
+    badge: '/icons/notif-event.svg',
+    actions: [
+      { action: 'open', title: 'Ver mañana' },
+      { action: 'snooze', title: 'Luego' },
+    ],
+  },
+}
+
 self.addEventListener('push', (event) => {
   // Defaults: NUNCA strings vacíos.
   const FALLBACK_TITLE = 'Focus'
@@ -276,6 +335,9 @@ self.addEventListener('push', (event) => {
     icon: rawIcon,
     badge: rawBadge,
     actions: rawActions,
+    renotify: rawRenotify,
+    requireInteraction: rawRequireInteraction,
+    timestamp: rawTimestamp,
     data = {},
   } = payload
 
@@ -287,7 +349,7 @@ self.addEventListener('push', (event) => {
   // Resolver assets/acciones: respetamos lo que vino en el payload; si falta
   // algo, caemos a los defaults del kind; si no hay kind, caemos al icono
   // genérico y a las acciones clásicas (compat con pushes viejas en cola).
-  const kindDefaults = NOTIF_KIND_DEFAULTS[data?.kind] || null
+  const kindDefaults = SMART_KIND_DEFAULTS[data?.kind] || NOTIF_KIND_DEFAULTS[data?.kind] || null
   const icon  = rawIcon  || kindDefaults?.icon  || '/icons/icon-192.png'
   const badge = rawBadge || kindDefaults?.badge || '/icons/icon-192.png'
   const actions = Array.isArray(rawActions) && rawActions.length > 0
@@ -297,18 +359,25 @@ self.addEventListener('push', (event) => {
         { action: 'snooze', title: 'Posponer 10 min' },
       ])
 
-  event.waitUntil(
-    self.registration.showNotification(title, {
+  const options = {
       body,
       icon,
       badge,
       tag,
-      renotify: true,
-      requireInteraction: false,
-      data: { url, ...data },
+      renotify: rawRenotify ?? true,
+      requireInteraction: Boolean(rawRequireInteraction),
+      data: {
+        url,
+        snoozeMinutes: Number(data?.snoozeMinutes) || 10,
+        ...data,
+      },
       actions,
-    }),
-  )
+    }
+
+  const ts = Number(rawTimestamp)
+  if (Number.isFinite(ts) && ts > 0) options.timestamp = ts
+
+  event.waitUntil(self.registration.showNotification(title, options))
 })
 
 // ── Click en notificación ──────────────────────────────────────────────────
@@ -346,7 +415,7 @@ self.addEventListener('notificationclick', (event) => {
             body: JSON.stringify({
               action: 'snooze',
               eventId: event.notification.data?.eventId,
-              minutes: 10,
+              minutes: Number(event.notification.data?.snoozeMinutes) || 10,
               endpoint,
             }),
           })

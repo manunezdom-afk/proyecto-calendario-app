@@ -130,9 +130,13 @@ async function sendPushToUser(admin, userId, payload, logCtx = null) {
     let errorMessage = null
 
     try {
+      const ttl = Math.max(60, Math.min(Number(payload.ttl) || 3600, 24 * 60 * 60))
+      const urgency = ['very-low', 'low', 'normal', 'high'].includes(payload.urgency)
+        ? payload.urgency
+        : 'normal'
       await webpush.sendNotification(sub, JSON.stringify(payload), {
-        TTL: 3600,
-        urgency: 'high',
+        TTL: ttl,
+        urgency,
         contentEncoding: 'aes128gcm',
       })
       sent++

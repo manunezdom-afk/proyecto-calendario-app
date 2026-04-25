@@ -6,6 +6,17 @@ const MAX_OFFSET_MIN = 1440
 // api/_lib/personality.js). Si el valor recibido no es uno de estos, caemos
 // a 'focus' silenciosamente.
 const SUPPORTED_PERSONALITIES = new Set(['focus', 'cercana', 'estrategica'])
+const VALID_URGENCY = new Set(['very-low', 'low', 'normal', 'high'])
+
+const KIND_ASSETS = {
+  focus_start:    '/icons/notif-reminder.svg',
+  focus_reminder: '/icons/notif-reminder.svg',
+  meeting_prep:   '/icons/notif-event.svg',
+  leave_now:      '/icons/notif-reminder.svg',
+  event_start:    '/icons/notif-event.svg',
+  day_before:     '/icons/notif-event.svg',
+  event_reminder: '/icons/notif-event.svg',
+}
 
 function normalizeText(value) {
   return String(value || '')
@@ -26,6 +37,100 @@ function uniqueSorted(values) {
 
 function resolvePersonality(value) {
   return SUPPORTED_PERSONALITIES.has(value) ? value : 'focus'
+}
+
+function isIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))
+}
+
+function buildNotificationUrl(event = {}) {
+  const date = isIsoDate(event.date) ? event.date : null
+  const params = new URLSearchParams()
+  params.set('view', 'day')
+  if (date) params.set('date', date)
+  return `/?${params.toString()}`
+}
+
+function assetForKind(kind) {
+  return KIND_ASSETS[kind] || '/icons/icon-192.png'
+}
+
+function buildActionsForKind(kind, moment) {
+  const snoozeTitle = moment === 'imminent' || moment === 'late' ? '5 min' : 'Luego'
+
+  if (kind === 'focus_start' || kind === 'focus_reminder') {
+    return [
+      { action: 'open', title: 'Empezar' },
+      { action: 'snooze', title: snoozeTitle },
+    ]
+  }
+
+  if (kind === 'meeting_prep') {
+    return [
+      { action: 'open', title: 'Preparar' },
+      { action: 'snooze', title: snoozeTitle },
+    ]
+  }
+
+  if (kind === 'leave_now') {
+    return [
+      { action: 'open', title: 'Ver' },
+      { action: 'snooze', title: '5 min' },
+    ]
+  }
+
+  if (kind === 'day_before') {
+    return [
+      { action: 'open', title: 'Ver mañana' },
+      { action: 'snooze', title: 'Luego' },
+    ]
+  }
+
+  return [
+    { action: 'open', title: 'Abrir' },
+    { action: 'snooze', title: snoozeTitle },
+  ]
+}
+
+export function getNotificationDeliveryProfile({ kind, moment, minsLeft }) {
+  const m = Number.isFinite(Number(minsLeft)) ? Number(minsLeft) : 10
+  const leadSeconds = Math.max(0, Math.round(m * 60))
+  const isCritical =
+    moment === 'imminent' ||
+    moment === 'late' ||
+    kind === 'event_start' ||
+    kind === 'focus_start' ||
+    kind === 'leave_now'
+
+  const graceSeconds =
+    moment === 'late' ? 5 * 60 :
+    moment === 'imminent' ? 10 * 60 :
+    kind === 'day_before' ? 12 * 60 * 60 :
+    30 * 60
+
+  const maxTtl =
+    kind === 'day_before' ? 12 * 60 * 60 :
+    isCritical ? 30 * 60 :
+    6 * 60 * 60
+
+  const ttl = Math.max(60, Math.min(maxTtl, leadSeconds + graceSeconds))
+  const urgency =
+    isCritical ? 'high' :
+    kind === 'day_before' || moment === 'far' ? 'low' :
+    'normal'
+
+  const snoozeMinutes =
+    moment === 'imminent' || moment === 'late' || kind === 'leave_now' ? 5 :
+    kind === 'day_before' ? 60 :
+    10
+
+  return {
+    ttl,
+    urgency: VALID_URGENCY.has(urgency) ? urgency : 'normal',
+    renotify: moment !== 'far' && kind !== 'day_before',
+    requireInteraction: isCritical,
+    snoozeMinutes,
+  }
 }
 
 export function normalizeReminderOffsets(value, fallback = DEFAULT_REMINDER_OFFSETS) {
@@ -253,6 +358,13 @@ export function buildSmartNotificationPayload(event = {}, options = {}) {
   const actualMins = Math.round(Number(minsLeft))
   const moment = classifyMoment(actualMins)
   const kind = classifySmartNotification(event, offset, Math.max(0, actualMins))
+  const delivery = getNotificationDeliveryProfile({ kind, moment, minsLeft: actualMins })
+  const icon = assetForKind(kind)
+  const url = buildNotificationUrl(event)
+  const startsAtISO = startsAt instanceof Date ? startsAt.toISOString() : startsAt
+  const timestamp = startsAt instanceof Date
+    ? startsAt.getTime()
+    : Date.parse(startsAtISO || '')
 
   const copy = buildCopyForKind({
     kind,
@@ -270,23 +382,29 @@ export function buildSmartNotificationPayload(event = {}, options = {}) {
   return {
     title: copy.title,
     body: copy.body,
-    url: '/',
+    url,
     tag,
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    actions: [
-      { action: 'open', title: 'Abrir' },
-      { action: 'snooze', title: 'Posponer 10 min' },
-    ],
+    icon,
+    badge: icon,
+    actions: buildActionsForKind(kind, moment),
+    ttl: delivery.ttl,
+    urgency: delivery.urgency,
+    renotify: delivery.renotify,
+    requireInteraction: delivery.requireInteraction,
+    timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
     data: {
       eventId,
       offset,
       kind,
       moment,
+      urgency: delivery.urgency,
+      ttl: delivery.ttl,
+      snoozeMinutes: delivery.snoozeMinutes,
       personality: resolvePersonality(personality),
       subject: subject || null,
       eventTitle: title,
-      startsAt: startsAt instanceof Date ? startsAt.toISOString() : startsAt,
+      startsAt: startsAtISO,
+      eventDate: isIsoDate(event.date) ? event.date : null,
       section: event.section || null,
       iconName: copy.iconName,
     },

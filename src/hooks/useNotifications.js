@@ -13,6 +13,7 @@ import {
   normalizeReminderOffsets,
 } from '../utils/smartNotifications'
 import { focusLog } from '../utils/debug'
+import { readPreferenceSync } from './useAppPreferences'
 
 const LOG_KEY    = 'focus_notif_log'
 const FIRED_KEY  = 'focus_notif_fired'
@@ -212,6 +213,7 @@ export function useNotifications({ events = [] } = {}) {
           offset: offsetMin,
           minsLeft,
           startsAt: eventTime,
+          personality: readPreferenceSync('novaPersonality'),
         })
 
         // Append to in-app log
@@ -240,10 +242,13 @@ export function useNotifications({ events = [] } = {}) {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           const notifOptions = {
             body: payload.body,
-            icon: '/icons/icon-192.png',
-            badge: '/icons/icon-192.png',
+            icon: payload.icon || '/icons/icon-192.png',
+            badge: payload.badge || payload.icon || '/icons/icon-192.png',
             tag: payload.tag || `reminder-${event.id}-${offsetMin}`,
-            data: payload.data,
+            renotify: payload.renotify ?? true,
+            requireInteraction: Boolean(payload.requireInteraction),
+            timestamp: payload.timestamp || Date.now(),
+            data: { url: payload.url, ...payload.data },
             actions: payload.actions,
           }
           if ('serviceWorker' in navigator) {
