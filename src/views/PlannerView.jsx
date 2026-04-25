@@ -316,6 +316,17 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   // re-sembrar el mismo texto y re-disparar el efecto.
   const [focusBarSeed, setFocusBarSeed] = useState({ text: '', n: 0, context: null })
   const [recurringSheetOpen, setRecurringSheetOpen] = useState(false)
+  // Banner "Tienes el día abierto" — dismissable. Persistimos el estado en
+  // localStorage para que el usuario que ya lo cerró no lo vuelva a ver al
+  // recargar. Lectura sincrónica en el initial state para evitar un flash
+  // del banner que después se oculta tras el efecto.
+  const [emptyDayBannerDismissed, setEmptyDayBannerDismissed] = useState(() => {
+    try { return localStorage.getItem('focus_empty_day_banner_dismissed') === '1' } catch { return false }
+  })
+  const dismissEmptyDayBanner = () => {
+    try { localStorage.setItem('focus_empty_day_banner_dismissed', '1') } catch {}
+    setEmptyDayBannerDismissed(true)
+  }
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60_000)
@@ -1116,7 +1127,57 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 )
               })}
 
-              {blocks.length === 0 && pendingTasksCount === 0 && (() => {
+              {/* ── Banner "Tienes el día abierto" ─────────────────────────
+                  Aparece cuando el día está vacío y el usuario no lo cerró.
+                  CTA grande arma el día con Nova; X persiste el dismiss
+                  para que no reaparezca en la próxima sesión. Si el usuario
+                  ya lo cerró, mostramos el chips card más abajo (fallback). */}
+              {blocks.length === 0 && pendingTasksCount === 0 && !emptyDayBannerDismissed && (
+                <div className="w-full max-w-2xl mx-auto">
+                  <div
+                    className="relative rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/5 via-secondary/5 to-surface px-6 py-7 sm:px-8 sm:py-9 shadow-[0_2px_24px_-8px_rgba(59,130,246,0.15)]"
+                  >
+                    <button
+                      type="button"
+                      onClick={dismissEmptyDayBanner}
+                      aria-label="Cerrar"
+                      className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full text-outline hover:text-on-surface hover:bg-surface-container-low transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">close</span>
+                    </button>
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 w-11 h-11 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-[0_4px_16px_-4px_rgba(59,130,246,0.4)]">
+                        <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-headline font-extrabold tracking-tight text-on-surface text-2xl sm:text-3xl leading-tight pr-6">
+                          Tienes el día abierto. Podemos armarlo en 10 segundos.
+                        </h3>
+                        <p className="mt-2 text-outline text-sm sm:text-[15px] leading-relaxed">
+                          Agrega un evento o pídele a Nova que arme tu agenda.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFocusBarSeed(({ n }) => ({
+                              text: 'Planifica mi día',
+                              n: n + 1,
+                              autosubmit: true,
+                              context: null,
+                            }))
+                          }}
+                          className="mt-5 inline-flex items-center gap-2 bg-on-surface text-surface rounded-full px-5 py-2.5 text-sm font-bold hover:bg-on-surface/90 active:scale-[0.98] transition-all shadow-[0_4px_14px_-4px_rgba(0,0,0,0.3)]"
+                        >
+                          <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                          Planificar mi día con Nova
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {blocks.length === 0 && pendingTasksCount === 0 && emptyDayBannerDismissed && (() => {
                 const pendingTotal = semanaCount + algoDiaCount
                 // Chips de onboarding: se esconden para siempre después de
                 // que el usuario haya creado su primer evento o tarea. Usamos
