@@ -5,13 +5,29 @@ import { parseEvent }         from '../utils/parseEvent'
 import { googleCalendarUrl }  from '../utils/googleCalendarUrl'
 import { supabase }           from '../lib/supabase'
 
+// Tres tabs claras, sin jerga. Antes había 5 ("Por texto" y "Foto" eran
+// métodos de import disfrazados de tabs, "Suscripción" sonaba a billing).
+// Ahora los 3 métodos de import (foto/texto/archivo) viven dentro de una
+// única tab "Importar" con un selector horizontal.
 const TABS = [
-  { id: 'export',    label: 'Exportar',    icon: 'ios_share' },
-  { id: 'subscribe', label: 'Suscripción', icon: 'rss_feed' },
-  { id: 'import',    label: 'Importar',    icon: 'download' },
-  { id: 'text',      label: 'Por texto',   icon: 'edit_note' },
-  { id: 'photo',     label: 'Foto',        icon: 'photo_camera' },
+  { id: 'import', label: 'Importar',    icon: 'download'  },
+  { id: 'export', label: 'Exportar',    icon: 'ios_share' },
+  { id: 'sync',   label: 'Sincronizar', icon: 'sync'      },
 ]
+
+// Compat con callers que abren la sheet en una tab vieja por initialTab.
+const TAB_ALIASES = {
+  subscribe: 'sync',
+  text:      'import',
+  photo:     'import',
+}
+
+// Si initialTab es 'text' o 'photo', preseleccionamos ese método dentro
+// de la tab Importar para que el deep-link siga funcionando.
+const INITIAL_IMPORT_METHOD_FROM_LEGACY_TAB = {
+  text:  'text',
+  photo: 'photo',
+}
 
 // ── Small preview card for an event to be imported ──────────────────────────
 function PreviewCard({ ev, onRemove }) {
@@ -183,18 +199,19 @@ function ExportTab({ events }) {
         </p>
       </div>
 
-      {/* ── Opción 1: Google Calendar directo ── */}
+      {/* ── Opción A · Google Calendar directo ── */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">1</span>
-          <p className="text-xs font-bold text-on-surface">Google Calendar — un clic por evento</p>
+        <div>
+          <p className="text-sm font-bold text-on-surface">Abrir en Google Calendar</p>
+          <p className="text-[12px] text-outline mt-0.5 leading-relaxed">
+            Sin descargas. Cada evento se abre con un clic y se guarda directamente en tu Google Calendar.
+          </p>
         </div>
-        <p className="text-xs text-on-surface-variant pl-7">Sin descargar nada. Se abre directamente en Google Calendar con la hora y fecha correctas.</p>
 
         {filteredEvents.length === 0 ? (
-          <p className="text-xs text-outline pl-7 italic">No hay eventos para exportar con los filtros actuales.</p>
+          <p className="text-xs text-outline italic">Aún no tienes eventos para exportar.</p>
         ) : (
-          <div className="space-y-2 max-h-56 overflow-y-auto pl-7">
+          <div className="space-y-2 max-h-56 overflow-y-auto">
             {filteredEvents.map((ev) => (
               <div key={ev.id} className="flex items-center gap-3 p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/20">
                 <div className="flex-1 min-w-0">
@@ -219,28 +236,23 @@ function ExportTab({ events }) {
 
       <div className="border-t border-outline-variant/20" />
 
-      {/* ── Opción 2: Archivo .ics (Apple, Outlook, etc.) ── */}
+      {/* ── Opción B · Descargar archivo (Apple, Outlook, otros) ── */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">2</span>
-          <p className="text-xs font-bold text-on-surface">Archivo .ics — Apple Calendar · Outlook · otros</p>
+        <div>
+          <p className="text-sm font-bold text-on-surface">Descargar para otra app</p>
+          <p className="text-[12px] text-outline mt-0.5 leading-relaxed">
+            Apple Calendar, Outlook u otras. Los horarios se ajustan automáticamente a tu zona horaria.
+          </p>
         </div>
-        <p className="text-xs text-on-surface-variant pl-7">
-          Descarga el archivo y ábrelo en tu app de calendario. Los horarios se exportan en UTC para que aparezcan a la hora correcta en cualquier zona horaria.
-        </p>
 
-        <div className="pl-7 space-y-2">
-          {/* Cuando no hay nada que exportar, degradamos el CTA a estado neutro
-              en lugar de dejar el botón primario con opacity-30: visualmente
-              sigue pareciendo disponible y genera frustración. El texto
-              también cambia para decir explícitamente que no hay nada. */}
+        <div className="space-y-2">
           {filteredEvents.length === 0 ? (
             <button
               disabled
               className="w-full py-3.5 rounded-2xl bg-surface-container-low text-outline font-semibold flex items-center justify-center gap-2 text-sm cursor-not-allowed"
             >
               <span className="material-symbols-outlined text-[18px]">block</span>
-              Nada que exportar con estos filtros
+              Aún no tienes eventos para exportar
             </button>
           ) : (
             <button
@@ -248,7 +260,7 @@ function ExportTab({ events }) {
               className="w-full py-3.5 rounded-2xl bg-primary text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
             >
               <span className="material-symbols-outlined text-[20px]">ios_share</span>
-              Descargar {filteredEvents.length} evento{filteredEvents.length !== 1 ? 's' : ''} (.ics)
+              Descargar {filteredEvents.length} evento{filteredEvents.length !== 1 ? 's' : ''}
             </button>
           )}
 
@@ -258,26 +270,32 @@ function ExportTab({ events }) {
             className="w-full py-3 rounded-2xl bg-surface-container-low text-on-surface font-semibold flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed text-sm active:scale-[0.98] transition-all"
           >
             <span className="material-symbols-outlined text-[18px]">{copied ? 'check_circle' : 'content_copy'}</span>
-            {copied ? '¡Copiado!' : 'Copiar como texto ICS'}
+            {copied ? '¡Copiado!' : 'Copiar al portapapeles'}
           </button>
         </div>
 
-        {/* Instrucciones por app */}
-        <div className="pl-7 space-y-2">
-          {[
-            { icon: 'apple', label: 'Apple Calendar', desc: 'Toca el .ics desde Archivos o Mail → se importa solo' },
-            { icon: 'language', label: 'Google Calendar (alternativa)', desc: 'calendar.google.com → Configuración ⚙ → Importar → sube el .ics' },
-            { icon: 'mail', label: 'Outlook', desc: 'Doble clic en el .ics → "Abrir con Outlook"' },
-          ].map(({ icon, label, desc }) => (
-            <div key={label} className="flex items-start gap-3 p-3 bg-surface-container-low rounded-xl">
-              <span className="material-symbols-outlined text-outline text-[18px] mt-0.5">{icon}</span>
-              <div>
-                <p className="text-sm font-bold text-on-surface">{label}</p>
-                <p className="text-xs text-outline font-medium mt-0.5">{desc}</p>
+        {/* Cómo abrirlo en cada app — guía rápida sin jerga */}
+        <details className="group">
+          <summary className="text-[12px] font-semibold text-outline cursor-pointer hover:text-on-surface flex items-center gap-1 list-none">
+            <span className="material-symbols-outlined text-[16px] transition-transform group-open:rotate-90">chevron_right</span>
+            ¿Cómo lo abro en mi app?
+          </summary>
+          <div className="space-y-2 mt-2.5">
+            {[
+              { icon: 'phone_iphone', label: 'iPhone / Mac (Apple Calendar)', desc: 'Toca el archivo descargado desde Archivos o Mail. Se importa solo.' },
+              { icon: 'language',     label: 'Google Calendar',                desc: 'calendar.google.com → Configuración → Importar → sube el archivo.' },
+              { icon: 'mail',         label: 'Outlook',                        desc: 'Doble clic en el archivo y elige "Abrir con Outlook".' },
+            ].map(({ icon, label, desc }) => (
+              <div key={label} className="flex items-start gap-3 p-3 bg-surface-container-low rounded-xl">
+                <span className="material-symbols-outlined text-outline text-[18px] mt-0.5">{icon}</span>
+                <div>
+                  <p className="text-sm font-bold text-on-surface">{label}</p>
+                  <p className="text-xs text-outline font-medium mt-0.5">{desc}</p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </details>
       </div>
 
     </div>
@@ -1003,12 +1021,78 @@ function PhotoTab({ onImport }) {
   )
 }
 
-// ── Main sheet ────────────────────────────────────────────────────────────────
-export default function ImportExportSheet({ isOpen, onClose, events, onImportEvent, initialTab = 'export' }) {
-  const [activeTab, setActiveTab] = useState(initialTab)
+// ── Import tab — method picker + delegación al método elegido ───────────────
+// Antes había 3 tabs separadas (Importar / Por texto / Foto) que confundían al
+// usuario: los 3 son métodos del MISMO objetivo (traer eventos a Focus).
+// Acá los muestro como un selector horizontal de 3 opciones, y debajo el flujo
+// del método elegido. Cero navegación nueva: el cambio es inline.
+const IMPORT_METHODS = [
+  { id: 'photo', label: 'Foto',    icon: 'photo_camera', desc: 'Captura tu agenda en papel o un screenshot.' },
+  { id: 'text',  label: 'Texto',   icon: 'edit_note',    desc: 'Pega un email, mensaje o cualquier texto con horarios.' },
+  { id: 'file',  label: 'Archivo', icon: 'folder_zip',   desc: 'Sube un archivo de calendario desde Google, Apple u Outlook.' },
+]
 
-  // Reset to initialTab each time the sheet opens
-  useEffect(() => { if (isOpen) setActiveTab(initialTab) }, [isOpen, initialTab])
+function ImportTab({ onImport, initialMethod = 'photo' }) {
+  const [method, setMethod] = useState(initialMethod)
+  const activeMeta = IMPORT_METHODS.find((m) => m.id === method) || IMPORT_METHODS[0]
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="text-[11px] font-bold text-on-surface mb-2">¿Cómo quieres traer tus eventos?</p>
+        <div className="grid grid-cols-3 gap-2">
+          {IMPORT_METHODS.map((m) => {
+            const active = m.id === method
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setMethod(m.id)}
+                className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl border transition-all ${
+                  active
+                    ? 'bg-primary/10 border-primary/40 text-primary ring-1 ring-primary/30'
+                    : 'bg-surface-container-lowest border-outline-variant/25 text-on-surface-variant hover:bg-surface-container-low'
+                }`}
+              >
+                <span
+                  className="material-symbols-outlined text-[22px]"
+                  style={{ fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0" }}
+                >
+                  {m.icon}
+                </span>
+                <span className="text-[11.5px] font-bold">{m.label}</span>
+              </button>
+            )
+          })}
+        </div>
+        <p className="text-[11.5px] text-outline mt-2.5 leading-relaxed">{activeMeta.desc}</p>
+      </div>
+
+      {method === 'photo' && <PhotoTab onImport={onImport} />}
+      {method === 'text'  && <TextTab onImport={onImport} />}
+      {method === 'file'  && <ImportICSTab onImport={onImport} />}
+    </div>
+  )
+}
+
+// ── Main sheet ────────────────────────────────────────────────────────────────
+function normalizeInitialTab(initialTab) {
+  return TAB_ALIASES[initialTab] || initialTab || 'import'
+}
+
+export default function ImportExportSheet({ isOpen, onClose, events, onImportEvent, initialTab = 'import' }) {
+  const [activeTab, setActiveTab] = useState(() => normalizeInitialTab(initialTab))
+  const [importInitialMethod, setImportInitialMethod] = useState(
+    () => INITIAL_IMPORT_METHOD_FROM_LEGACY_TAB[initialTab] || 'photo',
+  )
+
+  // Reset to initialTab each time the sheet opens — respeta el deep-link aun
+  // cuando initialTab sea legacy ('text'/'photo'/'subscribe').
+  useEffect(() => {
+    if (!isOpen) return
+    setActiveTab(normalizeInitialTab(initialTab))
+    setImportInitialMethod(INITIAL_IMPORT_METHOD_FROM_LEGACY_TAB[initialTab] || 'photo')
+  }, [isOpen, initialTab])
 
   if (!isOpen) return null
 
@@ -1058,11 +1142,11 @@ export default function ImportExportSheet({ isOpen, onClose, events, onImportEve
 
         {/* Tab content */}
         <div className="flex-1 overflow-y-auto hide-scrollbar px-6 pb-10">
-          {activeTab === 'export'    && <ExportTab events={events} />}
-          {activeTab === 'subscribe' && <SubscribeTab />}
-          {activeTab === 'import'    && <ImportICSTab onImport={onImportEvent} />}
-          {activeTab === 'text'      && <TextTab onImport={onImportEvent} />}
-          {activeTab === 'photo'     && <PhotoTab onImport={onImportEvent} />}
+          {activeTab === 'import' && (
+            <ImportTab onImport={onImportEvent} initialMethod={importInitialMethod} />
+          )}
+          {activeTab === 'export' && <ExportTab events={events} />}
+          {activeTab === 'sync'   && <SubscribeTab />}
         </div>
       </div>
     </>
