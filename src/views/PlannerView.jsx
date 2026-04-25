@@ -879,17 +879,25 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   // event/task (useEffect arriba).
   const showNovaGuide = isFirstUse
 
+  // Si la columna derecha quedaría vacía (no hay tutorial Nova ni bloques),
+  // colapsamos a una sola columna centrada — antes el grid reservaba 360-400px
+  // a la derecha y el composer quedaba pegado al borde izquierdo, raro en
+  // pantallas anchas.
+  const hasRightContent = showNovaGuide || blocks.length > 0
+  const useTwoColumns = isDesktop && hasRightContent
+
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-8 dark:bg-slate-900 dark:text-slate-100">
 
       {/* Setup card legacy — reemplazado por OnboardingTour animado.
           El sistema de user_signals aprende el cronotipo solo, sin preguntar. */}
 
-      <main className={`${isDesktop ? 'max-w-7xl' : 'max-w-7xl'} mx-auto px-4 sm:px-6 pt-8`}>
-        {/* Desktop: dos columnas para que Focus no se sienta como mobile
-            estirado. La derecha explica y activa el potencial de Nova; mobile
-            conserva el flujo vertical original. */}
-        <div className={isDesktop ? 'grid grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px] gap-8 xl:gap-10 items-start' : 'flex flex-col gap-10'}>
+      <main className={`${isDesktop && !useTwoColumns ? 'max-w-3xl' : 'max-w-7xl'} mx-auto px-4 sm:px-6 pt-8`}>
+        {/* Desktop: dos columnas cuando hay contenido a la derecha (tutorial
+            Nova o bloques agendados). Si no, colapsa a una columna centrada
+            para que el composer no quede off-center con un hueco vacío al
+            lado. Mobile conserva el flujo vertical original. */}
+        <div className={useTwoColumns ? 'grid grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px] gap-8 xl:gap-10 items-start' : 'flex flex-col gap-10'}>
 
           {/* ── Left: Timeline ────────────────────────────────────────────── */}
           <div className="min-w-0">
@@ -1246,10 +1254,26 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   // de un saque.
                   { icon: 'event_repeat',   label: 'Reunión semanal fija', action: 'recurring' },
                 ]
+                // Desktop con banner descartado: ya no mostramos la card grande.
+                // Sólo dejamos los chips de ejemplo para que el composer no
+                // quede solo en pantalla. Mobile no entra aquí (ya tiene su
+                // propia variante compacta más abajo).
+                const showBigCard = !(isDesktop && emptyDayBannerDismissed)
                 return (
                   <div className={`w-full mx-auto ${isDesktop ? 'max-w-none' : 'max-w-[300px]'} space-y-4`}>
-                    <div className={`${isDesktop ? 'rounded-[28px] border border-primary/10 bg-gradient-to-br from-white via-primary/5 to-secondary/10 px-6 py-6 shadow-[0_22px_60px_rgba(27,27,29,0.06)]' : 'space-y-1 text-center'}`}>
-                      <div className={isDesktop ? 'flex items-start gap-4' : ''}>
+                    {showBigCard && (
+                    <div className={`${isDesktop ? 'relative rounded-[28px] border border-primary/10 bg-gradient-to-br from-white via-primary/5 to-secondary/10 px-6 py-6 shadow-[0_22px_60px_rgba(27,27,29,0.06)]' : 'space-y-1 text-center'}`}>
+                      {isDesktop && (
+                        <button
+                          type="button"
+                          onClick={dismissEmptyDayBanner}
+                          aria-label="Cerrar"
+                          className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center rounded-full text-outline hover:text-on-surface hover:bg-surface-container-low active:scale-95 transition-all"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                      )}
+                      <div className={isDesktop ? 'flex items-start gap-4 pr-10' : ''}>
                         {isDesktop && (
                           <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-primary/20">
                             <span className="material-symbols-outlined text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
@@ -1281,7 +1305,8 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                         </div>
                       </div>
                     </div>
-                    {isFirstUse && !isDesktop && (
+                    )}
+                    {isFirstUse && (
                       <ul className={isDesktop ? 'grid grid-cols-3 gap-3' : 'space-y-2'}>
                         {chips.map((chip) => (
                           <li key={chip.label}>
@@ -1378,7 +1403,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
             </div>
           </div>
 
-          {/* ── Right: Insights personalizados ────────────────────────────── */}
+          {/* ── Right: Insights personalizados ──────────────────────────────
+              En desktop sólo renderizamos esta columna si tiene contenido —
+              si está vacía, el grid se reduce a una columna centrada y la
+              caja en blanco no aparece más. */}
+          {(!isDesktop || hasRightContent) && (
           <div className={`w-full space-y-5 ${isDesktop ? 'lg:sticky lg:top-28' : ''}`}>
 
             {/* ── Right: tutorial Nova — solo primer uso, descartable con X ── */}
@@ -1690,6 +1719,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
             )}
 
           </div>
+          )}
         </div>
       </main>
 
