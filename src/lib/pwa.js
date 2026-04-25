@@ -5,9 +5,9 @@
 //   1. El browser detecta un sw.js distinto (Cache-Control no-store en Vercel).
 //   2. El SW nuevo pasa a estado "installed" y queda en waiting.
 //   3. Despachamos `focus:sw-update-available` por si la UI quiere reaccionar.
-//   4. Auto-apply: cuando el usuario vuelve a la app (visibilitychange →
-//      visible) o ya está en background, mandamos SKIP_WAITING. Es la ventana
-//      más segura — no está escribiendo.
+//   4. Auto-apply: si la app está en background, mandamos SKIP_WAITING altiro.
+//      Si está visible, esperamos un delay corto y recargamos una sola vez.
+//      Esto evita que una PWA instalada quede pegada días en una build vieja.
 //   5. El SW nuevo se activa y toma control → `controllerchange` dispara un
 //      único reload para reflejar el bundle fresco.
 //
@@ -22,6 +22,7 @@ export function registerServiceWorker() {
 
   let refreshing = false
   let updateApplied = false
+  const VISIBLE_UPDATE_APPLY_DELAY_MS = 1200
 
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (refreshing) return
@@ -32,7 +33,7 @@ export function registerServiceWorker() {
 
   const applyUpdate = (reg) => {
     const waiting = reg?.waiting
-    if (!waiting) return
+    if (!waiting || updateApplied) return
     updateApplied = true
     waiting.postMessage({ type: 'SKIP_WAITING' })
   }
@@ -45,11 +46,12 @@ export function registerServiceWorker() {
   // desde cualquier punto post-parse.
   const register = () => {
     navigator.serviceWorker
-      .register('/sw.js', { scope: '/' })
+      .register('/sw.js', { scope: '/', updateViaCache: 'none' })
       .then((reg) => {
         console.log('[Focus] 🛰️ Service Worker registrado', reg.scope)
 
         const onUpdateReady = () => {
+          if (updateApplied) return
           // Despachamos para que la UI pueda mostrar un aviso opcional.
           window.dispatchEvent(new CustomEvent('focus:sw-update-available'))
 
@@ -59,13 +61,22 @@ export function registerServiceWorker() {
             applyUpdate(reg)
             return
           }
-          // Si está visible, esperamos a que pase a background y vuelva.
-          // Ese es el punto menos intrusivo para un reload silencioso.
-          const onVisible = () => {
-            if (document.hidden) return
+          // Si está visible, aplicamos igual después de un delay corto. En
+          // piloto nos importa más no dejar a nadie atrapado en una build
+          // vieja que preservar una sesión antigua indefinidamente.
+          let visibleUpdateTimer
+          const applyVisibleUpdate = () => {
             document.removeEventListener('visibilitychange', onVisible)
+            window.clearTimeout(visibleUpdateTimer)
             applyUpdate(reg)
           }
+          const onVisible = () => {
+            if (!document.hidden) applyVisibleUpdate()
+          }
+          visibleUpdateTimer = window.setTimeout(
+            applyVisibleUpdate,
+            VISIBLE_UPDATE_APPLY_DELAY_MS,
+          )
           document.addEventListener('visibilitychange', onVisible)
         }
 
