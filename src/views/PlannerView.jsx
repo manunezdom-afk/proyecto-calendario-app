@@ -808,6 +808,12 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       action: 'recurring',
     },
   ]
+  let onboardingChipsDismissed = false
+  try {
+    onboardingChipsDismissed = localStorage.getItem('focus_onboarding_chips_dismissed') === '1'
+  } catch {}
+  const isFirstUse = !onboardingChipsDismissed && events.length === 0 && tasks.length === 0
+  const showDesktopNewUserGuide = isDesktop && isFirstUse && blocks.length === 0 && pendingTasksCount === 0
 
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-8 dark:bg-slate-900 dark:text-slate-100">
@@ -1085,15 +1091,6 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
 
               {blocks.length === 0 && pendingTasksCount === 0 && (() => {
                 const pendingTotal = semanaCount + algoDiaCount
-                // Chips de onboarding: se esconden para siempre después de
-                // que el usuario haya creado su primer evento o tarea. Usamos
-                // una flag persistente en localStorage — confiar solo en
-                // events.length === 0 los hacía reaparecer si después
-                // borraba todo, y el usuario los percibía como "no
-                // desaparecen con data real".
-                let chipsDismissed = false
-                try { chipsDismissed = localStorage.getItem('focus_onboarding_chips_dismissed') === '1' } catch {}
-                const isFirstUse = !chipsDismissed && events.length === 0 && tasks.length === 0
                 const chips = [
                   { icon: 'fitness_center', label: 'Agendar gym mañana',   prompt: 'Agenda gym mañana a las 7' },
                   { icon: 'schedule',       label: 'Bloquear 2h de foco',  prompt: 'Bloquea 2h de foco esta tarde' },
@@ -1119,7 +1116,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                           <p className={`${isDesktop ? 'mt-2 max-w-xl text-sm leading-relaxed text-outline/75' : 'text-outline/70 text-xs leading-relaxed'}`}>
                         {isFirstUse
                           ? isDesktop
-                            ? 'Dile a Nova qué tienes en la cabeza: una reunión, una tarea, un recordatorio o simplemente “planifica mi día”.'
+                            ? 'Agrega un evento o pídele a Nova que arme tu agenda.'
                             : '¿Por dónde empezamos? Toca un ejemplo o escríbele a Nova.'
                           : pendingTotal > 0
                           ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. Buen momento para avanzar una.`
@@ -1138,7 +1135,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                         </div>
                       </div>
                     </div>
-                    {isFirstUse && (
+                    {isFirstUse && !isDesktop && (
                       <ul className={isDesktop ? 'grid grid-cols-3 gap-3' : 'space-y-2'}>
                         {chips.map((chip) => (
                           <li key={chip.label}>
@@ -1238,7 +1235,8 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
           {/* ── Right: Insights personalizados ────────────────────────────── */}
           <div className={`w-full space-y-5 ${isDesktop ? 'lg:sticky lg:top-28' : ''}`}>
 
-            {isDesktop && (
+            {/* ── Right: guía Nova solo para primer uso desktop ────────────── */}
+            {showDesktopNewUserGuide && (
               <div className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.07)]">
                 <div className="relative px-6 py-6">
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(59,130,246,0.16),transparent_36%),radial-gradient(circle_at_90%_20%,rgba(124,107,255,0.12),transparent_34%)]" aria-hidden="true" />
