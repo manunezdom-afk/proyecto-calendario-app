@@ -684,7 +684,13 @@ export default function App() {
           onDeleteTask={deleteTask}
           onProposeActions={handleProposeActions}
           onOpenInbox={() => setInboxOpen(true)}
-          proposeMode={true}
+          // Las acciones que el usuario le pide a Nova en el chat se ejecutan
+          // directo (con Undo persistente como red de seguridad). La Bandeja
+          // queda reservada para propuestas AUTÓNOMAS de Nova (conflictos,
+          // optimizaciones), no para confirmar lo que el usuario ya pidió —
+          // ese paso intermedio era burocracia: el usuario veía "Listo, agregué X"
+          // y al mismo tiempo una propuesta para aprobar lo que acababa de pedir.
+          proposeMode={false}
           isDesktop={isDesktop}
         />
       )}

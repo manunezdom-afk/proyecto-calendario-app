@@ -363,10 +363,10 @@ export default function SuggestionsInbox({
                     </span>
                   </div>
                   <p className="text-center text-[14px] font-semibold text-slate-700">
-                    Aquí caen las propuestas de Nova
+                    Aquí caen las propuestas autónomas de Nova
                   </p>
-                  <p className="mt-1 max-w-[280px] text-center text-[12.5px] leading-relaxed text-slate-500">
-                    Cuando Nova detecta un conflicto o un espacio libre que no puede resolver sola, manda una propuesta aquí para que tú decidas.
+                  <p className="mt-1 max-w-[300px] text-center text-[12.5px] leading-relaxed text-slate-500">
+                    Conflictos detectados, optimizaciones de tu agenda, oportunidades que ella nota por su cuenta. Lo que tú le pides en el chat se aplica al toque y queda en <b>Deshacer</b> — no necesita pasar por aquí.
                   </p>
 
                   {/* Leyenda de colores: explica qué representa cada color en
