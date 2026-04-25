@@ -374,6 +374,20 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     return () => window.removeEventListener('focus:nova-seed', onSeed)
   }, [])
 
+  // Estado del tutorial de bienvenida ("Nova en tu día"). Se inicializa
+  // sincrónicamente desde localStorage para evitar el flash en el que el
+  // panel aparece por un frame y luego desaparece. Una vez seteado a true
+  // el panel no vuelve a mostrarse jamás.
+  const [onboardingChipsDismissed, setOnboardingChipsDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try { return localStorage.getItem('focus_onboarding_chips_dismissed') === '1' } catch { return false }
+  })
+
+  function dismissOnboardingTutorial() {
+    setOnboardingChipsDismissed(true)
+    try { localStorage.setItem('focus_onboarding_chips_dismissed', '1') } catch {}
+  }
+
   // Una vez que el usuario tenga CUALQUIER evento o tarea propia, marcamos
   // los chips de onboarding como descartados. De ahí en adelante, aunque
   // borre todo, los ejemplos no reaparecen — se quedarían sintiendo fuera
@@ -385,6 +399,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
         localStorage.setItem('focus_onboarding_chips_dismissed', '1')
       }
     } catch {}
+    setOnboardingChipsDismissed(true)
   }, [events.length, tasks.length])
 
   const { profile } = useUserProfile()
@@ -851,12 +866,18 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       action: 'recurring',
     },
   ]
-  let onboardingChipsDismissed = false
-  try {
-    onboardingChipsDismissed = localStorage.getItem('focus_onboarding_chips_dismissed') === '1'
-  } catch {}
+  // isFirstUse usa el state ya inicializado más arriba — no se relee
+  // localStorage en cada render. Antes era `let` con lookup directo, lo que
+  // hacía que el dismiss manual no se reflejara hasta el próximo render
+  // disparado por otro motivo.
   const isFirstUse = !onboardingChipsDismissed && events.length === 0 && tasks.length === 0
-  const showDesktopNewUserGuide = isDesktop && isFirstUse && blocks.length === 0 && pendingTasksCount === 0
+  // Tutorial Nova: aparece UNA sola vez para usuarios nuevos (sin
+  // events/tasks/dismiss). Renderiza tanto en desktop (right column) como
+  // en mobile (al final del flujo, ya que el grid colapsa a flex-col).
+  // X manual arriba a la derecha permite descartarlo sin tener que crear
+  // un evento; auto-descartar también ocurre cuando aparece el primer
+  // event/task (useEffect arriba).
+  const showNovaGuide = isFirstUse
 
   return (
     <div className="bg-surface font-body text-on-surface min-h-screen pb-8 dark:bg-slate-900 dark:text-slate-100">
@@ -1360,10 +1381,18 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
           {/* ── Right: Insights personalizados ────────────────────────────── */}
           <div className={`w-full space-y-5 ${isDesktop ? 'lg:sticky lg:top-28' : ''}`}>
 
-            {/* ── Right: guía Nova solo para primer uso desktop ────────────── */}
-            {showDesktopNewUserGuide && (
-              <div className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.07)]">
-                <div className="relative px-6 py-6">
+            {/* ── Right: tutorial Nova — solo primer uso, descartable con X ── */}
+            {showNovaGuide && (
+              <div className="relative overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.07)]">
+                <button
+                  type="button"
+                  onClick={dismissOnboardingTutorial}
+                  aria-label="Cerrar tutorial"
+                  className="absolute top-3 right-3 z-10 w-9 h-9 flex items-center justify-center rounded-full text-outline hover:text-on-surface hover:bg-surface-container-low active:scale-95 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[20px]">close</span>
+                </button>
+                <div className="relative px-6 py-6 pr-14">
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(59,130,246,0.16),transparent_36%),radial-gradient(circle_at_90%_20%,rgba(124,107,255,0.12),transparent_34%)]" aria-hidden="true" />
                   <div className="relative">
                     <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/10 bg-primary/5 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-primary">
