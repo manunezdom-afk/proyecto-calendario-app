@@ -1187,7 +1187,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                         <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-headline font-extrabold tracking-tight text-on-surface text-2xl sm:text-3xl leading-tight pr-6">
+                        <h3 className="font-headline font-semibold tracking-tight text-on-surface text-2xl sm:text-3xl leading-tight pr-6">
                           Tienes el día abierto. Podemos armarlo en 10 segundos.
                         </h3>
                         <p className="mt-2 text-outline text-sm sm:text-[15px] leading-relaxed">
@@ -1235,7 +1235,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                           </span>
                         )}
                         <div className={isDesktop ? 'min-w-0 flex-1' : ''}>
-                          <p className={`${isDesktop ? 'font-headline text-2xl font-extrabold tracking-tight text-on-surface' : 'text-on-surface text-sm font-semibold'}`}>
+                          <p className={`${isDesktop ? 'font-headline text-2xl font-semibold tracking-tight text-on-surface' : 'text-on-surface text-sm font-semibold'}`}>
                             {isDesktop ? 'Tienes el día abierto. Podemos armarlo en 10 segundos.' : 'Hoy está libre.'}
                           </p>
                           <p className={`${isDesktop ? 'mt-2 max-w-xl text-sm leading-relaxed text-outline/75' : 'text-outline/70 text-xs leading-relaxed'}`}>
@@ -1370,7 +1370,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>psychology</span>
                       Nova en tu día
                     </div>
-                    <h3 className="font-headline text-2xl font-extrabold leading-tight tracking-tight text-slate-950">
+                    <h3 className="font-headline text-2xl font-semibold leading-tight tracking-tight text-slate-950">
                       No es solo guardar eventos. Es quitarte decisiones pequeñas.
                     </h3>
                     <p className="mt-3 text-sm leading-relaxed text-slate-500">
