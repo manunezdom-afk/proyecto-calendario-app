@@ -255,7 +255,7 @@ function formatWeekRange(weekStart) {
 }
 
 // ─── Main view ────────────────────────────────────────────────────────────────
-export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteEvent, onEditEvent, onOpenTask, onExportClick, onOpenDay, isDesktop = false }) {
+export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteEvent, onEditEvent, onOpenTask, onExportClick, onImportClick, onOpenDay, isDesktop = false }) {
   const [showModal, setShowModal] = useState(false)
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('dia')           // 'dia' | 'semana' | 'mes'
@@ -264,6 +264,19 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
   // de la vista semanal — hace que el evento caiga en el día correcto aunque
   // el texto tipeado no incluya fecha explícita.
   const [pendingDate, setPendingDate] = useState(null)
+  // Texto inicial del QuickAddSheet — el botón "Bloque de foco" lo usa para
+  // pre-llenar el input con un evento típico de foco. Se resetea en cancel/save.
+  const [quickAddInitial, setQuickAddInitial] = useState('')
+
+  function openAdd(initial = '') {
+    setQuickAddInitial(initial)
+    setShowModal(true)
+  }
+  function closeAdd() {
+    setShowModal(false)
+    setQuickAddInitial('')
+    setPendingDate(null)
+  }
 
   // Tick para re-renderizar cada minuto y actualizar el estado temporal de
   // los eventos (past/active/future). Los badges "Finalizado" dependen de
@@ -343,6 +356,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
     // Guardar el evento con la fecha del día seleccionado
     onAddEvent({ ...formData, date: activeDayISO })
     setShowModal(false)
+    setQuickAddInitial('')
   }
 
   return (
@@ -446,6 +460,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
               onOpenTask={onOpenTask}
               onAddAt={(iso) => {
                 setPendingDate(iso)
+                setQuickAddInitial('')
                 setShowModal(true)
               }}
             />
@@ -455,11 +470,11 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                 onSave={(formData) => {
                   // Si el usuario tocó una celda concreta, esa fecha manda.
                   onAddEvent({ ...formData, date: pendingDate ?? formData.date })
-                  setShowModal(false)
-                  setPendingDate(null)
+                  closeAdd()
                 }}
-                onCancel={() => { setShowModal(false); setPendingDate(null) }}
+                onCancel={closeAdd}
                 existingEvents={events}
+                initialText={quickAddInitial}
               />
             )}
           </section>
@@ -535,9 +550,9 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
               <DayTimeGrid
                 events={dayEvents}
                 referenceDate={now}
-                onAdd={() => setShowModal(true)}
-                onFocusBlock={() => setShowModal(true)}
-                onImport={onExportClick}
+                onAdd={() => openAdd('')}
+                onFocusBlock={() => openAdd('Bloque de foco 90 min')}
+                onImport={onImportClick}
                 onOpenTask={onOpenTask}
               />
             ) : (
@@ -606,22 +621,22 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                 </div>
                 <div className="flex flex-wrap gap-2 justify-center">
                   <button
-                    onClick={() => setShowModal(true)}
+                    onClick={() => openAdd('')}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-white text-xs font-bold active:scale-95 transition-all shadow-sm shadow-primary/20"
                   >
                     <span className="material-symbols-outlined text-[15px]">add</span>
                     Añadir evento
                   </button>
                   <button
-                    onClick={() => setShowModal(true)}
+                    onClick={() => openAdd('Bloque de foco 90 min')}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary/10 text-primary text-xs font-bold active:scale-95 transition-colors hover:bg-primary/15"
                   >
                     <span className="material-symbols-outlined text-[15px]">psychology</span>
                     Bloquear foco
                   </button>
-                  {onExportClick && (
+                  {onImportClick && (
                     <button
-                      onClick={onExportClick}
+                      onClick={onImportClick}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-semibold active:scale-95 transition-colors hover:bg-surface-container-high"
                     >
                       <span className="material-symbols-outlined text-[15px]">upload_file</span>
@@ -683,7 +698,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                     </button>
                   )}
                   <button
-                    onClick={() => setShowModal(true)}
+                    onClick={() => openAdd('')}
                     className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>
@@ -723,7 +738,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold text-on-surface">Tarde/Noche</h2>
                 <button
-                  onClick={() => setShowModal(true)}
+                  onClick={() => openAdd('')}
                   className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
                 >
                   <span className="material-symbols-outlined text-[16px]">add</span>
@@ -797,7 +812,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
               style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 172px)' }}
             >
               <button
-                onClick={() => setShowModal(true)}
+                onClick={() => openAdd('')}
                 aria-label="Añadir evento"
                 className="w-14 h-14 rounded-2xl bg-primary text-white shadow-2xl flex items-center justify-center active:scale-90 transition-transform duration-300"
                 title="Añadir evento"
@@ -811,8 +826,9 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
             {showModal && (
               <QuickAddSheet
                 onSave={handleSave}
-                onCancel={() => setShowModal(false)}
+                onCancel={closeAdd}
                 existingEvents={events}
+                initialText={quickAddInitial}
               />
             )}
                 </motion.div>

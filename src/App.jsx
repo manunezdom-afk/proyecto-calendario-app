@@ -581,6 +581,7 @@ export default function App() {
                   onEditEvent={editEvent}
                   onOpenTask={(event) => openTaskDetail(event)}
                   onExportClick={() => { setImportExportInitialTab('export'); setImportExportOpen(true) }}
+                  onImportClick={() => { setImportExportInitialTab('import'); setImportExportOpen(true) }}
                   onOpenDay={(iso) => {
                     try {
                       const url = new URL(window.location.href)
