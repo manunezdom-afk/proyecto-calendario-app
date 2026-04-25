@@ -2,6 +2,7 @@ import { useMemo, useRef, useEffect, useState } from 'react'
 import { LayoutGroup, motion } from 'framer-motion'
 import { parseEventHour } from '../utils/time'
 import { resolveEventDate } from '../utils/resolveEventDate'
+import { isReminderItem, extractReminderMeta } from '../utils/reminders'
 
 // Horas: grilla completa de 24 h. Antes cortaba a 8–22 (cualquier evento
 // temprano o nocturno quedaba invisible). Ahora, estilo Google Calendar:
@@ -51,6 +52,49 @@ function hourLabel(h, isNarrow) {
   if (h === 12) return '12 PM'
   if (h < 12) return `${h} AM`
   return `${h - 12} PM`
+}
+
+// Categorías visuales — cada tipo recibe un color distinto para que de un
+// vistazo se distingan recordatorios, reuniones, foco y eventos personales.
+// Antes todo se renderizaba con el mismo `bg-primary/10` y se confundían.
+const CATEGORY_THEME = {
+  reminder: {
+    container: 'bg-amber-400/15 hover:bg-amber-400/25 border-amber-500',
+    title:     'text-amber-700',
+    time:      'text-amber-700/70',
+  },
+  reunion: {
+    container: 'bg-blue-400/15 hover:bg-blue-400/25 border-blue-500',
+    title:     'text-blue-700',
+    time:      'text-blue-700/70',
+  },
+  foco: {
+    container: 'bg-emerald-400/15 hover:bg-emerald-400/25 border-emerald-500',
+    title:     'text-emerald-700',
+    time:      'text-emerald-700/70',
+  },
+  personal: {
+    container: 'bg-primary/10 hover:bg-primary/20 border-primary',
+    title:     'text-primary',
+    time:      'text-primary/70',
+  },
+}
+
+function eventCategory(ev) {
+  if (isReminderItem(ev)) return 'reminder'
+  const title = (ev?.title ?? '').toLowerCase()
+  if (/reuni[oó]n|meeting|llamada|call|junta|sync|1:1|standup|sincro/.test(title)) return 'reunion'
+  if (/foco|focus|deep|profund|trabajo/.test(title) || ev?.section === 'focus') return 'foco'
+  return 'personal'
+}
+
+// Para recordatorios mostramos solo el contenido (parentTitle) en vez del
+// "Recordatorio: ..." literal: el color amber + borde ya marcan el tipo, y
+// quitar el prefijo libera ~12 caracteres en columnas estrechas de mobile.
+function displayTitle(ev) {
+  const meta = extractReminderMeta(ev?.title)
+  if (meta.isReminder && meta.parentTitle) return meta.parentTitle
+  return ev?.title || ''
 }
 
 export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAddAt }) {
@@ -302,6 +346,10 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
                     const showTime = !!ev.time && !isNarrow && totalLines >= 3
                     const titleLines = showTime ? totalLines - 1 : totalLines
 
+                    // `break-word` corta solo cuando una palabra no entra
+                    // (vs. `anywhere`, que partía hasta sílabas — en columnas
+                    // de ~45 px en iPhone "Recordatorio" salía como
+                    // "Recor / datori / o" y consumía el bloque entero).
                     const titleStyle = titleLines === 1
                       ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
                       : {
@@ -309,8 +357,13 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
                           WebkitBoxOrient: 'vertical',
                           WebkitLineClamp: titleLines,
                           overflow: 'hidden',
-                          overflowWrap: 'anywhere',
+                          overflowWrap: 'break-word',
+                          wordBreak: 'break-word',
+                          hyphens: 'auto',
                         }
+
+                    const theme = CATEGORY_THEME[eventCategory(ev)] || CATEGORY_THEME.personal
+                    const visibleTitle = displayTitle(ev)
 
                     return (
                       <motion.button
@@ -319,8 +372,8 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
                         layout
                         type="button"
                         onClick={() => onOpenTask?.(ev)}
-                        className={`absolute bg-primary/10 hover:bg-primary/20 border-l-[3px] border-primary rounded-r-md text-left transition-colors overflow-hidden z-[5] ${
-                          isNarrow ? 'left-0.5 right-0.5 px-1 py-0.5' : 'left-1 right-1 px-1.5 py-1'
+                        className={`absolute ${theme.container} border-l-[3px] rounded-r-md text-left transition-colors overflow-hidden z-[5] ${
+                          isNarrow ? 'left-0.5 right-0.5 pl-1 pr-0.5 py-0.5' : 'left-1 right-1 px-1.5 py-1'
                         }`}
                         initial={false}
                         animate={{ top: top + 1, height }}
@@ -328,15 +381,16 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
                         title={`${ev.title}${ev.time ? ` · ${ev.time}` : ''}`}
                       >
                         <p
-                          className={`font-bold text-primary leading-tight ${
+                          className={`font-bold ${theme.title} leading-tight ${
                             isNarrow ? 'text-[10px]' : 'text-[11px]'
                           }`}
                           style={titleStyle}
+                          lang="es"
                         >
-                          {ev.title}
+                          {visibleTitle}
                         </p>
                         {showTime && (
-                          <p className="text-[9px] text-primary/70 leading-tight truncate">{ev.time}</p>
+                          <p className={`text-[9px] ${theme.time} leading-tight truncate`}>{ev.time}</p>
                         )}
                       </motion.button>
                     )
