@@ -881,7 +881,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
               <p className={`text-primary font-bold uppercase tracking-[0.14em] mb-2.5 ${isDesktop ? 'text-xs' : 'text-[11px]'}`}>
                 {formatToday()}
               </p>
-              <h2 className={`font-headline font-extrabold tracking-tight text-on-surface ${isDesktop ? 'text-6xl' : 'text-4xl'}`}>
+              <h2 className={`font-headline tracking-tight text-on-surface ${isDesktop ? 'text-5xl font-semibold' : 'text-4xl font-extrabold'}`}>
                 Mi Día
               </h2>
               {isDesktop && (
