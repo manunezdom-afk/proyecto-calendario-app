@@ -20,6 +20,7 @@ import AuthModal                   from './components/AuthModal'
 import NovaWidget                  from './components/NovaWidget'
 import MorningBrief                from './components/MorningBrief'
 import WelcomeScreen, { useWelcomeGate } from './components/WelcomeScreen'
+import BootSplash, { useBootSplash } from './components/BootSplash'
 import InstallAppCard              from './components/InstallAppCard'
 import AuroraBackground            from './components/AuroraBackground'
 import NovaHint                    from './components/NovaHint'
@@ -219,6 +220,11 @@ export default function App() {
   // en una pantalla de instrucciones: splash → bienvenida breve → tutorial.
   const { show: showWelcomeRaw, dismiss: dismissWelcome } = useWelcomeGate()
   const showWelcome = showWelcomeRaw
+  // BootSplash: pantalla con el icono de marca, ~1s en cada apertura
+  // (estilo Instagram/Spotify). Independiente de welcome/onboarding —
+  // siempre va primero, luego encima entra welcome (sólo primera vez)
+  // o el planner directo.
+  const { show: showBootSplash } = useBootSplash()
   const showOnboardingNow = showOnboarding && !showWelcome
 
   // Si el usuario recargó con un OTP pendiente (sessionStorage), reabrimos
@@ -1136,6 +1142,16 @@ export default function App() {
           />
         </Suspense>
       )}
+
+      {/* Boot splash — pantalla de arranque estilo apps mainstream
+          (icono + degradado azul, ~1s, fade). Va al final del árbol con
+          z-200 para cubrir todo el contenido en cada cold start. El
+          splash inline (#focus-splash en index.html) sigue pintando
+          mientras se carga el bundle; cuando React monta, BootSplash
+          continúa la imagen sin salto y luego se desvanece. */}
+      <AnimatePresence>
+        {showBootSplash && <BootSplash key="boot-splash" />}
+      </AnimatePresence>
     </div>
     </LayoutGroup>
   )

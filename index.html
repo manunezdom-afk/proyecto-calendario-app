@@ -189,54 +189,25 @@
         color: rgba(255,255,255,0.55);
         user-select: none;
       }
-      /* Orbe central — reproducimos NovaOrb con radial gradients + halo */
-      #focus-splash .orb-wrap {
+      /* Icono Focus inline — replica del SVG en /icons/icon.svg con la
+         misma paleta azul de marca. Antes había un orbe morado de Nova,
+         que era un mismatch visual con el icono de la app. Mostrar el
+         icono de la app aquí (mainstream-app pattern, Instagram/Spotify
+         enseñan su logo en cold start) hace el handoff splash→React→app
+         coherente: el usuario ve siempre el mismo símbolo. */
+      #focus-splash .icon-wrap {
         position: relative;
-        width: 84px;
-        height: 84px;
+        width: 96px;
+        height: 96px;
         display: flex;
         align-items: center;
         justify-content: center;
         margin-bottom: 36px;
+        filter: drop-shadow(0 16px 38px rgba(29,78,216,0.45));
       }
-      #focus-splash .orb-halo {
-        position: absolute;
-        inset: -46px;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(124,107,255,0.35) 0%, rgba(124,107,255,0.12) 40%, transparent 70%);
-        filter: blur(14px);
-        animation: focusSplashBreath 3.2s ease-in-out infinite;
-      }
-      #focus-splash .orb-core {
-        position: relative;
-        width: 84px;
-        height: 84px;
-        border-radius: 50%;
-        background: radial-gradient(circle at 30% 30%, #a99bff 0%, #7c6bff 45%, #4c3fd6 100%);
-        box-shadow: 0 10px 32px -8px rgba(124,107,255,0.6), inset 0 1px 2px rgba(255,255,255,0.35);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      #focus-splash .orb-core::before {
-        content: '';
-        position: absolute;
-        inset: 0;
-        border-radius: 50%;
-        background: radial-gradient(circle at 30% 28%, rgba(255,255,255,0.55), transparent 40%);
-        mix-blend-mode: screen;
-      }
-      #focus-splash .orb-core::after {
-        content: '';
-        width: 15px;
-        height: 15px;
-        border-radius: 50%;
-        background: radial-gradient(circle, #fff 0%, rgba(255,255,255,0.6) 60%, transparent 100%);
-        animation: focusSplashBreath 3.2s ease-in-out infinite;
-      }
-      @keyframes focusSplashBreath {
-        0%, 100% { transform: scale(1);    opacity: 0.55; }
-        50%      { transform: scale(1.04); opacity: 1; }
+      #focus-splash .icon-wrap svg {
+        width: 100%;
+        height: 100%;
       }
 
       /* Señal de vida para cold starts lentos en iPhone. Aparece recién a
@@ -287,8 +258,6 @@
       @keyframes focusSplashReload { from { opacity: 0; transform: translateX(-50%) translateY(6px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 
       @media (prefers-reduced-motion: reduce) {
-        #focus-splash .orb-halo,
-        #focus-splash .orb-core::after { animation: none; }
         #focus-splash .loading-hint { animation: none; opacity: 0.4; }
       }
     </style>
@@ -336,11 +305,10 @@
   </head>
   <body>
     <div id="root">
-      <!-- Splash inline: se pinta al instante y React lo reemplaza al montar.
-           Es idéntico en estructura al threshold scene (WelcomeScreen) — tiny
-           FOCUS arriba + orbe en la misma posición vertical — para que el
-           handoff sea invisible. Los spacers reservan el espacio que ocupará
-           el greeting/hairline/subline cuando React monte. -->
+      <!-- Splash inline: se pinta al instante y React lo reemplaza al montar
+           con BootSplash, que tiene el mismo layout (icono Focus centrado +
+           wordmark arriba + mismos blobs azules). El handoff inline→React es
+           invisible porque ambas pantallas son idénticas. -->
       <div id="focus-splash" aria-hidden="true">
         <div class="aurora">
           <div class="blob b1"></div>
@@ -350,13 +318,38 @@
         </div>
         <div class="top-wordmark">Focus</div>
         <div class="center-col">
-          <div class="orb-wrap">
-            <span class="orb-halo"></span>
-            <span class="orb-core"></span>
+          <div class="icon-wrap">
+            <!-- Icono Focus (espejo de /icons/icon.svg). Inline para
+                 renderizar instantáneo sin esperar fetch del PNG. -->
+            <svg viewBox="0 0 512 512" aria-hidden="true">
+              <defs>
+                <linearGradient id="splashIconBg" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#60a5fa"/>
+                  <stop offset="55%" stop-color="#1d4ed8"/>
+                  <stop offset="100%" stop-color="#1e1b4b"/>
+                </linearGradient>
+                <radialGradient id="splashIconGlow" cx="0.5" cy="0.5" r="0.5">
+                  <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
+                  <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <rect width="512" height="512" rx="112" fill="url(#splashIconBg)"/>
+              <circle cx="256" cy="256" r="180" fill="url(#splashIconGlow)"/>
+              <g fill="#ffffff" transform="translate(256 256)">
+                <circle r="68"/>
+                <g>
+                  <rect x="-10" y="-128" width="20" height="40" rx="10"/>
+                  <rect x="-10" y="88" width="20" height="40" rx="10"/>
+                  <rect x="-128" y="-10" width="40" height="20" rx="10"/>
+                  <rect x="88" y="-10" width="40" height="20" rx="10"/>
+                  <rect x="-10" y="-128" width="20" height="40" rx="10" transform="rotate(45)"/>
+                  <rect x="-10" y="88" width="20" height="40" rx="10" transform="rotate(45)"/>
+                  <rect x="-128" y="-10" width="40" height="20" rx="10" transform="rotate(45)"/>
+                  <rect x="88" y="-10" width="40" height="20" rx="10" transform="rotate(45)"/>
+                </g>
+              </g>
+            </svg>
           </div>
-          <div class="spacer-greeting"></div>
-          <div class="spacer-hairline"></div>
-          <div class="spacer-subline"></div>
         </div>
         <p class="loading-hint">preparando tu día…</p>
         <button id="focus-splash-reload" type="button" onclick="location.reload()">Recargar</button>
