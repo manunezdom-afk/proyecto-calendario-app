@@ -23,11 +23,24 @@ import { motion } from 'framer-motion'
 //   · Un ref con timestamp evita doble disparo cuando ambos eventos llegan.
 //   · onClick se deja como fallback para accesibilidad (teclado, screen
 //     readers, navegación por foco).
+//
+// Anillo de countdown (commitProgress):
+//   · Cuando el VAD detecta silencio confirmado y arranca el hangover,
+//     mostramos un arco SVG dentro del botón que se vacía mientras corre
+//     ese hangover. Da feedback explícito al usuario de que está a punto
+//     de cerrarse la sesión — si no era esa su intención, puede seguir
+//     hablando y el arco vuelve a desaparecer.
+//   · El SVG vive DENTRO del botón (no sibling absoluto inset-0) y nunca
+//     escala, sólo cambia stroke-dashoffset. Eso evita el bug de Safari
+//     iOS que descartaba taps cuando un sibling animado con scale corría
+//     entre touchstart y touchend (ver comentario arriba sobre el halo).
+//   · pointer-events: none en el SVG para que jamás interfiera con el tap.
 export default function MicButton({
   isListening,
   disabled = false,
   onToggle,
   className = '',
+  commitProgress = 0, // 0..1 — fracción restante del hangover (1=lleno, 0=oculto)
 }) {
   const lastFireRef = useRef(0)
   const pointerDownRef = useRef(false)
@@ -111,6 +124,34 @@ export default function MicButton({
         >
           mic
         </span>
+      )}
+
+      {/* Anillo de countdown — sólo visible mientras el VAD está en hangover.
+          stroke-dashoffset interpola el arco entre lleno (commitProgress=1) y
+          vacío (commitProgress=0). circle de r=15 → circunferencia ≈ 94.25.
+          stroke-linecap=round suaviza el extremo. El arco arranca arriba
+          (transform rotate -90) y se vacía en sentido horario. */}
+      {isListening && commitProgress > 0 && (
+        <svg
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          viewBox="0 0 36 36"
+          style={{ transform: 'rotate(-90deg)' }}
+        >
+          <circle
+            cx="18"
+            cy="18"
+            r="15"
+            fill="none"
+            stroke="currentColor"
+            strokeOpacity="0.85"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeDasharray="94.248"
+            strokeDashoffset={94.248 * (1 - Math.max(0, Math.min(1, commitProgress)))}
+            style={{ transition: 'stroke-dashoffset 80ms linear' }}
+          />
+        </svg>
       )}
     </button>
   )

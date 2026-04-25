@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useUserMemories } from '../hooks/useUserMemories'
 import MicButton from './MicButton'
 import { isIOSSafari } from '../lib/permissions'
+import { createVAD } from '../lib/voiceActivityDetector'
 import { readPreferenceSync } from '../hooks/useAppPreferences'
 import { novaSay } from '../utils/novaPersonality'
 import { expandRecurrence } from '../utils/expandRecurrence'
@@ -194,14 +195,27 @@ export default function FocusBar({
   //   · finalTextRef      — acumulador del texto definitivo entre reinicios
   //     del engine. Se envía al cerrar la sesión.
   //   · isRunningRef      — estado real del engine; evita start() duplicados.
+  //   · vadHandleRef      — VAD por audio real corriendo en paralelo al SR.
+  //     Cierra la sesión por hangover sobre silencio confirmado y resetea el
+  //     fallback timer también con sonidos paralingüísticos (mmm, eh,
+  //     respiraciones) que el SR ignora.
   const sessionActiveRef = useRef(false)
   const sessionStartRef  = useRef(0)
   const finalTextRef     = useRef('')
   const isRunningRef     = useRef(false)
+  const vadHandleRef     = useRef(null)
+  const [commitProgress, setCommitProgress] = useState(0)
 
-  // Silencio tolerante: 1800ms permite pausas para pensar sin cortar.
-  const SILENCE_MS = 1800
+  // Timer-only fallback: 1800ms cuando no hay VAD (mic ocupado, browser viejo).
+  const TIMER_ONLY_SILENCE_MS = 1800
+  // Con VAD activo: 2200ms como red de seguridad. El cierre real lo decide
+  // el VAD por hangover prosódico, mucho antes.
+  const VAD_FALLBACK_SILENCE_MS = 2200
   const MAX_SESSION_MS = 60_000
+
+  // Refleja el modo activo (con/sin VAD) sin remontar el efecto de SR. El
+  // useEffect captura el closure una sola vez; lee siempre desde aquí.
+  const silenceMsRef = useRef(TIMER_ONLY_SILENCE_MS)
 
   // Ref a la última versión de handleSend: el efecto de SR se monta una sola
   // vez; sin ref llamaríamos al handleSend con props/estado desactualizados.
@@ -278,7 +292,7 @@ export default function FocusBar({
       silenceRef.current = setTimeout(() => {
         sessionActiveRef.current = false
         try { r.stop() } catch {}
-      }, SILENCE_MS)
+      }, silenceMsRef.current)
     }
 
     r.onerror = (ev) => {
@@ -291,6 +305,10 @@ export default function FocusBar({
       isRunningRef.current = false
       clearTimeout(silenceRef.current)
       clearTimeout(restartTimerRef.current)
+      try { vadHandleRef.current?.stop() } catch {}
+      vadHandleRef.current = null
+      silenceMsRef.current = TIMER_ONLY_SILENCE_MS
+      setCommitProgress(0)
       setIsListening(false)
       // Errores bloqueantes: antes fallaban en silencio y el usuario veía
       // "el mic no hace nada". Ahora los reflejamos en la burbuja de reply.
@@ -359,6 +377,10 @@ export default function FocusBar({
       // invocándose con estado desactualizado.
       clearTimeout(silenceRef.current)
       clearTimeout(restartTimerRef.current)
+      try { vadHandleRef.current?.stop() } catch {}
+      vadHandleRef.current = null
+      silenceMsRef.current = TIMER_ONLY_SILENCE_MS
+      setCommitProgress(0)
       setIsListening(false)
       const txt = finalTextRef.current.trim()
       finalTextRef.current = ''
@@ -369,6 +391,8 @@ export default function FocusBar({
     return () => {
       clearTimeout(silenceRef.current)
       clearTimeout(restartTimerRef.current)
+      try { vadHandleRef.current?.stop() } catch {}
+      vadHandleRef.current = null
       try { r.abort() } catch {}
     }
   }, [])
@@ -401,6 +425,10 @@ export default function FocusBar({
     sessionActiveRef.current = false
     clearTimeout(silenceRef.current)
     clearTimeout(restartTimerRef.current)
+    try { vadHandleRef.current?.stop() } catch {}
+    vadHandleRef.current = null
+    setCommitProgress(0)
+    silenceMsRef.current = TIMER_ONLY_SILENCE_MS
     try { srRef.current?.stop() } catch {}
 
     setIsThinking(true)
@@ -611,6 +639,10 @@ export default function FocusBar({
       sessionActiveRef.current = false
       clearTimeout(silenceRef.current)
       clearTimeout(restartTimerRef.current)
+      try { vadHandleRef.current?.stop() } catch {}
+      vadHandleRef.current = null
+      setCommitProgress(0)
+      silenceMsRef.current = TIMER_ONLY_SILENCE_MS
       try { r.stop() } catch {}
       return
     }
@@ -624,6 +656,8 @@ export default function FocusBar({
     try {
       r.start()
       isRunningRef.current = true
+      // VAD en paralelo. Si falla, seguimos con timer-only (1.8s).
+      bootVAD()
     } catch {
       // InvalidStateError por engine aún liberando lock — abort y reintenta.
       sessionActiveRef.current = false
@@ -635,10 +669,56 @@ export default function FocusBar({
           sessionStartRef.current = Date.now()
           r.start()
           isRunningRef.current = true
+          bootVAD()
         } catch {
           sessionActiveRef.current = false
         }
       }, 120)
+    }
+  }
+
+  // Arranca VAD asíncrono. Si la sesión cambió mientras getUserMedia resolvía
+  // (usuario apretó stop, prompt de permiso lento en iOS), el handle se
+  // descarta sin dejar AudioContext huérfano.
+  async function bootVAD() {
+    if (vadHandleRef.current) return
+    const mySessionStart = sessionStartRef.current
+    try {
+      const handle = await createVAD({
+        onSpeechActivity: () => {
+          if (!sessionActiveRef.current) return
+          clearTimeout(silenceRef.current)
+          silenceRef.current = setTimeout(() => {
+            sessionActiveRef.current = false
+            try { srRef.current?.stop() } catch {}
+          }, silenceMsRef.current)
+        },
+        onCountdown: (remaining, total) => {
+          const frac = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0
+          setCommitProgress(frac)
+        },
+        onSpeechEnd: () => {
+          if (!sessionActiveRef.current) return
+          sessionActiveRef.current = false
+          try { srRef.current?.stop() } catch {}
+        },
+      })
+      if (!sessionActiveRef.current || sessionStartRef.current !== mySessionStart) {
+        try { handle.stop() } catch {}
+        return
+      }
+      vadHandleRef.current = handle
+      silenceMsRef.current = VAD_FALLBACK_SILENCE_MS
+      if (silenceRef.current) {
+        clearTimeout(silenceRef.current)
+        silenceRef.current = setTimeout(() => {
+          sessionActiveRef.current = false
+          try { srRef.current?.stop() } catch {}
+        }, silenceMsRef.current)
+      }
+    } catch {
+      vadHandleRef.current = null
+      silenceMsRef.current = TIMER_ONLY_SILENCE_MS
     }
   }
 
@@ -841,6 +921,7 @@ export default function FocusBar({
             isListening={isListening}
             disabled={isThinking}
             onToggle={toggleMic}
+            commitProgress={commitProgress}
           />
 
           <AnimatePresence>
@@ -1011,6 +1092,7 @@ export default function FocusBar({
             isListening={isListening}
             disabled={isThinking}
             onToggle={toggleMic}
+            commitProgress={commitProgress}
           />
 
           <AnimatePresence>

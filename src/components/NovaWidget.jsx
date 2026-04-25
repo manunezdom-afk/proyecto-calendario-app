@@ -6,6 +6,7 @@ import MicButton from './MicButton'
 import { logSignal } from '../services/signalsService'
 import { getCachedBehavior } from '../services/behaviorAnalysis'
 import { isIOSSafari } from '../lib/permissions'
+import { createVAD } from '../lib/voiceActivityDetector'
 import { readPreferenceSync } from '../hooks/useAppPreferences'
 import { novaSay } from '../utils/novaPersonality'
 import { expandRecurrence } from '../utils/expandRecurrence'
@@ -139,15 +140,30 @@ export default function NovaWidget({
   const restartTimerRef = useRef(null)
   const finalTextRef    = useRef('')
   const sendMessageRef  = useRef(null)
+  // VAD (Voice Activity Detector) corre en paralelo al SpeechRecognition.
+  // Detecta fin-de-habla por audio real (no por ausencia de transcript) y
+  // resetea el silenceTimer también con sonidos paralingüísticos como
+  // "mmm" o respiraciones, que el SR ignora.
+  const vadHandleRef = useRef(null)
+  const [commitProgress, setCommitProgress] = useState(0)
 
-  // Tolerancia a pausas cortas para pensar (el usuario reportó que 900ms
-  // cortaba demasiado rápido). 1800ms permite una pausa natural sin cortar,
-  // pero sigue cerrando rápido cuando el usuario claramente terminó.
-  const SILENCE_MS = 1800
+  // Timer-only: 1800ms de tolerancia para pausas pensativas. Sólo se aplica
+  // cuando el VAD no pudo arrancar (mic ocupado, navegador antiguo, etc.).
+  const TIMER_ONLY_SILENCE_MS = 1800
+  // Con VAD activo: 2200ms como red de seguridad por si el VAD no detectó
+  // bien el silencio (entornos extremadamente ruidosos donde el noise floor
+  // se calibró alto). El cierre real lo decide normalmente el VAD mucho antes.
+  const VAD_FALLBACK_SILENCE_MS = 2200
   // Tope de sesión de dictado — si el engine del browser deja de funcionar
   // o el usuario se olvidó el mic abierto, cerramos a los 60s. Suficiente
   // para dictar un evento o tarea larga sin sentirse atado.
   const MAX_SESSION_MS = 60_000
+
+  // El intervalo del silence timer depende de si el VAD está activo. Como el
+  // useEffect del SR captura su closure, leemos el valor vivo desde un ref
+  // para que cuando el VAD arranque/falle, el siguiente reset use el valor
+  // correcto sin remontar el SR.
+  const silenceMsRef = useRef(TIMER_ONLY_SILENCE_MS)
 
   const displayedText = useSimulatedStream(reply, isLoading)
 
@@ -249,13 +265,16 @@ export default function NovaWidget({
 
       // Reset silence timer en cada onresult (incluidos interim → el engine
       // los emite mientras el usuario habla, así que el timer sólo avanza
-      // cuando hay silencio real).
+      // cuando hay silencio real). Cuando hay VAD activo, el VAD también
+      // dispara este reset por audio sobre umbral (incluyendo "mmm" y
+      // respiraciones que el SR ignora) y cierra la sesión por hangover
+      // antes de que llegue este timeout.
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         // Silencio prolongado → cerramos sesión de verdad.
         sessionActiveRef.current = false
         try { r.stop() } catch {}
-      }, SILENCE_MS)
+      }, silenceMsRef.current)
     }
 
     r.onerror = (ev) => {
@@ -271,6 +290,10 @@ export default function NovaWidget({
       isRunningRef.current = false
       clearTimeout(silenceTimerRef.current)
       clearTimeout(restartTimerRef.current)
+      try { vadHandleRef.current?.stop() } catch {}
+      vadHandleRef.current = null
+      silenceMsRef.current = TIMER_ONLY_SILENCE_MS
+      setCommitProgress(0)
       setIsListening(false)
       // Antes los errores bloqueantes caían en silencio. Si el usuario está
       // en un navegador que soporta SR pero denegó el permiso (o el OS lo
@@ -333,6 +356,10 @@ export default function NovaWidget({
       // Fin de sesión real → limpiar y enviar lo acumulado.
       clearTimeout(silenceTimerRef.current)
       clearTimeout(restartTimerRef.current)
+      try { vadHandleRef.current?.stop() } catch {}
+      vadHandleRef.current = null
+      silenceMsRef.current = TIMER_ONLY_SILENCE_MS
+      setCommitProgress(0)
       setIsListening(false)
       const text = finalTextRef.current.trim()
       finalTextRef.current = ''
@@ -346,6 +373,8 @@ export default function NovaWidget({
     return () => {
       clearTimeout(silenceTimerRef.current)
       clearTimeout(restartTimerRef.current)
+      try { vadHandleRef.current?.stop() } catch {}
+      vadHandleRef.current = null
       try { r.abort() } catch {}
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -382,6 +411,10 @@ export default function NovaWidget({
       r.start()
       isRunningRef.current = true
       setIsListening(true)
+      // Arrancamos el VAD en paralelo. Si falla (mic ocupado, getUserMedia
+      // bloqueado, browser sin AudioContext) seguimos con el timer-only path
+      // — el dictado igual funciona, sólo perdemos la mejora de latencia.
+      bootVAD()
     } catch {
       sessionActiveRef.current = false
       try { r.abort() } catch {}
@@ -390,11 +423,79 @@ export default function NovaWidget({
     }
   }
 
+  // Arranca el VAD en paralelo al SpeechRecognition. La sesión es la
+  // referencia canónica de "intención del usuario": si el usuario apretó stop
+  // antes de que getUserMedia resolviera (ocurre en iOS porque el prompt de
+  // permiso puede ir lento), descartamos el handle al instante para no dejar
+  // un AudioContext huérfano consumiendo mic.
+  async function bootVAD() {
+    if (vadHandleRef.current) return
+    const mySessionStart = sessionStartRef.current
+    try {
+      const handle = await createVAD({
+        onSpeechActivity: () => {
+          // El VAD detectó audio sobre umbral. Reseteamos el silence timer
+          // (red de seguridad) — lo que cierra realmente la sesión es el
+          // hangover del VAD vía onSpeechEnd.
+          if (!sessionActiveRef.current) return
+          clearTimeout(silenceTimerRef.current)
+          silenceTimerRef.current = setTimeout(() => {
+            sessionActiveRef.current = false
+            try { srRef.current?.stop() } catch {}
+          }, silenceMsRef.current)
+        },
+        onCountdown: (remaining, total) => {
+          // Feedback visual del hangover en el botón. 0 = no estamos en
+          // hangover (oculta el anillo). > 0 = arco proporcional al tiempo
+          // que queda antes de cerrar.
+          const frac = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0
+          setCommitProgress(frac)
+        },
+        onSpeechEnd: () => {
+          // Silencio confirmado por audio real. Cerramos sesión inmediato
+          // sin esperar el timeout de fallback — esto es lo que da la
+          // sensación tipo ChatGPT de "0 lag" al terminar de hablar.
+          if (!sessionActiveRef.current) return
+          sessionActiveRef.current = false
+          try { srRef.current?.stop() } catch {}
+        },
+      })
+      // Mientras getUserMedia resolvía, el usuario pudo cerrar la sesión.
+      // Si la sesión actual ya no es la nuestra, descartamos el handle.
+      if (!sessionActiveRef.current || sessionStartRef.current !== mySessionStart) {
+        try { handle.stop() } catch {}
+        return
+      }
+      vadHandleRef.current = handle
+      // Con VAD activo subimos el silence timer a 2.2s como red de
+      // seguridad. El cierre real ocurre por onSpeechEnd, mucho antes.
+      silenceMsRef.current = VAD_FALLBACK_SILENCE_MS
+      // Si ya había un timer corriendo con el valor antiguo, lo
+      // re-armamos con el nuevo umbral.
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = setTimeout(() => {
+          sessionActiveRef.current = false
+          try { srRef.current?.stop() } catch {}
+        }, silenceMsRef.current)
+      }
+    } catch {
+      // Sin VAD: seguimos con el timer-only path. No avisamos al usuario
+      // — el dictado funciona igual, sólo con la latencia de antes.
+      vadHandleRef.current = null
+      silenceMsRef.current = TIMER_ONLY_SILENCE_MS
+    }
+  }
+
   function stopVoice() {
     // Marcar sesión como cerrada ANTES de stop() — así onend no auto-relanza.
     sessionActiveRef.current = false
     clearTimeout(silenceTimerRef.current)
     clearTimeout(restartTimerRef.current)
+    try { vadHandleRef.current?.stop() } catch {}
+    vadHandleRef.current = null
+    setCommitProgress(0)
+    silenceMsRef.current = TIMER_ONLY_SILENCE_MS
     try { srRef.current?.stop() } catch {}
     // isListening se limpia en onend para reflejar el estado real del engine
   }
@@ -937,6 +1038,7 @@ export default function NovaWidget({
           isListening={isListening}
           disabled={isLoading || isAnalyzingPhoto}
           onToggle={isListening ? stopVoice : startVoice}
+          commitProgress={commitProgress}
         />
 
         <button

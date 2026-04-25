@@ -395,14 +395,31 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   // sincrónicamente desde localStorage para evitar el flash en el que el
   // panel aparece por un frame y luego desaparece. Una vez seteado a true
   // el panel no vuelve a mostrarse jamás.
+  // Dos flags independientes:
+  //
+  //   · onboardingChipsDismissed — controla los chips "Hoy está libre" +
+  //     ejemplos ("Agendar gym", "Bloquear 2h de foco", etc.). Sólo se
+  //     marca true automáticamente cuando el usuario crea su primer evento
+  //     o tarea (el useEffect de abajo). Persiste para no reaparecer si
+  //     después borra todo y vuelve a estar vacío.
+  //
+  //   · novaTutorialDismissed — controla SÓLO la tarjeta "Nova en tu día"
+  //     (la del fondo con la X). El usuario reportó que cerrar esa tarjeta
+  //     hacía desaparecer también los chips de ejemplo, y eso es un bug:
+  //     son dos cosas distintas. La X del tutorial sólo descarta el
+  //     tutorial; los chips siguen visibles hasta que haya un evento real.
   const [onboardingChipsDismissed, setOnboardingChipsDismissed] = useState(() => {
     if (typeof window === 'undefined') return false
     try { return localStorage.getItem('focus_onboarding_chips_dismissed') === '1' } catch { return false }
   })
+  const [novaTutorialDismissed, setNovaTutorialDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try { return localStorage.getItem('focus_nova_tutorial_dismissed') === '1' } catch { return false }
+  })
 
   function dismissOnboardingTutorial() {
-    setOnboardingChipsDismissed(true)
-    try { localStorage.setItem('focus_onboarding_chips_dismissed', '1') } catch {}
+    setNovaTutorialDismissed(true)
+    try { localStorage.setItem('focus_nova_tutorial_dismissed', '1') } catch {}
   }
 
   // Una vez que el usuario tenga CUALQUIER evento o tarea propia, marcamos
@@ -415,8 +432,12 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       if (localStorage.getItem('focus_onboarding_chips_dismissed') !== '1') {
         localStorage.setItem('focus_onboarding_chips_dismissed', '1')
       }
+      if (localStorage.getItem('focus_nova_tutorial_dismissed') !== '1') {
+        localStorage.setItem('focus_nova_tutorial_dismissed', '1')
+      }
     } catch {}
     setOnboardingChipsDismissed(true)
+    setNovaTutorialDismissed(true)
   }, [events.length, tasks.length])
 
   const { profile } = useUserProfile()
@@ -894,7 +915,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   // X manual arriba a la derecha permite descartarlo sin tener que crear
   // un evento; auto-descartar también ocurre cuando aparece el primer
   // event/task (useEffect arriba).
-  const showNovaGuide = isFirstUse
+  //
+  // Importante: se descarta con un flag PROPIO (novaTutorialDismissed) y
+  // no con el flag de los chips. Antes ambas cosas compartían flag y la X
+  // de la tarjeta hacía desaparecer también los ejemplos del empty state.
+  const showNovaGuide = isFirstUse && !novaTutorialDismissed
 
   // Si la columna derecha quedaría vacía (no hay tutorial Nova ni bloques),
   // colapsamos a una sola columna centrada — antes el grid reservaba 360-400px
