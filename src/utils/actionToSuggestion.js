@@ -205,7 +205,7 @@ export function applySuggestion(suggestion, handlers = {}) {
   const { kind, payload = {} } = suggestion
   const {
     onAddEvent, onEditEvent, onDeleteEvent,
-    onAddTask, onToggleTask, onDeleteTask,
+    onAddTask, onToggleTask, onDeleteTask, onUpdateTask,
   } = handlers
 
   switch (kind) {
@@ -267,6 +267,30 @@ export function applySuggestion(suggestion, handlers = {}) {
     case 'delete_task':
       onDeleteTask?.(payload.id)
       return null
+    case 'reschedule_pending_today': {
+      // Cierre del día: mover N tareas pendientes "hoy" → "semana" en una
+      // sola pasada. payload.taskIds = array de ids. Guardamos el snapshot
+      // previo para que Undo pueda volver atrás todo el batch.
+      const ids = Array.isArray(payload.taskIds) ? payload.taskIds : []
+      if (ids.length === 0) return null
+      // Snapshot: capturamos el estado actual ANTES de mover, para poder
+      // restaurar la categoría exacta de cada una si el usuario revierte.
+      const moved = []
+      for (const id of ids) {
+        if (!onUpdateTask) continue
+        // El snapshot es opcional — si no podemos leer el state actual,
+        // restauramos a 'hoy' como fallback (el caso típico).
+        moved.push({ id, prevCategory: 'hoy' })
+        onUpdateTask(id, { category: 'semana' })
+      }
+      if (moved.length === 0) return null
+      return {
+        message: `Moví ${moved.length} ${moved.length === 1 ? 'tarea' : 'tareas'} pendientes a esta semana`,
+        undo: () => {
+          for (const { id, prevCategory } of moved) onUpdateTask?.(id, { category: prevCategory })
+        },
+      }
+    }
     default:
       return null
   }

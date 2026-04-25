@@ -6,6 +6,7 @@ import { useNotifications } from './hooks/useNotifications'
 import { useAppBadge }      from './hooks/useAppBadge'
 import { useNovaPersonalitySync } from './hooks/useNovaPersonalitySync'
 import { useSuggestions }   from './hooks/useSuggestions'
+import { useProposalEngine } from './hooks/useProposalEngine'
 import { useUserMemories }  from './hooks/useUserMemories'
 import { useAuth }          from './context/AuthContext'
 import { actionToSuggestion, applySuggestion } from './utils/actionToSuggestion'
@@ -179,6 +180,12 @@ export default function App() {
     clearResolved: clearResolvedSuggestions,
   } = useSuggestions()
 
+  // Motor de propuestas autónomas: detecta conflictos, patrones recurrentes
+  // y tareas pendientes al cierre del día. Empuja sugerencias a la bandeja
+  // sin pasar por el chat de Nova. Dedup interno via localStorage para que
+  // no proponga lo mismo dos veces.
+  useProposalEngine({ events, tasks, addSuggestion })
+
   const [inboxOpen, setInboxOpen] = useState(false)
   // Demo de propuesta que Nova muestra en la bandeja vacía para que un usuario
   // nuevo entienda cómo se ve una propuesta. Se descarta permanentemente en
@@ -210,6 +217,7 @@ export default function App() {
     onAddTask: addTask,
     onToggleTask: toggleTask,
     onDeleteTask: deleteTask,
+    onUpdateTask: updateTask, // necesario para reschedule_pending_today
   }
 
   function handleApproveSuggestion(id) {
