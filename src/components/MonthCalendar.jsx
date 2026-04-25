@@ -220,6 +220,7 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
       {/* Quick add sheet with target date label */}
       {showSheet && (
         <QuickAddSheet
+          targetDate={selectedDate}
           targetDateLabel={formatLabel(selectedDate)}
           onSave={handleSave}
           onCancel={() => setShowSheet(false)}

@@ -25,6 +25,23 @@ import { parseTimeRange, NO_END_TIME_LABEL } from '../utils/eventDuration'
 const DAY_NAMES_ES   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
 const MONTH_NAMES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 
+function SheetLoadingFallback({ label = 'Preparando...' }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/20 px-4 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-sm rounded-[28px] border border-white/70 bg-white/90 p-5 shadow-2xl shadow-slate-900/15">
+        <div className="mb-3 h-4 w-28 animate-pulse rounded-full bg-slate-200" />
+        <div className="mb-4 h-8 w-52 animate-pulse rounded-2xl bg-slate-200" />
+        <div className="h-20 animate-pulse rounded-3xl bg-slate-200" />
+        <span className="sr-only">{label}</span>
+      </div>
+    </div>
+  )
+}
+
 function formatToday() {
   const d = new Date()
   return `${DAY_NAMES_ES[d.getDay()]}, ${d.getDate()} de ${MONTH_NAMES_ES[d.getMonth()]}`
@@ -1746,7 +1763,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       )}
 
       {recurringSheetOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<SheetLoadingFallback label="Preparando reunión semanal" />}>
           <RecurringMeetingSheet
             onCancel={() => setRecurringSheetOpen(false)}
             onCreate={({ events: series, summary }) => {

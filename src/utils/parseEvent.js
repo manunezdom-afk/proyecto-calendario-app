@@ -4,6 +4,7 @@ import {
   inferDurationFromTitle,
   composeTimeRange,
 } from './eventDuration'
+import { focusLog } from './debug'
 
 /**
  * Extracts { title, time, date, section, icon, dotColor }
@@ -388,7 +389,7 @@ export function parseEvent(rawText) {
   const icon = guessIcon(title)
   const dotColor = section === 'evening' ? 'bg-secondary-container' : ''
 
-  console.log(`[Focus] 🧠 parseEvent("${rawText}") →`, {
+  focusLog(`[Focus] 🧠 parseEvent("${rawText}") →`, {
     title,
     displayTime,
     date,

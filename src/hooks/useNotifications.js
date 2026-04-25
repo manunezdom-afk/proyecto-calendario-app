@@ -12,6 +12,7 @@ import {
   buildSmartNotificationPayload,
   normalizeReminderOffsets,
 } from '../utils/smartNotifications'
+import { focusLog } from '../utils/debug'
 
 const LOG_KEY    = 'focus_notif_log'
 const FIRED_KEY  = 'focus_notif_fired'
@@ -256,7 +257,7 @@ export function useNotifications({ events = [] } = {}) {
           }
         }
 
-        console.log(`[Focus] 🔔 Notification fired: "${payload.title}"`)
+        focusLog(`[Focus] 🔔 Notification fired: "${payload.title}"`)
       })
     })
   }, [events])

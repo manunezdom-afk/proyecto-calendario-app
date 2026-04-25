@@ -293,6 +293,8 @@ export default function DayView({ events = [], tasks = [], onAddEvent, onOpenTas
           <QuickAddSheet
             onSave={(d) => { handleSave(d); setQuickAddInitial('') }}
             onCancel={() => { setShowAdd(false); setQuickAddInitial('') }}
+            targetDate={activeDate}
+            targetDateLabel={label}
             initialText={quickAddInitial}
             existingEvents={events}
           />

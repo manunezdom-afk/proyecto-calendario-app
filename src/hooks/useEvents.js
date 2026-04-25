@@ -7,6 +7,7 @@ import { useCoalescedRefetch } from './useCoalescedRefetch'
 import { cleanGeneratedTitle } from '../utils/titleCleanup'
 import { composeTimeRange, parseTimeRange } from '../utils/eventDuration'
 import { isReminderItem } from '../utils/reminders'
+import { focusLog } from '../utils/debug'
 
 // Extrae la hora (0-23) de un string "HH:MM" o "HH:MM – HH:MM"
 function parseEventHour(time) {
@@ -116,9 +117,9 @@ export function useEvents() {
       setEvents(merged)
       dataService.setCachedEvents(merged, user.id)
       if (pendingToKeep.length > 0) {
-        console.log(`[Focus] ☁️ ${cloudFiltered.length} en nube + ${pendingToKeep.length} pendientes ${tag}`)
+        focusLog(`[Focus] ☁️ ${cloudFiltered.length} en nube + ${pendingToKeep.length} pendientes ${tag}`)
       } else {
-        console.log(`[Focus] ☁️ ${merged.length} eventos cargados ${tag} (user=${user.id.slice(0,8)})`)
+        focusLog(`[Focus] ☁️ ${merged.length} eventos cargados ${tag} (user=${user.id.slice(0,8)})`)
       }
     } catch (err) {
       console.warn('[Focus] ⚠️ No se pudo cargar eventos de Supabase', err)
@@ -201,7 +202,7 @@ export function useEvents() {
       reminderOffsets,
       timezone: tz,
     }
-    console.log(`[Focus] ➕ addEvent: "${newEvent.title}"`)
+    focusLog(`[Focus] ➕ addEvent: "${newEvent.title}"`)
     setEvents(prev => [...prev, newEvent])
     // Marcamos el evento como "upsert pendiente" ANTES del setEvents para
     // que si el realtime de Supabase dispara un refetch entre este punto y
@@ -222,7 +223,7 @@ export function useEvents() {
   }
 
   function deleteEvent(id) {
-    console.log(`[Focus] 🗑️ deleteEvent: "${id}"`)
+    focusLog(`[Focus] 🗑️ deleteEvent: "${id}"`)
     pendingDeletesRef.current.add(id)
     // Si el evento que estamos borrando estaba marcado como upsert pendiente,
     // lo sacamos — si no, el refetch lo resucitaría desde pendingUpsertsRef.
@@ -244,7 +245,7 @@ export function useEvents() {
   }
 
   function editEvent(id, updates) {
-    console.log(`[Focus] ✏️ editEvent: "${id}"`, updates)
+    focusLog(`[Focus] ✏️ editEvent: "${id}"`, updates)
     setEvents(prev => {
       const next = prev.map(e => {
         if (e.id !== id) return e

@@ -18,7 +18,7 @@ const EXAMPLES = [
   '"cena con mamá a las 8"',
 ]
 
-export default function QuickAddSheet({ onSave, onCancel, targetDateLabel, initialText = '', existingEvents = [] }) {
+export default function QuickAddSheet({ onSave, onCancel, targetDate, targetDateLabel, initialText = '', existingEvents = [] }) {
   const [input, setInput] = useState(initialText)
   const [parsed, setParsed] = useState(null)
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
@@ -108,7 +108,7 @@ export default function QuickAddSheet({ onSave, onCancel, targetDateLabel, initi
     onSave({
       title: parsed.title,
       time: finalTime,
-      date: parsed.date,         // YYYY-MM-DD — va al campo date, no a description
+      date: targetDate || parsed.date, // YYYY-MM-DD — va al campo date, no a description
       description: '',           // notas del usuario: vacío al crear
       section: parsed.section,
       icon: parsed.icon,
@@ -119,13 +119,14 @@ export default function QuickAddSheet({ onSave, onCancel, targetDateLabel, initi
   // Conflictos: calculamos contra `existingEvents` el mismo payload que se
   // guardaría si el usuario pulsa "Añadir" ahora. No bloqueamos el flujo —
   // el usuario sigue pudiendo confirmar — solo avisamos visiblemente. Fuente
-  // de la verdad igual que al guardar: parsed.date + resolveFinalTime().
+  // de la verdad igual que al guardar: fecha objetivo + resolveFinalTime().
   const conflicts = (() => {
-    if (!parsed?.date || !parsed?.startTime) return []
+    const effectiveDate = targetDate || parsed?.date
+    if (!effectiveDate || !parsed?.startTime) return []
     const finalTime = resolveFinalTime()
     if (!finalTime) return []
     return findOverlappingEvents(
-      { date: parsed.date, time: finalTime },
+      { date: effectiveDate, time: finalTime },
       existingEvents,
     )
   })()

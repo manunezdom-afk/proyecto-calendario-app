@@ -7,6 +7,7 @@ import { useCoalescedRefetch } from './useCoalescedRefetch'
 import { getTaskLinks, setTaskLink, clearTaskLink } from '../utils/taskLinks'
 import { getTaskParents, setTaskParent, clearTaskParent } from '../utils/taskParents'
 import { cleanGeneratedTitle } from '../utils/titleCleanup'
+import { focusLog } from '../utils/debug'
 
 // Hidrata tasks con relaciones que viven solo en localStorage (no en Supabase):
 // · linkedEventId: tarea anclada a un evento concreto (subtarea de una reunión).
@@ -97,9 +98,9 @@ export function useTasks() {
       setTasks(hydrated)
       dataService.setCachedTasks(hydrated, user.id)
       if (pendingToKeep.length > 0) {
-        console.log(`[Focus] ☁️ ${cloudFiltered.length} tareas + ${pendingToKeep.length} pendientes ${tag}`)
+        focusLog(`[Focus] ☁️ ${cloudFiltered.length} tareas + ${pendingToKeep.length} pendientes ${tag}`)
       } else {
-        console.log(`[Focus] ☁️ ${cloudFiltered.length} tareas cargadas ${tag} (user=${user.id.slice(0,8)})`)
+        focusLog(`[Focus] ☁️ ${cloudFiltered.length} tareas cargadas ${tag} (user=${user.id.slice(0,8)})`)
       }
     } catch (err) {
       console.warn('[Focus] ⚠️ No se pudo cargar tareas de Supabase', err)
@@ -153,7 +154,7 @@ export function useTasks() {
     // específico) pero igual guardamos parentTaskId por si después el evento
     // desaparece y queda solo el padre tarea.
     if (parentTaskId && parentTaskId !== t.id) t.parentTaskId = parentTaskId
-    console.log(
+    focusLog(
       `[Focus] ➕ addTask: "${cleanLabel}"`
       + (linkedEventId ? ` (ligada a evento ${linkedEventId})` : '')
       + (parentTaskId ? ` (subtarea de ${parentTaskId})` : ''),

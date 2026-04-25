@@ -11,6 +11,7 @@
  */
 
 import { supabase } from './supabase'
+import { focusLog } from '../utils/debug'
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY
 
@@ -203,7 +204,7 @@ export async function subscribeToPush() {
       console.error('[Focus] push subscribe failed:', res.status, data)
       return { ok: false, reason: 'backend_error', error: data.error || `status ${res.status}` }
     }
-    console.log('[Focus] ✅ push subscription guardada en Supabase, endpoint:', subJson.endpoint?.slice(0, 60))
+    focusLog('[Focus] ✅ push subscription guardada en Supabase, endpoint:', subJson.endpoint?.slice(0, 60))
     localStorage.removeItem('focus_pending_push_sub')
     return { ok: true, subscription: subJson }
   } catch (err) {

@@ -10,6 +10,7 @@ import { isReminderItem } from '../utils/reminders'
 import EmptyState from '../components/EmptyState'
 import ContextActionSheet from '../components/ContextActionSheet'
 import { useLongPress } from '../hooks/useLongPress'
+import { focusLog } from '../utils/debug'
 
 // Descripción útil: no mostramos cuando es solo una fecha ISO (YYYY-MM-DD) —
 // data vieja generada por QuickAddSheet cuando stuffing date en description.
@@ -60,6 +61,15 @@ const todayISOStr       = todayEntry?.iso ?? CALENDAR_DAYS[0].iso
 // Mes en mayúscula inicial cuando va como título independiente (ej. "Abril 2026")
 const currentMonthNameLc = MONTH_NAMES_ES[new Date().getMonth()]
 const currentMonthLabel  = `${currentMonthNameLc.charAt(0).toUpperCase()}${currentMonthNameLc.slice(1)} ${new Date().getFullYear()}`
+
+function formatTargetDateLabel(iso) {
+  if (!iso) return undefined
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return undefined
+  const dayName = DAY_ABBR_ES[d.getDay()]
+  const month = MONTH_NAMES_ES[d.getMonth()]
+  return `${dayName} ${d.getDate()} de ${month}`
+}
 
 // ─── Small delete button ──────────────────────────────────────────────────────
 function DeleteButton({ onClick }) {
@@ -353,10 +363,11 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
   const [featuredEvent, ...smallEvents] = focusEvents
 
   function handleSave(formData) {
-    // Guardar el evento con la fecha del día seleccionado
-    onAddEvent({ ...formData, date: activeDayISO })
-    setShowModal(false)
-    setQuickAddInitial('')
+    // Un solo sheet compartido para día/semana. Antes la vista día desktop
+    // abría estado (`showModal=true`) pero no montaba ningún QuickAddSheet.
+    const date = pendingDate ?? (calView === 'dia' ? activeDayISO : formData.date)
+    onAddEvent?.({ ...formData, date })
+    closeAdd()
   }
 
   return (
@@ -465,18 +476,6 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
               }}
             />
 
-            {showModal && (
-              <QuickAddSheet
-                onSave={(formData) => {
-                  // Si el usuario tocó una celda concreta, esa fecha manda.
-                  onAddEvent({ ...formData, date: pendingDate ?? formData.date })
-                  closeAdd()
-                }}
-                onCancel={closeAdd}
-                existingEvents={events}
-                initialText={quickAddInitial}
-              />
-            )}
           </section>
         )}
 
@@ -499,7 +498,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                 return (
                   <button
                     key={day}
-                    onClick={() => { setActiveDay(num); console.log(`[Focus] 📅 Day selected: ${day} ${num}`) }}
+                    onClick={() => { setActiveDay(num); focusLog(`[Focus] 📅 Day selected: ${day} ${num}`) }}
                     title={tooltip}
                     className="flex flex-col items-center gap-2 focus:outline-none"
                   >
@@ -822,15 +821,6 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
             </div>
             )}
 
-            {/* Quick Add Sheet (semana) */}
-            {showModal && (
-              <QuickAddSheet
-                onSave={handleSave}
-                onCancel={closeAdd}
-                existingEvents={events}
-                initialText={quickAddInitial}
-              />
-            )}
                 </motion.div>
               </AnimatePresence>
               )
@@ -840,6 +830,17 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
         )}
 
       </main>
+
+      {showModal && (
+        <QuickAddSheet
+          onSave={handleSave}
+          onCancel={closeAdd}
+          existingEvents={events}
+          initialText={quickAddInitial}
+          targetDate={pendingDate ?? activeDayISO}
+          targetDateLabel={formatTargetDateLabel(pendingDate ?? activeDayISO)}
+        />
+      )}
 
       {/* Menú de acciones rápidas de long-press. Vive a nivel de CalendarView
           para compartir estado entre todas las cards (featured/small/evening)

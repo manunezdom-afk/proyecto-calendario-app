@@ -4,6 +4,7 @@ import { parseICS }           from '../utils/icsImport'
 import { parseEvent }         from '../utils/parseEvent'
 import { googleCalendarUrl }  from '../utils/googleCalendarUrl'
 import { supabase }           from '../lib/supabase'
+import { pushModal, popModal } from '../utils/modalStack'
 
 // Tres tabs claras, sin jerga. Antes había 5 ("Por texto" y "Foto" eran
 // métodos de import disfrazados de tabs, "Suscripción" sonaba a billing).
@@ -1093,6 +1094,12 @@ export default function ImportExportSheet({ isOpen, onClose, events, onImportEve
     setActiveTab(normalizeInitialTab(initialTab))
     setImportInitialMethod(INITIAL_IMPORT_METHOD_FROM_LEGACY_TAB[initialTab] || 'photo')
   }, [isOpen, initialTab])
+
+  useEffect(() => {
+    if (!isOpen) return
+    pushModal()
+    return () => popModal()
+  }, [isOpen])
 
   if (!isOpen) return null
 
