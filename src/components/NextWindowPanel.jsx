@@ -1,6 +1,7 @@
 import { isReminderItem } from '../utils/reminders'
 import { resolveEventDate, todayISO } from '../utils/resolveEventDate'
 import { parseTimeRange, composeTimeRange } from '../utils/eventDuration'
+import { formatDurationShort } from '../utils/smartNotifications'
 
 // "Tu próxima ventana": panel vivo que mira el calendario en este momento y
 // propone tareas para meter en el siguiente hueco libre del día. Reemplaza al
@@ -133,7 +134,7 @@ export default function NextWindowPanel({
 
       <div>
         <p className="font-headline font-semibold text-on-surface tracking-tight text-3xl lg:text-4xl">
-          {window.minutes} min libres
+          {formatDurationShort(window.minutes)} libres
         </p>
         <p className="text-sm text-outline mt-1">
           {startLabel} → {endLabel}
@@ -232,7 +233,7 @@ function CalmCard({ hasWindow, hasTasks, window }) {
   } else if (hasWindow && !hasTasks) {
     icon = 'check_circle'
     title = 'Día limpio'
-    body = `Tienes ${window.minutes} min libres pero no hay tareas pendientes. Disfruta el espacio.`
+    body = `Tienes ${formatDurationShort(window.minutes)} libres pero no hay tareas pendientes. Disfruta el espacio.`
   } else {
     icon = 'self_improvement'
     title = 'Todo en orden'
