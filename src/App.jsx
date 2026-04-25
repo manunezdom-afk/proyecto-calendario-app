@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { useEvents }        from './hooks/useEvents'
 import { useTasks }         from './hooks/useTasks'
@@ -33,25 +33,182 @@ import { writeIncomingPairCode, normalizeUserCode } from './utils/devicePairing'
 // ellas, con lo que el bundle inicial en iPhone baja ~200 KB (parse+eval
 // en devices antiguos pasa de ~2 s a ~1 s). Cada una queda en su propio
 // chunk de Vite y se cachea agresivamente (mismo hash en el filename).
-const CalendarView      = lazy(() => import('./views/CalendarView'))
-const DayView           = lazy(() => import('./views/DayView'))
-const TaskDetailView    = lazy(() => import('./views/TaskDetailView'))
-const TasksView         = lazy(() => import('./views/TasksView'))
-const SettingsView      = lazy(() => import('./views/SettingsView'))
-const MemoryView        = lazy(() => import('./views/MemoryView'))
-const NovaKnowsView     = lazy(() => import('./views/NovaKnowsView'))
-const CommandPalette    = lazy(() => import('./components/CommandPalette'))
-const QuickAddSheet     = lazy(() => import('./components/QuickAddSheet'))
-const ImportExportSheet = lazy(() => import('./components/ImportExportSheet'))
-const EveningShutdown   = lazy(() => import('./components/EveningShutdown'))
-const SuggestionsInbox  = lazy(() => import('./components/SuggestionsInbox'))
+const loadCalendarView      = () => import('./views/CalendarView')
+const loadDayView           = () => import('./views/DayView')
+const loadTaskDetailView    = () => import('./views/TaskDetailView')
+const loadTasksView         = () => import('./views/TasksView')
+const loadSettingsView      = () => import('./views/SettingsView')
+const loadMemoryView        = () => import('./views/MemoryView')
+const loadNovaKnowsView     = () => import('./views/NovaKnowsView')
+const loadCommandPalette    = () => import('./components/CommandPalette')
+const loadQuickAddSheet     = () => import('./components/QuickAddSheet')
+const loadImportExportSheet = () => import('./components/ImportExportSheet')
+const loadEveningShutdown   = () => import('./components/EveningShutdown')
+const loadSuggestionsInbox  = () => import('./components/SuggestionsInbox')
+
+const CalendarView      = lazy(loadCalendarView)
+const DayView           = lazy(loadDayView)
+const TaskDetailView    = lazy(loadTaskDetailView)
+const TasksView         = lazy(loadTasksView)
+const SettingsView      = lazy(loadSettingsView)
+const MemoryView        = lazy(loadMemoryView)
+const NovaKnowsView     = lazy(loadNovaKnowsView)
+const CommandPalette    = lazy(loadCommandPalette)
+const QuickAddSheet     = lazy(loadQuickAddSheet)
+const ImportExportSheet = lazy(loadImportExportSheet)
+const EveningShutdown   = lazy(loadEveningShutdown)
+const SuggestionsInbox  = lazy(loadSuggestionsInbox)
 
 const LAST_OPENED_KEY = 'nova_last_opened'
+const VALID_VIEWS = ['planner', 'calendar', 'day', 'tasks', 'settings']
+const SUB_VIEWS = new Set(['task-detail', 'memory', 'nova-knows'])
+const VIEW_LABELS = {
+  planner: 'Mi Día',
+  calendar: 'Calendario',
+  day: 'Día',
+  tasks: 'Tareas',
+  settings: 'Ajustes',
+  'task-detail': 'Detalle',
+  memory: 'Memoria',
+  'nova-knows': 'Nova aprende',
+}
+
+function prefersReducedMotion() {
+  return typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+}
+
+function routeDepth(view) {
+  return SUB_VIEWS.has(view) ? 1 : 0
+}
+
+function getRouteMotion(from, to, intent) {
+  if (intent === 'back') return { direction: -1, depth: 'back' }
+  if (intent === 'deeper') return { direction: 1, depth: 'deeper' }
+  if (from === to) return { direction: 1, depth: 'same' }
+
+  const fromDepth = routeDepth(from)
+  const toDepth = routeDepth(to)
+  if (toDepth > fromDepth) return { direction: 1, depth: 'deeper' }
+  if (toDepth < fromDepth) return { direction: -1, depth: 'back' }
+
+  const fromIndex = VALID_VIEWS.indexOf(from)
+  const toIndex = VALID_VIEWS.indexOf(to)
+  if (fromIndex >= 0 && toIndex >= 0) {
+    return { direction: toIndex > fromIndex ? 1 : -1, depth: 'peer' }
+  }
+  return { direction: 1, depth: 'peer' }
+}
+
+function prefetch(loader) {
+  try {
+    loader().catch(() => {})
+  } catch {}
+}
+
+function resetViewportPosition() {
+  if (typeof window === 'undefined') return
+  window.requestAnimationFrame(() => {
+    try { window.scrollTo({ top: 0, left: 0, behavior: 'auto' }) } catch {}
+  })
+}
 
 const pageVariants = {
-  initial: { opacity: 0, y: 6, scale: 0.99 },
-  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.15, ease: 'easeOut' } },
-  exit:    { opacity: 0, scale: 0.99, transition: { duration: 0.08 } },
+  initial: ({ direction = 1, depth = 'peer' } = {}) => {
+    if (prefersReducedMotion()) return { opacity: 0 }
+    return {
+      opacity: 0,
+      x: depth === 'deeper' ? 18 : depth === 'back' ? -14 : direction * 16,
+      y: depth === 'deeper' ? 8 : 0,
+      scale: depth === 'deeper' ? 0.985 : 1,
+    }
+  },
+  animate: {
+    opacity: 1,
+    x: 0,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
+  },
+  exit: ({ direction = 1, depth = 'peer' } = {}) => {
+    if (prefersReducedMotion()) return { opacity: 0, transition: { duration: 0.08 } }
+    return {
+      opacity: 0,
+      x: depth === 'deeper' ? -10 : depth === 'back' ? 12 : direction * -12,
+      y: depth === 'deeper' ? -4 : 0,
+      scale: depth === 'back' ? 0.995 : 0.99,
+      transition: { duration: 0.1, ease: 'easeOut' },
+    }
+  },
+}
+
+function SkeletonBlock({ className = '' }) {
+  return (
+    <div
+      className={`animate-pulse rounded-2xl bg-slate-200/70 shadow-inner shadow-white/40 ${className}`}
+      aria-hidden="true"
+    />
+  )
+}
+
+function RouteFallback({ activeView, isDesktop }) {
+  const label = VIEW_LABELS[activeView] || 'Vista'
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label={`Cargando ${label}`}
+      className={`min-h-[calc(100vh-96px)] ${isDesktop ? 'px-8 pt-10' : 'px-4 pt-6'}`}
+    >
+      <div className="fixed inset-x-0 top-0 z-[80] h-[2px] overflow-hidden bg-slate-200/50">
+        <motion.div
+          className="h-full w-1/3 bg-gradient-to-r from-transparent via-blue-500 to-transparent"
+          initial={{ x: '-120%' }}
+          animate={{ x: '360%' }}
+          transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      </div>
+      <div className="mx-auto w-full max-w-5xl">
+        <SkeletonBlock className="mb-4 h-4 w-32 rounded-full" />
+        <SkeletonBlock className="mb-3 h-12 w-52 rounded-3xl" />
+        <SkeletonBlock className="mb-10 h-5 w-full max-w-xl rounded-full" />
+        <div className={isDesktop ? 'grid grid-cols-[minmax(0,1fr)_360px] gap-8' : 'space-y-5'}>
+          <div className="space-y-5">
+            <SkeletonBlock className="h-16 rounded-[2rem]" />
+            <SkeletonBlock className="h-48 rounded-[2rem]" />
+            <SkeletonBlock className="h-20 rounded-[1.75rem]" />
+          </div>
+          {isDesktop && (
+            <div className="space-y-4 rounded-[2rem] border border-slate-200/80 bg-white/70 p-6 shadow-sm">
+              <SkeletonBlock className="h-4 w-36 rounded-full" />
+              <SkeletonBlock className="h-8 w-full rounded-xl" />
+              <SkeletonBlock className="h-12 rounded-2xl" />
+              <SkeletonBlock className="h-12 rounded-2xl" />
+              <SkeletonBlock className="h-12 rounded-2xl" />
+            </div>
+          )}
+        </div>
+      </div>
+      <span className="sr-only">Cargando {label}</span>
+    </div>
+  )
+}
+
+function SheetFallback({ label = 'Cargando' }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-[90] grid place-items-center bg-slate-950/20 px-4 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-sm rounded-[1.75rem] border border-white/70 bg-white/90 p-5 shadow-2xl shadow-slate-900/15">
+        <SkeletonBlock className="mb-3 h-4 w-28 rounded-full" />
+        <SkeletonBlock className="mb-4 h-8 w-52 rounded-2xl" />
+        <SkeletonBlock className="h-20 rounded-3xl" />
+        <span className="sr-only">{label}</span>
+      </div>
+    </div>
+  )
 }
 
 export default function App() {
@@ -108,7 +265,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const VALID_VIEWS = ['planner', 'calendar', 'day', 'tasks', 'settings']
   const initialView = () => {
     try {
       const v = new URLSearchParams(window.location.search).get('view')
@@ -119,11 +275,21 @@ export default function App() {
   }
   const [activeView, setActiveView]     = useState(initialView)
   const [previousView, setPreviousView] = useState('planner')
+  const [routeMotion, setRouteMotion] = useState({ direction: 1, depth: 'peer' })
+  const activeViewRef = useRef(activeView)
+
+  useEffect(() => {
+    activeViewRef.current = activeView
+  }, [activeView])
 
   useEffect(() => {
     function onPop() {
       const v = new URLSearchParams(window.location.search).get('view')
-      setActiveView(VALID_VIEWS.includes(v) ? v : 'planner')
+      const nextView = VALID_VIEWS.includes(v) ? v : 'planner'
+      setRouteMotion(getRouteMotion(activeViewRef.current, nextView, 'back'))
+      activeViewRef.current = nextView
+      setSelectedEvent(null)
+      setActiveView(nextView)
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
@@ -287,7 +453,7 @@ export default function App() {
     } catch {}
     dismissInboxDemo()
     setInboxOpen(false)
-    setActiveView('planner')
+    navigate('planner')
     // Si planner ya estaba montado, activeView no cambia y el useEffect de
     // mount no se vuelve a disparar. El custom event sí.
     setTimeout(() => {
@@ -381,32 +547,59 @@ export default function App() {
   }, [showOnboardingNow])
 
   // ── Navigation ────────────────────────────────────────────────────────────
-  function navigate(view) {
-    // Subviews (memory / nova-knows) no viven en el bottom nav. Si navegamos a
-    // una desde cualquier vista principal, guardamos la actual como previousView
-    // para que el botón de back vuelva al punto de origen — p.ej. desde el
-    // command palette en Planner, "volver" debe regresar al Planner, no a Ajustes.
-    if ((view === 'memory' || view === 'nova-knows') && activeView !== 'task-detail') {
-      setPreviousView(activeView)
-    }
-    setActiveView(view)
+  function syncRouteUrl(view, { date, replace = false } = {}) {
     try {
       const url = new URL(window.location.href)
       if (VALID_VIEWS.includes(view) && view !== 'planner') url.searchParams.set('view', view)
       else url.searchParams.delete('view')
-      window.history.pushState({ view }, '', url.toString())
+      if (view === 'day' && date) url.searchParams.set('date', date)
+      if (view !== 'day') url.searchParams.delete('date')
+      const method = replace ? 'replaceState' : 'pushState'
+      window.history[method]({ view }, '', url.toString())
     } catch {}
   }
 
+  function navigate(view, options = {}) {
+    const nextView = VALID_VIEWS.includes(view) || SUB_VIEWS.has(view) ? view : 'planner'
+    const fromView = activeViewRef.current
+    if (nextView === fromView && !options.date) return
+    // Subviews (memory / nova-knows) no viven en el bottom nav. Si navegamos a
+    // una desde cualquier vista principal, guardamos la actual como previousView
+    // para que el botón de back vuelva al punto de origen — p.ej. desde el
+    // command palette en Planner, "volver" debe regresar al Planner, no a Ajustes.
+    if ((nextView === 'memory' || nextView === 'nova-knows') && fromView !== 'task-detail') {
+      setPreviousView(SUB_VIEWS.has(fromView) ? (previousView || 'settings') : fromView)
+    }
+    if (nextView !== 'task-detail') setSelectedEvent(null)
+    setRouteMotion(getRouteMotion(fromView, nextView, options.intent))
+    activeViewRef.current = nextView
+    setActiveView(nextView)
+    if (isDesktop) resetViewportPosition()
+    syncRouteUrl(nextView, options)
+  }
+
   function openTaskDetail(event = null) {
+    const fromView = activeViewRef.current
     setSelectedEvent(event)
-    setPreviousView(activeView)
+    setPreviousView(SUB_VIEWS.has(fromView) ? (previousView || 'planner') : fromView)
+    setRouteMotion(getRouteMotion(fromView, 'task-detail', 'deeper'))
+    activeViewRef.current = 'task-detail'
     setActiveView('task-detail')
+    if (isDesktop) resetViewportPosition()
+  }
+
+  function returnToPreviousView(fallback = 'planner') {
+    const target = previousView || fallback
+    setRouteMotion(getRouteMotion(activeViewRef.current, target, 'back'))
+    setSelectedEvent(null)
+    activeViewRef.current = target
+    setActiveView(target)
+    if (isDesktop) resetViewportPosition()
+    syncRouteUrl(target, { replace: true })
   }
 
   function goBack() {
-    setActiveView(previousView)
-    setSelectedEvent(null)
+    returnToPreviousView('planner')
   }
 
   function handleSaveTask(updates) {
@@ -424,6 +617,31 @@ export default function App() {
   const showInstallCard = firstRun.step === 'install' && !gatesBlocking
   const hasNovaConflictHint = (events?.length ?? 0) >= 2
   const hasNovaEmptyHint = (events?.length ?? 0) === 0 && activeView === 'planner'
+
+  useEffect(() => {
+    if (gatesBlocking) return
+    const run = () => {
+      // Después del primer frame útil precargamos lo más probable. Así el
+      // usuario siente navegación instantánea sin pagar el costo en cold start.
+      prefetch(loadCalendarView)
+      prefetch(loadDayView)
+      prefetch(loadTasksView)
+      prefetch(loadSettingsView)
+      if (isDesktop) {
+        prefetch(loadCommandPalette)
+        prefetch(loadQuickAddSheet)
+        prefetch(loadImportExportSheet)
+        prefetch(loadSuggestionsInbox)
+      }
+    }
+    const id = window.requestIdleCallback
+      ? window.requestIdleCallback(run, { timeout: 1600 })
+      : window.setTimeout(run, 900)
+    return () => {
+      if (window.cancelIdleCallback && typeof id === 'number') window.cancelIdleCallback(id)
+      else window.clearTimeout(id)
+    }
+  }, [gatesBlocking, isDesktop])
 
   // ── Shared PlannerView props ──────────────────────────────────────────────
   const plannerProps = {
@@ -556,20 +774,20 @@ export default function App() {
         style={!isDesktop || isDetail ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)' } : undefined}
       >
         {/* ── Single-view layout: cada botón del sidebar → su propia vista ──
-            Suspense envuelve TODO para cubrir las vistas lazy. Fallback null
-            — el micro-flash entre navegación es imperceptible porque los
-            chunks de cada vista están ya cacheados tras la primera visita. */}
+            Suspense envuelve TODO para cubrir las vistas lazy. El fallback ya
+            no es null: una estructura liviana evita flashes y comunica progreso. */}
         {(
           <AnimatePresence mode="wait">
             <motion.div
               key={activeView}
+              custom={routeMotion}
               variants={pageVariants}
               initial="initial"
               animate="animate"
               exit="exit"
               className="w-full"
             >
-              <Suspense fallback={null}>
+              <Suspense fallback={<RouteFallback activeView={activeView} isDesktop={isDesktop} />}>
               {activeView === 'planner' && <PlannerView {...plannerProps} isDesktop={isDesktop} />}
 
               {activeView === 'calendar' && (
@@ -583,13 +801,7 @@ export default function App() {
                   onExportClick={() => { setImportExportInitialTab('export'); setImportExportOpen(true) }}
                   onImportClick={() => { setImportExportInitialTab('import'); setImportExportOpen(true) }}
                   onOpenDay={(iso) => {
-                    try {
-                      const url = new URL(window.location.href)
-                      url.searchParams.set('view', 'day')
-                      if (iso) url.searchParams.set('date', iso)
-                      window.history.pushState({ view: 'day' }, '', url.toString())
-                    } catch {}
-                    setActiveView('day')
+                    navigate('day', { date: iso })
                   }}
                   isDesktop={isDesktop}
                 />
@@ -628,8 +840,8 @@ export default function App() {
                 <SettingsView
                   memoriesCount={memories.length}
                   onOpenImport={() => { setImportExportInitialTab('import'); setImportExportOpen(true) }}
-                  onOpenMemory={() => { setPreviousView('settings'); setActiveView('memory') }}
-                  onOpenNovaKnows={() => { setPreviousView('settings'); setActiveView('nova-knows') }}
+                  onOpenMemory={() => navigate('memory', { intent: 'deeper' })}
+                  onOpenNovaKnows={() => navigate('nova-knows', { intent: 'deeper' })}
                 />
               )}
 
@@ -637,7 +849,7 @@ export default function App() {
                 <div>
                   <div className="max-w-lg lg:max-w-2xl mx-auto px-4 pt-4">
                     <button
-                      onClick={() => setActiveView(previousView || 'settings')}
+                      onClick={() => returnToPreviousView('settings')}
                       className="inline-flex items-center gap-1 text-[13px] font-semibold text-slate-500 hover:text-slate-800 transition-colors"
                     >
                       <span className="material-symbols-outlined text-[18px]">arrow_back</span>
@@ -652,7 +864,7 @@ export default function App() {
               )}
 
               {activeView === 'nova-knows' && (
-                <NovaKnowsView onBack={() => setActiveView(previousView || 'settings')} />
+                <NovaKnowsView onBack={() => returnToPreviousView('settings')} />
               )}
 
 
@@ -697,7 +909,7 @@ export default function App() {
           Antes estaba eager y pesaba en el bundle inicial aunque la bandeja
           vive oculta en cada cold start. */}
       {inboxOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<SheetFallback label="Cargando bandeja" />}>
           <SuggestionsInbox
             isOpen={inboxOpen}
             onClose={() => setInboxOpen(false)}
@@ -867,7 +1079,7 @@ export default function App() {
       {/* ── Evening Shutdown ─────────────────────────────────────────────── */}
       <AnimatePresence>
         {showEveningShutdown && (
-          <Suspense fallback={null}>
+          <Suspense fallback={<SheetFallback label="Preparando cierre del día" />}>
             <EveningShutdown
               events={events}
               tasks={tasks}
@@ -887,7 +1099,7 @@ export default function App() {
       />
 
       {importExportOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<SheetFallback label="Cargando importar y exportar" />}>
           <ImportExportSheet
             isOpen={importExportOpen}
             onClose={() => setImportExportOpen(false)}
@@ -901,7 +1113,7 @@ export default function App() {
       <AuthModal isOpen={authModal} onClose={() => setAuthModal(false)} />
 
       {paletteOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<SheetFallback label="Abriendo buscador" />}>
           <CommandPalette
             isOpen={paletteOpen}
             onClose={() => setPaletteOpen(false)}
@@ -916,7 +1128,7 @@ export default function App() {
       )}
 
       {paletteQuickAdd && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<SheetFallback label="Abriendo creación rápida" />}>
           <QuickAddSheet
             onSave={(formData) => { addEvent(formData); setPaletteQuickAdd(false) }}
             onCancel={() => setPaletteQuickAdd(false)}
