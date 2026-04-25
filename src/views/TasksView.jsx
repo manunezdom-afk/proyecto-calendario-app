@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import WeeklyStatsCard from '../components/WeeklyStatsCard'
 import TaskCheckmark from '../components/TaskCheckmark'
+import NextWindowPanel from '../components/NextWindowPanel'
 
 const PRIORITY_CFG = {
   Alta:      { color: 'text-error',     bg: 'bg-error/10',     dot: 'bg-error',     ring: 'ring-error/30' },
@@ -17,7 +18,7 @@ const CAT_ICONS  = { hoy: 'today', semana: 'date_range', 'algún día': 'inbox' 
 // su primer render y lo borra. Evita elevar focusBarSeed a App.jsx.
 const NOVA_SEED_KEY = 'focus_pending_nova_seed'
 
-export default function TasksView({ tasks = [], events = [], addTask = () => {}, toggleTask = () => {}, deleteTask = () => {}, updateTask = () => {}, onNavigate }) {
+export default function TasksView({ tasks = [], events = [], addTask = () => {}, toggleTask = () => {}, deleteTask = () => {}, updateTask = () => {}, addEvent = () => {}, onNavigate }) {
   const [showInput, setShowInput]     = useState(false)
   const [addCategory, setAddCategory] = useState('hoy')
   const [newLabel, setNewLabel]       = useState('')
@@ -38,11 +39,11 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
   const doneCount  = todayTasks.filter((t) => t.done).length
   const progress   = todayTasks.length > 0 ? Math.round((doneCount / todayTasks.length) * 100) : 0
 
-  // MIT: top 3 undone today tasks sorted by priority
-  const topThree = tasks
-    .filter((t) => !t.done && t.category === 'hoy')
-    .sort((a, b) => ({ Alta: 0, Media: 1, Baja: 2 }[a.priority] - { Alta: 0, Media: 1, Baja: 2 }[b.priority]))
-    .slice(0, 3)
+  const pendingToday = tasks.filter((t) => !t.done && t.category === 'hoy')
+
+  function handleBulkDefer(ids, category) {
+    ids.forEach((id) => updateTask(id, { category }))
+  }
 
   function handleAdd(e) {
     e.preventDefault()
@@ -148,40 +149,13 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
           <WeeklyStatsCard tasks={tasks} />
         </div>
 
-        {/* ── Las 3 Victorias (MIT method) ──────────────────────────────── */}
-        {topThree.length > 0 && (
-          <section className="space-y-3 lg:max-w-2xl">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[18px] text-amber-500" style={{ fontVariationSettings: "'FILL' 1" }}>
-                emoji_events
-              </span>
-              <h2 className="font-headline font-bold text-on-surface">Las 3 Victorias de Hoy</h2>
-              <span className="ml-auto text-[10px] text-outline font-bold">Método MIT</span>
-            </div>
-
-            {topThree.map(({ id, label, priority, done }, i) => {
-              const cfg = PRIORITY_CFG[priority]
-              const isTop = i === 0
-              return (
-                <div
-                  key={id}
-                  className={`w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all ${
-                    isTop ? 'bg-primary/8 ring-1 ring-primary/25' : 'bg-surface-container-lowest ring-1 ring-outline-variant/15'
-                  }`}
-                >
-                  <span className={`text-2xl font-black tabular-nums w-7 text-center ${isTop ? 'text-primary' : 'text-outline/30'}`}>
-                    {i + 1}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-on-surface text-sm truncate">{label}</p>
-                    <span className={`text-[10px] font-bold ${cfg.color}`}>Prioridad {priority}</span>
-                  </div>
-                  <TaskCheckmark done={done} onToggle={() => handleToggle(id)} size={20} />
-                </div>
-              )
-            })}
-          </section>
-        )}
+        {/* ── Tu próxima ventana (panel vivo: window / shutdown / calm) ─── */}
+        <NextWindowPanel
+          events={events}
+          pendingTasks={pendingToday}
+          onAddEvent={addEvent}
+          onBulkDefer={handleBulkDefer}
+        />
 
         {/* ── Tareas agrupadas por categoría (kanban 3-col en desktop) ──── */}
         <section className="space-y-5 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-5 lg:items-start">
@@ -347,20 +321,6 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
             )
           })}
         </section>
-
-        {/* ── Tip: Patrón de éxito ──────────────────────────────────────── */}
-        <div className="bg-gradient-to-br from-primary/8 to-secondary/5 rounded-[24px] p-5 lg:p-6 border border-primary/10 space-y-3 lg:max-w-3xl lg:mx-auto">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-              tips_and_updates
-            </span>
-            <span className="text-xs font-bold text-primary">Patrón de Éxito · Método MIT</span>
-          </div>
-          <p className="text-sm text-on-surface-variant font-medium leading-relaxed">
-            Identifica tu <span className="text-on-surface font-bold">tarea más importante</span> del día y
-            complétala antes de revisar correos o mensajes. Una tarea terminada vale más que diez empezadas.
-          </p>
-        </div>
 
       </main>
     </div>

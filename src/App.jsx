@@ -614,6 +614,7 @@ export default function App() {
                   toggleTask={toggleTask}
                   deleteTask={deleteTask}
                   updateTask={updateTask}
+                  addEvent={addEvent}
                   onNavigate={navigate}
                 />
               )}
