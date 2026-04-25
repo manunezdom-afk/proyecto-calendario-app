@@ -230,10 +230,22 @@ export default function WelcomeScreen({
 }
 
 export function useWelcomeGate() {
+  // La pantalla de bienvenida (Threshold Scene) aparece SÓLO en el primer
+  // uso de la app, igual que apps mainstream (Calendar, Notion, etc.):
+  // a partir de ahí abre directo al planner. Antes mostrábamos esto una
+  // vez al día comparando la fecha de WELCOME_KEY con hoy; el usuario lo
+  // sintió pesado para uso diario.
+  //
+  // Backward-compat: WELCOME_KEY ya existía con valor de fecha en sesiones
+  // anteriores, así que basta con preguntar si tiene CUALQUIER valor para
+  // saltar la pantalla a usuarios que ya la vieron una vez. No introducimos
+  // una key nueva (provocaría que volvieran a ver la animación tras
+  // actualizar). markOnboardingCompleted también escribe en WELCOME_KEY,
+  // así que el flujo "primer uso → onboarding → Welcome desaparece" sigue
+  // funcionando sin tocar nada más.
   const [show, setShow] = useState(() => {
     try {
-      const today = new Date().toISOString().slice(0, 10)
-      return localStorage.getItem(WELCOME_KEY) !== today
+      return localStorage.getItem(WELCOME_KEY) == null
     } catch {
       return false
     }

@@ -978,7 +978,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* ── Threshold Scene — la pantalla-firma de entrada (una vez por día) ── */}
+      {/* ── Threshold Scene — pantalla-firma de entrada, SÓLO en el primer uso ── */}
       <AnimatePresence>
         {showWelcome && (
           <WelcomeScreen
