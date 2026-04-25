@@ -283,31 +283,64 @@ export default function WeekTimeGrid({ weekStart, events = [], onOpenTask, onAdd
                     mínimo. El border-l aporta identidad visual aunque el título
                     esté muy truncado. title atributo mantiene accesibilidad. */}
                 <LayoutGroup>
-                  {positioned.map(({ ev, top, height }) => (
-                    <motion.button
-                      key={ev.id}
-                      layoutId={`week-event-${ev.id}`}
-                      layout
-                      type="button"
-                      onClick={() => onOpenTask?.(ev)}
-                      className={`absolute bg-primary/10 hover:bg-primary/20 border-l-[3px] border-primary rounded-r-md text-left transition-colors overflow-hidden z-[5] ${
-                        isNarrow ? 'left-0.5 right-0.5 px-1 py-0.5' : 'left-1 right-1 px-1.5 py-1'
-                      }`}
-                      initial={false}
-                      animate={{ top: top + 1, height }}
-                      transition={{ type: 'spring', damping: 14, stiffness: 180 }}
-                      title={`${ev.title}${ev.time ? ` · ${ev.time}` : ''}`}
-                    >
-                      <p className={`font-bold text-primary leading-tight truncate ${
-                        isNarrow ? 'text-[10px]' : 'text-[11px]'
-                      }`}>
-                        {ev.title}
-                      </p>
-                      {ev.time && !isNarrow && (
-                        <p className="text-[9px] text-primary/70 leading-tight truncate">{ev.time}</p>
-                      )}
-                    </motion.button>
-                  ))}
+                  {positioned.map(({ ev, top, height }) => {
+                    // Clamp dinámico: estimamos cuántas líneas entran según la
+                    // altura del bloque (1 h ≈ 48 px). Antes el título usaba
+                    // `truncate` (1 línea fija con elipsis) sin importar cuánto
+                    // espacio vertical tuviera el evento — un compromiso de 2 h
+                    // mostraba solo "Reunión con cli…" en vez de aprovechar las
+                    // 6 líneas disponibles. Ahora un evento corto (30 min) sigue
+                    // truncando en 1 línea, y un evento largo wrappea hasta donde
+                    // la altura le permita.
+                    const padY = isNarrow ? 4 : 8
+                    const lineH = isNarrow ? 12.5 : 13.75
+                    const innerH = Math.max(0, height - padY)
+                    const totalLines = Math.max(1, Math.floor(innerH / lineH))
+                    // La línea de tiempo solo se renderiza cuando hay holgura
+                    // (≥ 3 líneas totales); en eventos chicos el título se
+                    // queda con todo el espacio disponible.
+                    const showTime = !!ev.time && !isNarrow && totalLines >= 3
+                    const titleLines = showTime ? totalLines - 1 : totalLines
+
+                    const titleStyle = titleLines === 1
+                      ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+                      : {
+                          display: '-webkit-box',
+                          WebkitBoxOrient: 'vertical',
+                          WebkitLineClamp: titleLines,
+                          overflow: 'hidden',
+                          overflowWrap: 'anywhere',
+                        }
+
+                    return (
+                      <motion.button
+                        key={ev.id}
+                        layoutId={`week-event-${ev.id}`}
+                        layout
+                        type="button"
+                        onClick={() => onOpenTask?.(ev)}
+                        className={`absolute bg-primary/10 hover:bg-primary/20 border-l-[3px] border-primary rounded-r-md text-left transition-colors overflow-hidden z-[5] ${
+                          isNarrow ? 'left-0.5 right-0.5 px-1 py-0.5' : 'left-1 right-1 px-1.5 py-1'
+                        }`}
+                        initial={false}
+                        animate={{ top: top + 1, height }}
+                        transition={{ type: 'spring', damping: 14, stiffness: 180 }}
+                        title={`${ev.title}${ev.time ? ` · ${ev.time}` : ''}`}
+                      >
+                        <p
+                          className={`font-bold text-primary leading-tight ${
+                            isNarrow ? 'text-[10px]' : 'text-[11px]'
+                          }`}
+                          style={titleStyle}
+                        >
+                          {ev.title}
+                        </p>
+                        {showTime && (
+                          <p className="text-[9px] text-primary/70 leading-tight truncate">{ev.time}</p>
+                        )}
+                      </motion.button>
+                    )
+                  })}
                 </LayoutGroup>
               </div>
             )
