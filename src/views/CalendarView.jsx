@@ -22,12 +22,13 @@ function hasMeaningfulNote(desc) {
 const DAY_ABBR_ES    = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const MONTH_NAMES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 
-// Build the current week (Mon → Sun) from today — incluye ISO date para filtrar eventos
-function getCurrentWeek() {
+// Build a week (Mon → Sun) starting from today + offset weeks.
+// offset = 0  → semana actual; offset = 1 → semana siguiente; offset = -1 → anterior.
+function getWeek(offset = 0) {
   const today = new Date()
   const dow    = today.getDay() // 0=Sun
   const monday = new Date(today)
-  monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1))
+  monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) + offset * 7)
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
@@ -54,10 +55,11 @@ function categorizeEvent(ev) {
   return 'personal'
 }
 
-const CALENDAR_DAYS     = getCurrentWeek()
+// Referencia a "hoy" — siempre la semana actual real, no la visible
+const CURRENT_WEEK      = getWeek(0)
 const todayNum          = new Date().getDate()
-const todayEntry        = CALENDAR_DAYS.find((d) => d.isToday)
-const todayISOStr       = todayEntry?.iso ?? CALENDAR_DAYS[0].iso
+const todayEntry        = CURRENT_WEEK.find((d) => d.isToday)
+const todayISOStr       = todayEntry?.iso ?? CURRENT_WEEK[0].iso
 // Mes en mayúscula inicial cuando va como título independiente (ej. "Abril 2026")
 const currentMonthNameLc = MONTH_NAMES_ES[new Date().getMonth()]
 const currentMonthLabel  = `${currentMonthNameLc.charAt(0).toUpperCase()}${currentMonthNameLc.slice(1)} ${new Date().getFullYear()}`
@@ -270,6 +272,35 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
   const [activeDay, setActiveDay] = useState(todayNum)    // selected day number
   const [calView, setCalView] = useState('dia')           // 'dia' | 'semana' | 'mes'
   const [weekStart, setWeekStart] = useState(() => getMondayOf(new Date()))
+  // Offset de semana para la vista "día" — 0 = semana actual, ±1 = vecinas, etc.
+  // Permite navegar el week strip (lun-dom) con flechas a otras semanas.
+  const [weekOffset, setWeekOffset] = useState(0)
+  const weekDays = useMemo(() => getWeek(weekOffset), [weekOffset])
+  // Etiqueta del rango visible del strip ("21–27 Abr" / "28 Abr – 4 May").
+  const weekStripLabel = useMemo(() => {
+    const first = weekDays[0]
+    const last  = weekDays[6]
+    const fd = new Date(`${first.iso}T00:00:00`)
+    const ld = new Date(`${last.iso}T00:00:00`)
+    const fm = MONTH_NAMES_ES[fd.getMonth()]
+    const lm = MONTH_NAMES_ES[ld.getMonth()]
+    const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1, 3)
+    if (fd.getMonth() === ld.getMonth()) return `${first.num}–${last.num} ${cap(fm)}`
+    return `${first.num} ${cap(fm)} – ${last.num} ${cap(lm)}`
+  }, [weekDays])
+  // Cambia de semana manteniendo el mismo día-de-la-semana (lun→lun, mar→mar, etc.)
+  function shiftWeek(delta) {
+    const newOffset = weekOffset + delta
+    const newWeek = getWeek(newOffset)
+    const idx = weekDays.findIndex((d) => d.num === activeDay)
+    const targetIdx = idx >= 0 ? idx : 0
+    setWeekOffset(newOffset)
+    setActiveDay(newWeek[targetIdx].num)
+  }
+  function goToTodayInStrip() {
+    setWeekOffset(0)
+    setActiveDay(todayNum)
+  }
   // Fecha preseleccionada cuando el usuario abre "Añadir" tocando una celda
   // de la vista semanal — hace que el evento caiga en el día correcto aunque
   // el texto tipeado no incluya fecha explícita.
@@ -299,8 +330,8 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
 
   const effectiveEvents = events ?? []
 
-  // ISO del día seleccionado en la vista semana
-  const activeDayISO = CALENDAR_DAYS.find((d) => d.num === activeDay)?.iso ?? todayISOStr
+  // ISO del día seleccionado en el week strip — se busca en la semana actualmente visible
+  const activeDayISO = weekDays.find((d) => d.num === activeDay)?.iso ?? todayISOStr
   const isToday = activeDayISO === todayISOStr
 
   // Filtramos eventos por día seleccionado (resolviendo cualquier formato de fecha)
@@ -482,9 +513,42 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
         {/* ── VISTA DÍA ────────────────────────────────────────────────── */}
         {calView === 'dia' && (
           <>
+            {/* Navegación de semana — flechas + etiqueta de rango + botón "Hoy". */}
+            <div className="flex items-center justify-between px-1 -mb-2">
+              <button
+                onClick={() => shiftWeek(-1)}
+                aria-label="Semana anterior"
+                title="Semana anterior"
+                className="w-9 h-9 flex items-center justify-center rounded-full text-outline hover:bg-surface-container-low active:scale-90 transition-all"
+              >
+                <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+              </button>
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-bold text-on-surface tracking-tight">
+                  {weekStripLabel}
+                </p>
+                {weekOffset !== 0 && (
+                  <button
+                    onClick={goToTodayInStrip}
+                    className="text-[10px] font-bold uppercase tracking-wider text-primary hover:underline"
+                  >
+                    Hoy
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => shiftWeek(1)}
+                aria-label="Semana siguiente"
+                title="Semana siguiente"
+                className="w-9 h-9 flex items-center justify-center rounded-full text-outline hover:bg-surface-container-low active:scale-90 transition-all"
+              >
+                <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+              </button>
+            </div>
+
             {/* Week strip */}
             <div className="grid grid-cols-7 gap-2">
-              {CALENDAR_DAYS.map(({ day, num, iso, isToday }) => {
+              {weekDays.map(({ day, num, iso, isToday }) => {
                 const isActive  = num === activeDay
                 const dayEvts   = effectiveEvents.filter((e) => resolveEventDate(e) === iso)
                 const hasEvts   = dayEvts.length > 0
@@ -564,13 +628,27 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                la semana visible, el swipe en esa dirección rebota por
                dragElastic sin cambiar nada. */
             (() => {
-              const days = CALENDAR_DAYS
+              const days = weekDays
               const activeIdx = days.findIndex((d) => d.num === activeDay)
-              const canPrev = activeIdx > 0
-              const canNext = activeIdx < days.length - 1
+              const canPrev = true
+              const canNext = true
+              // Swipe que cruza la frontera de semana (lunes ← / ← domingo)
+              // navega a la semana vecina y posiciona el día en el extremo
+              // opuesto, replicando el comportamiento de iOS/Google Calendar.
               function goDelta(delta) {
                 const next = activeIdx + delta
-                if (next < 0 || next >= days.length) return
+                if (next < 0) {
+                  const prevWeek = getWeek(weekOffset - 1)
+                  setWeekOffset(weekOffset - 1)
+                  setActiveDay(prevWeek[6].num)
+                  return
+                }
+                if (next >= days.length) {
+                  const nextWeek = getWeek(weekOffset + 1)
+                  setWeekOffset(weekOffset + 1)
+                  setActiveDay(nextWeek[0].num)
+                  return
+                }
                 setActiveDay(days[next].num)
               }
               return (
