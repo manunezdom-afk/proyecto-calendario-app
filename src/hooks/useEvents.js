@@ -123,8 +123,26 @@ export function useEvents() {
       }
     } catch (err) {
       console.warn('[Focus] ⚠️ No se pudo cargar eventos de Supabase', err)
+      throw err
     }
   })
+
+  // Reintentos con backoff cuando el (init) falla: si Supabase tarda o la red
+  // está jitterosa al abrir el dispositivo, sin reintento la UI queda mostrando
+  // la caché del día anterior. Ver useTasks.js para el mismo patrón.
+  const refetchWithRetry = useRef(null)
+  refetchWithRetry.current = async (tag) => {
+    const delays = [800, 2000, 5000]
+    for (let i = 0; i <= delays.length; i++) {
+      try {
+        await refetch(tag)
+        return
+      } catch {
+        if (i === delays.length) return
+        await new Promise(r => setTimeout(r, delays[i]))
+      }
+    }
+  }
 
   // Carga desde Supabase cuando el usuario inicia sesión
   useEffect(() => {
@@ -138,7 +156,7 @@ export function useEvents() {
     // Al cambiar de usuario, partimos del cache propio (no del global compartido)
     setEvents(dataService.getCachedEvents(user.id))
 
-    refetch('(init)')
+    refetchWithRetry.current('(init)')
 
     // Sync al volver a la pestaña. visibilitychange y focus suelen disparar a
     // la vez en iOS: el helper coalesced dedupea la ráfaga.
@@ -146,18 +164,36 @@ export function useEvents() {
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('focus', onVisibility)
 
-    // Realtime: cualquier cambio en la tabla events del user dispara refetch
+    // pageshow: iOS PWA + BFCache restauran la página sin disparar
+    // visibilitychange. Sin esto, al cambiar de dispositivo y volver a la app
+    // el usuario veía sólo la caché del día anterior.
+    const onPageShow = () => refetch('(pageshow)')
+    window.addEventListener('pageshow', onPageShow)
+
+    // online: forzar resync cuando el dispositivo recupera red para traer
+    // cambios hechos en otro device mientras estábamos offline.
+    const onOnline = () => refetch('(online)')
+    window.addEventListener('online', onOnline)
+
+    // Realtime: el WebSocket puede morir en background (Safari iOS lo
+    // suspende). Cuando se resuscribe, los cambios que ocurrieron mientras
+    // estaba caído NO se replayan — por eso forzamos un refetch en cada
+    // SUBSCRIBED para hacer catch-up.
     const channel = supabase
       .channel(`events-${user.id}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'events', filter: `user_id=eq.${user.id}` },
         () => refetch('(realtime)'),
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') refetch('(realtime-subscribed)')
+      })
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('focus', onVisibility)
+      window.removeEventListener('pageshow', onPageShow)
+      window.removeEventListener('online', onOnline)
       supabase.removeChannel(channel)
     }
   }, [user?.id, refetch])
