@@ -3,691 +3,551 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0a0a0f">
+<meta name="theme-color" content="#0a0a0a">
 <meta name="color-scheme" content="dark">
 
-<title>Focus — Tu calendario, afinado al detalle</title>
-<meta name="description" content="Focus es el calendario con Nova, la IA que propone cambios y nunca toca nada sin tu aprobación. Gratis, sin cuenta, funciona offline.">
+<title>FOCUS OS — Un sistema operativo para tu día</title>
+<meta name="description" content="FOCUS OS es un ecosistema de productividad con IA. Tres apps que piensan en conjunto: Focus, Capture y Review. Hoy empieza por Focus.">
 
-<!-- Open Graph -->
-<meta property="og:title" content="Focus — Tu calendario, afinado al detalle">
-<meta property="og:description" content="El calendario con Nova, la IA que propone cambios y nunca toca nada sin tu aprobación.">
+<meta property="og:title" content="FOCUS OS — Un sistema operativo para tu día">
+<meta property="og:description" content="Tres apps que piensan en conjunto. Una IA que aprende cómo vivís. Hoy empieza por Focus.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="/og-image.png">
 
-<!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Focus — Tu calendario, afinado al detalle">
-<meta name="twitter:description" content="El calendario con Nova, la IA que propone cambios y nunca toca nada sin tu aprobación.">
+<meta name="twitter:title" content="FOCUS OS — Un sistema operativo para tu día">
+<meta name="twitter:description" content="Tres apps que piensan en conjunto. Una IA que aprende cómo vivís. Hoy empieza por Focus.">
 
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%233b82f6'/%3E%3Cstop offset='.5' stop-color='%237c3aed'/%3E%3Cstop offset='1' stop-color='%23ec4899'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='32' r='8' fill='white'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g' cx='35%25' cy='35%25'%3E%3Cstop offset='0' stop-color='%23c4b5fd'/%3E%3Cstop offset='.5' stop-color='%237c3aed'/%3E%3Cstop offset='1' stop-color='%231e1b4b'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%230a0a0a'/%3E%3Ccircle cx='32' cy='32' r='18' fill='url(%23g)'/%3E%3C/svg%3E">
 
-<!-- Preconnect a Google Fonts para arrancar descarga ASAP -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-<!-- Fonts con display=swap + solo los pesos que usamos -->
-<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800;900&family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800;900&family=Inter:wght@400;500;600;700&display=swap">
-
-<!-- Material Symbols solo los iconos que usamos (requiere text=) -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0..1,0&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
 
 <style>
   *,*::before,*::after{box-sizing:border-box}
   html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
-  body{margin:0;background:#0a0a0f;color:#fff;font:400 16px/1.55 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;overflow-x:hidden;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
-  h1,h2,h3{font-family:Manrope,system-ui,sans-serif;margin:0}
+  body{
+    margin:0;
+    background:#0a0a0a;
+    color:#fafafa;
+    font:400 16px/1.55 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+    overflow-x:hidden;
+    text-rendering:optimizeLegibility;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+  h1,h2,h3,h4{font-family:Manrope,system-ui,sans-serif;margin:0;letter-spacing:-.03em}
   p{margin:0}
   a{color:inherit;text-decoration:none}
   button{font:inherit;cursor:pointer}
   img{max-width:100%;display:block}
-  .material-symbols-outlined{font-family:"Material Symbols Outlined";font-weight:normal;font-style:normal;display:inline-block;line-height:1;text-transform:none;letter-spacing:normal;word-wrap:normal;white-space:nowrap;direction:ltr;-webkit-font-feature-settings:"liga";font-feature-settings:"liga";-webkit-font-smoothing:antialiased;font-variation-settings:"FILL" 0,"wght" 400,"GRAD" 0,"opsz" 24}
-  .mi-filled{font-variation-settings:"FILL" 1,"wght" 400,"GRAD" 0,"opsz" 24}
+
+  /* Tokens */
+  :root{
+    --bg: #0a0a0a;
+    --surface: #0f0f10;
+    --border: #1f1f22;
+    --border-strong: #2a2a2e;
+    --text: #fafafa;
+    --text-2: #a1a1aa;
+    --text-3: #52525b;
+    --accent-1: #6366f1;
+    --accent-2: #a855f7;
+    --accent-3: #ec4899;
+    --green: #34d399;
+  }
 
   /* Layout */
-  .wrap{max-width:1200px;margin:0 auto;padding:0 40px}
-  .section{position:relative;z-index:10;padding:128px 40px}
-  .eyebrow{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.25em;color:rgba(255,255,255,.5);margin-bottom:12px}
+  .container{max-width:1080px;margin:0 auto;padding:0 32px}
+  .section{padding:128px 0;border-top:1px solid var(--border);position:relative}
+  .section:first-of-type{border-top:0}
 
-  /* Aurora */
-  .aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-  .aurora::after{content:'';position:absolute;inset:0;background:linear-gradient(to bottom,transparent,transparent 60%,#0a0a0f)}
-  .blob{position:absolute;border-radius:50%;filter:blur(140px);will-change:transform}
-  .blob-1{top:-160px;left:-160px;width:620px;height:620px;background:rgba(59,130,246,.3);animation:aurora1 18s ease-in-out infinite}
-  .blob-2{top:20%;right:-160px;width:580px;height:580px;background:rgba(124,58,237,.25);animation:aurora2 22s ease-in-out infinite}
-  .blob-3{bottom:10%;left:20%;width:520px;height:520px;background:rgba(236,72,153,.2);animation:aurora3 26s ease-in-out infinite}
-  @keyframes aurora1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(60px,-40px) scale(1.15)}}
-  @keyframes aurora2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-40px,50px) scale(1.2)}}
-  @keyframes aurora3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(30px,30px) scale(1.1)}}
-  @media (prefers-reduced-motion:reduce){.blob{animation:none}}
+  /* Mono utility */
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:500;letter-spacing:.02em}
 
-  /* Glass */
-  .glass{background:rgba(255,255,255,.035);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.08);border-radius:24px;transition:background .25s ease,border-color .25s ease,transform .25s ease}
-  .glass:hover{background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.14)}
+  /* Eyebrow */
+  .eyebrow{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:11px;
+    font-weight:500;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--text-3);
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:32px;
+  }
+  .eyebrow .num{color:var(--text-2)}
+  .eyebrow .dot{width:4px;height:4px;border-radius:50%;background:var(--accent-2);opacity:.8}
 
-  /* Brand mark */
-  .mark{border-radius:28%;background:linear-gradient(135deg,#3b82f6,#7c3aed,#ec4899);display:inline-flex;align-items:center;justify-content:center;box-shadow:0 10px 30px -10px rgba(59,130,246,.4);flex-shrink:0}
+  /* Heading sizes */
+  h1{
+    font-weight:900;
+    font-size:clamp(48px,8.5vw,104px);
+    line-height:.96;
+    letter-spacing:-.045em;
+  }
+  h2{
+    font-weight:900;
+    font-size:clamp(36px,5.5vw,64px);
+    line-height:1.02;
+    letter-spacing:-.035em;
+  }
+  h3{font-weight:800;font-size:28px;line-height:1.15}
+  .lead{
+    font-size:clamp(17px,1.6vw,20px);
+    line-height:1.55;
+    color:var(--text-2);
+    max-width:520px;
+  }
+  .lead b, .lead strong{color:var(--text);font-weight:600}
 
   /* Header */
-  .header{position:relative;z-index:20;padding:20px 40px;display:flex;align-items:center;justify-content:space-between}
-  .header nav{display:flex;align-items:center;gap:32px;font-size:13.5px;font-weight:500;color:rgba(255,255,255,.7)}
-  .header nav a{transition:color .2s}
-  .header nav a:hover{color:#fff}
-  .header-logo{display:flex;align-items:center;gap:8px;color:#fff;font-family:Manrope;font-size:18px;font-weight:800;letter-spacing:-.02em}
-  .btn-ghost{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.1);padding:8px 16px;border-radius:999px;font-size:13px;font-weight:600;color:#fff;backdrop-filter:blur(10px);transition:background .2s}
-  .btn-ghost:hover{background:rgba(255,255,255,.16)}
+  .site-header{
+    position:sticky;top:0;z-index:50;
+    backdrop-filter:saturate(140%) blur(12px);
+    -webkit-backdrop-filter:saturate(140%) blur(12px);
+    background:rgba(10,10,10,.7);
+    border-bottom:1px solid var(--border);
+  }
+  .site-header-inner{
+    max-width:1080px;margin:0 auto;padding:18px 32px;
+    display:flex;align-items:center;justify-content:space-between;gap:24px;
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-family:Manrope;font-weight:800;letter-spacing:-.01em;font-size:15px}
+  .brand-mark{
+    width:24px;height:24px;border-radius:7px;
+    background:radial-gradient(circle at 30% 30%,#c4b5fd 0%,#7c3aed 50%,#1e1b4b 100%);
+    box-shadow:0 0 0 1px rgba(255,255,255,.04),0 0 20px rgba(124,58,237,.4);
+  }
+  .nav{display:flex;align-items:center;gap:28px;font-size:13px;color:var(--text-2)}
+  .nav a{transition:color .15s}
+  .nav a:hover{color:var(--text)}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:9px 16px;border-radius:8px;
+    font-size:13px;font-weight:600;
+    transition:transform .15s,background .15s,border-color .15s;
+  }
+  .btn-primary{background:#fafafa;color:#0a0a0a}
+  .btn-primary:hover{transform:translateY(-1px);background:#fff}
+  .btn-ghost{border:1px solid var(--border-strong);color:var(--text)}
+  .btn-ghost:hover{border-color:#3a3a3e;background:rgba(255,255,255,.03)}
+  .arrow{font-size:14px;line-height:1;transform:translateY(-1px)}
 
-  /* Hero */
-  .hero{position:relative;z-index:10;padding:80px 40px 128px;text-align:center}
-  .hero-inner{max-width:960px;margin:0 auto}
-  .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);padding:6px 16px;border-radius:999px;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.2em;color:rgba(255,255,255,.7);margin-bottom:32px}
-  .pulse{width:6px;height:6px;border-radius:3px;background:#34d399;box-shadow:0 0 8px #34d399;animation:pulse 2s ease-in-out infinite}
-  @keyframes pulse{50%{opacity:.5}}
-  .hero h1{font-weight:900;font-size:clamp(44px,6.5vw,76px);line-height:1.02;letter-spacing:-.03em;margin-bottom:24px}
-  .grad-text{background:linear-gradient(135deg,#60a5fa,#a78bfa,#f0abfc);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
-  .hero-sub{max-width:620px;margin:0 auto 40px;font-size:clamp(16px,2vw,19px);line-height:1.6;color:rgba(255,255,255,.65);font-weight:500}
-  .hero-sub b{color:rgba(255,255,255,.85);font-weight:600}
-  .hero-ctas{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
-  .btn-primary{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#0f172a;padding:14px 28px;border-radius:999px;font-size:14px;font-weight:700;box-shadow:0 20px 40px -10px rgba(59,130,246,.3);transition:transform .2s,box-shadow .2s}
-  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 24px 50px -10px rgba(59,130,246,.4)}
-  .btn-secondary{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:rgba(255,255,255,.8);padding:13px 24px;border-radius:999px;font-size:13.5px;font-weight:600;transition:background .2s,border-color .2s}
-  .btn-secondary:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.25)}
-  .hero-checks{margin-top:56px;display:flex;justify-content:center;flex-wrap:wrap;gap:12px 32px;font-size:12px;font-weight:500;color:rgba(255,255,255,.45)}
-  .hero-checks span{display:inline-flex;align-items:center;gap:6px}
-  .hero-checks .material-symbols-outlined{font-size:15px;color:rgba(52,211,153,.8)}
+  /* HERO */
+  .hero{padding:120px 0 64px;border-top:0}
+  .hero-eyebrow{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:11px;font-weight:500;
+    letter-spacing:.2em;text-transform:uppercase;
+    color:var(--text-3);
+    margin-bottom:40px;
+    display:inline-flex;align-items:center;gap:10px;
+  }
+  .hero-eyebrow::before{
+    content:'';width:6px;height:6px;border-radius:50%;
+    background:var(--green);
+    box-shadow:0 0 10px var(--green);
+    animation:pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse{50%{opacity:.4}}
+  .hero h1{margin-bottom:32px;max-width:14ch}
+  .hero .lead{margin-bottom:48px;max-width:540px}
+  .hero-ctas{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .hero-meta{
+    margin-top:64px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:12px;color:var(--text-3);letter-spacing:.05em;
+  }
+  .hero-meta span{display:inline-flex;align-items:center;gap:6px}
+  .hero-meta .sep{color:var(--border-strong)}
 
-  /* Product mock */
-  .mock{position:relative;margin:72px auto 0;max-width:1040px}
-  .mock-glow{position:absolute;inset:0;z-index:-1;margin:0 64px;bottom:-40px;border-radius:32px;background:linear-gradient(to right,rgba(59,130,246,.4),rgba(124,58,237,.4),rgba(236,72,153,.4));filter:blur(60px)}
-  .mock-frame{overflow:hidden;border-radius:28px;border:1px solid rgba(255,255,255,.1);background:#f8fafc;box-shadow:0 0 0 1px rgba(255,255,255,.06),0 40px 100px -20px rgba(59,130,246,.35),0 30px 60px -30px rgba(124,58,237,.3)}
-  .mock-topbar{display:flex;align-items:center;justify-content:space-between;background:#f1f5f9;border-bottom:1px solid #e2e8f0;padding:12px 20px}
-  .mock-body{display:grid;grid-template-columns:1fr 1.5fr;min-height:480px}
-  .mock-pane-left{background:#fff;border-right:1px solid #f1f5f9;padding:20px;display:flex;flex-direction:column;gap:12px}
-  .mock-pane-right{background:#f8fafc;padding:24px}
-  .mock-eyebrow{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.18em}
-  .mock-brief{margin-top:12px;border-radius:16px;border:1px solid #fde68a;background:#fffbeb;padding:12px;display:flex;flex-direction:column;gap:4px}
-  .mock-event{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px}
-  .mock-chip{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .mock-chip .material-symbols-outlined{color:#fff;font-size:13px}
-  .mock-nova{border-radius:16px;border:1px solid #e2e8f0;background:#fff;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-  .mock-nova-icon{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .mock-nova-icon .material-symbols-outlined{color:#fff;font-size:16px}
-  .btn-dark{border:0;border-radius:999px;background:#0f172a;color:#fff;font-size:10.5px;font-weight:600;padding:6px 10px}
-  .btn-light{border:1px solid #e2e8f0;border-radius:999px;background:#fff;color:#64748b;font-size:10.5px;font-weight:600;padding:6px 10px}
+  /* PROBLEMA */
+  .quote{
+    font-family:Manrope;font-weight:500;
+    font-size:clamp(22px,3vw,32px);
+    line-height:1.4;letter-spacing:-.02em;
+    color:var(--text);max-width:860px;
+  }
+  .quote span{color:var(--text-3)}
 
-  /* Section titles */
-  .section h2{font-weight:900;font-size:clamp(34px,5vw,56px);line-height:1.05;letter-spacing:-.02em;color:#fff;text-align:center;max-width:760px;margin:0 auto}
-  .section .eyebrow{text-align:center}
+  /* CICLO — list */
+  .cycle{margin-top:64px;border-top:1px solid var(--border)}
+  .cycle-row{
+    display:grid;
+    grid-template-columns:80px 1fr 2fr;
+    gap:32px;align-items:baseline;
+    padding:32px 0;
+    border-bottom:1px solid var(--border);
+    transition:background .2s;
+  }
+  .cycle-row:hover{background:rgba(255,255,255,.015)}
+  .cycle-num{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:13px;color:var(--text-3);font-weight:500;
+    letter-spacing:.05em;
+  }
+  .cycle-title{
+    font-family:Manrope;font-weight:800;
+    font-size:clamp(22px,2.4vw,28px);
+    letter-spacing:-.025em;
+  }
+  .cycle-desc{color:var(--text-2);font-size:15px;line-height:1.55;max-width:480px}
+  .cycle-foot{
+    margin-top:40px;display:flex;align-items:center;gap:12px;
+    color:var(--text-3);font-size:13px;
+  }
+  .cycle-foot .pill{
+    width:8px;height:8px;border-radius:50%;
+    background:linear-gradient(135deg,#6366f1,#a855f7,#ec4899);
+    box-shadow:0 0 12px rgba(168,85,247,.5);
+  }
 
-  /* Features grid */
-  .features-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:64px}
-  .feature-card{padding:28px}
-  .feature-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
-  .feature-icon{width:44px;height:44px;border-radius:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px -10px rgba(59,130,246,.3);flex-shrink:0}
-  .feature-icon .material-symbols-outlined{color:#fff;font-size:22px}
-  .feature-card h3{font-weight:800;font-size:22px;letter-spacing:-.02em;color:#fff}
-  .feature-card p{font-size:14.5px;line-height:1.6;color:rgba(255,255,255,.65)}
+  /* APPS — cards */
+  .apps{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:64px;background:var(--border);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .app{background:var(--bg);padding:36px 32px;display:flex;flex-direction:column;gap:14px;min-height:320px}
+  .app-status{
+    align-self:flex-start;
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:10.5px;font-weight:500;letter-spacing:.15em;text-transform:uppercase;
+    padding:5px 10px;border-radius:4px;
+    border:1px solid var(--border-strong);color:var(--text-3);
+  }
+  .app-status.live{border-color:rgba(52,211,153,.35);color:var(--green);background:rgba(52,211,153,.06)}
+  .app-name{
+    font-family:Manrope;font-weight:900;
+    font-size:36px;letter-spacing:-.03em;line-height:1;
+    margin-top:8px;
+  }
+  .app-tagline{font-weight:600;font-size:15px;color:var(--text);margin-top:-4px}
+  .app-body{font-size:14px;line-height:1.6;color:var(--text-2);flex:1}
+  .app-link{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:12px;font-weight:500;letter-spacing:.06em;
+    color:var(--text);display:inline-flex;align-items:center;gap:8px;
+    margin-top:12px;padding-top:16px;border-top:1px solid var(--border);
+    transition:color .15s,gap .15s;
+  }
+  .app-link:hover{color:#fff;gap:12px}
+  .app-link.disabled{color:var(--text-3);pointer-events:none}
+  .apps-foot{
+    margin-top:32px;text-align:center;
+    font-size:13px;color:var(--text-3);
+  }
 
-  /* Steps */
-  .steps-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:64px}
-  .step-card{padding:28px;position:relative}
-  .step-n{position:absolute;top:-12px;left:-12px;width:40px;height:40px;border-radius:16px;background:#fff;color:#0f172a;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;box-shadow:0 10px 30px -5px rgba(0,0,0,.3);font-family:Manrope}
-  .step-card > div{padding-top:12px}
-  .step-card h3{font-weight:800;font-size:20px;letter-spacing:-.02em;color:#fff;margin-bottom:8px}
-  .step-card p{font-size:14px;line-height:1.6;color:rgba(255,255,255,.65)}
+  /* NOVA */
+  .nova-wrap{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;margin-top:64px}
+  .nova-visual{display:flex;justify-content:center;align-items:center;min-height:360px;position:relative}
+  .nova-orb{
+    width:280px;height:280px;border-radius:50%;
+    position:relative;
+    background:
+      radial-gradient(circle at 32% 28%,#e9d5ff 0%,#a855f7 28%,#4c1d95 60%,#1e1b4b 90%);
+    box-shadow:
+      0 0 100px rgba(168,85,247,.35),
+      0 0 0 1px rgba(168,85,247,.15),
+      inset -30px -30px 80px rgba(0,0,0,.5),
+      inset 20px 20px 50px rgba(255,255,255,.06);
+    animation:novaBreath 6s ease-in-out infinite;
+  }
+  .nova-orb::before{
+    content:'';position:absolute;inset:-60px;border-radius:50%;
+    background:conic-gradient(from 0deg,transparent 0deg,rgba(168,85,247,.18) 90deg,transparent 180deg,rgba(99,102,241,.18) 270deg,transparent 360deg);
+    filter:blur(30px);
+    animation:novaSpin 18s linear infinite;
+    z-index:-1;
+  }
+  .nova-orb::after{
+    content:'';position:absolute;inset:-2px;border-radius:50%;
+    background:radial-gradient(circle at 50% 50%,transparent 60%,rgba(255,255,255,.04) 100%);
+    pointer-events:none;
+  }
+  @keyframes novaBreath{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+  @keyframes novaSpin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.nova-orb,.nova-orb::before{animation:none}}
+  .nova-content h2{margin-bottom:20px}
+  .nova-content .lead{margin-bottom:0}
+  .nova-principles{
+    margin-top:64px;display:grid;grid-template-columns:repeat(3,1fr);gap:24px;
+    border-top:1px solid var(--border);padding-top:40px;
+  }
+  .principle .label{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--accent-2);margin-bottom:10px;
+  }
+  .principle h4{font-family:Manrope;font-weight:800;font-size:18px;letter-spacing:-.02em;margin-bottom:6px}
+  .principle p{font-size:14px;line-height:1.55;color:var(--text-2)}
 
-  /* Install grid */
-  .install-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:56px}
-  .install-card{padding:28px}
-  .install-card h3{font-weight:800;font-size:19px;letter-spacing:-.02em;color:#fff;margin-bottom:8px}
-  .install-card p{font-size:13.5px;line-height:1.6;color:rgba(255,255,255,.65);margin-bottom:16px}
-  .install-card ol{padding-left:18px;font-size:13px;line-height:1.7;color:rgba(255,255,255,.65);margin:0}
-  .install-card .arrow{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:rgba(255,255,255,.8);transition:color .2s}
-  .install-card .arrow:hover{color:#fff}
+  /* CTA FINAL */
+  .final{text-align:center;padding:160px 0}
+  .final h2{margin:0 auto 24px;max-width:14ch}
+  .final .lead{margin:0 auto 48px}
+  .final-meta{
+    margin-top:32px;
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:12px;color:var(--text-3);letter-spacing:.05em;
+    display:flex;justify-content:center;gap:18px;flex-wrap:wrap;
+  }
+  .final-meta .sep{color:var(--border-strong)}
+  .btn-lg{padding:14px 24px;font-size:14px;border-radius:10px}
 
-  /* Final CTA */
-  .finalcta{text-align:center}
-  .finalcta-inner{max-width:620px;margin:0 auto}
-  .finalcta-mark{position:relative;display:inline-block;margin-bottom:32px}
-  .finalcta-mark::before{content:'';position:absolute;inset:-20px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.3),transparent 65%);filter:blur(24px)}
-  .finalcta h2{font-size:clamp(40px,5.5vw,64px);letter-spacing:-.03em;line-height:1.04;margin-bottom:20px}
-  .finalcta p{font-size:17px;color:rgba(255,255,255,.6);font-weight:500;margin:0 auto 36px;max-width:480px}
-
-  /* Footer */
-  .footer{position:relative;z-index:10;border-top:1px solid rgba(255,255,255,.05);margin-top:80px}
-  .footer-inner{max-width:1200px;margin:0 auto;padding:40px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:20px;font-size:12.5px;color:rgba(255,255,255,.4)}
-  .footer a{transition:color .2s}
-  .footer a:hover{color:rgba(255,255,255,.8)}
+  /* FOOTER */
+  footer{
+    border-top:1px solid var(--border);
+    padding:48px 0;
+    color:var(--text-3);font-size:13px;
+  }
+  .footer-inner{
+    max-width:1080px;margin:0 auto;padding:0 32px;
+    display:flex;justify-content:space-between;align-items:center;
+    flex-wrap:wrap;gap:20px;
+  }
+  .footer-inner a{transition:color .15s}
+  .footer-inner a:hover{color:var(--text-2)}
+  .footer-brand{display:flex;align-items:center;gap:10px;color:var(--text-2)}
+  .footer-brand .brand-mark{width:18px;height:18px;border-radius:5px}
+  .footer-brand b{font-family:Manrope;font-weight:800;color:var(--text-2);letter-spacing:-.01em}
+  .footer-links{display:flex;gap:24px;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;letter-spacing:.05em}
 
   /* Responsive */
-
-  /* ============ DEMO VIDEO (CSS-only animation) ============ */
-  .demo-section{position:relative;z-index:10;padding:64px 40px 128px}
-  .demo-wrap{max-width:960px;margin:0 auto;text-align:center}
-  .demo-stage{position:relative;margin-top:56px;border-radius:28px;overflow:hidden;background:#0f172a;border:1px solid rgba(255,255,255,.1);box-shadow:0 0 0 1px rgba(255,255,255,.06),0 40px 100px -20px rgba(124,58,237,.4),0 30px 60px -30px rgba(236,72,153,.3);aspect-ratio:16/10}
-  .demo-stage::before{content:'';position:absolute;inset:-2px;z-index:-1;background:linear-gradient(135deg,#3b82f6,#7c3aed,#ec4899);filter:blur(40px);opacity:.5}
-  .demo-screen{position:absolute;inset:0;display:grid;grid-template-columns:320px 1fr;background:#f8fafc}
-  .demo-sidebar{background:#fff;border-right:1px solid #f1f5f9;padding:24px 20px;display:flex;flex-direction:column;gap:10px;font-family:Inter}
-  .demo-main{padding:24px;display:flex;flex-direction:column;gap:16px;background:linear-gradient(180deg,#f8fafc,#eef2ff)}
-  .demo-eyebrow{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.18em}
-
-  /* Chat bubble (user prompt) */
-  .demo-chat{display:flex;gap:10px;align-items:flex-end;opacity:0;transform:translateY(12px);animation:chatIn 14s ease infinite}
-  .demo-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f97316);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-weight:800;font-size:11px;font-family:Manrope}
-  .demo-bubble{background:#fff;border:1px solid #e2e8f0;border-radius:16px 16px 16px 4px;padding:12px 14px;font-size:13px;color:#0f172a;line-height:1.4;box-shadow:0 1px 2px rgba(0,0,0,.04);max-width:420px}
-  .demo-bubble-typed::after{content:'';display:inline-block;width:1px;height:14px;background:#0f172a;vertical-align:-2px;margin-left:2px;animation:blink 1s step-end infinite}
-
-  /* Nova thinking */
-  .demo-nova-thinking{display:flex;gap:10px;align-items:center;opacity:0;animation:thinkIn 14s ease infinite}
-  .demo-nova-avatar{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#7c3aed,#ec4899);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .demo-nova-avatar .material-symbols-outlined{color:#fff;font-size:15px}
-  .demo-typing{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:10px 14px;display:flex;gap:4px}
-  .demo-typing span{width:6px;height:6px;border-radius:50%;background:#94a3b8;animation:typing 1.4s ease-in-out infinite}
-  .demo-typing span:nth-child(2){animation-delay:.2s}
-  .demo-typing span:nth-child(3){animation-delay:.4s}
-  @keyframes typing{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
-  @keyframes blink{50%{opacity:0}}
-
-  /* Nova proposal card (big, centered) */
-  .demo-proposal{position:relative;border-radius:20px;border:1px solid #e2e8f0;background:#fff;padding:20px;box-shadow:0 10px 40px -10px rgba(59,130,246,.25);opacity:0;transform:translateY(20px) scale(.96);animation:proposalIn 14s ease infinite}
-  .demo-proposal-head{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
-  .demo-proposal-icon{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#7c3aed);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 8px 20px -8px rgba(59,130,246,.5)}
-  .demo-proposal-icon .material-symbols-outlined{color:#fff;font-size:18px}
-  .demo-proposal-title{font-size:15px;font-weight:700;color:#0f172a;line-height:1.3}
-  .demo-proposal-desc{font-size:12.5px;color:#64748b;margin-top:3px;line-height:1.45}
-  .demo-proposal-actions{display:flex;gap:8px}
-  .demo-btn-approve{border:0;border-radius:999px;background:#0f172a;color:#fff;font-size:12px;font-weight:600;padding:8px 16px;font-family:Inter;position:relative;overflow:hidden;display:flex;align-items:center;gap:6px}
-  .demo-btn-approve::after{content:'';position:absolute;inset:0;background:#10b981;transform:translateX(-100%);animation:btnFill 14s ease infinite}
-  .demo-btn-approve .material-symbols-outlined{font-size:14px;position:relative;z-index:1;opacity:0;animation:checkShow 14s ease infinite}
-  .demo-btn-approve .label{position:relative;z-index:1;animation:labelFade 14s ease infinite}
-  .demo-btn-reject{border:1px solid #e2e8f0;border-radius:999px;background:#fff;color:#64748b;font-size:12px;font-weight:600;padding:8px 16px;font-family:Inter}
-
-  /* Success toast */
-  .demo-toast{position:absolute;top:16px;right:16px;background:#10b981;color:#fff;padding:10px 14px;border-radius:12px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px;box-shadow:0 10px 30px -10px rgba(16,185,129,.5);opacity:0;transform:translateY(-8px);animation:toastIn 14s ease infinite}
-  .demo-toast .material-symbols-outlined{font-size:16px}
-
-  /* Calendar day in sidebar */
-  .demo-day-header{font-family:Manrope;font-size:20px;font-weight:800;color:#0f172a;letter-spacing:-.02em;margin-bottom:4px}
-  .demo-day-sub{font-size:11px;color:#64748b;font-weight:500;margin-bottom:12px}
-  .demo-event{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;position:relative;transition:all .6s ease}
-  .demo-event-icon{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .demo-event-icon .material-symbols-outlined{color:#fff;font-size:12px}
-  .demo-event-title{font-size:11.5px;font-weight:700;color:#0f172a;line-height:1.3}
-  .demo-event-time{font-size:10px;color:#64748b}
-
-  /* THE MEETING moving: 15h → 16h */
-  .demo-event-moving{background:#eff6ff;border:1px solid #dbeafe;animation:eventMove 14s ease infinite}
-  .demo-event-moving .demo-event-time{animation:timeSwap 14s step-end infinite}
-  .demo-event-moving::after{content:'';position:absolute;inset:0;border-radius:12px;background:#10b981;opacity:0;animation:flashGreen 14s ease infinite;pointer-events:none}
-
-  /* Keyframes — single 14s loop */
-  @keyframes chatIn{
-    0%,8%{opacity:0;transform:translateY(12px)}
-    12%,22%{opacity:1;transform:translateY(0)}
-    100%{opacity:1;transform:translateY(0)}
-  }
-  @keyframes thinkIn{
-    0%,22%{opacity:0;transform:translateY(8px)}
-    26%,33%{opacity:1;transform:translateY(0)}
-    37%,100%{opacity:0}
-  }
-  @keyframes proposalIn{
-    0%,37%{opacity:0;transform:translateY(20px) scale(.96)}
-    42%,70%{opacity:1;transform:translateY(0) scale(1)}
-    80%,100%{opacity:0;transform:translateY(-10px) scale(.98)}
-  }
-  @keyframes btnFill{
-    0%,58%{transform:translateX(-100%)}
-    63%,72%{transform:translateX(0)}
-    75%,100%{transform:translateX(0)}
-  }
-  @keyframes checkShow{
-    0%,60%{opacity:0}
-    65%,72%{opacity:1}
-    75%,100%{opacity:0}
-  }
-  @keyframes labelFade{
-    0%,60%{opacity:1}
-    62%,72%{opacity:0}
-    75%,100%{opacity:1}
-  }
-  @keyframes toastIn{
-    0%,72%{opacity:0;transform:translateY(-8px)}
-    75%,88%{opacity:1;transform:translateY(0)}
-    92%,100%{opacity:0;transform:translateY(-8px)}
-  }
-  @keyframes eventMove{
-    0%,68%{transform:translateY(0);background:#eff6ff;border-color:#dbeafe}
-    72%{transform:translateY(0);background:#dcfce7;border-color:#86efac}
-    78%,88%{transform:translateY(48px);background:#dcfce7;border-color:#86efac}
-    94%,100%{transform:translateY(48px);background:#eff6ff;border-color:#dbeafe}
-  }
-  @keyframes timeSwap{
-    0%,72%{content:'15:00 – 16:00'}
-    75%,100%{content:'16:00 – 17:00'}
-  }
-  @keyframes flashGreen{
-    0%,68%{opacity:0}
-    72%,76%{opacity:.15}
-    80%,100%{opacity:0}
-  }
-
-  /* Reduced motion */
-  @media (prefers-reduced-motion:reduce){
-    .demo-chat,.demo-nova-thinking,.demo-proposal,.demo-toast,.demo-btn-approve::after,.demo-btn-approve .material-symbols-outlined,.demo-event-moving,.demo-event-moving::after{animation:none}
-    .demo-chat,.demo-proposal{opacity:1;transform:none}
-  }
-
   @media (max-width:900px){
-    .demo-section{padding:40px 20px 80px}
-    .demo-stage{aspect-ratio:3/4}
-    .demo-screen{grid-template-columns:1fr;grid-template-rows:auto 1fr}
-    .demo-sidebar{border-right:0;border-bottom:1px solid #f1f5f9;padding:16px}
-    .demo-main{padding:16px}
+    .container{padding:0 24px}
+    .section{padding:80px 0}
+    .hero{padding:64px 0 32px}
+    .nav{display:none}
+    .cycle-row{grid-template-columns:1fr;gap:8px;padding:24px 0}
+    .cycle-num{font-size:11px}
+    .apps{grid-template-columns:1fr}
+    .nova-wrap{grid-template-columns:1fr;gap:40px}
+    .nova-orb{width:220px;height:220px}
+    .nova-principles{grid-template-columns:1fr;gap:24px;padding-top:32px;margin-top:48px}
+    .footer-inner{flex-direction:column;text-align:center;gap:16px}
+    .final{padding:96px 0}
+    h1{font-size:clamp(40px,11vw,68px)}
   }
-
-  @media (max-width:900px){
-    .header{padding:16px 20px}
-    .header nav{display:none}
-    .hero,.section{padding:60px 20px}
-    .hero{padding-top:40px}
-    .features-grid{grid-template-columns:1fr;gap:12px;margin-top:40px}
-    .steps-grid{grid-template-columns:1fr;gap:32px;margin-top:48px}
-    .install-grid{grid-template-columns:1fr;gap:12px;margin-top:40px}
-    /* Mobile mock: ocultamos la bandeja derecha para no stackear dos paneles.
-       Dejamos solo Mi Día — más limpio, más legible, foco en el calendario real. */
-    .mock-body{grid-template-columns:1fr;min-height:auto}
-    .mock-pane-left{border-right:0;border-bottom:0;padding:18px}
-    .mock-pane-right{display:none}
-    .mock{margin-top:48px}
-    .hero-checks{margin-top:40px;gap:10px 20px}
-    .footer-inner{padding:32px 20px;flex-direction:column;text-align:center}
+  @media (max-width:540px){
+    .hero-meta{gap:12px}
+    .hero-meta .sep{display:none}
+    .final-meta .sep{display:none}
   }
 </style>
 </head>
-<body>
-
-<!-- AURORA -->
-<div class="aurora" aria-hidden="true">
-  <div class="blob blob-1"></div>
-  <div class="blob blob-2"></div>
-  <div class="blob blob-3"></div>
-</div>
+<body id="top">
 
 <!-- HEADER -->
-<header class="header">
-  <a href="#top" class="header-logo">
-    <span class="mark" style="width:36px;height:36px">
-      <span class="material-symbols-outlined mi-filled" style="color:#fff;font-size:18px">brightness_high</span>
-    </span>
-    <span>Focus</span>
-  </a>
-  <nav>
-    <a href="#features">Features</a>
-    <a href="#how">Cómo funciona</a>
-    <a href="#install">Instalar</a>
-  </nav>
-  <a href="https://usefocus.me" class="btn-ghost">Abrir app <span class="material-symbols-outlined" style="font-size:16px">arrow_forward</span></a>
+<header class="site-header">
+  <div class="site-header-inner">
+    <a href="#top" class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>FOCUS&nbsp;OS</span>
+    </a>
+    <nav class="nav">
+      <a href="#ciclo">El ciclo</a>
+      <a href="#apps">Apps</a>
+      <a href="#nova">Nova</a>
+    </nav>
+    <a href="https://app.usefocus.me" class="btn btn-ghost">
+      Probar Focus <span class="arrow">→</span>
+    </a>
+  </div>
 </header>
 
-<!-- HERO -->
-<section class="hero">
-  <div class="hero-inner">
-    <div class="pill">
-      <span class="pulse"></span>
-      Versión 1.0 · Gratis · Sin cuenta
-    </div>
-    <h1>
-      Tu calendario,<br>
-      <span class="grad-text">afinado al detalle</span>.
-    </h1>
-    <p class="hero-sub">
-      Focus es el calendario con <b>Nova</b>, la IA que propone cambios y <b>nunca toca nada sin tu aprobación</b>. Resumen matutino, cierre nocturno, tareas kanban y modo offline.
-    </p>
+<main class="container">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-eyebrow">FOCUS_OS_v1 — EN_CONSTRUCCIÓN</div>
+    <h1>Un sistema operativo para tu día.</h1>
+    <p class="lead">Tres apps que <b>piensan en conjunto</b>. Una IA que aprende cómo vivís. Hoy empieza por <b>Focus</b> — Capture y Review llegan después.</p>
     <div class="hero-ctas">
-      <a href="https://usefocus.me" class="btn-primary">Probar Focus ahora <span class="material-symbols-outlined" style="font-size:18px">arrow_forward</span></a>
-      <a href="#how" class="btn-secondary"><span class="material-symbols-outlined" style="font-size:16px">play_circle</span>Ver cómo funciona</a>
+      <a href="https://app.usefocus.me" class="btn btn-primary btn-lg">
+        Probar Focus <span class="arrow">→</span>
+      </a>
+      <a href="#ciclo" class="btn btn-ghost btn-lg">
+        Ver el sistema
+      </a>
     </div>
-    <div class="hero-checks">
-      <span><span class="material-symbols-outlined">check_circle</span>Funciona offline</span>
-      <span><span class="material-symbols-outlined">check_circle</span>Instalable como app</span>
-      <span><span class="material-symbols-outlined">check_circle</span>Tus datos son tuyos</span>
-      <span><span class="material-symbols-outlined">check_circle</span>Sin ads, sin tracking</span>
+    <div class="hero-meta">
+      <span>v1.0</span>
+      <span class="sep">/</span>
+      <span>gratis</span>
+      <span class="sep">/</span>
+      <span>sin cuenta</span>
+      <span class="sep">/</span>
+      <span>funciona offline</span>
     </div>
-  </div>
+  </section>
 
-  <!-- PRODUCT MOCK -->
-  <div class="mock">
-    <div class="mock-glow" aria-hidden="true"></div>
-    <div class="mock-frame">
-      <div class="mock-topbar">
-        <div style="display:flex;align-items:center;gap:6px">
-          <span class="mark" style="width:36px;height:36px;border-radius:12px">
-            <span class="material-symbols-outlined mi-filled" style="color:#fff;font-size:16px">brightness_high</span>
-          </span>
-          <span style="font-family:Manrope;font-weight:800;font-size:15px;color:#0f172a;letter-spacing:-.02em">Focus</span>
-        </div>
-        <div style="display:flex;gap:8px">
-          <div style="width:28px;height:28px;border-radius:14px;background:#e2e8f0"></div>
-          <div style="width:28px;height:28px;border-radius:14px;background:#e2e8f0"></div>
-          <div style="width:28px;height:28px;border-radius:14px;background:rgba(0,88,188,.2);position:relative">
-            <div style="position:absolute;top:-2px;right:-2px;width:12px;height:12px;border-radius:6px;background:#0058bc;font-size:8px;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center">3</div>
-          </div>
-        </div>
+  <!-- 01 / EL PROBLEMA -->
+  <section class="section" id="problema">
+    <div class="eyebrow"><span class="num">01</span> / EL PROBLEMA</div>
+    <h2>Tu día está roto en pedazos.</h2>
+    <p class="quote" style="margin-top:48px">
+      Calendario para la agenda. Notas para las ideas. Tareas en otra app. Recordatorios en el teléfono.
+      <span>Ninguna sabe lo que hacés en la otra.</span>
+      Cada herramienta resolvió su parte; nadie resolvió el conjunto.
+    </p>
+  </section>
+
+  <!-- 02 / EL CICLO -->
+  <section class="section" id="ciclo">
+    <div class="eyebrow"><span class="num">02</span> / EL CICLO</div>
+    <h2>Cinco pasos.<br>Una sola IA conectándolos.</h2>
+    <p class="lead" style="margin-top:24px">FOCUS OS modela cómo vive tu día. Capturás, organizás, ejecutás, revisás, mejorás — y volvés a empezar con lo que aprendiste.</p>
+
+    <div class="cycle">
+      <div class="cycle-row">
+        <div class="cycle-num">01 / CAPTURAR</div>
+        <div class="cycle-title">Vaciás la mente.</div>
+        <div class="cycle-desc">Ideas, tareas, recordatorios sin orden. Lo escribís o lo decís — Capture lo recibe.</div>
       </div>
-      <div class="mock-body">
-        <div class="mock-pane-left">
-          <div class="mock-eyebrow">Mi Día</div>
-          <div style="font-family:Manrope;font-size:22px;font-weight:800;color:#0f172a;letter-spacing:-.02em">Jueves 17</div>
-          <div style="font-size:11px;color:#64748b;font-weight:500">3 eventos · 2 tareas MIT</div>
-          <div class="mock-brief">
-            <div style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.12em">
-              <span class="material-symbols-outlined" style="font-size:13px">wb_twilight</span>Morning Brief
-            </div>
-            <div style="font-size:11.5px;color:#334155;line-height:1.45">Arranca el día con foco: tus <b>3 eventos</b> y <b>2 MIT</b> en una sola pantalla.</div>
-          </div>
-
-          <div class="mock-event" style="background:#eff6ff;border:1px solid #dbeafe">
-            <div class="mock-chip" style="background:#3b82f6"><span class="material-symbols-outlined">groups</span></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:11.5px;font-weight:700;color:#0f172a">Reunión con equipo</div>
-              <div style="font-size:10px;color:#64748b">10:00 – 11:00</div>
-            </div>
-          </div>
-          <div class="mock-event" style="background:#f5f3ff;border:1px solid #ede9fe">
-            <div class="mock-chip" style="background:#7c3aed"><span class="material-symbols-outlined">fitness_center</span></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:11.5px;font-weight:700;color:#0f172a">Gym</div>
-              <div style="font-size:10px;color:#64748b">18:00 – 19:30</div>
-            </div>
-          </div>
-          <div class="mock-event" style="background:#f8fafc;border:1px solid #f1f5f9">
-            <div class="mock-chip" style="background:#10b981"><span class="material-symbols-outlined">restaurant</span></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:11.5px;font-weight:700;color:#0f172a">Cena con Ana</div>
-              <div style="font-size:10px;color:#64748b">20:30 – 22:00</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="mock-pane-right">
-          <div class="mock-eyebrow" style="margin-bottom:8px">Bandeja de Nova</div>
-          <div style="font-family:Manrope;font-size:18px;font-weight:800;color:#0f172a;letter-spacing:-.02em;margin-bottom:16px">3 propuestas pendientes</div>
-          <div style="display:flex;flex-direction:column;gap:10px">
-            <div class="mock-nova">
-              <div style="display:flex;gap:12px;align-items:flex-start">
-                <div class="mock-nova-icon" style="background:linear-gradient(135deg,#3b82f6,#7c3aed)"><span class="material-symbols-outlined mi-filled">auto_awesome</span></div>
-                <div style="flex:1;min-width:0">
-                  <div style="font-size:13px;font-weight:700;color:#0f172a;line-height:1.35">Mover reunión de las 15h → 16h</div>
-                  <div style="font-size:11.5px;color:#64748b;margin-top:2px;line-height:1.4">Choca con tu bloque de trabajo profundo — moverla evita la interrupción.</div>
-                  <div style="display:flex;gap:6px;margin-top:10px">
-                    <button class="btn-dark">Aprobar</button>
-                    <button class="btn-light">Rechazar</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="mock-nova">
-              <div style="display:flex;gap:12px;align-items:flex-start">
-                <div class="mock-nova-icon" style="background:linear-gradient(135deg,#7c3aed,#ec4899)"><span class="material-symbols-outlined mi-filled">add_circle</span></div>
-                <div style="flex:1;min-width:0">
-                  <div style="font-size:13px;font-weight:700;color:#0f172a;line-height:1.35">Agregar "Llamar al dentista"</div>
-                  <div style="font-size:11.5px;color:#64748b;margin-top:2px;line-height:1.4">Tarea rápida · martes entre 9–10h.</div>
-                </div>
-              </div>
-            </div>
-            <div class="mock-nova" style="opacity:.6">
-              <div style="display:flex;gap:12px;align-items:flex-start">
-                <div class="mock-nova-icon" style="background:#10b981"><span class="material-symbols-outlined mi-filled">delete</span></div>
-                <div style="flex:1;min-width:0">
-                  <div style="font-size:13px;font-weight:700;color:#0f172a;line-height:1.35">Cancelar "Standup equivocado"</div>
-                  <div style="font-size:11.5px;color:#64748b;margin-top:2px;line-height:1.4">Evento duplicado del lunes.</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="cycle-row">
+        <div class="cycle-num">02 / ORGANIZAR</div>
+        <div class="cycle-title">Nova agrupa y prioriza.</div>
+        <div class="cycle-desc">Cada cosa en su lugar: lo que tiene hora va a la agenda; lo accionable, a tareas; lo que necesita aviso, a recordatorios.</div>
+      </div>
+      <div class="cycle-row">
+        <div class="cycle-num">03 / EJECUTAR</div>
+        <div class="cycle-title">Mi Día te muestra qué importa ahora.</div>
+        <div class="cycle-desc">No la lista entera. Lo de hoy, en orden, con foco en lo que mueve la aguja.</div>
+      </div>
+      <div class="cycle-row">
+        <div class="cycle-num">04 / REVISAR</div>
+        <div class="cycle-title">Cómo te fue de verdad.</div>
+        <div class="cycle-desc">Cuándo rendiste, qué postergaste, dónde se fue el tiempo. Sin interpretaciones.</div>
+      </div>
+      <div class="cycle-row">
+        <div class="cycle-num">05 / MEJORAR</div>
+        <div class="cycle-title">El próximo ciclo arranca con lo que aprendiste.</div>
+        <div class="cycle-desc">Nova ajusta sus propuestas. Vos ajustás tus rituales. El sistema mejora con vos.</div>
       </div>
     </div>
-  </div>
-</section>
 
-</section>
+    <div class="cycle-foot">
+      <span class="pill" aria-hidden="true"></span>
+      <span>Nova vive entre los cinco pasos.</span>
+    </div>
+  </section>
 
-<!-- DEMO VIDEO (CSS-only animation) -->
-<section class="demo-section">
-  <div class="demo-wrap">
-    <div class="eyebrow" style="text-align:center">Míralo en acción</div>
-    <h2 style="font-weight:900;font-size:clamp(34px,5vw,56px);line-height:1.05;letter-spacing:-.02em;color:#fff">Nova propone. <span class="grad-text">Tú decides.</span></h2>
-    <p style="margin-top:16px;font-size:15px;color:rgba(255,255,255,.6);max-width:540px;margin-left:auto;margin-right:auto">Un vistazo a cómo funciona la bandeja de propuestas en tiempo real.</p>
+  <!-- 03 / LAS APPS -->
+  <section class="section" id="apps">
+    <div class="eyebrow"><span class="num">03</span> / LAS APPS</div>
+    <h2>Tres apps.<br>Un solo sistema.</h2>
+    <p class="lead" style="margin-top:24px">Cada app cubre una parte del ciclo. Comparten datos, contexto e inteligencia.</p>
 
-    <div class="demo-stage" aria-label="Demostración animada de Focus">
-      <div class="demo-screen">
-        <!-- Sidebar con calendario -->
-        <div class="demo-sidebar">
-          <div class="demo-eyebrow">Mi Día</div>
-          <div class="demo-day-header">Jueves 17</div>
-          <div class="demo-day-sub">3 eventos</div>
+    <div class="apps">
+      <article class="app">
+        <span class="app-status live">[ DISPONIBLE ]</span>
+        <h3 class="app-name">Focus</h3>
+        <p class="app-tagline">El calendario que piensa con vos.</p>
+        <p class="app-body">Tu agenda, tareas y recordatorios en un solo lugar. Lenguaje natural, ritual diario, modo offline. La cara ejecutiva del ecosistema.</p>
+        <a href="https://app.usefocus.me" class="app-link">Probar ahora <span class="arrow">→</span></a>
+      </article>
 
-          <div class="demo-event" style="background:#f5f3ff;border:1px solid #ede9fe">
-            <div class="demo-event-icon" style="background:#7c3aed"><span class="material-symbols-outlined">groups</span></div>
-            <div style="flex:1;min-width:0">
-              <div class="demo-event-title">Standup</div>
-              <div class="demo-event-time">09:00 – 09:30</div>
-            </div>
-          </div>
+      <article class="app">
+        <span class="app-status">[ PRÓXIMO ]</span>
+        <h3 class="app-name">Capture</h3>
+        <p class="app-tagline">Vaciá la mente sin pensar.</p>
+        <p class="app-body">Hablás o escribís algo desordenado. Capture lo convierte en tareas, eventos, recordatorios o ideas, y los reparte al resto del ecosistema.</p>
+        <span class="app-link disabled">Aún no</span>
+      </article>
 
-          <div class="demo-event demo-event-moving">
-            <div class="demo-event-icon" style="background:#3b82f6"><span class="material-symbols-outlined">videocam</span></div>
-            <div style="flex:1;min-width:0">
-              <div class="demo-event-title">Reunión con equipo</div>
-              <div class="demo-event-time">15:00 – 16:00</div>
-            </div>
-          </div>
+      <article class="app">
+        <span class="app-status">[ PRÓXIMO ]</span>
+        <h3 class="app-name">Review</h3>
+        <p class="app-tagline">Mirá la semana de cerca.</p>
+        <p class="app-body">Analiza tus patrones: cuándo rendís, qué postergás, dónde se va el tiempo. Cierra el ciclo aprendiendo de cómo viviste tu agenda.</p>
+        <span class="app-link disabled">Aún no</span>
+      </article>
+    </div>
 
-          <div class="demo-event" style="background:#f8fafc;border:1px solid #f1f5f9">
-            <div class="demo-event-icon" style="background:#10b981"><span class="material-symbols-outlined">restaurant</span></div>
-            <div style="flex:1;min-width:0">
-              <div class="demo-event-title">Cena con Ana</div>
-              <div class="demo-event-time">20:30 – 22:00</div>
-            </div>
-          </div>
-        </div>
+    <p class="apps-foot">Las tres comparten la misma capa de inteligencia — Nova.</p>
+  </section>
 
-        <!-- Main con chat + propuesta -->
-        <div class="demo-main">
-          <div class="demo-eyebrow" style="margin-bottom:0">Conversación con Nova</div>
+  <!-- 04 / NOVA -->
+  <section class="section" id="nova">
+    <div class="eyebrow"><span class="num">04</span> / NOVA</div>
 
-          <div class="demo-chat">
-            <div class="demo-avatar">M</div>
-            <div class="demo-bubble">Libérame la tarde para no tener reuniones.</div>
-          </div>
-
-          <div class="demo-nova-thinking">
-            <div class="demo-nova-avatar"><span class="material-symbols-outlined mi-filled">auto_awesome</span></div>
-            <div class="demo-typing"><span></span><span></span><span></span></div>
-          </div>
-
-          <div class="demo-proposal">
-            <div class="demo-proposal-head">
-              <div class="demo-proposal-icon"><span class="material-symbols-outlined mi-filled">auto_awesome</span></div>
-              <div style="flex:1">
-                <div class="demo-proposal-title">Mover "Reunión con equipo" → 16:00</div>
-                <div class="demo-proposal-desc">Te libera la franja 14–16h sin reuniones. No hay conflictos.</div>
-              </div>
-            </div>
-            <div class="demo-proposal-actions">
-              <button class="demo-btn-approve">
-                <span class="material-symbols-outlined">check</span>
-                <span class="label">Aprobar</span>
-              </button>
-              <button class="demo-btn-reject">Rechazar</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Success toast -->
-        <div class="demo-toast">
-          <span class="material-symbols-outlined">check_circle</span>
-          Cambio aplicado
-        </div>
+    <div class="nova-wrap">
+      <div class="nova-visual">
+        <div class="nova-orb" aria-hidden="true"></div>
+      </div>
+      <div class="nova-content">
+        <h2>Nova no es un chatbot.</h2>
+        <p class="lead">Es el <b>hilo que conecta</b> las tres apps. Vive entre Focus, Capture y Review. Lo que aprende en una alimenta a las otras. No reemplaza tu criterio — propone, y vos decidís.</p>
       </div>
     </div>
-  </div>
-</section>
 
-<!-- FEATURES -->
-<section id="features" class="section">
-  <div class="wrap">
-    <div class="eyebrow">Lo que incluye</div>
-    <h2>Todo lo que te falta en tu calendario actual.</h2>
-    <div class="features-grid">
-      <div class="glass feature-card">
-        <div class="feature-head">
-          <div class="feature-icon" style="background:linear-gradient(135deg,#3b82f6,#7c3aed,#ec4899)"><span class="material-symbols-outlined mi-filled">auto_awesome</span></div>
-          <h3>Nova nunca toca sin permiso</h3>
-        </div>
-        <p>Cada cambio que sugiere Nova pasa por una bandeja — tú apruebas o rechazas uno a uno. Nada de sorpresas al despertar con tu agenda movida.</p>
+    <div class="nova-principles">
+      <div class="principle">
+        <div class="label">— Aprende</div>
+        <h4>De cómo vivís.</h4>
+        <p>Cómo agendás, qué postergás, cuándo rendís mejor. Sin tracking externo: sólo tu propio uso.</p>
       </div>
-      <div class="glass feature-card">
-        <div class="feature-head">
-          <div class="feature-icon" style="background:linear-gradient(135deg,#fbbf24,#f97316)"><span class="material-symbols-outlined mi-filled">wb_twilight</span></div>
-          <h3>Ritual diario opinado</h3>
-        </div>
-        <p>Morning Brief al abrir: tu día en 30 segundos. Evening Shutdown a la noche: cierras el día con claridad. La retención viene del ritual, no del calendario.</p>
+      <div class="principle">
+        <div class="label">— Propone</div>
+        <h4>Cambios concretos.</h4>
+        <p>Mover una reunión, bloquear foco profundo, agregar una tarea. En lenguaje natural, al pie de tu día.</p>
       </div>
-      <div class="glass feature-card">
-        <div class="feature-head">
-          <div class="feature-icon" style="background:linear-gradient(135deg,#34d399,#14b8a6)"><span class="material-symbols-outlined mi-filled">task_alt</span></div>
-          <h3>Tareas como kanban</h3>
-        </div>
-        <p>Categorías en columnas en desktop, lista limpia en mobile. MIT (Most Important Task) visible al tope para arrancar con lo que importa.</p>
-      </div>
-      <div class="glass feature-card">
-        <div class="feature-head">
-          <div class="feature-icon" style="background:linear-gradient(135deg,#94a3b8,#475569)"><span class="material-symbols-outlined mi-filled">cloud_off</span></div>
-          <h3>Funciona offline</h3>
-        </div>
-        <p>Todos tus eventos y tareas se guardan localmente. Si pierdes conexión, todo sigue funcionando y sincroniza cuando vuelves online.</p>
-      </div>
-      <div class="glass feature-card">
-        <div class="feature-head">
-          <div class="feature-icon" style="background:linear-gradient(135deg,#22d3ee,#3b82f6)"><span class="material-symbols-outlined mi-filled">flash_on</span></div>
-          <h3>Sin cuenta para empezar</h3>
-        </div>
-        <p>Abres la app y funciona. Si quieres sincronizar en varios dispositivos, inicias sesión después. Cero fricción para probarla.</p>
+      <div class="principle">
+        <div class="label">— Pide permiso</div>
+        <h4>Nunca actúa sola.</h4>
+        <p>Cada cambio pasa por una bandeja. Aprobás o rechazás. Tu agenda nunca se mueve sin que vos lo decidas.</p>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- HOW -->
-<section id="how" class="section">
-  <div class="wrap" style="max-width:1040px">
-    <div class="eyebrow">Cómo funciona</div>
-    <h2>Tres pasos. <span class="grad-text">Cero fricción.</span></h2>
-    <div class="steps-grid">
-      <div class="glass step-card">
-        <div class="step-n">1</div>
-        <div>
-          <h3>Instala en un toque</h3>
-          <p>Abres el link desde tu teléfono o escritorio. En Chrome/Edge/Android, "Instalar" aparece solo. En iOS: compartir → añadir a pantalla.</p>
-        </div>
-      </div>
-      <div class="glass step-card">
-        <div class="step-n">2</div>
-        <div>
-          <h3>Arma tu primer día</h3>
-          <p>Agregas tus eventos y tareas. Focus los organiza en Mi Día, tu pantalla ejecutiva con lo que importa ahora.</p>
-        </div>
-      </div>
-      <div class="glass step-card">
-        <div class="step-n">3</div>
-        <div>
-          <h3>Deja que Nova proponga</h3>
-          <p>Pídele cambios en lenguaje natural. Nova los encola en la bandeja y tú decides cuáles aplicar con un tap.</p>
-        </div>
-      </div>
+  <!-- 05 / EMPEZÁ -->
+  <section class="final" id="empezar">
+    <div class="eyebrow" style="margin-bottom:32px"><span class="num">05</span> / EMPEZÁ</div>
+    <h2>Probá Focus.</h2>
+    <p class="lead">La primera puerta al ecosistema. <b>Capture</b> y <b>Review</b> llegan después — el sistema arranca hoy.</p>
+    <a href="https://app.usefocus.me" class="btn btn-primary btn-lg">
+      Abrir Focus <span class="arrow">→</span>
+    </a>
+    <div class="final-meta">
+      <span>gratis</span>
+      <span class="sep">/</span>
+      <span>sin cuenta</span>
+      <span class="sep">/</span>
+      <span>sin tracking</span>
+      <span class="sep">/</span>
+      <span>código del sistema en construcción</span>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- INSTALL -->
-<section id="install" class="section">
-  <div class="wrap" style="max-width:1040px">
-    <div class="eyebrow">Instalar</div>
-    <h2>En cualquier dispositivo.</h2>
-    <p style="margin-top:20px;font-size:15px;color:rgba(255,255,255,.6);max-width:540px;margin-left:auto;margin-right:auto;text-align:center">Focus es una Progressive Web App. No necesita tienda, no ocupa memoria extra, abre directo desde tu pantalla de inicio.</p>
-    <div class="install-grid">
-      <div class="glass install-card">
-        <div class="feature-icon" style="background:linear-gradient(135deg,#34d399,#16a34a);margin-bottom:16px"><span class="material-symbols-outlined">android</span></div>
-        <h3>Android · Chrome · Edge</h3>
-        <p>Al abrir la app aparece una card: "Instalar Focus como app". Un toque y listo.</p>
-        <a href="https://usefocus.me" class="arrow">Abrir e instalar <span class="material-symbols-outlined" style="font-size:15px">arrow_forward</span></a>
-      </div>
-      <div class="glass install-card">
-        <div class="feature-icon" style="background:linear-gradient(135deg,#94a3b8,#475569);margin-bottom:16px"><span class="material-symbols-outlined">phone_iphone</span></div>
-        <h3>iPhone · Safari</h3>
-        <ol>
-          <li>Abre Focus en Safari</li>
-          <li>Toca el botón compartir</li>
-          <li>"Añadir a pantalla de inicio"</li>
-        </ol>
-      </div>
-      <div class="glass install-card">
-        <div class="feature-icon" style="background:linear-gradient(135deg,#60a5fa,#4f46e5);margin-bottom:16px"><span class="material-symbols-outlined">desktop_windows</span></div>
-        <h3>Mac · Windows</h3>
-        <p>Busca el ícono de instalación en la barra de URL de Chrome, Edge o Brave. Queda como app nativa en tu escritorio.</p>
-        <a href="https://usefocus.me" class="arrow">Abrir en escritorio <span class="material-symbols-outlined" style="font-size:15px">arrow_forward</span></a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- FINAL CTA -->
-<section class="section finalcta">
-  <div class="finalcta-inner">
-    <div class="finalcta-mark">
-      <span class="mark" style="width:80px;height:80px;border-radius:24px;box-shadow:0 30px 60px -15px rgba(59,130,246,.4);position:relative">
-        <span class="material-symbols-outlined mi-filled" style="color:#fff;font-size:36px">brightness_high</span>
-      </span>
-    </div>
-    <h2>Tu día, <span class="grad-text">afinado al detalle</span>.</h2>
-    <p>Gratis, sin cuenta para empezar, sin tracking. Abre Focus y pruébalo ahora mismo.</p>
-    <a href="https://usefocus.me" class="btn-primary" style="padding:16px 32px;font-size:15px">Probar Focus ahora <span class="material-symbols-outlined" style="font-size:18px">arrow_forward</span></a>
-  </div>
-</section>
+</main>
 
 <!-- FOOTER -->
-<footer class="footer">
+<footer>
   <div class="footer-inner">
-    <div style="display:flex;align-items:center;gap:8px">
-      <span class="mark" style="width:24px;height:24px">
-        <span class="material-symbols-outlined mi-filled" style="color:#fff;font-size:12px">brightness_high</span>
-      </span>
-      <span style="font-family:Manrope;font-weight:700;color:rgba(255,255,255,.6)">Focus</span>
-      <span>· Calendario con IA</span>
+    <div class="footer-brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <b>FOCUS&nbsp;OS</b>
+      <span style="color:var(--text-3)">— Un ecosistema en construcción</span>
     </div>
-    <div style="display:flex;gap:24px">
-      <a href="https://usefocus.me">Abrir app</a>
-      <a href="#features">Features</a>
-      <a href="#install">Instalar</a>
+    <div class="footer-links">
+      <a href="https://app.usefocus.me">probar_focus</a>
+      <a href="#apps">ecosistema</a>
+      <a href="#nova">nova</a>
     </div>
-    <div>© 2026 · Hecho con <span style="color:#f43f5e">♥</span></div>
+    <div class="mono" style="font-size:12px;color:var(--text-3)">© 2026</div>
   </div>
 </footer>
 
 <script>
-  // Continuidad landing → app.
-  // Al hacer click en cualquier CTA que lleve a la app, guardamos un flag en
-  // sessionStorage (live ~4s) para que la app monte con aurora visible desde
-  // el primer frame, sin flash blanco.
+  // Continuidad landing → app: al ir a la app marcamos un flag en sessionStorage
+  // (vive ~4s) para que la app monte sin flash blanco.
   (function () {
-    const APP_HOST_HINT = 'proyecto-calendario-app';
+    const APP_HINTS = ['proyecto-calendario-app', 'app.usefocus.me'];
     function isAppLink(href) {
       if (!href) return false;
-      return href.includes(APP_HOST_HINT) || href.startsWith('/app') || href === '/';
+      return APP_HINTS.some(function (h) { return href.includes(h); })
+        || href.startsWith('/app') || href === '/';
     }
     function markContinuity() {
       try {
