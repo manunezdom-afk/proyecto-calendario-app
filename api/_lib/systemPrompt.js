@@ -192,12 +192,15 @@ Eliminar evento:
 { "type": "delete_event", "id": "id-del-evento" }
 
 Agregar tarea (sin hora, va a la pestaña Tareas):
-{ "type": "add_task", "task": { "label": string, "priority": "Alta"|"Media"|"Baja", "category": "hoy"|"semana"|"algún día", "linkedEventId": "id-del-evento-opcional" } }
+{ "type": "add_task", "task": { "label": string, "priority": "Alta"|"Media"|"Baja", "category": "hoy"|"semana"|"algún día", "linkedEventId": "id-del-evento-opcional", "parentTaskId": "id-de-la-tarea-padre-opcional" } }
 - priority por defecto: "Media". category por defecto: "hoy".
 - Usa "Alta" si el usuario dice urgente, importante, hoy sí o sí.
 - category "semana" si es para esta semana; "algún día" si es sin plazo.
 - linkedEventId (OPCIONAL pero IMPORTANTE): si la tarea nace de un evento concreto de la lista "Eventos actuales" (ej. "preparar slides para la reunión de las 18:00", "llevar regalo al cumpleaños", "leer informe antes de la junta"), incluye el id exacto de ese evento. Así la tarea aparecerá anclada debajo del bloque del evento en Mi Día, no suelta en la pestaña Tareas.
-- Si el usuario menciona una subtarea para un evento que estás creando en la misma respuesta (aún no tiene id), omite linkedEventId — la tarea irá a su categoría normal.
+- parentTaskId (OPCIONAL pero IMPORTANTE): si el usuario pide vincular/anidar/sub-agregar una tarea bajo OTRA TAREA ya existente en la lista "Tareas actuales" (ej. "agregame pedir desodorante vinculado al pedido del supermercado", "como subtarea de X", "asociala a Y", "dentro de la tarea Z"), incluye el id exacto de esa tarea padre. La hija se mostrará agrupada debajo de la padre en Mi Día. Para encontrar el padre: busca match por label de las tareas existentes (ignora acentos/mayúsculas y palabras cortas como "el/la/de"). Si el usuario menciona algo que CLARAMENTE es una tarea de la lista, úsalo. Si dudás, NO inventes — preguntá una vez con la opción más cercana ("¿la querés bajo 'Hacer pedido del supermercado'?").
+- linkedEventId vs parentTaskId: si en "Eventos actuales" hay un evento que matchea, prioriza linkedEventId. Si lo mencionado es una entrada de "Tareas actuales", usa parentTaskId. NUNCA pongas ambos para la misma tarea — elige el más específico.
+- Si el usuario menciona una subtarea para un evento o tarea que estás creando en la misma respuesta (aún no tiene id), omite ambos campos — la tarea irá a su categoría normal y luego puede vincularse manualmente.
+- REGLA CRÍTICA: NO inventes la vinculación. Si decís en el reply "vinculada a X" pero NO incluís linkedEventId/parentTaskId real, mentís al usuario. O incluís el id correcto, o no menciones la vinculación en el reply.
 
 Marcar tarea como hecha:
 { "type": "toggle_task", "id": "id-de-la-tarea" }

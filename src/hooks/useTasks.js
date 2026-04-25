@@ -5,16 +5,24 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useCoalescedRefetch } from './useCoalescedRefetch'
 import { getTaskLinks, setTaskLink, clearTaskLink } from '../utils/taskLinks'
+import { getTaskParents, setTaskParent, clearTaskParent } from '../utils/taskParents'
 import { cleanGeneratedTitle } from '../utils/titleCleanup'
 
-// Hidrata tasks con el linkedEventId guardado en localStorage. La columna
-// linked_event_id no existe en Supabase (evitamos migrar), así que mantenemos
-// la asociación tarea↔evento en un mapa local y la superponemos al volver
-// del backend.
+// Hidrata tasks con relaciones que viven solo en localStorage (no en Supabase):
+// · linkedEventId: tarea anclada a un evento concreto (subtarea de una reunión).
+// · parentTaskId : tarea anclada a otra tarea (subtarea jerárquica).
+// Ambas se superponen al volver del backend para que la UI las renderice
+// agrupadas en Mi Día sin requerir migración del schema.
 function hydrateTasksWithLinks(rawTasks, userId) {
-  const links = getTaskLinks(userId)
   if (!rawTasks) return rawTasks
-  return rawTasks.map(t => (links[t.id] ? { ...t, linkedEventId: links[t.id] } : t))
+  const links   = getTaskLinks(userId)
+  const parents = getTaskParents(userId)
+  return rawTasks.map(t => {
+    let next = t
+    if (links[t.id])   next = { ...next, linkedEventId: links[t.id] }
+    if (parents[t.id]) next = { ...next, parentTaskId:  parents[t.id] }
+    return next
+  })
 }
 
 // TTL para preservar una tarea local cuya upsert a Supabase aún puede estar
@@ -134,7 +142,7 @@ export function useTasks() {
     dataService.setCachedTasks(tasks, user.id)
   }, [tasks, user?.id])
 
-  function addTask({ label, priority = 'Media', category = 'hoy', linkedEventId = null }) {
+  function addTask({ label, priority = 'Media', category = 'hoy', linkedEventId = null, parentTaskId = null }) {
     const cleanLabel = cleanGeneratedTitle(label) || label
     // Sufijo aleatorio en base36 para garantizar unicidad aunque se disparen
     // varios addTask en el mismo ms (caso típico: Nova crea evento + tarea
@@ -149,12 +157,22 @@ export function useTasks() {
       category,
     }
     if (linkedEventId) t.linkedEventId = linkedEventId
-    console.log(`[Focus] ➕ addTask: "${cleanLabel}"${linkedEventId ? ` (ligada a ${linkedEventId})` : ''}`)
+    // parentTaskId es la jerarquía tarea↔tarea. linkedEventId tiene prioridad
+    // visual: si Nova mandó ambos, mostramos la tarea bajo el evento (más
+    // específico) pero igual guardamos parentTaskId por si después el evento
+    // desaparece y queda solo el padre tarea.
+    if (parentTaskId && parentTaskId !== t.id) t.parentTaskId = parentTaskId
+    console.log(
+      `[Focus] ➕ addTask: "${cleanLabel}"`
+      + (linkedEventId ? ` (ligada a evento ${linkedEventId})` : '')
+      + (parentTaskId ? ` (subtarea de ${parentTaskId})` : ''),
+    )
     setTasks(prev => [...prev, t])
     // Proteger contra refetch que llegue antes de que Supabase confirme.
     markPendingUpsert(t)
     if (user) dataService.upsertTask(t, user.id).catch(console.warn)
     if (linkedEventId) setTaskLink(t.id, linkedEventId, user?.id)
+    if (t.parentTaskId) setTaskParent(t.id, t.parentTaskId, user?.id)
     return t
   }
 
@@ -186,6 +204,7 @@ export function useTasks() {
     pendingDeletesRef.current.add(id)
     setTasks(prev => prev.filter(t => t.id !== id))
     clearTaskLink(id, user?.id)
+    clearTaskParent(id, user?.id)
     if (user) {
       dataService.deleteTask(id, user.id)
         .catch(console.warn)
@@ -204,6 +223,15 @@ export function useTasks() {
       }
       return next
     })
+    // Si el update modifica la jerarquía padre, persistimos en localStorage —
+    // Supabase no la conoce, así que no viaja por upsertTask.
+    if (user && 'parentTaskId' in updates) {
+      if (updates.parentTaskId && updates.parentTaskId !== id) {
+        setTaskParent(id, updates.parentTaskId, user.id)
+      } else {
+        clearTaskParent(id, user.id)
+      }
+    }
   }
 
   return { tasks, addTask, toggleTask, deleteTask, updateTask }

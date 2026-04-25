@@ -757,16 +757,28 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     }
 
     // 4) Append standalone "hoy" tasks as flexible items al final del día.
-    //    Evita duplicar las que ya colgamos como subtareas en paso 3.
-    //    Orden: prioridad Alta primero, luego Media, luego Baja; dentro de
-    //    cada nivel respetamos el orden de creación para que la lista no baile.
+    //    Evita duplicar las que ya colgamos como subtareas en paso 3 (tareas
+    //    ligadas a un evento) o las hijas que se cuelgan bajo otra tarea
+    //    en el paso 4.5. Orden: prioridad Alta primero, luego Media, luego
+    //    Baja; dentro de cada nivel respetamos el orden de creación.
+    //
+    //    Una tarea es "hija" si su parentTaskId apunta a otra tarea VIVA en
+    //    la lista. Si el padre fue eliminado o no está en tasks, la hija se
+    //    renderiza standalone — no la dejamos huérfana sin contexto visible.
     if (Array.isArray(tasks) && tasks.length > 0) {
+      const tasksById = new Map(tasks.map((t) => [t.id, t]))
+      const isChildOfLiveTask = (t) => !!(t?.parentTaskId && tasksById.has(t.parentTaskId))
+
       const PRIO_RANK = { Alta: 0, Media: 1, Baja: 2 }
       const pendingToday = tasks
-        .filter((t) => t && !t.done && t.category === 'hoy' && !attachedTaskIds.has(t.id))
+        .filter((t) => t && !t.done && t.category === 'hoy' && !attachedTaskIds.has(t.id) && !isChildOfLiveTask(t))
         .sort((a, b) => (PRIO_RANK[a.priority] ?? 1) - (PRIO_RANK[b.priority] ?? 1))
+
+      // Index de los blocks de tarea recién agregados — lo usamos en 4.5
+      // para encontrar el padre cuando colgamos a las hijas.
+      const taskBlocksByTaskId = new Map()
       for (const t of pendingToday) {
-        order.push({
+        const entry = {
           id: `tsk-${t.id}`,
           taskId: t.id,
           time: '—',
@@ -775,7 +787,27 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
           priority: t.priority,
           _isTask: true,
           subtasks: [],
+        }
+        order.push(entry)
+        taskBlocksByTaskId.set(t.id, entry)
+      }
+
+      // 4.5) Subtareas tarea↔tarea: para cada hija viva (parentTaskId en
+      //      otra tarea de la lista), la colgamos visualmente bajo el block
+      //      del padre. Mismo formato que las subtareas de eventos para
+      //      mantener consistencia visual en Mi Día.
+      for (const t of tasks) {
+        if (!t || t.done || !isChildOfLiveTask(t)) continue
+        if (attachedTaskIds.has(t.id)) continue // ya colgada de un evento (linkedEventId tiene prioridad)
+        const parentEntry = taskBlocksByTaskId.get(t.parentTaskId)
+        if (!parentEntry) continue
+        pushUniqueSubtask(parentEntry, {
+          id: `tsk-sub-${t.id}`,
+          label: t.priority === 'Alta' ? 'Subtarea · prioridad alta' : 'Subtarea',
+          text: t.label,
+          taskId: t.id,
         })
+        attachedTaskIds.add(t.id)
       }
     }
 
@@ -894,6 +926,38 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                                 HECHO ✓
                               </button>
                             </div>
+
+                            {/* Subtareas de una tarea padre (parentTaskId).
+                                Mismo estilo visual que las subtareas de eventos
+                                para que el patrón sea consistente en Mi Día. */}
+                            {subtasks.length > 0 && (
+                              <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                {subtasks.map((s) => (
+                                  <div
+                                    key={s.id}
+                                    onClick={(e) => { e.stopPropagation(); if (s.taskId) onToggleTask?.(s.taskId) }}
+                                    style={{
+                                      paddingLeft: '12px',
+                                      paddingRight: '10px',
+                                      paddingTop: '5px',
+                                      paddingBottom: '5px',
+                                      background: '#f8fafc',
+                                      borderRadius: '6px',
+                                      borderLeft: '2px solid #e2e8f0',
+                                      cursor: s.taskId ? 'pointer' : 'default',
+                                    }}
+                                    title={s.taskId ? 'Marcar como hecha' : undefined}
+                                  >
+                                    <p style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', marginBottom: '1px' }}>
+                                      {s.label}
+                                    </p>
+                                    <p style={{ fontSize: '11px', lineHeight: '1.4', color: '#64748b' }}>
+                                      {s.text}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </LongPressZone>
                         </SwipeableCard>
                       </div>
