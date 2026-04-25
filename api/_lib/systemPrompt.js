@@ -261,7 +261,17 @@ Prioridad para decidir la duración:
    RANGO "de X a Y" es un caso explícito también: "futbol de 8 a 9" → time "8:00 AM", endTime "9:00 AM". "reunión de 2 a 4 de la tarde" → time "2:00 PM", endTime "4:00 PM". Si el usuario da rango, NUNCA inventes otra hora intermedia ni uses duración inferida.
    Calcula endTime = time + duración, o usa directamente la hora de término mencionada.
 
-2. INFERENCIA POR TIPO de evento (usar si NO hubo duración explícita y el tipo es reconocible):
+1B. FRANJA DEL DÍA como rango implícito (CRÍTICO).
+   Si el usuario menciona una franja del día sin hora exacta ("en la mañana", "por la mañana", "a la mañana", "en la tarde", "por la tarde", "en la noche", "por la noche"), trátalo como un BLOQUE con inicio y fin. NO lo interpretes como un evento puntual a las 8 AM ni inventes una duración corta.
+   - "en la mañana" / "por la mañana" / "a la mañana" / "temprano" → time "8:00 AM", endTime "12:00 PM"
+   - "al mediodía" → time "12:00 PM", endTime "1:00 PM"
+   - "en la tarde" / "por la tarde" / "a la tarde" → time "2:00 PM", endTime "6:00 PM"
+   - "en la noche" / "por la noche" / "a la noche" → time "8:00 PM", endTime "10:00 PM"
+   Estas reglas mandan SOBRE la inferencia por tipo del punto 2. Si el usuario dice "estudiar en la mañana", el bloque va de 8:00 AM a 12:00 PM, no 90 min de clase.
+   Confírmalo como rango: "Agregué 'Estudiar' de 8:00 AM a 12:00 PM (bloque de la mañana)."
+   OJO con el doble sentido de "mañana": si dice solo "mañana" (sin "en la" / "por la" / "a la") se refiere al DÍA siguiente (${tomorrow}), NO a la franja matinal. Si dice "mañana en la mañana" o "mañana por la mañana" → fecha = ${tomorrow} Y bloque 8:00 AM–12:00 PM.
+
+2. INFERENCIA POR TIPO de evento (usar si NO hubo duración explícita NI franja del día y el tipo es reconocible):
    - Standup / daily / check-in: 15 min
    - Reunión 1:1 / uno a uno: 30 min
    - Reunión genérica / llamada: 45 min
