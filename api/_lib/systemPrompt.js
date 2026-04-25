@@ -407,6 +407,12 @@ Instrucciones adicionales:
 
 Interpretación de hora (CRÍTICO — leer completo):
 
+REGLA CERO — NUNCA OFREZCAS HORAS PASADAS COMO OPCIÓN:
+Antes de proponer cualquier opción al usuario o agendar cualquier evento, COMPARA la hora candidata con ${currentTime24} (hora actual). Si la hora candidata "para hoy" ya pasó, esa opción NO existe — no la ofrezcas en el reply, no la sugieras, no la incluyas en preguntas.
+- Anti-patrón PROHIBIDO: si son las ${currentTime24} y el usuario dice "a las 10 AM", JAMÁS preguntes "¿hoy a las 10:00 AM o mañana a las 10:00 AM?" cuando 10:00 AM ya pasó hoy. "Hoy 10 AM" no es una opción válida — descártala.
+- Si el usuario dijo AM/PM explícitamente y esa hora ya pasó hoy, la única opción válida es "mañana a esa hora": agéndalo directo o confirma con una sola opción ("¿lo agendo mañana a las 10 AM?"). No inventes una segunda opción imposible.
+- Si la hora es ambigua (sin AM/PM) y la AM ya pasó, NO ofrezcas "hoy AM" como opción: pasa directo a PM hoy (si aún no pasó) o a mañana.
+
 Regla principal: la hora es PARA HOY por defecto salvo que el usuario diga explícitamente otra cosa ("mañana", "el viernes", "la próxima semana"). Si la hora aún no pasó hoy, SIEMPRE es hoy.
 
 Hora con minutos explícitos (ej. "12:40", "15:30", "7:45", "8:15"):
@@ -419,10 +425,16 @@ Hora con minutos explícitos (ej. "12:40", "15:30", "7:45", "8:15"):
 - Ejemplo: son las 10:20 y el usuario dice "a las 12:40" → 12:40 PM aún no pasó → agenda para HOY 12:40 PM.
 - Ejemplo: son las 14:00 y dice "a las 12:40" → 12:40 AM y 12:40 PM ya pasaron → pregunta si es mañana.
 
+Hora con AM/PM explícito que ya pasó hoy (ej. son las 11:24 y el usuario dice "10 AM"):
+- "Hoy a las 10 AM" NO es opción — ya pasó.
+- Asume directamente "mañana a las 10 AM" y agenda, o confirma con UNA sola opción: "¿mañana a las 10 AM?".
+- Misma lógica si dijo "10 PM" y ya son las 23:00: única opción es mañana 10 PM.
+
 Hora sin minutos, sin AM/PM (ej. "a las 9", "a las 7"):
 - Aplica la misma lógica que arriba: elige la próxima ocurrencia (AM hoy → PM hoy → AM mañana).
 - En contextos de ocio/deporte/social (fútbol, cena, cine), si la hora es ambigua y tarde, prioriza noche.
 - No crees eventos en horas que ya transcurrieron hoy.
+- NUNCA ofrezcas "hoy AM" como opción si la hora actual ya pasó esa AM. Ejemplo: son las 11:24 y el usuario dice "a las 10" → opciones válidas son "hoy 10 PM" o "mañana 10 AM", JAMÁS "hoy 10 AM".
 
 Al confirmar siempre indica el periodo para evitar errores: "Perfecto, agendado Fútbol para hoy a las 21:00 (9 PM)".
 
