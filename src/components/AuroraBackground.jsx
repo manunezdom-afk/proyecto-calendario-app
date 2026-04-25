@@ -34,6 +34,13 @@ export default function AuroraBackground({ variant = 'app', className = '', inte
       className={`pointer-events-none fixed inset-0 overflow-hidden ${className}`}
       style={{ zIndex: 0 }}
     >
+      {/* Tres blobs en familia azul, alineados con el gradiente del icono
+          (#60a5fa → #1d4ed8 → #1e1b4b). Antes eran azul + morado + rosa,
+          y daban una sensación general violeta que ya no concuerda con el
+          icono actual ni con la marca. Ahora todo el degradado tira al
+          azul: claro arriba-izquierda, royal arriba-derecha, profundo
+          abajo. Las opacidades se mantienen para preservar la sensación
+          ambiente — sólo cambia el matiz. */}
       <div
         style={{
           position: 'absolute',
@@ -42,7 +49,7 @@ export default function AuroraBackground({ variant = 'app', className = '', inte
           width: dims.b1,
           height: dims.b1,
           borderRadius: '50%',
-          background: `rgba(59,130,246,${0.28 * intensity * boost})`,
+          background: `rgba(96,165,250,${0.30 * intensity * boost})`,
           filter: `blur(${dims.blur}px)`,
           animation: 'auroraDrift1 18s ease-in-out infinite',
           willChange: 'transform',
@@ -56,7 +63,7 @@ export default function AuroraBackground({ variant = 'app', className = '', inte
           width: dims.b2,
           height: dims.b2,
           borderRadius: '50%',
-          background: `rgba(124,58,237,${0.24 * intensity * boost})`,
+          background: `rgba(37,99,235,${0.26 * intensity * boost})`,
           filter: `blur(${dims.blur}px)`,
           animation: 'auroraDrift2 22s ease-in-out infinite',
           willChange: 'transform',
@@ -70,7 +77,7 @@ export default function AuroraBackground({ variant = 'app', className = '', inte
           width: dims.b3,
           height: dims.b3,
           borderRadius: '50%',
-          background: `rgba(236,72,153,${0.18 * intensity * boost})`,
+          background: `rgba(29,78,216,${0.22 * intensity * boost})`,
           filter: `blur(${dims.blur}px)`,
           animation: 'auroraDrift3 26s ease-in-out infinite',
           willChange: 'transform',

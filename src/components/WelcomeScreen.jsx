@@ -89,7 +89,11 @@ export default function WelcomeScreen({
       aria-label="Saltar bienvenida"
       className="fixed inset-0 z-[100] flex items-center justify-center"
       style={{
-        background: continuity ? '#0a0a0f' : 'radial-gradient(ellipse at 50% 42%, #15121f 0%, #0a0a0f 70%)',
+        // Base oscura con sesgo azul (antes #15121f tenía un undertone
+        // morado que peleaba con el icono azul de la marca). #0a1226 lleva
+        // R=10 G=18 B=38: clara dominancia azul, manteniendo casi-negro
+        // para que los blobs de aurora destaquen.
+        background: continuity ? '#06080f' : 'radial-gradient(ellipse at 50% 42%, #0a1226 0%, #06080f 70%)',
         cursor: 'pointer',
       }}
     >

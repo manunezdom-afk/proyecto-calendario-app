@@ -384,7 +384,7 @@ export default function FirstLaunchOnboarding({ onDone }) {
       transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
       className="fixed inset-0 z-[120] flex flex-col"
       style={{
-        background: 'radial-gradient(ellipse at 50% 38%, #181532 0%, #0a0a0f 70%)',
+        background: 'radial-gradient(ellipse at 50% 38%, #0e1a36 0%, #06080f 70%)',
         color: 'rgba(255,255,255,0.92)',
         paddingTop: 'env(safe-area-inset-top, 0px)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',

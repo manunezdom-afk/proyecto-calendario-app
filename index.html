@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" style="background-color:#0a0a0f">
+<html lang="es" style="background-color:#06080f">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -16,7 +16,7 @@
 
     <!-- Theme colors (claro/oscuro) -->
     <meta name="theme-color" content="#0058bc" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#06080f" media="(prefers-color-scheme: dark)" />
 
     <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -66,7 +66,7 @@
          #fcf8fb por defecto y había un flash blanco entre el splash de iOS y el
          primer render de React. Ahora html/body arrancan oscuros y el salto es
          continuo con el splash del icono. */
-      html, body { background-color: #0a0a0f; margin: 0; }
+      html, body { background-color: #06080f; margin: 0; }
 
       /* Cinturón de seguridad: mientras Material Symbols no haya cargado,
          ocultamos el texto del span (font-size:0) para que nunca se filtren
@@ -79,7 +79,7 @@
       /* Continuidad landing→app: si llegamos con el flag en sessionStorage,
          el body arranca oscuro para que no haya flash blanco entre la
          landing dark y el threshold scene dark. Se remueve al terminar. */
-      html.focus-continuity, html.focus-continuity body { background: #0a0a0f !important; }
+      html.focus-continuity, html.focus-continuity body { background: #06080f !important; }
 
       /* Dark boot: cuando arranca la app y todavía va a renderizar un frame
          oscuro encima (onboarding o welcome), mantenemos html/body negros
@@ -88,7 +88,7 @@
          de React. La clase se añade al vuelo desde el <script> de abajo
          (antes de que React corra) y se remueve desde JS cuando la
          experiencia de bienvenida/onboarding dispara su exit. */
-      html.focus-dark-boot, html.focus-dark-boot body { background: #0a0a0f !important; }
+      html.focus-dark-boot, html.focus-dark-boot body { background: #06080f !important; }
 
       /* ── Instant boot splash ───────────────────────────────────────────────
          HTML+CSS puros dentro de #root. Pinta al instante con el primer parseo
@@ -106,7 +106,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: radial-gradient(ellipse at 50% 42%, #15121f 0%, #0a0a0f 70%);
+        background: radial-gradient(ellipse at 50% 42%, #0a1226 0%, #06080f 70%);
         font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
         z-index: 0;
         padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -134,25 +134,29 @@
         border-radius: 50%;
         filter: blur(120px);
       }
+      /* Mismas tonalidades que AuroraBackground variant="threshold":
+         tres blobs en familia azul alineados con el icono de la marca
+         (#60a5fa → #2563eb → #1d4ed8). Antes b2/b3 eran morado/rosa y
+         creaban un degradado violáceo que no concordaba con el icono. */
       #focus-splash .aurora .b1 {
         top: -160px; left: -160px;
         width: 560px; height: 560px;
-        background: rgba(59,130,246,0.28);
+        background: rgba(96,165,250,0.30);
       }
       #focus-splash .aurora .b2 {
         top: 15%; right: -180px;
         width: 520px; height: 520px;
-        background: rgba(124,58,237,0.24);
+        background: rgba(37,99,235,0.26);
       }
       #focus-splash .aurora .b3 {
         bottom: 5%; left: 20%;
         width: 480px; height: 480px;
-        background: rgba(236,72,153,0.18);
+        background: rgba(29,78,216,0.22);
       }
       #focus-splash .aurora .fade {
         position: absolute;
         inset: 0;
-        background: linear-gradient(180deg, transparent 0%, rgba(10,10,15,0.3) 60%, rgba(10,10,15,0.85) 100%);
+        background: linear-gradient(180deg, transparent 0%, rgba(6,8,15,0.3) 60%, rgba(6,8,15,0.85) 100%);
       }
       #focus-splash .center-col {
         display: flex;
