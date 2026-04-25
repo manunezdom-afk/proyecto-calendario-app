@@ -105,6 +105,32 @@ export function AuthProvider({ children }) {
     if (error) throw error
   }, [])
 
+  const signInWithPassword = useCallback(async (email, password) => {
+    if (!supabase) throw new Error('Supabase no configurado')
+    const clean = String(email || '').trim().toLowerCase()
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: clean,
+      password: String(password ?? ''),
+    })
+    if (error) throw error
+    return data?.user ?? null
+  }, [])
+
+  // Si Supabase tiene email confirmation activado, data.session viene null
+  // y el usuario debe abrir el link del correo antes de poder loguearse.
+  // Devolvemos {user, session} para que la UI pueda mostrar el mensaje
+  // "Revisa tu correo" en ese caso.
+  const signUpWithPassword = useCallback(async (email, password) => {
+    if (!supabase) throw new Error('Supabase no configurado')
+    const clean = String(email || '').trim().toLowerCase()
+    const { data, error } = await supabase.auth.signUp({
+      email: clean,
+      password: String(password ?? ''),
+    })
+    if (error) throw error
+    return { user: data?.user ?? null, session: data?.session ?? null }
+  }, [])
+
   const verifyOtp = useCallback(async (email, token) => {
     if (!supabase) throw new Error('Supabase no configurado')
     const cleanEmail = String(email || '').trim().toLowerCase()
@@ -263,6 +289,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       user, loading, authModal, setAuthModal,
       signInWithEmail, verifyOtp, signOut,
+      signInWithPassword, signUpWithPassword,
       startDevicePairing, claimDevicePairing, exchangeDeviceToken,
     }}>
       {children}

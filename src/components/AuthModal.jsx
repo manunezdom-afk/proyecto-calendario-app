@@ -89,6 +89,7 @@ function Spinner() {
 export default function AuthModal({ isOpen, onClose }) {
   const {
     signInWithEmail, verifyOtp, user, signOut,
+    signInWithPassword, signUpWithPassword,
     startDevicePairing, claimDevicePairing, exchangeDeviceToken,
   } = useAuth()
 
@@ -98,9 +99,10 @@ export default function AuthModal({ isOpen, onClose }) {
   const [email, setEmail]       = useState(initialPending?.email || '')
   const [code, setCode]         = useState('')
   // Pasos:
-  //   chooser         — elección entre email y escanear QR
+  //   chooser         — elección entre email-OTP, email+contraseña y QR
   //   email           — pedir email para OTP
   //   code            — verificar OTP
+  //   password        — login/registro con email + contraseña
   //   device_scan     — (sin sesión) escanear/tipear código para entrar
   //   device_show     — (logueado) mostrar QR para que otro dispositivo entre
   //   device_success  — breve confirmación antes de cerrar
@@ -137,6 +139,17 @@ export default function AuthModal({ isOpen, onClose }) {
   const [scannerOpen, setScannerOpen] = useState(false)
   // Banner post rate-limit sugiriendo usar otro dispositivo.
   const [rateLimitHit, setRateLimitHit] = useState(false)
+
+  // ── Lado password (signin/signup) ───────────────────────────────────────
+  // Mismo paso 'password' sirve para entrar o crear cuenta. El toggle al pie
+  // alterna el modo sin desmontar el form.
+  const [password, setPassword] = useState('')
+  const [passwordMode, setPasswordMode] = useState('signin') // 'signin' | 'signup'
+  const [showPassword, setShowPassword] = useState(false)
+  // Cuando el proyecto Supabase tiene email-confirmation activado, signUp
+  // devuelve session=null y el usuario debe abrir el link del correo. En ese
+  // caso mostramos un mensaje en lugar del form, sin cerrar el modal.
+  const [signupSuccess, setSignupSuccess] = useState(false)
 
   // submitLock evita dobles envíos incluso en el mismo tick (antes de re-render)
   const submitLock = useRef(false)
@@ -496,6 +509,45 @@ export default function AuthModal({ isOpen, onClose }) {
     setResendCooldown(0)
   }
 
+  async function handlePasswordSubmit(e) {
+    e?.preventDefault?.()
+    if (submitLock.current || loading) return
+    if (!emailValid) {
+      setError('Ingresa un email válido.')
+      return
+    }
+    if (password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres.')
+      return
+    }
+    submitLock.current = true
+    setLoading(true)
+    setError(null)
+    try {
+      if (passwordMode === 'signup') {
+        const { session } = await signUpWithPassword(email, password)
+        if (!session) {
+          // Email confirmation activado en Supabase: no hay sesión todavía.
+          // Mostramos el mensaje "revisa tu correo" sin cerrar el modal.
+          setSignupSuccess(true)
+          setPassword('')
+          return
+        }
+      } else {
+        await signInWithPassword(email, password)
+      }
+      // SIGNED_IN dispara onAuthStateChange en AuthContext, que maneja la
+      // limpieza de caché global y el flush de cola. Solo cerramos el modal.
+      setPassword('')
+      handleClose()
+    } catch (err) {
+      setError(humanizeAuthError(err))
+    } finally {
+      setLoading(false)
+      submitLock.current = false
+    }
+  }
+
   function handleEmailChange(value) {
     setEmail(value)
     if (error) setError(null)
@@ -736,13 +788,26 @@ export default function AuthModal({ isOpen, onClose }) {
                   <div className="space-y-2.5">
                     <button
                       type="button"
+                      onClick={() => { setStep('password'); setError(null); setPasswordMode('signin'); setSignupSuccess(false) }}
+                      className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 hover:border-primary/40 hover:bg-primary/5 active:scale-[0.99] transition-all flex items-center gap-3 text-left"
+                    >
+                      <span className="material-symbols-outlined text-primary text-[22px] flex-shrink-0">lock</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-semibold text-slate-800">Email y contraseña</p>
+                        <p className="text-[11.5px] text-slate-500 leading-snug">Inicia sesión o crea una cuenta.</p>
+                      </div>
+                      <span className="material-symbols-outlined text-slate-300 text-[20px]">chevron_right</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => { setStep('email'); setError(null) }}
                       className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 hover:border-primary/40 hover:bg-primary/5 active:scale-[0.99] transition-all flex items-center gap-3 text-left"
                     >
                       <span className="material-symbols-outlined text-primary text-[22px] flex-shrink-0">mail</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-semibold text-slate-800">Continuar con email</p>
-                        <p className="text-[11.5px] text-slate-500 leading-snug">Te enviamos un código por correo.</p>
+                        <p className="text-[14px] font-semibold text-slate-800">Código por email</p>
+                        <p className="text-[11.5px] text-slate-500 leading-snug">Sin contraseña. Te enviamos un código por correo.</p>
                       </div>
                       <span className="material-symbols-outlined text-slate-300 text-[20px]">chevron_right</span>
                     </button>
@@ -770,6 +835,140 @@ export default function AuthModal({ isOpen, onClose }) {
                   <p className="mt-4 text-[11px] text-center text-slate-400 leading-snug">
                     Al continuar aceptas que usemos tu email solo para autenticación.
                   </p>
+                </>
+              ) : step === 'password' ? (
+                /* ── Email + contraseña (signin/signup) ────────────── */
+                <>
+                  <div className="flex items-start justify-between gap-3 mb-5">
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-[20px] sm:text-[22px] font-bold text-slate-900 leading-tight">
+                        {passwordMode === 'signup' ? 'Crear cuenta' : 'Iniciar sesión'}
+                      </h2>
+                      <p className="text-[12.5px] text-slate-500 mt-1 leading-snug">
+                        {passwordMode === 'signup'
+                          ? 'Usa tu email y elige una contraseña.'
+                          : 'Con tu email y contraseña.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep('chooser')
+                        setError(null)
+                        setPassword('')
+                        setShowPassword(false)
+                        setSignupSuccess(false)
+                      }}
+                      aria-label="Volver"
+                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-slate-400 text-[22px]">arrow_back</span>
+                    </button>
+                  </div>
+
+                  {signupSuccess ? (
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center">
+                      <span
+                        className="material-symbols-outlined text-emerald-600 text-[32px]"
+                        style={{ fontVariationSettings: "'FILL' 1" }}
+                      >
+                        mark_email_read
+                      </span>
+                      <p className="text-[13px] font-bold text-emerald-900 mt-2">Revisa tu correo</p>
+                      <p className="text-[12px] text-emerald-800 mt-1 leading-snug">
+                        Te enviamos un enlace a <span className="font-semibold break-all">{email}</span> para confirmar tu cuenta. Tras confirmar, vuelve aquí e inicia sesión.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => { setSignupSuccess(false); setPasswordMode('signin'); setError(null) }}
+                        className="mt-3 text-primary text-[12.5px] font-semibold hover:underline"
+                      >
+                        Iniciar sesión
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <form onSubmit={handlePasswordSubmit} noValidate>
+                        <label htmlFor="auth-pw-email" className="sr-only">Email</label>
+                        <input
+                          id="auth-pw-email"
+                          type="email"
+                          inputMode="email"
+                          autoCapitalize="off"
+                          autoCorrect="off"
+                          spellCheck={false}
+                          value={email}
+                          onChange={(e) => handleEmailChange(e.target.value)}
+                          placeholder="tu@email.com"
+                          required
+                          autoComplete="email"
+                          aria-invalid={!!error}
+                          className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 text-[15px] mb-3 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
+                        />
+
+                        <label htmlFor="auth-pw-input" className="sr-only">Contraseña</label>
+                        <div className="relative mb-3">
+                          <input
+                            id="auth-pw-input"
+                            type={showPassword ? 'text' : 'password'}
+                            value={password}
+                            onChange={(e) => { setPassword(e.target.value); if (error) setError(null) }}
+                            placeholder="Contraseña"
+                            required
+                            minLength={6}
+                            autoComplete={passwordMode === 'signup' ? 'new-password' : 'current-password'}
+                            aria-invalid={!!error}
+                            className="w-full px-4 py-3.5 pr-12 rounded-2xl border border-slate-200 text-[15px] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((v) => !v)}
+                            aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-slate-400 text-[20px]">
+                              {showPassword ? 'visibility_off' : 'visibility'}
+                            </span>
+                          </button>
+                        </div>
+
+                        {error && (
+                          <p role="alert" className="text-red-500 text-[12.5px] mb-3 leading-snug">
+                            {error}
+                          </p>
+                        )}
+
+                        <button
+                          type="submit"
+                          disabled={loading || !emailValid || password.length < 6}
+                          className="w-full py-3.5 bg-primary text-white rounded-2xl text-[14px] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                        >
+                          {loading
+                            ? (<><Spinner /> {passwordMode === 'signup' ? 'Creando cuenta…' : 'Iniciando sesión…'}</>)
+                            : (passwordMode === 'signup' ? 'Crear cuenta' : 'Iniciar sesión')}
+                        </button>
+                      </form>
+
+                      <div className="mt-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPasswordMode((m) => (m === 'signup' ? 'signin' : 'signup'))
+                            setError(null)
+                          }}
+                          className="text-primary text-[12.5px] font-semibold hover:underline"
+                        >
+                          {passwordMode === 'signup'
+                            ? '¿Ya tienes cuenta? Inicia sesión'
+                            : '¿No tienes cuenta? Crea una'}
+                        </button>
+                      </div>
+
+                      <p className="mt-4 text-[11px] text-center text-slate-400 leading-snug">
+                        Mínimo 6 caracteres. Al continuar aceptas que usemos tu email solo para autenticación.
+                      </p>
+                    </>
+                  )}
                 </>
               ) : step === 'device_scan' ? (
                 /* ── Nuevo dispositivo: escanear o tipear código ────── */

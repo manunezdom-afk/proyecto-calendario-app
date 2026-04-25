@@ -15,6 +15,22 @@ const PATTERNS = [
   { match: /token has expired|otp.*expired|invalid.*token|invalid.*otp/i,
     msg: 'El código es incorrecto o expiró. Pide uno nuevo.' },
 
+  // Password — credenciales inválidas (signin)
+  { match: /invalid login credentials|invalid.*credentials|wrong password/i,
+    msg: 'Email o contraseña incorrectos.' },
+
+  // Password — usuario ya existe (signup)
+  { match: /user already registered|already.*exists|already.*registered/i,
+    msg: 'Ya existe una cuenta con este email. Inicia sesión.' },
+
+  // Password — débil o muy corta
+  { match: /password.*should be at least|password.*too short|password.*weak|weak.*password/i,
+    msg: 'La contraseña debe tener al menos 6 caracteres.' },
+
+  // Email no confirmado al intentar signin
+  { match: /email not confirmed|email.*confirm|confirm.*email/i,
+    msg: 'Confirma tu email antes de iniciar sesión. Revisa tu bandeja.' },
+
   // Email inválido
   { match: /invalid.*email|email.*invalid|unable to validate email/i,
     msg: 'El email no es válido. Revisa que esté bien escrito.' },
