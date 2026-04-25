@@ -5,13 +5,14 @@ import { buildDateContext } from './_lib/dateContext.js'
 import { buildSystemPrompt } from './_lib/systemPrompt.js'
 import { safeParseAssistantJSON } from './_lib/neutralize.js'
 import { normalizeNovaPersonality } from './_lib/personality.js'
+import { rejectCrossSiteUnsafe, setCorsHeaders } from './_lib/security.js'
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  setCorsHeaders(req, res, { methods: 'POST, OPTIONS' })
 
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
+  if (rejectCrossSiteUnsafe(req, res)) return
 
   if (rateLimited(clientIp(req))) {
     return res.status(429).json({ error: 'rate_limit', message: 'Demasiadas solicitudes. Espera un momento.' })

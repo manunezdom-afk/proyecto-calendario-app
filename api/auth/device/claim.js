@@ -8,18 +8,19 @@
 
 import { getSupabaseAdmin } from '../../_supabaseAdmin.js'
 import { rateLimited, clientIp } from '../../_lib/rateLimit.js'
+import { rejectCrossSiteUnsafe, setCorsHeaders } from '../../_lib/security.js'
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  setCorsHeaders(req, res, { methods: 'POST, OPTIONS' })
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
+  if (rejectCrossSiteUnsafe(req, res)) return
 
   // Rate-limit agresivo para bloquear bruteforce del user_code (32^8 combos,
   // pero TTL de 5 min y consumición al primer hit hacen que valga la pena
   // mantener baja la tasa de intentos por IP).
-  if (rateLimited(clientIp(req), { max: 30, windowMs: 60_000 })) {
+  const ip = clientIp(req)
+  if (rateLimited(ip, { max: 20, windowMs: 60_000 })) {
     return res.status(429).json({ error: 'rate_limited' })
   }
 
@@ -29,6 +30,9 @@ export default async function handler(req, res) {
 
   if (userCode.length !== 8) {
     return res.status(400).json({ error: 'invalid_user_code' })
+  }
+  if (rateLimited(`${ip}:device-claim:${userCode}`, { max: 5, windowMs: 5 * 60_000 })) {
+    return res.status(429).json({ error: 'rate_limited' })
   }
 
   const admin = getSupabaseAdmin()

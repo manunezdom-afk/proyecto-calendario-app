@@ -1,19 +1,13 @@
-// ─── Rate limiting en memoria (20 req/min por IP) ────────────────────────────
-const _rl = new Map()
-function rateLimited(ip) {
-  const now = Date.now()
-  const e = _rl.get(ip)
-  if (!e || now > e.reset) { _rl.set(ip, { count: 1, reset: now + 60_000 }); return false }
-  if (e.count >= 20) return true
-  e.count++
-  return false
-}
+import { rateLimited, clientIp } from './_lib/rateLimit.js'
+import { rejectCrossSiteUnsafe, setCorsHeaders } from './_lib/security.js'
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages'
+const MAX_IMAGES = 4
+const MAX_BASE64_CHARS = 6_000_000
+const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  setCorsHeaders(req, res, { methods: 'POST, OPTIONS' })
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end()
@@ -22,9 +16,9 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'method_not_allowed' })
   }
+  if (rejectCrossSiteUnsafe(req, res)) return
 
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown'
-  if (rateLimited(ip)) {
+  if (rateLimited(clientIp(req), { max: 12, windowMs: 60_000 })) {
     return res.status(429).json({ error: 'rate_limit', message: 'Demasiadas solicitudes. Espera un momento.' })
   }
 
@@ -39,11 +33,25 @@ export default async function handler(req, res) {
   if (!Array.isArray(images) || images.length === 0) {
     return res.status(400).json({ error: 'no_images' })
   }
+  if (images.length > MAX_IMAGES) {
+    return res.status(400).json({ error: 'too_many_images', message: `Máximo ${MAX_IMAGES} imágenes por análisis.` })
+  }
 
-  const imageBlocks = images.map(({ base64, mediaType }) => ({
-    type: 'image',
-    source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: base64 },
-  }))
+  const imageBlocks = []
+  for (const image of images) {
+    const mediaType = String(image?.mediaType || 'image/jpeg').toLowerCase()
+    const base64 = typeof image?.base64 === 'string' ? image.base64 : ''
+    if (!ALLOWED_MEDIA_TYPES.has(mediaType)) {
+      return res.status(400).json({ error: 'unsupported_image_type' })
+    }
+    if (!base64 || base64.length > MAX_BASE64_CHARS) {
+      return res.status(400).json({ error: 'image_too_large' })
+    }
+    imageBlocks.push({
+      type: 'image',
+      source: { type: 'base64', media_type: mediaType, data: base64 },
+    })
+  }
 
   const today    = new Date()
   const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`

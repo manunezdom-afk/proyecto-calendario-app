@@ -9,6 +9,7 @@
  */
 
 import { getSupabaseAdmin, getUserIdFromAuth } from './_supabaseAdmin.js'
+import { publicOrigin, rejectCrossSiteUnsafe, setCorsHeaders } from './_lib/security.js'
 
 function generateToken() {
   // 32 bytes = 256 bits, URL-safe base64
@@ -23,10 +24,9 @@ function generateToken() {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+  setCorsHeaders(req, res, { methods: 'GET, POST, DELETE, OPTIONS' })
   if (req.method === 'OPTIONS') return res.status(200).end()
+  if (rejectCrossSiteUnsafe(req, res)) return
 
   const userId = await getUserIdFromAuth(req)
   if (!userId) return res.status(401).json({ error: 'unauthorized' })
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       token,
       label,
-      feed_url: `${req.headers.origin || ''}/api/ics-feed?token=${token}`,
+      feed_url: `${publicOrigin(req)}/api/ics-feed?token=${token}`,
     })
   }
 

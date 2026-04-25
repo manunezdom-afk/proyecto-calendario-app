@@ -13,6 +13,7 @@
 import { randomBytes, randomUUID } from 'crypto'
 import { getSupabaseAdmin, getUserFromAuth } from '../../_supabaseAdmin.js'
 import { rateLimited, clientIp } from '../../_lib/rateLimit.js'
+import { rejectCrossSiteUnsafe, setCorsHeaders } from '../../_lib/security.js'
 
 // Alfabeto sin ambigüedades visuales: sin 0/O, sin 1/I/L.
 const USER_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -26,11 +27,10 @@ function generateUserCode() {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  setCorsHeaders(req, res, { methods: 'POST, OPTIONS' })
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
+  if (rejectCrossSiteUnsafe(req, res)) return
 
   if (rateLimited(clientIp(req), { max: 10, windowMs: 60_000 })) {
     return res.status(429).json({ error: 'rate_limited' })

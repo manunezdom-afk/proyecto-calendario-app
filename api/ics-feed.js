@@ -101,6 +101,8 @@ export default async function handler(req, res) {
   // CORS permissive — necesario para que Google/Apple Calendar puedan leer
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET') return res.status(405).end()
 
@@ -153,7 +155,7 @@ export default async function handler(req, res) {
 
   res.setHeader('Content-Type', 'text/calendar; charset=utf-8')
   res.setHeader('Content-Disposition', `inline; filename="focus-calendar.ics"`)
-  // Cache: 10 min. Apple/Google cachean igual, pero no queremos servir viejos eternos.
-  res.setHeader('Cache-Control', 'public, max-age=600, s-maxage=600')
+  // Token URL = calendario privado. Permitimos cache local corto, pero no CDN compartido.
+  res.setHeader('Cache-Control', 'private, max-age=300, s-maxage=0')
   return res.status(200).send(ics)
 }

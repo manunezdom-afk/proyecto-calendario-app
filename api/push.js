@@ -9,17 +9,13 @@
 
 import webpush from 'web-push'
 import { getSupabaseAdmin, getUserIdFromAuth } from './_supabaseAdmin.js'
-
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-}
+import { rejectCrossSiteUnsafe, setCorsHeaders } from './_lib/security.js'
 
 export default async function handler(req, res) {
-  cors(res)
+  setCorsHeaders(req, res, { methods: 'POST, OPTIONS' })
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
+  if (rejectCrossSiteUnsafe(req, res)) return
 
   const body = req.body || {}
   const action = typeof body.action === 'string' ? body.action : ''
