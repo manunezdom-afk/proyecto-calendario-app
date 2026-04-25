@@ -1,0 +1,28 @@
+{
+  "appId": "me.usefocus.app",
+  "appName": "Focus",
+  "webDir": "dist",
+  "ios": {
+    "scheme": "Focus",
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "server": {
+    "iosScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "backgroundColor": "#0a0a0f",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP",
+      "splashFullScreen": true,
+      "splashImmersive": true
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0a0a0f",
+      "overlaysWebView": false
+    }
+  }
+}

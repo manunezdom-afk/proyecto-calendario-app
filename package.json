@@ -7,10 +7,22 @@
     "dev": "vite",
     "build": "vite build && node scripts/stamp-sw-version.mjs",
     "preview": "vite preview",
-    "build:icons": "node scripts/build-icons.mjs"
+    "build:icons": "node scripts/build-icons.mjs",
+    "build:ios-icons": "node scripts/build-ios-icons.mjs",
+    "ios:sync": "npm run build && npx cap sync ios",
+    "ios:open": "npx cap open ios",
+    "ios:run": "npm run build && npx cap sync ios && npx cap open ios"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.89.0",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/core": "^8.3.1",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.3.1",
+    "@capacitor/keyboard": "^8.0.3",
+    "@capacitor/push-notifications": "^8.0.3",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "@supabase/supabase-js": "^2.103.3",
     "framer-motion": "^12.38.0",
     "qrcode": "^1.5.4",
@@ -19,6 +31,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.1",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
