@@ -1169,7 +1169,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   CTA grande arma el día con Nova; X persiste el dismiss
                   para que no reaparezca en la próxima sesión. Si el usuario
                   ya lo cerró, mostramos el chips card más abajo (fallback). */}
-              {blocks.length === 0 && pendingTasksCount === 0 && !emptyDayBannerDismissed && (
+              {blocks.length === 0 && pendingTasksCount === 0 && !isDesktop && !emptyDayBannerDismissed && (
                 <div className="w-full max-w-2xl mx-auto">
                   <div
                     className="relative rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/5 via-secondary/5 to-surface px-6 py-7 sm:px-8 sm:py-9 shadow-[0_2px_24px_-8px_rgba(59,130,246,0.15)]"
@@ -1214,7 +1214,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 </div>
               )}
 
-              {blocks.length === 0 && pendingTasksCount === 0 && emptyDayBannerDismissed && (() => {
+              {blocks.length === 0 && pendingTasksCount === 0 && (isDesktop || emptyDayBannerDismissed) && (() => {
                 const pendingTotal = semanaCount + algoDiaCount
                 const chips = [
                   { icon: 'fitness_center', label: 'Agendar gym mañana',   prompt: 'Agenda gym mañana a las 7' },
