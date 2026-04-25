@@ -166,7 +166,7 @@ export default function NextWindowPanel({
       </div>
 
       <p className="text-[11px] text-outline/70 leading-relaxed">
-        Al tocar "Agendar" creo el evento en tu calendario. Lo podés deshacer al instante desde Mi Día.
+        Al tocar "Agendar" creo el evento en tu calendario. Puedes deshacerlo al instante desde Mi Día.
       </p>
     </section>
   )
@@ -188,7 +188,7 @@ function ShutdownCard({ tasks, onBulkDefer }) {
 
       <p className="text-sm text-outline leading-relaxed">
         Te {tasks.length === 1 ? 'queda 1 tarea pendiente' : `quedan ${tasks.length} tareas pendientes`} de hoy.
-        Movelas en bloque y dormí tranquilo — no se pierden, solo cambian de día.
+        Muévelas en bloque y duerme tranquilo — no se pierden, solo cambian de día.
       </p>
 
       <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
@@ -228,11 +228,11 @@ function CalmCard({ hasWindow, hasTasks, window }) {
   if (!hasWindow && hasTasks) {
     icon = 'event_busy'
     title = 'Tu día está full'
-    body = 'No hay huecos libres. Si querés meter algo más, vas a tener que mover un evento desde el calendario.'
+    body = 'No hay huecos libres. Si quieres añadir algo más, tendrás que mover un evento desde el calendario.'
   } else if (hasWindow && !hasTasks) {
     icon = 'check_circle'
     title = 'Día limpio'
-    body = `Tenés ${window.minutes} min libres pero no hay tareas pendientes. Disfrutá el espacio.`
+    body = `Tienes ${window.minutes} min libres pero no hay tareas pendientes. Disfruta el espacio.`
   } else {
     icon = 'self_improvement'
     title = 'Todo en orden'

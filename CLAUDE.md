@@ -34,6 +34,16 @@ Si el push es rechazado por non-fast-forward: repetir paso 3 y reintentar. Nunca
 - Cuando cambien archivos en `public/icons/` (favicon, apple-touch-icon, icon-192/512): bumpar el query string `?v=N` en `index.html` y `public/manifest.json` para forzar cache-bust del browser HTTP.
 - iOS instalado en home screen NUNCA refresca su icono. El usuario debe desinstalar (long-press → eliminar) y reinstalar desde Safari → Compartir → Añadir a pantalla de inicio.
 
+## Idioma de copy
+
+Toda copy visible al usuario va en **español neutral** (forma "tú"), nunca voseo argentino. Aplica a títulos, mensajes, empty states, errores, copy de Nova, notificaciones push y system prompts.
+
+**Prohibido:** vos, tenés, sos, querés, podés, movelas, dormí, disfrutá, metés, agendá, tocás, abrís, hacelo, fijate, escribí, pensá, andá, mirá, decime, ponete.
+
+**Usar en su lugar:** tú/te, tienes, eres, quieres, puedes, muévelas, duerme, disfruta, métela, agenda, tocas, abres, hazlo, fíjate, escribe, piensa, ve, mira, dime, ponte.
+
+Antes de commitear copy nueva, hacer grep por: `vos|tenés|sos|querés|podés|movelas|dormí|disfrutá`. Comentarios internos del código (no visibles al usuario) pueden ir en cualquier dialecto.
+
 ## Memoria entre asistentes
 
 - `CLAUDE.md` (este archivo) lo lee Claude Code automáticamente al inicio de cada sesión.
