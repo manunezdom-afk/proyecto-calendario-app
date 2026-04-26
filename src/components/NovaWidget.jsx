@@ -5,6 +5,7 @@ import { useUserMemories } from '../hooks/useUserMemories'
 import MicButton from './MicButton'
 import { logSignal } from '../services/signalsService'
 import { getCachedBehavior } from '../services/behaviorAnalysis'
+import { apiFetch } from '../lib/apiClient'
 import { isIOSSafari } from '../lib/permissions'
 import { createVAD } from '../lib/voiceActivityDetector'
 import { readPreferenceSync } from '../hooks/useAppPreferences'
@@ -582,7 +583,7 @@ export default function NovaWidget({
         reader.readAsDataURL(file)
       })
 
-      const res = await fetch('/api/analyze-photo', {
+      const res = await apiFetch('/api/analyze-photo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ images: [{ base64, mediaType: file.type || 'image/jpeg' }] }),
@@ -671,7 +672,7 @@ export default function NovaWidget({
     })
 
     try {
-      const res = await fetch('/api/focus-assistant', {
+      const res = await apiFetch('/api/focus-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

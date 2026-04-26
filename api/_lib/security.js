@@ -3,7 +3,11 @@ const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 function parseOrigin(value) {
   if (!value || typeof value !== 'string') return null
   try {
-    return new URL(value).origin
+    const url = new URL(value)
+    if (url.protocol === 'capacitor:' || url.protocol === 'ionic:') {
+      return `${url.protocol}//${url.host}`
+    }
+    return url.origin
   } catch {
     return null
   }
@@ -69,7 +73,8 @@ export function rejectCrossSiteUnsafe(req, res) {
   if (!UNSAFE_METHODS.has(req.method)) return false
 
   const secFetchSite = String(req.headers?.['sec-fetch-site'] || '').toLowerCase()
-  if (secFetchSite === 'cross-site') {
+  const origin = parseOrigin(req.headers?.origin)
+  if (secFetchSite === 'cross-site' && (!origin || !isTrustedOrigin(req, origin))) {
     res.status(403).json({ error: 'cross_site_blocked' })
     return true
   }

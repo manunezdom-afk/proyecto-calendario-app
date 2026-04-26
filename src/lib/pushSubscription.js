@@ -11,6 +11,7 @@
  */
 
 import { supabase } from './supabase'
+import { apiFetch } from './apiClient'
 import { focusLog } from '../utils/debug'
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY
@@ -184,7 +185,7 @@ export async function subscribeToPush() {
     }
 
     const res = await withTimeout(
-      fetch('/api/push', {
+      apiFetch('/api/push', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -230,7 +231,7 @@ export async function unsubscribeFromPush() {
   try {
     const token = (await supabase?.auth.getSession())?.data?.session?.access_token
     if (token) {
-      await fetch('/api/push', {
+      await apiFetch('/api/push', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -253,37 +254,40 @@ export async function unsubscribeFromPush() {
  * Sirve para detectar el caso "APNs revocó mi suscripción, el cron la borró
  * por 410, pero yo localmente todavía creo que está viva".
  */
-export async function checkSubscriptionHealth() {
-  if (!isPushSupported()) return { ok: false, reason: 'unsupported' }
+export async function checkSubscriptionHealth(options = {}) {
+  const nativeToken = typeof options.nativeToken === 'string' ? options.nativeToken : null
+  if (!nativeToken && !isPushSupported()) return { ok: false, reason: 'unsupported' }
   try {
     let endpoint = null
-    try {
-      const reg = await withTimeout(
-        navigator.serviceWorker.getRegistration(),
-        3000,
-        'sw_getRegistration_timeout',
-      )
-      const sub = reg
-        ? await withTimeout(reg.pushManager.getSubscription(), 3000, 'sub_getSubscription_timeout')
-        : null
-      endpoint = sub?.endpoint ?? null
-    } catch {
-      // Si el SW no responde seguimos consultando al backend con endpoint=null
-      // — el backend sabe responder con subscriptionCount aunque no le pases
-      // endpoint específico.
+    if (!nativeToken) {
+      try {
+        const reg = await withTimeout(
+          navigator.serviceWorker.getRegistration(),
+          3000,
+          'sw_getRegistration_timeout',
+        )
+        const sub = reg
+          ? await withTimeout(reg.pushManager.getSubscription(), 3000, 'sub_getSubscription_timeout')
+          : null
+        endpoint = sub?.endpoint ?? null
+      } catch {
+        // Si el SW no responde seguimos consultando al backend con endpoint=null
+        // — el backend sabe responder con subscriptionCount aunque no le pases
+        // endpoint específico.
+      }
     }
 
     const token = (await supabase?.auth.getSession())?.data?.session?.access_token
     if (!token) return { ok: false, reason: 'no_session' }
 
     const res = await withTimeout(
-      fetch('/api/push', {
+      apiFetch('/api/push', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: 'health', endpoint }),
+        body: JSON.stringify({ action: 'health', endpoint, native_token: nativeToken }),
       }),
       8000,
       'health_timeout',
@@ -296,9 +300,12 @@ export async function checkSubscriptionHealth() {
     return {
       ok: true,
       subscriptionCount: data.subscriptionCount ?? 0,
+      nativeTokenCount: data.nativeTokenCount ?? 0,
       currentPresent: data.currentPresent,
+      currentNativePresent: data.currentNativePresent,
       lastDelivery: data.lastDelivery ?? null,
       localEndpoint: endpoint,
+      nativeToken,
     }
   } catch (err) {
     return { ok: false, reason: 'network_error', error: String(err?.message || err) }
@@ -346,13 +353,12 @@ export async function forceResubscribe() {
  * vapid_not_configured, unauthorized, backend_error, timeout, unsupported.
  */
 export async function sendTestPush() {
-  if (!isPushSupported()) return { ok: false, reason: 'unsupported' }
   try {
     const token = (await supabase?.auth.getSession())?.data?.session?.access_token
     if (!token) return { ok: false, reason: 'no_session' }
 
     const res = await withTimeout(
-      fetch('/api/push', {
+      apiFetch('/api/push', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -376,7 +382,8 @@ export async function sendTestPush() {
       sent: data.sent ?? 0,
       failed: data.failed ?? 0,
       subscriptions: data.subscriptions ?? 0,
-      reason: data.ok ? undefined : 'no_delivery',
+      results: data.results ?? [],
+      reason: data.ok ? undefined : (data.results?.find((r) => r.error)?.error || data.error || 'no_delivery'),
     }
   } catch (err) {
     return { ok: false, reason: String(err?.message || err) }
@@ -391,7 +398,7 @@ export async function flushPendingSubscription() {
     const subJson = JSON.parse(raw)
     const token = (await supabase?.auth.getSession())?.data?.session?.access_token
     if (!token) return
-    const res = await fetch('/api/push', {
+    const res = await apiFetch('/api/push', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

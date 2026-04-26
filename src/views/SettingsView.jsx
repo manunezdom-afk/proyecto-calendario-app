@@ -6,6 +6,11 @@ import {
   checkSubscriptionHealth,
   sendTestPush,
 } from '../lib/pushSubscription'
+import {
+  getNativePushStatus,
+  isNativePushSupported,
+  registerNativePush,
+} from '../lib/nativePush'
 import PermissionsSection from '../components/PermissionsSection'
 import { useAppPreferences } from '../hooks/useAppPreferences'
 import { NOVA_PERSONALITIES } from '../utils/novaPersonality'
@@ -92,6 +97,41 @@ function PushDiagnostic() {
     setVerifying(true)
     setStatus(null)
     try {
+      if (isNativePushSupported()) {
+        const s = await getNativePushStatus()
+        if (s.error) {
+          setStatus({ ok: false, msg: 'No se pudo leer el estado nativo de notificaciones. Cierra y vuelve a abrir la app.' })
+          return
+        }
+        if (s.permission === 'denied') {
+          setStatus({ ok: false, msg: blockedPermissionMsg() })
+          return
+        }
+        if (s.permission !== 'granted') {
+          setStatus({ ok: false, msg: 'Permiso aún no concedido. Activa las notificaciones desde el banner al crear un evento.' })
+          return
+        }
+        if (!s.subscribed) {
+          setStatus({ ok: false, msg: 'No hay token nativo registrado. Usa "Reconectar notificaciones" abajo para crearlo.' })
+          return
+        }
+        const h = await checkSubscriptionHealth({ nativeToken: s.token })
+        if (!h?.ok) {
+          if (h?.reason === 'no_session') {
+            setStatus({ ok: false, msg: 'No hay sesión activa. Inicia sesión para que el servidor pueda enviarte notificaciones.' })
+          } else {
+            setStatus({ ok: false, msg: 'No se pudo verificar con el servidor. Revisa la conexión y reintenta.' })
+          }
+          return
+        }
+        if (h.nativeTokenCount === 0 || h.currentNativePresent === false) {
+          setStatus({ ok: false, msg: 'El servidor no tiene el token de esta app. Usa "Reconectar notificaciones" abajo.' })
+          return
+        }
+        setStatus({ ok: true, msg: '✅ Todo OK. Permiso activo, token nativo y servidor conectados.' })
+        return
+      }
+
       const s = await getPushStatus()
       if (s.error) {
         setStatus({ ok: false, msg: msgForTimeout(s.error) })
@@ -151,7 +191,9 @@ function PushDiagnostic() {
     setReconnecting(true)
     setStatus(null)
     try {
-      const r = await forceResubscribe()
+      const r = isNativePushSupported()
+        ? await registerNativePush({ prompt: true })
+        : await forceResubscribe()
       if (r.ok && r.reason !== 'saved_locally_no_session') {
         setStatus({ ok: true, msg: '✅ Reconectado. Nueva suscripción guardada en el servidor.' })
         return
@@ -162,6 +204,8 @@ function PushDiagnostic() {
         setStatus({ ok: false, msg: blockedPermissionMsg() })
       } else if (r.reason === 'no_vapid_key') {
         setStatus({ ok: false, msg: 'Falta configurar VITE_VAPID_PUBLIC_KEY en Vercel.' })
+      } else if (r.reason === 'native_registration_timeout') {
+        setStatus({ ok: false, msg: 'El registro nativo tardó demasiado. Cierra y vuelve a abrir la app, luego reintenta.' })
       } else if (r.reason === 'unsupported') {
         setStatus({ ok: false, msg: 'Este dispositivo no soporta notificaciones push.' })
       } else if (/timeout/i.test(String(r.reason || r.error || ''))) {
@@ -193,6 +237,8 @@ function PushDiagnostic() {
         setStatus({ ok: false, msg: 'El servidor no tiene ninguna suscripción para tu cuenta. Usa "Reconectar notificaciones" primero.' })
       } else if (reason === 'vapid_not_configured') {
         setStatus({ ok: false, msg: 'Faltan las VAPID keys en Vercel (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY).' })
+      } else if (reason === 'apns_not_configured') {
+        setStatus({ ok: false, msg: 'Faltan las credenciales APNs en Vercel (APNS_TEAM_ID / APNS_KEY_ID / APNS_PRIVATE_KEY).' })
       } else if (reason === 'no_delivery') {
         setStatus({ ok: false, msg: 'El servidor aceptó la prueba pero ninguna push llegó a entregarse. Probablemente la suscripción está caduca — usa "Reconectar".' })
       } else if (reason === 'unsupported') {
@@ -420,6 +466,28 @@ function RemindersRow() {
     let cancelled = false
     async function run() {
       try {
+        if (isNativePushSupported()) {
+          const s = await getNativePushStatus()
+          if (cancelled) return
+          if (!s.supported) { setState('unsupported'); return }
+          if (s.permission === 'denied') { setState('blocked'); return }
+          if (s.permission !== 'granted') { setState('inactive'); return }
+          if (!s.subscribed) { setState('disconnected'); return }
+          const h = await checkSubscriptionHealth({ nativeToken: s.token }).catch(() => null)
+          if (cancelled) return
+          if (h?.ok) {
+            if (h.lastDelivery) setLastDelivery(h.lastDelivery)
+            if (h.nativeTokenCount === 0 || h.currentNativePresent === false) {
+              setState('disconnected')
+            } else {
+              setState('active')
+            }
+          } else {
+            setState('active')
+          }
+          return
+        }
+
         const s = await getPushStatus()
         if (cancelled) return
         if (!s.supported) { setState('unsupported'); return }

@@ -1,7 +1,7 @@
 name: Notifications Cron
 
 # Cada 5 minutos, pingea el endpoint /api/cron-notifications
-# que escanea eventos próximos y dispara Web Push.
+# que escanea eventos próximos y dispara Web Push/APNs.
 
 on:
   schedule:
@@ -23,6 +23,10 @@ jobs:
           if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
             echo "::error::APP_URL o CRON_SECRET no configurados en GitHub Secrets"
             exit 1
+          fi
+          APP_URL="${APP_URL%/}"
+          if [ "$APP_URL" = "https://usefocus.me" ]; then
+            APP_URL="https://www.usefocus.me"
           fi
           echo "Pinging $APP_URL/api/cron-notifications ..."
           HTTP_CODE=$(curl -sS -o response.json -w "%{http_code}" \

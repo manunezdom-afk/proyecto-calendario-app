@@ -3,7 +3,9 @@ import { supabase } from '../lib/supabase'
 import { dataService } from '../services/dataService'
 import { setSignalsUserId, flushSignalsQueue } from '../services/signalsService'
 import { fetchBehavior } from '../services/behaviorAnalysis'
+import { apiFetch } from '../lib/apiClient'
 import { flushPendingSubscription, subscribeToPush, getPushStatus } from '../lib/pushSubscription'
+import { flushPendingNativeToken, getNativePushStatus, registerNativePush } from '../lib/nativePush'
 
 // withAuthTimeout — blindaje genérico para promesas de auth/pairing. Rechaza
 // con Error(label) si la promesa no resuelve en `ms`. Lo usamos en getSession,
@@ -47,6 +49,11 @@ export function AuthProvider({ children }) {
         await flushSignalsQueue()
         await fetchBehavior(u.id).catch(() => {})
         await flushPendingSubscription().catch(() => {})
+        await flushPendingNativeToken().catch(() => {})
+        const native = await getNativePushStatus().catch(() => null)
+        if (native?.supported && native.permission === 'granted') {
+          await registerNativePush({ prompt: false }).catch(() => {})
+        }
         const s = await getPushStatus()
         if (s.supported && s.permission === 'granted' && !s.subscribed) {
           await subscribeToPush().catch(() => {})
@@ -99,7 +106,7 @@ export function AuthProvider({ children }) {
     const clean = String(email || '').trim().toLowerCase()
     let r
     try {
-      r = await fetch('/api/auth/email/send-otp', {
+      r = await apiFetch('/api/auth/email/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: clean }),
@@ -209,7 +216,7 @@ export function AuthProvider({ children }) {
     let r
     try {
       r = await withAuthTimeout(
-        fetch('/api/auth/device/start', {
+        apiFetch('/api/auth/device/start', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -248,7 +255,7 @@ export function AuthProvider({ children }) {
     let r
     try {
       r = await withAuthTimeout(
-        fetch('/api/auth/device/claim', {
+        apiFetch('/api/auth/device/claim', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_code: userCode }),

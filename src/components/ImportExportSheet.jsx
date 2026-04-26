@@ -3,6 +3,7 @@ import { downloadICS }        from '../utils/icsExport'
 import { parseICS }           from '../utils/icsImport'
 import { parseEvent }         from '../utils/parseEvent'
 import { googleCalendarUrl }  from '../utils/googleCalendarUrl'
+import { apiFetch, apiUrl }    from '../lib/apiClient'
 import { supabase }           from '../lib/supabase'
 import { pushModal, popModal } from '../utils/modalStack'
 
@@ -330,7 +331,7 @@ function SubscribeTab() {
     }
     setAuthed(true)
     try {
-      const res = await fetch('/api/calendar-feeds', {
+      const res = await apiFetch('/api/calendar-feeds', {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error(`status ${res.status}`)
@@ -351,7 +352,7 @@ function SubscribeTab() {
     try {
       const token = await getToken()
       if (!token) throw new Error('Necesitas iniciar sesión')
-      const res = await fetch('/api/calendar-feeds', {
+      const res = await apiFetch('/api/calendar-feeds', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -372,7 +373,7 @@ function SubscribeTab() {
     if (!confirm('¿Revocar este feed? Las apps suscritas dejarán de recibir actualizaciones.')) return
     try {
       const jwt = await getToken()
-      await fetch('/api/calendar-feeds', {
+      await apiFetch('/api/calendar-feeds', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -385,8 +386,10 @@ function SubscribeTab() {
   }
 
   function feedUrl(token) {
+    const url = apiUrl(`/api/ics-feed?token=${token}`)
+    if (/^https?:\/\//i.test(url)) return url
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    return `${origin}/api/ics-feed?token=${token}`
+    return `${origin}${url}`
   }
 
   async function copyUrl(url) {
@@ -861,7 +864,7 @@ function PhotoTab({ onImport }) {
 
       let res
       try {
-        res = await fetch('/api/analyze-photo', {
+        res = await apiFetch('/api/analyze-photo', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ images }),

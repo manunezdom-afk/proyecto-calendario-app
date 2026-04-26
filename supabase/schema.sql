@@ -214,6 +214,27 @@ CREATE POLICY "Users manage own push subscriptions"
   ON public.push_subscriptions FOR ALL USING (auth.uid() = user_id);
 CREATE INDEX IF NOT EXISTS push_subs_user_idx ON public.push_subscriptions (user_id);
 
+-- ── native_push_tokens: APNs tokens para builds iOS App Store ────────────────
+CREATE TABLE IF NOT EXISTS public.native_push_tokens (
+  id           BIGSERIAL PRIMARY KEY,
+  user_id      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  token        TEXT NOT NULL UNIQUE,
+  platform     TEXT NOT NULL DEFAULT 'ios',
+  environment  TEXT NOT NULL DEFAULT 'production',
+  bundle_id    TEXT NOT NULL DEFAULT 'me.usefocus.app',
+  user_agent   TEXT,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.native_push_tokens ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own native push tokens"
+  ON public.native_push_tokens FOR ALL USING (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS native_push_tokens_user_idx
+  ON public.native_push_tokens (user_id);
+CREATE INDEX IF NOT EXISTS native_push_tokens_user_env_idx
+  ON public.native_push_tokens (user_id, environment);
+
 -- ── sent_notifications: dedup para no mandar la misma push 2 veces ───────────
 -- El cron scheduler registra aquí cada push enviado (user_id + event_id + offset)
 CREATE TABLE IF NOT EXISTS public.sent_notifications (

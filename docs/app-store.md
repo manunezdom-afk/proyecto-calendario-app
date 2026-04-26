@@ -75,15 +75,16 @@ En Xcode:
 4. **Bundle Identifier** → debería decir `me.usefocus.app`. Si Xcode te pide cambiarlo porque "ya existe", elige otro (ej: `me.usefocus.focusapp`) y actualiza también `capacitor.config.json` + `npm run ios:sync`.
 5. Si Xcode muestra warning de provisioning profile, click en **"Try Again"** o **"Automatically manage signing"**.
 
-### Paso 4 — Habilitar Push Notifications (opcional pero recomendado)
+### Paso 4 — Habilitar Push Notifications
 
 En la misma pantalla **Signing & Capabilities**:
 
 1. Click `+ Capability` (arriba a la izquierda).
 2. Buscar y agregar **Push Notifications**.
-3. Agregar también **Background Modes** → marcar `Remote notifications`.
 
-⚠️ Sin este paso, el plugin `@capacitor/push-notifications` no funciona en iOS. La web push de Vercel sí seguirá funcionando, pero las nativas no.
+El repo ya incluye `ios/App/App/App.entitlements` y Release usa `aps-environment=production`, pero Xcode igual necesita tu Team de Apple para crear el provisioning profile con Push Notifications.
+
+No agregues **Background Modes → Remote notifications** para esta versión salvo que implementes silent/background pushes. Los recordatorios visibles de APNs no lo necesitan.
 
 ### Paso 5 — Probar en simulador
 
@@ -179,26 +180,29 @@ Apple te manda un mensaje específico, lo arreglas, vuelves a hacer Archive + Up
 
 ## ¿Cómo arreglo bugs después de publicar?
 
-### Bug en código React (UI, lógica, etc.) — sin pasar por Apple
+### Bug en código React (UI, lógica, etc.)
+
+En la app iOS empaquetada, los cambios de React también pasan por Apple:
 
 1. Cambias el código.
-2. `git push` a `main`.
-3. Vercel deploya en ~1 min.
-4. El usuario abre la app y ya tiene el fix (porque la app carga su contenido desde `dist/` empaquetado, PERO si configuras la app para cargar desde `usefocus.me`, ahí sí es instantáneo).
+2. `npm run ios:sync`.
+3. En Xcode, subes el build number.
+4. Product → Archive → Distribute → Upload.
+5. En App Store Connect seleccionas el nuevo build y lo envías a revisión.
 
-⚠️ **Importante**: Capacitor por defecto empaqueta `dist/` dentro del binario iOS. Eso significa que un cambio en React requiere `npm run ios:sync` + Archive + Upload + review de Apple.
+Para la web/PWA, un `git push` a `main` sí queda publicado por Vercel en minutos.
 
 **Si quieres updates instantáneos** (sin pasar por Apple para cada bug), edita `capacitor.config.json` y agrega:
 
 ```json
 "server": {
-  "url": "https://usefocus.me",
+  "url": "https://www.usefocus.me",
   "iosScheme": "https",
   "cleartext": false
 }
 ```
 
-Eso hace que la app sea un wrapper que carga `usefocus.me` directo. Pros: cualquier push a main = update inmediato para todos. Contras: requiere conexión, y Apple a veces es más estricto con esto (guideline 4.2).
+Eso hace que la app sea un wrapper que carga `www.usefocus.me` directo. Pros: cualquier push a main = update inmediato para todos. Contras: requiere conexión, y Apple a veces es más estricto con esto (guideline 4.2).
 
 **Recomendación**: empieza empaquetado (default). Si Apple rechaza por 4.2, agregas más nativo. Si la base de usuarios crece y necesitas updates rápidos, pasa al modo `server.url`.
 
@@ -244,7 +248,7 @@ npm run build:ios-icons  # regenera el AppIcon 1024 desde public/icons/icon-512.
 - [ ] App abre y funciona en iPhone físico (recomendado).
 - [ ] Bundle ID en Xcode coincide con `me.usefocus.app` (o el que elegiste).
 - [ ] Team de Signing seleccionado.
-- [ ] Push Notifications capability agregada (si quieres push nativo).
+- [ ] Push Notifications capability agregada.
 - [ ] AppIcon 1024×1024 sin alpha (ya está, generado por `build:ios-icons`).
 - [ ] Privacy Policy URL pública lista.
 - [ ] Screenshots tomados (mínimo 3 a 6.7").

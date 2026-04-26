@@ -3,12 +3,14 @@
 // /api/push-snooze y /api/push-test para respetar el límite de 12 funciones
 // serverless del plan Hobby de Vercel.
 //
-// Body: { action: 'subscribe' | 'unsubscribe' | 'snooze' | 'test', ... }
-// Auth (Bearer Supabase) requerido para subscribe, unsubscribe y test.
+// Body: { action: 'subscribe' | 'unsubscribe' | 'native_subscribe' |
+//         'native_unsubscribe' | 'snooze' | 'test', ... }
+// Auth (Bearer Supabase) requerido para subscribe, unsubscribe, native_* y test.
 // Snooze se deja sin auth porque lo llama el service worker sin token.
 
 import webpush from 'web-push'
 import { getSupabaseAdmin, getUserIdFromAuth } from './_supabaseAdmin.js'
+import { getApnsConfig, normalizeApnsToken, sendApnsNotification } from './_lib/apns.js'
 import { rejectCrossSiteUnsafe, setCorsHeaders } from './_lib/security.js'
 
 export default async function handler(req, res) {
@@ -23,12 +25,66 @@ export default async function handler(req, res) {
   switch (action) {
     case 'subscribe':   return handleSubscribe(req, res, body)
     case 'unsubscribe': return handleUnsubscribe(req, res, body)
+    case 'native_subscribe':   return handleNativeSubscribe(req, res, body)
+    case 'native_unsubscribe': return handleNativeUnsubscribe(req, res, body)
     case 'snooze':      return handleSnooze(req, res, body)
     case 'test':        return handleTest(req, res, body)
     case 'health':      return handleHealth(req, res, body)
     case 'renew':       return handleRenew(req, res, body)
     default:            return res.status(400).json({ error: 'invalid_action' })
   }
+}
+
+async function handleNativeSubscribe(req, res, body) {
+  const userId = await getUserIdFromAuth(req)
+  if (!userId) return res.status(401).json({ error: 'unauthorized' })
+
+  const token = normalizeApnsToken(body.token)
+  if (!token) return res.status(400).json({ error: 'invalid_native_token' })
+
+  const admin = getSupabaseAdmin()
+  if (!admin) return res.status(503).json({ error: 'no_backend_supabase' })
+
+  const config = getApnsConfig()
+  const environment = body.environment === 'development' ? 'development' : config.environment
+  const bundleId = typeof body.bundle_id === 'string' && body.bundle_id.trim()
+    ? body.bundle_id.trim()
+    : config.bundleId
+
+  const { error } = await admin
+    .from('native_push_tokens')
+    .upsert({
+      user_id: userId,
+      token,
+      platform: body.platform === 'android' ? 'android' : 'ios',
+      environment,
+      bundle_id: bundleId,
+      user_agent: typeof body.user_agent === 'string' ? body.user_agent.slice(0, 200) : null,
+      last_used_at: new Date().toISOString(),
+    }, { onConflict: 'token' })
+
+  if (error) return res.status(500).json({ error: 'db_error', message: error.message })
+  return res.status(200).json({ ok: true, native: true })
+}
+
+async function handleNativeUnsubscribe(req, res, body) {
+  const userId = await getUserIdFromAuth(req)
+  if (!userId) return res.status(401).json({ error: 'unauthorized' })
+
+  const token = normalizeApnsToken(body.token)
+  if (!token) return res.status(400).json({ error: 'invalid_native_token' })
+
+  const admin = getSupabaseAdmin()
+  if (!admin) return res.status(503).json({ error: 'no_backend_supabase' })
+
+  const { error } = await admin
+    .from('native_push_tokens')
+    .delete()
+    .eq('user_id', userId)
+    .eq('token', token)
+
+  if (error) return res.status(500).json({ error: 'db_error', message: error.message })
+  return res.status(200).json({ ok: true })
 }
 
 // handleRenew — reemplaza una suscripción expirada por una nueva, autenticando
@@ -217,6 +273,20 @@ async function handleHealth(req, res, body) {
     ? subs?.some((s) => s.endpoint === currentEndpoint)
     : null
 
+  let nativeTokenCount = 0
+  let currentNativePresent = null
+  try {
+    const currentNativeToken = normalizeApnsToken(body.native_token)
+    const { data: nativeTokens } = await admin
+      .from('native_push_tokens')
+      .select('token')
+      .eq('user_id', userId)
+    nativeTokenCount = nativeTokens?.length ?? 0
+    currentNativePresent = currentNativeToken
+      ? nativeTokens?.some((row) => row.token === currentNativeToken)
+      : null
+  } catch {}
+
   // Última entrega (best-effort): si la tabla notification_deliveries no
   // existe, el query devuelve error y mandamos `lastDelivery: null`.
   let lastDelivery = null
@@ -240,7 +310,9 @@ async function handleHealth(req, res, body) {
   return res.status(200).json({
     ok: true,
     subscriptionCount,
+    nativeTokenCount,
     currentPresent, // true | false | null
+    currentNativePresent, // true | false | null
     lastDelivery,   // { status, statusCode, title, sentAt } | null
   })
 }
@@ -248,12 +320,6 @@ async function handleHealth(req, res, body) {
 async function handleTest(req, res) {
   const userId = await getUserIdFromAuth(req)
   if (!userId) return res.status(401).json({ error: 'unauthorized' })
-
-  const pub = process.env.VAPID_PUBLIC_KEY
-  const priv = process.env.VAPID_PRIVATE_KEY
-  const email = process.env.VAPID_EMAIL || 'mailto:admin@focus.app'
-  if (!pub || !priv) return res.status(503).json({ error: 'vapid_not_configured' })
-  webpush.setVapidDetails(email, pub, priv)
 
   const admin = getSupabaseAdmin()
   if (!admin) return res.status(503).json({ error: 'no_backend_supabase' })
@@ -264,7 +330,19 @@ async function handleTest(req, res) {
     .eq('user_id', userId)
 
   if (error) return res.status(500).json({ error: 'db_error', message: error.message })
-  if (!subs?.length) return res.status(404).json({ error: 'no_subscriptions_for_user' })
+
+  let nativeTokens = []
+  try {
+    const { data } = await admin
+      .from('native_push_tokens')
+      .select('token, environment, bundle_id')
+      .eq('user_id', userId)
+    nativeTokens = data || []
+  } catch {}
+
+  if (!subs?.length && !nativeTokens.length) {
+    return res.status(404).json({ error: 'no_subscriptions_for_user' })
+  }
 
   const payload = {
     title: 'Notificación de prueba',
@@ -278,27 +356,77 @@ async function handleTest(req, res) {
 
   const results = []
   const deadEndpoints = []
+  const deadNativeTokens = []
 
-  await Promise.all(subs.map(async (row) => {
-    const sub = { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }
-    try {
-      await webpush.sendNotification(sub, JSON.stringify(payload), {
-        TTL: 60, urgency: 'high', contentEncoding: 'aes128gcm',
-      })
-      results.push({ endpoint: row.endpoint.slice(0, 60) + '…', ok: true })
-    } catch (err) {
-      if (err?.statusCode === 404 || err?.statusCode === 410) deadEndpoints.push(row.endpoint)
-      results.push({
+  const pub = process.env.VAPID_PUBLIC_KEY
+  const priv = process.env.VAPID_PRIVATE_KEY
+  const email = process.env.VAPID_EMAIL || 'mailto:admin@focus.app'
+
+  if (subs?.length) {
+    if (pub && priv) {
+      webpush.setVapidDetails(email, pub, priv)
+      await Promise.all(subs.map(async (row) => {
+        const sub = { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }
+        try {
+          await webpush.sendNotification(sub, JSON.stringify(payload), {
+            TTL: 60, urgency: 'high', contentEncoding: 'aes128gcm',
+          })
+          results.push({ channel: 'web', endpoint: row.endpoint.slice(0, 60) + '…', ok: true })
+        } catch (err) {
+          if (err?.statusCode === 404 || err?.statusCode === 410) deadEndpoints.push(row.endpoint)
+          results.push({
+            channel: 'web',
+            endpoint: row.endpoint.slice(0, 60) + '…',
+            ok: false,
+            statusCode: err?.statusCode,
+            body: err?.body?.toString?.().slice(0, 200),
+          })
+        }
+      }))
+    } else {
+      subs.forEach((row) => results.push({
+        channel: 'web',
         endpoint: row.endpoint.slice(0, 60) + '…',
         ok: false,
-        statusCode: err?.statusCode,
-        body: err?.body?.toString?.().slice(0, 200),
-      })
+        error: 'vapid_not_configured',
+      }))
     }
-  }))
+  }
+
+  if (nativeTokens.length) {
+    const apnsConfig = getApnsConfig()
+    await Promise.all(nativeTokens.map(async (row) => {
+      const result = await sendApnsNotification({
+        token: row.token,
+        payload,
+        config: {
+          ...apnsConfig,
+          bundleId: row.bundle_id || apnsConfig.bundleId,
+          environment: row.environment || apnsConfig.environment,
+        },
+      }).catch((err) => ({
+        ok: false,
+        statusCode: null,
+        error: String(err?.message || err),
+      }))
+      if (!result.ok && (result.statusCode === 410 || /Unregistered|BadDeviceToken/i.test(result.error || ''))) {
+        deadNativeTokens.push(row.token)
+      }
+      results.push({
+        channel: 'apns',
+        token: `${row.token.slice(0, 8)}…`,
+        ok: result.ok,
+        statusCode: result.statusCode,
+        error: result.error,
+      })
+    }))
+  }
 
   if (deadEndpoints.length > 0) {
     await admin.from('push_subscriptions').delete().in('endpoint', deadEndpoints)
+  }
+  if (deadNativeTokens.length > 0) {
+    await admin.from('native_push_tokens').delete().in('token', deadNativeTokens)
   }
 
   const sent = results.filter(r => r.ok).length

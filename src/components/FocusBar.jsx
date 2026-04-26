@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUserMemories } from '../hooks/useUserMemories'
 import MicButton from './MicButton'
+import { apiFetch } from '../lib/apiClient'
 import { isIOSSafari } from '../lib/permissions'
 import { createVAD } from '../lib/voiceActivityDetector'
 import { readPreferenceSync } from '../hooks/useAppPreferences'
@@ -101,7 +102,7 @@ function resolveLinkedEventId(events, task) {
 }
 
 async function callFocusAssistant({ message, events, tasks, memories, history }) {
-  const res = await fetch('/api/focus-assistant', {
+  const res = await apiFetch('/api/focus-assistant', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -572,7 +573,7 @@ export default function FocusBar({
         reader.readAsDataURL(file)
       })
 
-      const res = await fetch('/api/analyze-photo', {
+      const res = await apiFetch('/api/analyze-photo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ images: [{ base64, mediaType: file.type || 'image/jpeg' }] }),

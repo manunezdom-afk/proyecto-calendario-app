@@ -157,7 +157,7 @@ El **6** y **7** van en paralelo cuando tengas tiempo muerto.
 
 - ❌ Agregar features nuevas (lo que tienes ya alcanza)
 - ❌ Dark mode, temas, personalizaciones visuales
-- ❌ App nativa (Capacitor) — espera a tener 500+ usuarios activos
+- Nota: App nativa (Capacitor) quedó fuera de este plan original; el flujo actual está en `docs/app-store.md`
 - ❌ Blog, content marketing — después de Product Hunt
 - ❌ Integraciones profundas (Google Cal bidireccional, WhatsApp) — mes 2 si hay tracción
 - ❌ Rebuilds de cosas que funcionan aceptablemente

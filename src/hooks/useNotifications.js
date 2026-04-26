@@ -8,6 +8,12 @@ import {
   forceResubscribe,
 } from '../lib/pushSubscription'
 import {
+  getNativePushStatus,
+  isNativePushSupported,
+  registerNativePush,
+  unregisterNativePush,
+} from '../lib/nativePush'
+import {
   DEFAULT_REMINDER_OFFSETS,
   buildSmartNotificationPayload,
   normalizeReminderOffsets,
@@ -32,10 +38,17 @@ function loadJSON(key, fallback) {
   return fallback
 }
 
+function normalizeNativePermission(value) {
+  if (value === 'granted' || value === 'denied') return value
+  return 'default'
+}
+
 export function useNotifications({ events = [] } = {}) {
   const [notifLog, setNotifLog] = useState(() => loadJSON(LOG_KEY, []))
   const [permissionState, setPermissionState] = useState(() =>
-    typeof Notification !== 'undefined' ? Notification.permission : 'denied',
+    isNativePushSupported()
+      ? 'default'
+      : (typeof Notification !== 'undefined' ? Notification.permission : 'denied'),
   )
   const [permissionDismissed, setPermissionDismissed] = useState(
     () => localStorage.getItem(DISMISS_KEY) === '1',
@@ -72,6 +85,47 @@ export function useNotifications({ events = [] } = {}) {
   const [lastDelivery, setLastDelivery] = useState(null)
 
   const runHealthCheck = useCallback(async () => {
+    if (isNativePushSupported()) {
+      const s = await getNativePushStatus().catch(() => null)
+      if (!s) return
+      setPermissionState(normalizeNativePermission(s.permission))
+      setPushSubscribed(!!s.subscribed)
+
+      if (!s.supported) { setPushDisconnected(false); return }
+      if (s.permission !== 'granted') { setPushDisconnected(false); return }
+
+      if (!s.subscribed) {
+        const r = await registerNativePush({ prompt: false }).catch(() => null)
+        if (r?.ok && r.reason !== 'saved_locally_no_session') {
+          setPushSubscribed(true)
+          setPushDisconnected(false)
+        } else {
+          setPushDisconnected(true)
+        }
+        return
+      }
+
+      const h = await checkSubscriptionHealth({ nativeToken: s.token }).catch(() => null)
+      if (!h || !h.ok) { setPushDisconnected(false); return }
+      if (h.lastDelivery !== undefined) setLastDelivery(h.lastDelivery)
+
+      if (h.nativeTokenCount === 0 || h.currentNativePresent === false) {
+        console.warn('[Focus] 🔁 token APNs huérfano — registrando de nuevo')
+        setPushHealing(true)
+        const r = await registerNativePush({ prompt: false }).catch(() => null)
+        setPushHealing(false)
+        if (r?.ok && r.reason !== 'saved_locally_no_session') {
+          setPushSubscribed(true)
+          setPushDisconnected(false)
+        } else {
+          setPushDisconnected(true)
+        }
+      } else {
+        setPushDisconnected(false)
+      }
+      return
+    }
+
     if ('serviceWorker' in navigator) {
       await navigator.serviceWorker.ready.catch(() => {})
     }
@@ -135,6 +189,17 @@ export function useNotifications({ events = [] } = {}) {
   const reconnectPush = useCallback(async () => {
     setPushHealing(true)
     try {
+      if (isNativePushSupported()) {
+        const r = await registerNativePush({ prompt: true })
+        if (r?.ok) {
+          setPushSubscribed(true)
+          setPushDisconnected(false)
+          setPermissionState('granted')
+          return { ok: true }
+        }
+        return { ok: false, reason: r?.reason, error: r?.error }
+      }
+
       const r = await forceResubscribe()
       if (r?.ok) {
         setPushSubscribed(true)
@@ -148,6 +213,15 @@ export function useNotifications({ events = [] } = {}) {
   }, [])
 
   const requestPermission = useCallback(async () => {
+    if (isNativePushSupported()) {
+      const r = await registerNativePush({ prompt: true })
+      const s = await getNativePushStatus().catch(() => null)
+      if (s?.permission) setPermissionState(normalizeNativePermission(s.permission))
+      setPushSubscribed(!!r?.ok)
+      if (!r?.ok) console.warn('[Focus] native push subscribe failed:', r?.reason)
+      return
+    }
+
     if (typeof Notification === 'undefined') return
     const result = await Notification.requestPermission()
     setPermissionState(result)
@@ -159,6 +233,13 @@ export function useNotifications({ events = [] } = {}) {
   }, [])
 
   const disablePush = useCallback(async () => {
+    if (isNativePushSupported()) {
+      await unregisterNativePush()
+      setPushSubscribed(false)
+      setPushDisconnected(false)
+      return
+    }
+
     await unsubscribeFromPush()
     setPushSubscribed(false)
   }, [])

@@ -1,7 +1,7 @@
 /**
  * GET /api/cron-notifications
  *
- * Endpoint llamado cada ~5 min por GitHub Actions (o Vercel Cron).
+ * Endpoint llamado cada ~5 min por GitHub Actions.
  * Escanea eventos próximos y dispara push notifications.
  *
  * Auth: header 'Authorization: Bearer <CRON_SECRET>' — shared secret.
@@ -14,6 +14,7 @@
  */
 
 import webpush from 'web-push'
+import { getApnsConfig, sendApnsNotification } from './_lib/apns.js'
 import { getSupabaseAdmin } from './_supabaseAdmin.js'
 import {
   DEFAULT_REMINDER_OFFSETS,
@@ -107,7 +108,8 @@ function minutesUntil(date) {
   return (date.getTime() - Date.now()) / 60000
 }
 
-async function sendPushToUser(admin, userId, payload, logCtx = null) {
+async function sendPushToUser(admin, userId, payload, logCtx = null, options = {}) {
+  const webPushConfigured = options.webPushConfigured !== false
   const { data: subs, error } = await admin
     .from('push_subscriptions')
     .select('*')
@@ -130,6 +132,7 @@ async function sendPushToUser(admin, userId, payload, logCtx = null) {
     let errorMessage = null
 
     try {
+      if (!webPushConfigured) throw new Error('vapid_not_configured')
       const ttl = Math.max(60, Math.min(Number(payload.ttl) || 3600, 24 * 60 * 60))
       const urgency = ['very-low', 'low', 'normal', 'high'].includes(payload.urgency)
         ? payload.urgency
@@ -181,6 +184,84 @@ async function sendPushToUser(admin, userId, payload, logCtx = null) {
   return { sent, failed }
 }
 
+async function sendNativePushToUser(admin, userId, payload, logCtx = null, apnsConfig = getApnsConfig()) {
+  const { data: tokens, error } = await admin
+    .from('native_push_tokens')
+    .select('token, bundle_id, environment')
+    .eq('user_id', userId)
+  if (error || !tokens?.length) return { sent: 0, failed: 0 }
+
+  let sent = 0
+  let failed = 0
+  const deadTokens = []
+  const deliveryRows = []
+
+  await Promise.all(tokens.map(async (row) => {
+    const startedAt = Date.now()
+    let status = 'delivered'
+    let statusCode = null
+    let errorMessage = null
+
+    try {
+      if (!apnsConfig?.configured) throw new Error('apns_not_configured')
+      const result = await sendApnsNotification({
+        token: row.token,
+        payload,
+        config: {
+          ...apnsConfig,
+          bundleId: row.bundle_id || apnsConfig.bundleId,
+          environment: row.environment || apnsConfig.environment,
+        },
+      })
+      statusCode = result.statusCode ?? null
+      if (result.ok) {
+        sent++
+      } else {
+        failed++
+        errorMessage = String(result.error || '').slice(0, 300)
+        if (statusCode === 410 || /Unregistered|BadDeviceToken/i.test(errorMessage)) {
+          deadTokens.push(row.token)
+          status = 'gone'
+        } else {
+          status = 'failed'
+          console.warn('[cron] apns push failed', row.token.slice(0, 8), statusCode, errorMessage)
+        }
+      }
+    } catch (err) {
+      failed++
+      errorMessage = String(err?.message || err).slice(0, 300)
+      status = 'failed'
+      console.warn('[cron] apns push failed', row.token.slice(0, 8), statusCode, errorMessage)
+    }
+
+    if (logCtx) {
+      deliveryRows.push({
+        user_id: userId,
+        event_id: logCtx.eventId ?? null,
+        offset_min: logCtx.offset ?? null,
+        endpoint: `apns:${row.token.slice(0, 32)}`,
+        status,
+        status_code: statusCode,
+        error: errorMessage,
+        payload_title: payload.title?.slice(0, 200) ?? null,
+        duration_ms: Date.now() - startedAt,
+        sent_at: new Date().toISOString(),
+      })
+    }
+  }))
+
+  if (deadTokens.length > 0) {
+    await admin.from('native_push_tokens').delete().in('token', deadTokens)
+  }
+
+  // Tabla opcional: si la migración no existe, no rompemos el cron.
+  if (deliveryRows.length > 0) {
+    admin.from('notification_deliveries').insert(deliveryRows).then(() => {}, () => {})
+  }
+
+  return { sent, failed }
+}
+
 async function recordSentNotification(admin, row) {
   const extended = {
     user_id: row.user_id,
@@ -221,8 +302,10 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'unauthorized' })
   }
 
-  if (!configureWebPush()) {
-    return res.status(503).json({ error: 'vapid_not_configured' })
+  const webPushConfigured = configureWebPush()
+  const apnsConfig = getApnsConfig()
+  if (!webPushConfigured && !apnsConfig.configured) {
+    return res.status(503).json({ error: 'push_not_configured' })
   }
 
   const admin = getSupabaseAdmin()
@@ -364,10 +447,16 @@ export default async function handler(req, res) {
         subject,
       })
 
-      const { sent, failed } = await sendPushToUser(admin, ev.user_id, payload, {
+      const webResult = await sendPushToUser(admin, ev.user_id, payload, {
         eventId: ev.id,
         offset,
-      })
+      }, { webPushConfigured })
+      const nativeResult = await sendNativePushToUser(admin, ev.user_id, payload, {
+        eventId: ev.id,
+        offset,
+      }, apnsConfig)
+      const sent = webResult.sent + nativeResult.sent
+      const failed = webResult.failed + nativeResult.failed
       pushes += sent
       failures += failed
 
@@ -399,6 +488,8 @@ export default async function handler(req, res) {
         kind: payload.data?.kind,
         title: payload.title,
         sent,
+        web_sent: webResult.sent,
+        native_sent: nativeResult.sent,
       })
     }
   }
