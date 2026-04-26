@@ -48,16 +48,17 @@ export default function NovaHint({
     return () => clearTimeout(t)
   }, [id, trigger, delayMs])
 
-  // Auto-dismiss tras 14s. Si el usuario scrolleó o ignoró el hint, no vale la
-  // pena que siga tapando contenido en iPhone (donde ocupa una banda ancha
-  // sobre los chips y el bottom nav). Una vez descartado no vuelve — el copy
-  // no era crítico, solo orientativo.
+  // Auto-dismiss. En desktop dejamos 14s; en móvil bajamos a 9s porque la
+  // burbuja (aunque ahora compacta) sigue ocupando espacio sobre el planner
+  // y el copy ya se leyó en los primeros segundos. Una vez descartado no
+  // vuelve — el copy no era crítico, solo orientativo.
   useEffect(() => {
     if (!visible) return
-    const t = setTimeout(() => dismiss(), 14000)
+    const ms = isMobile ? 9000 : 14000
+    const t = setTimeout(() => dismiss(), ms)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible])
+  }, [visible, isMobile])
 
   function dismiss() {
     markShown(id)
@@ -81,10 +82,12 @@ export default function NovaHint({
           className="fixed z-[60] pointer-events-none"
           style={isMobile
             ? {
-                left: 'calc(env(safe-area-inset-left, 0px) + 14px)',
-                right: 'calc(env(safe-area-inset-right, 0px) + 14px)',
-                top: 'calc(env(safe-area-inset-top, 0px) + 72px)',
-                maxWidth: 'none',
+                // En móvil: anclado arriba-izquierda con max-width acotado.
+                // Antes ocupaba toda la banda superior (left+right edge) y se
+                // sentía invasivo en el planner — ahora deja respirar el día.
+                left: 'calc(env(safe-area-inset-left, 0px) + 12px)',
+                top: 'calc(env(safe-area-inset-top, 0px) + 60px)',
+                maxWidth: 'min(calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)), 280px)',
               }
             : {
                 right: 'calc(env(safe-area-inset-right, 0px) + 18px)',
@@ -94,10 +97,12 @@ export default function NovaHint({
         >
           <div className="flex items-start sm:items-end gap-2 pointer-events-auto">
             <div style={{ flexShrink: 0, marginBottom: 4 }}>
-              <NovaOrb size={36} pulse ambient />
+              <NovaOrb size={isMobile ? 30 : 36} pulse ambient />
             </div>
             <div
-              className="relative rounded-2xl rounded-bl-md border pl-4 pr-9 py-3 shadow-xl"
+              className={`relative rounded-2xl rounded-bl-md border shadow-xl ${
+                isMobile ? 'pl-3 pr-8 py-2.5' : 'pl-4 pr-9 py-3'
+              }`}
               style={{
                 background: 'rgba(20, 18, 36, 0.92)',
                 borderColor: 'rgba(124, 107, 255, 0.25)',
@@ -109,15 +114,15 @@ export default function NovaHint({
               <button
                 onClick={dismiss}
                 aria-label="Descartar tip"
-                className="absolute top-1.5 right-1.5 h-7 w-7 flex items-center justify-center rounded-full text-white/50 hover:text-white/90 hover:bg-white/10 active:scale-90 transition-colors"
+                className="absolute top-1 right-1 h-6 w-6 flex items-center justify-center rounded-full text-white/50 hover:text-white/90 hover:bg-white/10 active:scale-90 transition-colors"
               >
-                <span className="material-symbols-outlined text-[16px]">close</span>
+                <span className="material-symbols-outlined text-[14px]">close</span>
               </button>
               <p
                 className="font-headline"
                 style={{
-                  fontSize: '13.5px',
-                  lineHeight: 1.45,
+                  fontSize: isMobile ? '12.5px' : '13.5px',
+                  lineHeight: 1.4,
                   letterSpacing: '-0.005em',
                   fontWeight: 500,
                 }}
@@ -125,11 +130,11 @@ export default function NovaHint({
                 {children}
               </p>
 
-              <div className="mt-2.5 flex items-center gap-2">
+              <div className={`flex items-center gap-2 ${isMobile ? 'mt-2' : 'mt-2.5'}`}>
                 {actionLabel && (
                   <button
                     onClick={handleAction}
-                    className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-white transition-transform active:scale-95 min-h-[32px]"
+                    className="rounded-full px-3 py-1 text-[11.5px] font-semibold text-white transition-transform active:scale-95 min-h-[28px]"
                     style={{ background: 'var(--nova)' }}
                   >
                     {actionLabel}
@@ -137,7 +142,7 @@ export default function NovaHint({
                 )}
                 <button
                   onClick={dismiss}
-                  className="rounded-full px-2.5 py-1 text-[12px] font-medium text-white/60 hover:text-white/90 transition-colors min-h-[32px]"
+                  className="rounded-full px-2 py-0.5 text-[11.5px] font-medium text-white/55 hover:text-white/90 transition-colors min-h-[28px]"
                 >
                   Entendido
                 </button>
