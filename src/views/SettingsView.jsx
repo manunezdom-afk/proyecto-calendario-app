@@ -81,6 +81,36 @@ function PushDiagnostic() {
   const [testing, setTesting] = useState(false)
   const busy = verifying || reconnecting || testing
 
+  // Watchdog: en iOS PWA, si la pestaña entra en background mientras hay un
+  // fetch + withTimeout en vuelo, ambos quedan congelados y el `finally` que
+  // limpia el flag de loading nunca corre — los botones quedan deshabilitados
+  // ("Enviando…", "Verificando…") para siempre. Este safety net libera el
+  // estado pasado un margen razonable sobre el withTimeout interno.
+  useEffect(() => {
+    if (!verifying) return
+    const t = setTimeout(() => {
+      setVerifying(false)
+      setStatus({ ok: false, msg: 'La verificación tardó demasiado. Reintenta en unos segundos.' })
+    }, 25000)
+    return () => clearTimeout(t)
+  }, [verifying])
+  useEffect(() => {
+    if (!reconnecting) return
+    const t = setTimeout(() => {
+      setReconnecting(false)
+      setStatus({ ok: false, msg: 'La reconexión tardó demasiado. Reintenta en unos segundos.' })
+    }, 40000)
+    return () => clearTimeout(t)
+  }, [reconnecting])
+  useEffect(() => {
+    if (!testing) return
+    const t = setTimeout(() => {
+      setTesting(false)
+      setStatus({ ok: false, msg: 'El servidor tardó demasiado. Reintenta en unos segundos.' })
+    }, 18000)
+    return () => clearTimeout(t)
+  }, [testing])
+
   function msgForTimeout(label) {
     if (/sw_/.test(label)) return 'El service worker no respondió. Cierra y vuelve a abrir la app.'
     if (/backend|health|test/.test(label)) return 'No se pudo contactar al servidor. Revisa la conexión y reintenta.'
@@ -418,6 +448,15 @@ function RemindersRow() {
 
   useEffect(() => {
     let cancelled = false
+    // Watchdog: si nos quedamos en 'checking' más de 25s, asumimos que el SW
+    // o el backend están colgados (típico en iOS PWA tras un wake-up) y
+    // mostramos el estado por defecto. Sin esto el subtítulo "Verificando
+    // estado…" se quedaba para siempre.
+    const watchdog = setTimeout(() => {
+      if (!cancelled) {
+        setState((prev) => (prev === 'checking' ? 'active' : prev))
+      }
+    }, 25000)
     async function run() {
       try {
         const s = await getPushStatus()
@@ -445,7 +484,7 @@ function RemindersRow() {
       }
     }
     run()
-    return () => { cancelled = true }
+    return () => { cancelled = true; clearTimeout(watchdog) }
   }, [])
 
   const baseCopy = {
