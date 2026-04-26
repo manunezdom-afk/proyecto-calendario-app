@@ -117,7 +117,7 @@ const STORAGE_KEY = 'focus_planner_blocks'
 // ── Lógica de insights personalizados ─────────────────────────────────────
 function buildInsights(events, profile) {
   const todayISO = todayISODate()
-  const todayEvents = events.filter((e) => !e.date || e.date === todayISO)
+  const todayEvents = events.filter((e) => e.date === todayISO)
   const eveningCount = todayEvents.filter((e) => e.section === 'evening').length
   const meetingCount = todayEvents.filter((e) =>
     /reuni[oó]n|meeting|llamada|call|sincro|junta/i.test(e.title)
@@ -455,7 +455,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   // si cambiaron. Los blocks manuales (sin eventId) no se tocan.
   useEffect(() => {
     const todayISO = todayISODate()
-    const todayEvents = (events || []).filter((e) => !e.date || e.date === todayISO)
+    const todayEvents = (events || []).filter((e) => e.date === todayISO)
     const eventById = new Map(todayEvents.map(e => [e.id, e]))
 
     setBlocks((prev) => {

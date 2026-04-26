@@ -38,6 +38,10 @@ function eventFromDb(row) {
     date: row.date, featured: row.featured,
     reminderOffsets: row.reminder_offsets ?? null,
     timezone: row.timezone ?? null,
+    // Necesario para backfillear `date` en eventos legacy creados sin fecha:
+    // un evento con date=null aparecía como "hoy" para siempre y se arrastraba
+    // día tras día. Con createdAt podemos estamparlo en su día real.
+    createdAt: row.created_at ?? null,
   }
 }
 

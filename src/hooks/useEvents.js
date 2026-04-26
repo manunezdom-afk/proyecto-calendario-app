@@ -8,6 +8,20 @@ import { cleanGeneratedTitle } from '../utils/titleCleanup'
 import { composeTimeRange, parseTimeRange } from '../utils/eventDuration'
 import { isReminderItem } from '../utils/reminders'
 import { focusLog } from '../utils/debug'
+import { todayISO } from '../utils/time'
+
+// Backfill para eventos legacy sin `date`: usamos `created_at` para estamparlos
+// en el día en que se crearon. Sin esto, los filtros de "hoy" tratan null como
+// hoy y los eventos no completados ayer se "arrastran" al día siguiente.
+function isoDateLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function backfillDateFromCreatedAt(createdAtIso) {
+  if (!createdAtIso) return todayISO()
+  const d = new Date(createdAtIso)
+  if (Number.isNaN(d.getTime())) return todayISO()
+  return isoDateLocal(d)
+}
 
 // Extrae la hora (0-23) de un string "HH:MM" o "HH:MM – HH:MM"
 function parseEventHour(time) {
@@ -90,7 +104,30 @@ export function useEvents() {
   const refetch = useCoalescedRefetch(async (tag = '') => {
     if (!user) return
     try {
-      const cloudEvents = await dataService.fetchEvents(user.id)
+      const cloudEventsRaw = await dataService.fetchEvents(user.id)
+      // Backfill: cualquier evento legacy con date=null se estampa con la fecha
+      // local de su `created_at` y se persiste. Así dejan de aparecer "hoy"
+      // para siempre. Es idempotente — solo toca los que están en null.
+      const cloudEvents = []
+      const toBackfill = []
+      for (const ev of cloudEventsRaw) {
+        if (ev.date == null) {
+          const stampedDate = backfillDateFromCreatedAt(ev.createdAt)
+          const fixed = { ...ev, date: stampedDate }
+          cloudEvents.push(fixed)
+          toBackfill.push(fixed)
+        } else {
+          cloudEvents.push(ev)
+        }
+      }
+      if (toBackfill.length > 0) {
+        focusLog(`[Focus] 🩹 Backfill de fecha en ${toBackfill.length} evento(s) legacy`)
+        for (const ev of toBackfill) {
+          dataService.upsertEvent(ev, user.id).catch((err) => {
+            console.warn('[Focus] ⚠️ backfill upsert falló:', err)
+          })
+        }
+      }
       const pendingDeletes = pendingDeletesRef.current
       const cloudFiltered = pendingDeletes.size > 0
         ? cloudEvents.filter(e => !pendingDeletes.has(e.id))
@@ -211,6 +248,10 @@ export function useEvents() {
     if (!tz) {
       try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null } catch { tz = null }
     }
+    // Si no se pasa `date`, estampamos hoy. Antes quedaba en null y los filtros
+    // lo trataban como "hoy" para siempre — al día siguiente, sin completarlo,
+    // el evento se "rolleaba" al nuevo día.
+    const eventDate = date ?? todayISO()
 
     // Normalización del campo time:
     //   · Los recordatorios nunca llevan hora de término — el aviso es
@@ -234,7 +275,7 @@ export function useEvents() {
       id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       title: cleanGeneratedTitle(title) || title,
       time: finalTime,
-      description, section, featured: false, icon, dotColor, date,
+      description, section, featured: false, icon, dotColor, date: eventDate,
       reminderOffsets,
       timezone: tz,
     }
@@ -252,7 +293,7 @@ export function useEvents() {
     logSignal('event_created', {
       hour: parseEventHour(finalTime),
       section,
-      date,
+      date: eventDate,
       weekday: new Date().getDay(),
     })
     return newEvent

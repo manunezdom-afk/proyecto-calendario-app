@@ -695,7 +695,7 @@ export default function App() {
       return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null
     }
     const todayEvents = (events || [])
-      .filter((e) => (e?.date || today) === today && toMin(e?.time) != null)
+      .filter((e) => e?.date === today && toMin(e?.time) != null)
       .sort((a, b) => toMin(a.time) - toMin(b.time))
     const nextEv = todayEvents.find((e) => toMin(e.time) >= nowMin - 5) || todayEvents[0] || null
     const pendingTasks = (tasks || []).filter((t) => !t.done)
