@@ -6,6 +6,8 @@ import { buildSystemPrompt } from './_lib/systemPrompt.js'
 import { safeParseAssistantJSON } from './_lib/neutralize.js'
 import { normalizeNovaPersonality } from './_lib/personality.js'
 import { rejectCrossSiteUnsafe, setCorsHeaders } from './_lib/security.js'
+import { getSupabaseAdmin, getUserIdFromAuth } from './_supabaseAdmin.js'
+import { enforceAiQuota } from './_lib/aiUsage.js'
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res, { methods: 'POST, OPTIONS' })
@@ -14,8 +16,31 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
   if (rejectCrossSiteUnsafe(req, res)) return
 
-  if (rateLimited(clientIp(req))) {
+  // Cinturón de seguridad #1: rate limit IP (defensa contra burst). El user
+  // limit más fino llega después, una vez identificado el usuario.
+  if (rateLimited(clientIp(req), { max: 30, windowMs: 60_000 })) {
     return res.status(429).json({ error: 'rate_limit', message: 'Demasiadas solicitudes. Espera un momento.' })
+  }
+
+  // Cinturón de seguridad #2: autenticación obligatoria. Sin esto, cualquiera
+  // con la URL puede vaciar el presupuesto de Anthropic. El cliente inyecta
+  // Bearer token automáticamente vía src/lib/apiClient.js si hay sesión.
+  const userId = await getUserIdFromAuth(req)
+  if (!userId) {
+    return res.status(401).json({ error: 'auth_required', message: 'Inicia sesión para usar Nova.' })
+  }
+
+  // Cinturón de seguridad #3: cuota diaria por usuario. Si la migración 010 no
+  // se aplicó, enforceAiQuota devuelve soft:true y dejamos pasar (logueado).
+  const admin = getSupabaseAdmin()
+  const quota = await enforceAiQuota(admin, userId, 'focus-assistant')
+  if (!quota.ok) {
+    return res.status(429).json({
+      error: 'quota_exceeded',
+      message: 'Llegaste al límite diario de mensajes con Nova. Vuelve mañana.',
+      reset_at: quota.resetAt,
+      limit: quota.limit,
+    })
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
@@ -75,17 +100,18 @@ export default async function handler(req, res) {
     const r1 = (d1.content?.[0]?.text ?? '').trim()
     try {
       return res.status(200).json(safeParseAssistantJSON(r1))
-    } catch (e1) {
+    } catch {
       const d2 = await runClaude(
         'Tu respuesta anterior tuvo JSON inválido o incompleto. Reintenta ahora. Responde SOLO con un objeto JSON válido siguiendo exactamente el formato indicado. Cierra todas las llaves y corchetes.'
       )
       const r2 = (d2.content?.[0]?.text ?? '').trim()
       try {
         return res.status(200).json(safeParseAssistantJSON(r2))
-      } catch (e2) {
-        console.error('[focus-assistant] JSON parse failed after retry:', {
-          e1: String(e1), e2: String(e2), raw1: r1.slice(0, 500), raw2: r2.slice(0, 500),
-        })
+      } catch {
+        // Sin loggear el contenido crudo: incluye datos del usuario
+        // (eventos, tareas, memorias) y filtra a Vercel logs. La métrica útil
+        // (tasa de fallo) la podemos derivar del status code 502.
+        console.error('[focus-assistant] JSON parse failed after retry')
         return res.status(502).json({
           error: 'llm_bad_output',
           reply: 'Tuve un problema procesando la respuesta. Repite el mensaje por favor.',
@@ -96,22 +122,24 @@ export default async function handler(req, res) {
   } catch (err) {
     const status = err?.status || err?.response?.status
     if (status === 401) {
-      console.error('[focus-assistant] Invalid ANTHROPIC_API_KEY')
+      console.error('[focus-assistant] upstream auth failure')
       return res.status(503).json({ error: 'invalid_api_key', message: 'Servicio temporalmente no disponible.' })
     }
     if (status === 429) {
-      console.error('[focus-assistant] Upstream rate limit')
+      console.error('[focus-assistant] upstream rate limit')
       return res.status(429).json({ error: 'upstream_rate_limit', message: 'Demasiadas solicitudes. Prueba en unos segundos.' })
     }
     if (status === 529 || status === 503) {
-      console.error('[focus-assistant] Upstream overloaded')
+      console.error('[focus-assistant] upstream overloaded')
       return res.status(503).json({ error: 'upstream_overloaded', message: 'El servicio está sobrecargado. Intenta de nuevo.' })
     }
     if (err?.name === 'AbortError' || /timeout/i.test(err?.message || '')) {
-      console.error('[focus-assistant] Timeout:', err)
+      console.error('[focus-assistant] timeout')
       return res.status(504).json({ error: 'timeout', message: 'La respuesta tardó demasiado. Intenta otra vez.' })
     }
-    console.error('[focus-assistant] Unexpected error:', err)
+    // Loggeamos el tipo de error sin el stack completo: evita filtrar datos
+    // serializados en el message del SDK.
+    console.error('[focus-assistant] unexpected:', err?.name || 'Error', status || '')
     return res.status(500).json({ error: 'internal_error', message: 'Error interno. Reintenta en un momento.' })
   }
 }

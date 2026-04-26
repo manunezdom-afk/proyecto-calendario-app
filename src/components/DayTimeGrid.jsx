@@ -104,7 +104,7 @@ export default function DayTimeGrid({
                   className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-4 py-2 text-xs font-bold text-primary transition-colors hover:bg-primary/15 active:scale-95"
                 >
                   <span className="material-symbols-outlined text-[15px]">psychology</span>
-                  Bloquear foco
+                  Trabajar enfocado
                 </button>
                 {onImport && (
                   <button

@@ -55,6 +55,10 @@ export default function QuickAddSheet({ onSave, onCancel, targetDate, targetDate
         )
       } else if (code === 'audio-capture') {
         setVoiceError('No se pudo acceder al micrófono. Otra app puede estar usándolo.')
+      } else if (code === 'network') {
+        setVoiceError('Sin conexión para dictar. Revisa tu internet o escribe el evento.')
+      } else if (code === 'language-not-supported') {
+        setVoiceError('Tu navegador no soporta dictado en español. Escribe el evento.')
       }
     },
   })

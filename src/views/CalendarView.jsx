@@ -305,8 +305,9 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
   // de la vista semanal — hace que el evento caiga en el día correcto aunque
   // el texto tipeado no incluya fecha explícita.
   const [pendingDate, setPendingDate] = useState(null)
-  // Texto inicial del QuickAddSheet — el botón "Bloque de foco" lo usa para
-  // pre-llenar el input con un evento típico de foco. Se resetea en cancel/save.
+  // Texto inicial del QuickAddSheet — el botón "Trabajar enfocado" lo usa para
+  // pre-llenar el input con un evento típico de tiempo enfocado. Se resetea en
+  // cancel/save.
   const [quickAddInitial, setQuickAddInitial] = useState('')
 
   function openAdd(initial = '') {
@@ -614,7 +615,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                 events={dayEvents}
                 referenceDate={now}
                 onAdd={() => openAdd('')}
-                onFocusBlock={() => openAdd('Bloque de foco 90 min')}
+                onFocusBlock={() => openAdd('Trabajar enfocado 90 min')}
                 onImport={onImportClick}
                 onOpenTask={onOpenTask}
               />
@@ -705,11 +706,11 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                     Añadir evento
                   </button>
                   <button
-                    onClick={() => openAdd('Bloque de foco 90 min')}
+                    onClick={() => openAdd('Trabajar enfocado 90 min')}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary/10 text-primary text-xs font-bold active:scale-95 transition-colors hover:bg-primary/15"
                   >
                     <span className="material-symbols-outlined text-[15px]">psychology</span>
-                    Bloquear foco
+                    Trabajar enfocado
                   </button>
                   {onImportClick && (
                     <button

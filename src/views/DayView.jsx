@@ -184,11 +184,11 @@ export default function DayView({ events = [], tasks = [], onAddEvent, onOpenTas
               </button>
 
               <button
-                onClick={() => { setQuickAddInitial('Bloque de foco 90 min'); setShowAdd(true) }}
+                onClick={() => { setQuickAddInitial('Trabajar enfocado 90 min'); setShowAdd(true) }}
                 className="group flex flex-col items-start gap-1.5 rounded-2xl bg-surface-container-lowest hover:bg-primary/5 border border-outline-variant/40 hover:border-primary/40 p-3 text-left transition-colors active:scale-[0.98]"
               >
                 <span className="material-symbols-outlined text-primary text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>psychology</span>
-                <span className="text-[13px] font-semibold text-on-surface leading-tight">Bloque de foco</span>
+                <span className="text-[13px] font-semibold text-on-surface leading-tight">Trabajar enfocado</span>
                 <span className="text-[11px] text-outline leading-snug">90 minutos sin interrupciones.</span>
               </button>
 

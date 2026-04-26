@@ -122,7 +122,18 @@ async function callFocusAssistant({ message, events, tasks, memories, history })
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
-    throw Object.assign(new Error(data.error || 'error'), { code: data.error })
+    const code = data?.error
+    const friendly = {
+      auth_required:    'Inicia sesión para hablar con Nova.',
+      quota_exceeded:   'Llegaste al límite diario de mensajes con Nova. Vuelve mañana.',
+      rate_limit:       'Muchos mensajes seguidos. Espera unos segundos.',
+      upstream_rate_limit: 'Muchos mensajes seguidos. Espera unos segundos.',
+      upstream_overloaded: 'El servicio está sobrecargado. Reintenta.',
+      timeout:          'La respuesta tardó demasiado. Intenta otra vez.',
+    }[code]
+    const err = new Error(friendly || code || 'error')
+    err.code = code
+    throw err
   }
   return res.json()
 }

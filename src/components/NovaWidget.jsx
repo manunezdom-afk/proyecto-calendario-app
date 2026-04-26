@@ -589,7 +589,17 @@ export default function NovaWidget({
         body: JSON.stringify({ images: [{ base64, mediaType: file.type || 'image/jpeg' }] }),
       })
 
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
+      // Errores específicos de auth/cuota: mensaje claro al usuario en vez de
+      // un genérico "no se detectaron eventos" que confundiría.
+      if (res.status === 401 || data?.error === 'auth_required') {
+        setReply('Inicia sesión para analizar fotos.')
+        return
+      }
+      if (data?.error === 'quota_exceeded') {
+        setReply('Llegaste al límite diario de fotos analizadas. Vuelve mañana.')
+        return
+      }
       const events = data?.events ?? []
 
       if (events.length === 0) {
@@ -705,6 +715,8 @@ export default function NovaWidget({
           no_api_key:           'Servicio no disponible en este momento.',
           message_too_long:     'Mensaje demasiado largo.',
           llm_bad_output:       'No pude procesarlo. Repite por favor.',
+          auth_required:        'Inicia sesión para hablar con Nova.',
+          quota_exceeded:       'Llegaste al límite diario de mensajes. Vuelve mañana.',
         }[code] || data?.message || `Error ${res.status}`
         throw new Error(statusMsg)
       }
@@ -850,7 +862,7 @@ export default function NovaWidget({
             <div className="w-full max-w-[280px] space-y-1.5">
               {[
                 { icon: 'event', text: 'Agenda gym mañana a las 7' },
-                { icon: 'psychology', text: 'Bloquea 2h de foco esta tarde' },
+                { icon: 'psychology', text: 'Reserva 2 horas enfocadas esta tarde' },
                 { icon: 'swap_horiz', text: 'Libérame el viernes' },
               ].map((ex) => (
                 <button

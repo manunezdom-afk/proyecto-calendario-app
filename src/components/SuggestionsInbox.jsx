@@ -204,7 +204,7 @@ function DemoSuggestionCard({ onApprove, onEdit, onDismiss }) {
           </div>
 
           <p className="mt-1.5 text-[12.5px] leading-snug text-slate-600">
-            Nova propone bloquear 2h de foco mañana de 9:00 a 11:00 porque tu mañana está libre.
+            Nova propone reservar mañana de 9:00 a 11:00 para trabajar en lo importante porque tu mañana está libre.
           </p>
 
           <div className="mt-3 flex items-center justify-end gap-1.5">

@@ -38,7 +38,8 @@ const MAX_SESSION_MS = 60_000
  * @param {(text: string) => void} [opts.onFinalize] — texto final consolidado
  *   al cerrar la sesión (silencio confirmado o stop manual).
  * @param {(code: string) => void} [opts.onError] — códigos:
- *   'unsupported' | 'not-allowed' | 'service-not-allowed' | 'audio-capture'.
+ *   'unsupported' | 'not-allowed' | 'service-not-allowed' | 'audio-capture' |
+ *   'network' | 'language-not-supported'.
  * @param {string} [opts.lang]
  */
 export function useVoiceDictation({
@@ -113,7 +114,18 @@ export function useVoiceDictation({
       setCommitProgress(0)
       setIsListening(false)
       const code = ev?.error
-      if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'audio-capture') {
+      // 'network' es común en iOS Safari sin red estable: el engine de Apple
+      // sube audio a sus servers y si la conexión falla devuelve este código.
+      // 'language-not-supported' aparece si lang no está disponible (raro en
+      // es-ES, pero pasa en builds antiguos de Edge). Notificamos para que el
+      // caller pueda mostrar un mensaje en vez de quedarse con el botón muerto.
+      if (
+        code === 'not-allowed' ||
+        code === 'service-not-allowed' ||
+        code === 'audio-capture' ||
+        code === 'network' ||
+        code === 'language-not-supported'
+      ) {
         callbacksRef.current.onError?.(code)
       }
     }

@@ -1,5 +1,7 @@
 import { rateLimited, clientIp } from './_lib/rateLimit.js'
 import { rejectCrossSiteUnsafe, setCorsHeaders } from './_lib/security.js'
+import { getSupabaseAdmin, getUserIdFromAuth } from './_supabaseAdmin.js'
+import { enforceAiQuota } from './_lib/aiUsage.js'
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages'
 const MAX_IMAGES = 4
@@ -20,6 +22,26 @@ export default async function handler(req, res) {
 
   if (rateLimited(clientIp(req), { max: 12, windowMs: 60_000 })) {
     return res.status(429).json({ error: 'rate_limit', message: 'Demasiadas solicitudes. Espera un momento.' })
+  }
+
+  // Auth obligatoria — sin esto, cualquiera con la URL puede mandar fotos
+  // arbitrarias a Anthropic vision (~$0.30/M tokens, fácil de explotar).
+  const userId = await getUserIdFromAuth(req)
+  if (!userId) {
+    return res.status(401).json({ error: 'auth_required', message: 'Inicia sesión para analizar fotos.' })
+  }
+
+  // Cuota diaria por usuario (migración 010). Vision es más cara que texto;
+  // límite más conservador en _lib/aiUsage.js.
+  const admin = getSupabaseAdmin()
+  const quota = await enforceAiQuota(admin, userId, 'analyze-photo')
+  if (!quota.ok) {
+    return res.status(429).json({
+      error: 'quota_exceeded',
+      message: 'Llegaste al límite diario de fotos analizadas. Vuelve mañana.',
+      reset_at: quota.resetAt,
+      limit: quota.limit,
+    })
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
@@ -122,13 +144,18 @@ Si no hay eventos claros: []`,
     })
 
     if (!anthropicRes.ok) {
-      const txt = await anthropicRes.text()
       if (anthropicRes.status === 401) {
         return res.status(401).json({ error: 'invalid_api_key' })
       }
-      console.error('[analyze-photo] Anthropic error:', anthropicRes.status, txt)
-      let detail = txt
-      try { detail = JSON.parse(txt)?.error?.message ?? txt } catch {}
+      // Loggeamos solo el status y un trozo corto del error para diagnóstico,
+      // sin volcar la respuesta completa de Anthropic (puede contener detalles
+      // del prompt o mensajes con el contenido enviado por el usuario).
+      let detail = ''
+      try {
+        const txt = await anthropicRes.text()
+        detail = (() => { try { return JSON.parse(txt)?.error?.message } catch { return null } })() || txt.slice(0, 200)
+      } catch {}
+      console.error('[analyze-photo] upstream', anthropicRes.status)
       return res.status(502).json({ error: 'api_error', status: anthropicRes.status, detail })
     }
 
@@ -149,7 +176,9 @@ Si no hay eventos claros: []`,
     return res.status(200).json({ events })
 
   } catch (err) {
-    console.error('[analyze-photo] Error:', err)
-    return res.status(500).json({ error: 'internal_error', message: err.message })
+    // Sin volcar err.message completo: a veces incluye URLs/headers
+    // serializados que ensucian logs sin aportar diagnóstico.
+    console.error('[analyze-photo]', err?.name || 'Error')
+    return res.status(500).json({ error: 'internal_error' })
   }
 }

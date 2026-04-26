@@ -903,8 +903,8 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
     {
       icon: 'auto_awesome',
       title: 'Planificar mi día',
-      body: 'Convierte un día vacío en bloques concretos.',
-      prompt: 'Planifica mi día con 2 bloques de foco, una pausa y una tarea rápida.',
+      body: 'Convierte un día vacío en pasos concretos.',
+      prompt: 'Organiza mi día con dos prioridades, una pausa y una tarea rápida.',
     },
     {
       icon: 'notifications_active',
@@ -1304,7 +1304,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 const pendingTotal = semanaCount + algoDiaCount
                 const chips = [
                   { icon: 'fitness_center', label: 'Agendar gym mañana',   prompt: 'Agenda gym mañana a las 7' },
-                  { icon: 'schedule',       label: 'Bloquear 2h de foco',  prompt: 'Bloquea 2h de foco esta tarde' },
+                  { icon: 'schedule',       label: 'Reservar 2h enfocadas',prompt: 'Reserva 2h enfocadas esta tarde para trabajar en lo importante' },
                   // "Reunión semanal fija" abre un wizard guiado en vez de
                   // autosubmit: una reunión recurrente requiere decisiones
                   // (nombre, día, hora, duración) que es antinatural tipear
@@ -1352,7 +1352,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                           {isDesktop && (
                             <button
                               type="button"
-                              onClick={() => seedNova('Planifica mi día con 2 bloques de foco, una pausa y una tarea rápida.')}
+                              onClick={() => seedNova('Organiza mi día con dos prioridades, una pausa y una tarea rápida.')}
                               className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-slate-950 px-5 py-2.5 text-sm font-bold text-white shadow-[0_18px_42px_rgba(15,23,42,0.22)] transition-transform hover:scale-[1.01] active:scale-[0.98]"
                             >
                               <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
@@ -1489,7 +1489,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       No es solo guardar eventos. Es quitarte decisiones pequeñas.
                     </h3>
                     <p className="mt-3 text-sm leading-relaxed text-slate-500">
-                      Escríbele como piensas: “tengo que salir en 20 min”, “bloquea foco”, “mueve la reunión si choca”. Focus lo vuelve acción.
+                      Escríbele como piensas: “tengo que salir en 20 min”, “resérvame 2 horas mañana”, “mueve la reunión si choca”. Focus lo vuelve acción.
                     </p>
                   </div>
                 </div>

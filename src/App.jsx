@@ -421,7 +421,7 @@ export default function App() {
     t.setDate(t.getDate() + 1)
     const tomorrowISO = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
     const created = addEvent({
-      title: 'Bloque de foco',
+      title: 'Trabajar en lo importante',
       time: '9:00 AM - 11:00 AM',
       date: tomorrowISO,
       section: 'focus',
@@ -429,7 +429,7 @@ export default function App() {
       dotColor: 'bg-secondary-container',
     })
     if (created?.id) {
-      showUndo('Bloque de foco añadido para mañana', () => deleteEvent(created.id))
+      showUndo('Evento añadido para mañana', () => deleteEvent(created.id))
     }
     dismissInboxDemo()
     setInboxOpen(false)
@@ -446,7 +446,7 @@ export default function App() {
     // Dejamos los dos activos porque son complementarios — el listener del
     // evento no hará nada si planner no está montado, y la sessionStorage
     // cubre ese caso.
-    const seedText = 'Bloquea 2h de foco mañana de 9:00 a 11:00'
+    const seedText = 'Reserva mañana de 9:00 a 11:00 para trabajar en lo importante'
     const seedContext = {
       label: 'Editando propuesta de Nova',
       body: 'Ajusta esta propuesta antes de guardarla en tu calendario.',

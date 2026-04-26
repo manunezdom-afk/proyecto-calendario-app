@@ -882,6 +882,16 @@ function PhotoTab({ onImport }) {
         return
       }
 
+      if (res.status === 401 || data?.error === 'auth_required') {
+        setError('Inicia sesión para analizar fotos.')
+        return
+      }
+
+      if (data?.error === 'quota_exceeded') {
+        setError('Llegaste al límite diario de fotos. Vuelve mañana.')
+        return
+      }
+
       if (res.status === 429) {
         setError('Demasiadas solicitudes. Espera un momento e intenta de nuevo.')
         return
