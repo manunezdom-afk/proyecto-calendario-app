@@ -67,10 +67,15 @@ export default {
         full: '9999px',
       },
       fontFamily: {
-        headline: ['Manrope', 'sans-serif'],
-        body: ['Inter', 'sans-serif'],
-        label: ['Inter', 'sans-serif'],
-        nova: ['Manrope', 'sans-serif'],
+        // Stack del sistema, estilo Notion: SF Pro en Mac/iOS, Segoe UI Variable
+        // en Windows, Roboto en Android. Se ve nativo, no hay FOUT y el primer
+        // paint es instantáneo (no esperamos descarga de Google Fonts). Las
+        // cuatro familias apuntan al mismo stack — antes había mezcla Manrope/
+        // Inter pero el usuario pidió uniformidad estilo Notion.
+        headline: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI Variable"', '"Segoe UI"', 'system-ui', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+        body:     ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI Variable"', '"Segoe UI"', 'system-ui', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+        label:    ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI Variable"', '"Segoe UI"', 'system-ui', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+        nova:     ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI Variable"', '"Segoe UI"', 'system-ui', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
       },
       spacing: {
         'safe-top': 'env(safe-area-inset-top, 0px)',
