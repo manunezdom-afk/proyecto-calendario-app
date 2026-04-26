@@ -103,15 +103,17 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
       </div>
 
       {/* ── Day grid ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
         {grid.map((day, idx) => {
           if (!day) return <div key={`e-${idx}`} />
           const iso = toISO(viewYear, viewMonth, day)
           const isToday    = iso === todayISO
           const isSelected = iso === selectedDate
+          const isPast     = iso < todayISO
           const dayEvts    = eventsForDate(iso)
           const count      = dayEvts.length
-          const highLoad   = count >= 3
+          const visibleEvts = dayEvts.slice(0, 4)
+          const overflow    = count - visibleEvts.length
 
           return (
             <button
@@ -119,41 +121,60 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
               onClick={() => handleDayClick(day)}
               aria-label={`${day}${isToday ? ' (hoy)' : ''}${count > 0 ? `, ${count} evento${count === 1 ? '' : 's'}` : ''}`}
               aria-pressed={isSelected}
-              className={`relative flex flex-col items-center justify-center gap-0.5 h-12 rounded-2xl font-semibold text-sm transition-all active:scale-90 ${
+              className={`relative flex flex-col items-stretch gap-1 min-h-[96px] sm:min-h-[120px] p-1 sm:p-1.5 rounded-xl sm:rounded-2xl transition-all active:scale-[0.97] text-left ${
                 isSelected
-                  ? isToday
-                    ? 'bg-primary text-white shadow-lg shadow-primary/30 ring-2 ring-primary/30 ring-offset-2 ring-offset-surface'
-                    : 'bg-primary text-white shadow-lg shadow-primary/25'
-                  : isToday
-                  ? 'bg-primary/10 text-primary font-bold ring-1 ring-primary/40'
-                  : highLoad
-                  ? 'bg-primary/12 text-primary hover:bg-primary/18'
-                  : 'hover:bg-surface-container-low text-on-surface'
+                  ? 'ring-2 ring-primary bg-primary/5 shadow-sm'
+                  : 'hover:bg-surface-container-low'
               }`}
             >
-              {day}
-              {count > 0 && (
-                <div className="flex gap-[2px]">
-                  {dayEvts.slice(0, 3).map((ev, i) => (
-                    <div
-                      key={i}
-                      className={`w-1 h-1 rounded-full ${
-                        isSelected
-                          ? 'bg-white/80'
-                          : ev.section === 'evening'
-                          ? 'bg-secondary'
-                          : 'bg-primary'
-                      }`}
-                    />
-                  ))}
-                </div>
-              )}
-              {isToday && !isSelected && (
+              <div className="flex justify-center">
                 <span
-                  className="absolute bottom-0.5 w-1 h-1 rounded-full bg-primary"
-                  aria-hidden="true"
-                  style={{ display: count > 0 ? 'none' : undefined }}
-                />
+                  className={`inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full text-xs sm:text-sm font-bold transition-colors ${
+                    isToday
+                      ? 'bg-primary text-white shadow-sm shadow-primary/30'
+                      : isPast
+                      ? 'text-outline'
+                      : 'text-on-surface'
+                  }`}
+                >
+                  {day}
+                </span>
+              </div>
+
+              {count > 0 && (
+                <div className="flex flex-col gap-0.5 sm:gap-1 min-w-0">
+                  {visibleEvts.map((ev, i) => {
+                    const evening = ev.section === 'evening'
+                    return (
+                      <div
+                        key={ev.id ?? i}
+                        className={`rounded-md px-1 sm:px-1.5 py-0.5 min-w-0 ${
+                          evening ? 'bg-secondary/15' : 'bg-primary/12'
+                        } ${isPast ? 'opacity-55' : ''}`}
+                      >
+                        <p
+                          className={`text-[10px] sm:text-[11px] font-bold leading-[1.15] line-clamp-2 ${
+                            evening ? 'text-secondary' : 'text-primary'
+                          }`}
+                        >
+                          {ev.title}
+                        </p>
+                        <p
+                          className={`text-[9px] sm:text-[10px] font-semibold leading-[1.15] truncate mt-[1px] ${
+                            evening ? 'text-secondary/75' : 'text-primary/75'
+                          }`}
+                        >
+                          {ev.time || 'Todo el día'}
+                        </p>
+                      </div>
+                    )
+                  })}
+                  {overflow > 0 && (
+                    <p className="text-[9px] sm:text-[10px] font-bold text-outline px-1 leading-tight">
+                      +{overflow} más
+                    </p>
+                  )}
+                </div>
               )}
             </button>
           )
@@ -180,7 +201,7 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
             <EmptyState
               illustration="calendar-empty"
               title="Sin eventos en este día"
-              body="Tocá Añadir para agendar algo, o dejálo libre."
+              body="Toca Añadir para agendar algo, o déjalo libre."
               tone="muted"
               compact
             />
