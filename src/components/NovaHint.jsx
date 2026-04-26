@@ -100,7 +100,7 @@ export default function NovaHint({
               className="relative rounded-2xl rounded-bl-md border pl-4 pr-9 py-3 shadow-xl"
               style={{
                 background: 'rgba(20, 18, 36, 0.92)',
-                borderColor: 'rgba(124, 107, 255, 0.25)',
+                borderColor: 'rgba(var(--nova-glow), 0.30)',
                 backdropFilter: 'blur(14px)',
                 WebkitBackdropFilter: 'blur(14px)',
                 color: 'rgba(255,255,255,0.92)',

@@ -147,7 +147,11 @@ export default function WelcomeScreen({
               transition={{ duration: 0.32, ease: EASE }}
               className="mb-9 sm:mb-10"
             >
-              <NovaOrb size={typeof window !== 'undefined' && window.innerWidth >= 640 ? 96 : 84} ambient />
+              <NovaOrb
+                size={typeof window !== 'undefined' && window.innerWidth >= 640 ? 116 : 96}
+                ambient
+                hero
+              />
             </motion.div>
           )}
         </AnimatePresence>

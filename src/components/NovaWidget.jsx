@@ -1075,7 +1075,7 @@ export default function NovaWidget({
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 rounded-2xl"
                 style={{
-                  background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)',
+                  background: 'linear-gradient(135deg, #0891b2 0%, #22d3ee 55%, #67e8f9 100%)',
                   filter: 'blur(10px)',
                   zIndex: 0,
                 }}
@@ -1089,8 +1089,8 @@ export default function NovaWidget({
                 onPointerLeave={onPillPointerLeave}
                 className="relative flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-2xl text-white text-[13px] font-semibold select-none active:scale-95 transition-transform"
                 style={{
-                  background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)',
-                  boxShadow: '0 8px 24px rgba(59,130,246,0.35), 0 2px 8px rgba(0,0,0,0.1)',
+                  background: 'linear-gradient(135deg, #0891b2 0%, #22d3ee 55%, #67e8f9 100%)',
+                  boxShadow: '0 8px 24px rgba(34,211,238,0.40), 0 2px 8px rgba(0,0,0,0.1)',
                 }}
                 aria-label="Abrir Nova"
               >

@@ -52,8 +52,9 @@ export default {
         'inverse-surface': '#303032',
         'on-tertiary-container': '#fffbff',
         'secondary-container': '#6664e4',
-        'nova': '#7c6bff',
-        'nova-soft': '#a99bff',
+        'nova': '#22d3ee',
+        'nova-soft': '#67e8f9',
+        'nova-deep': '#0891b2',
       },
       transitionTimingFunction: {
         focus: 'cubic-bezier(0.22, 1, 0.36, 1)',

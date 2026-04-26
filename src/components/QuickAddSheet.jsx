@@ -223,7 +223,7 @@ export default function QuickAddSheet({ onSave, onCancel, targetDate, targetDate
           <div
             className={`flex items-center gap-2 bg-surface-container-low rounded-2xl px-4 py-2.5 border transition-colors ${
               dictation.isListening
-                ? 'border-[#7c6bff]/50 shadow-[0_0_0_3px_rgba(124,107,255,0.12)]'
+                ? 'border-nova/50 shadow-[0_0_0_3px_rgba(34,211,238,0.14)]'
                 : 'border-outline-variant/30 focus-within:border-primary'
             }`}
           >

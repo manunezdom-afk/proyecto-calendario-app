@@ -246,7 +246,7 @@ function LongPressZone({ onLongPress, onClick, className, style, title, children
     WebkitUserSelect:   'none',
     userSelect:         'none',
     transform: pressed ? 'scale(1.02)' : 'scale(1)',
-    boxShadow: pressed ? '0 12px 32px -10px rgba(124, 107, 255, 0.35)' : undefined,
+    boxShadow: pressed ? '0 12px 32px -10px rgba(34, 211, 238, 0.40)' : undefined,
     transition: 'transform 180ms var(--ease, cubic-bezier(0.22,1,0.36,1)), box-shadow 180ms var(--ease, cubic-bezier(0.22,1,0.36,1))',
   }
 

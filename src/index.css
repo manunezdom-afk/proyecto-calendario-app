@@ -11,9 +11,13 @@
   /* Motion: un solo easing para toda la app (ease-out-expo). */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  /* Nova brand — púrpura vivo, distinto del primary azul. */
-  --nova: #7c6bff;
-  --nova-glow: 124, 107, 255;
+  /* Nova brand — cian eléctrico. Combina con el azul Focus (misma familia
+   * fría) pero se distingue al instante por saturación + luminosidad. Lee
+   * como "IA" (Siri/JARVIS/Apple Intelligence) sin pisar la marca app. */
+  --nova: #22d3ee;
+  --nova-glow: 34, 211, 238;
+  --nova-deep: #0891b2;
+  --nova-soft: #67e8f9;
 }
 
 .material-symbols-outlined {

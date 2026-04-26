@@ -112,10 +112,10 @@ function SlideIllustrationPlanner() {
   return (
     <div className="relative flex h-[220px] w-full items-center justify-center px-4">
       <div className="w-full max-w-[300px] space-y-2">
-        <PlannerCard time="09:00" title="Revisar informe Q2"     color="#7c6bff" delay={0.05} />
+        <PlannerCard time="09:00" title="Revisar informe Q2"     color="#22d3ee" delay={0.05} />
         <PlannerCard time="11:30" title="Reunión con Ana"        color="#3b82f6" delay={0.18} />
         <PlannerCard time="14:00" title="Tarea: enviar propuesta" color="#ec4899" delay={0.31} />
-        <PlannerCard time="16:00" title="Clase de español"       color="#7c6bff" delay={0.44} />
+        <PlannerCard time="16:00" title="Clase de español"       color="#0ea5e9" delay={0.44} />
       </div>
     </div>
   )
@@ -166,7 +166,7 @@ function SlideIllustrationTasksEvents() {
         </motion.div>
         <Pill icon="event" label="Eventos" color="#3b82f6" delay={0.25} />
       </div>
-      <Pill icon="alarm" label="Recordatorios" color="#7c6bff" delay={0.45} />
+      <Pill icon="alarm" label="Recordatorios" color="#22d3ee" delay={0.45} />
     </div>
   )
 }
@@ -196,7 +196,7 @@ function SlideIllustrationNova() {
           className="relative max-w-[210px] rounded-2xl rounded-bl-md border px-3.5 py-2.5"
           style={{
             background: 'rgba(20, 18, 36, 0.92)',
-            borderColor: 'rgba(124, 107, 255, 0.3)',
+            borderColor: 'rgba(34, 211, 238, 0.32)',
           }}
         >
           <div className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-white/40">
@@ -484,8 +484,8 @@ export default function FirstLaunchOnboarding({ onDone }) {
           onClick={next}
           className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-full px-5 font-semibold text-white transition-transform active:scale-[0.98]"
           style={{
-            background: 'linear-gradient(135deg, #7c6bff 0%, #5b4bd6 100%)',
-            boxShadow: '0 10px 30px -10px rgba(124,107,255,0.55)',
+            background: 'linear-gradient(135deg, #0891b2 0%, #22d3ee 60%, #67e8f9 100%)',
+            boxShadow: '0 10px 30px -10px rgba(34,211,238,0.55)',
             fontSize: '14.5px',
             maxWidth: 320,
           }}

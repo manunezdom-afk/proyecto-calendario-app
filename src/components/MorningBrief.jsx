@@ -260,8 +260,8 @@ export default function MorningBrief({
                   style={{
                     fontSize: '15px',
                     letterSpacing: '-0.005em',
-                    background: 'linear-gradient(135deg, #8b7bff 0%, #5b4bd6 100%)',
-                    boxShadow: '0 14px 34px -12px rgba(124,107,255,0.55), inset 0 1px 0 rgba(255,255,255,0.18)',
+                    background: 'linear-gradient(135deg, #0891b2 0%, #22d3ee 60%, #67e8f9 100%)',
+                    boxShadow: '0 14px 34px -12px rgba(34,211,238,0.55), inset 0 1px 0 rgba(255,255,255,0.18)',
                   }}
                 >
                   <span className="relative z-10">Empezar el día</span>

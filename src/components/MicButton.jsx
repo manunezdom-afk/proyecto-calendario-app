@@ -91,8 +91,8 @@ export default function MicButton({
       aria-pressed={isListening}
       className={`relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors select-none disabled:opacity-40 disabled:cursor-not-allowed ${
         isListening
-          ? 'bg-[#7c6bff] text-white'
-          : 'text-[#7c6bff] hover:bg-[#7c6bff]/10'
+          ? 'bg-nova text-white'
+          : 'text-nova hover:bg-nova/10'
       } ${className}`}
       style={{
         touchAction: 'manipulation',
