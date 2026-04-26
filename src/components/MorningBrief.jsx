@@ -27,7 +27,9 @@ function generateBrief({ events, tasks }) {
   const hour = now.getHours()
 
   const todayISO = getTodayISO()
-  const todayEvents = events.filter(e => !e.date || e.date === todayISO)
+  // Solo eventos con fecha exactamente igual a hoy. Un evento legacy con
+  // date=null aparecería cada día como "del día actual" si admitiéramos null.
+  const todayEvents = events.filter(e => e?.date === todayISO)
 
   // Excluimos recordatorios asociados a un evento principal — no son reuniones
   // independientes y duplicarían la cuenta (el evento padre ya cuenta por sí).

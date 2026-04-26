@@ -117,7 +117,10 @@ const STORAGE_KEY = 'focus_planner_blocks'
 // ── Lógica de insights personalizados ─────────────────────────────────────
 function buildInsights(events, profile) {
   const todayISO = todayISODate()
-  const todayEvents = events.filter((e) => !e.date || e.date === todayISO)
+  // Solo eventos cuya fecha coincide explícitamente con hoy. Un evento con
+  // date=null es legacy (escapó del default en addEvent) y NO debe contar
+  // como "hoy" — si lo hiciera, aparecería en cada día indefinidamente.
+  const todayEvents = events.filter((e) => e.date === todayISO)
   const eveningCount = todayEvents.filter((e) => e.section === 'evening').length
   const meetingCount = todayEvents.filter((e) =>
     /reuni[oó]n|meeting|llamada|call|sincro|junta/i.test(e.title)
@@ -455,7 +458,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   // si cambiaron. Los blocks manuales (sin eventId) no se tocan.
   useEffect(() => {
     const todayISO = todayISODate()
-    const todayEvents = (events || []).filter((e) => !e.date || e.date === todayISO)
+    // Solo eventos cuya fecha es EXACTAMENTE hoy. Eventos con date=null son
+    // legacy y no deben crear blocks "fantasma" que aparecen cada día. El
+    // default en useEvents.addEvent ya garantiza que los nuevos siempre
+    // tengan fecha; este filtro protege contra los antiguos.
+    const todayEvents = (events || []).filter((e) => e?.date === todayISO)
     const eventById = new Map(todayEvents.map(e => [e.id, e]))
 
     setBlocks((prev) => {
@@ -582,7 +589,15 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
   const eventBlocksRaw = allBlocksRaw.filter((b) => !isReminderBlock(b))
   const reminderBlocksRaw = allBlocksRaw.filter((b) => isReminderBlock(b))
 
+  // IMPORTANTE: filtramos `type === 'done'` para que un bloque ya completado
+  // (HECHO ✓) NO vuelva a aparecer como "En curso" ni como "Próximo Bloque".
+  // Sin este filtro, un bloque marcado hecho ayer cuya hora todavía esté en
+  // el futuro relativo a "ahora" reaparece como upcoming — ej: "fútbol 6 PM"
+  // marcado a las 5 PM se mostraba al día siguiente a las 11 AM como
+  // "Próximo Bloque" porque 18 > 11. Los bloques `done` siguen visibles en
+  // el timeline (con su pill ✓ HECHO), solo se excluyen del foco/upcoming.
   const blocksWithDecimal = eventBlocksRaw
+    .filter((b) => b && b.type !== 'done')
     .map((b) => {
       const range = parseTimeRange(b.time)
       const startH = range?.startH ?? parseTimeToDecimal(b.time)

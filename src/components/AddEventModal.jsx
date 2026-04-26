@@ -33,7 +33,11 @@ export default function AddEventModal({ onSave, onCancel }) {
       return
     }
     setError('')
-    onSave({ title: title.trim(), time, description, section, icon, dotColor })
+    // Pasamos date explícito a hoy. Antes omitíamos `date` y caía a null,
+    // lo que generaba eventos fantasma que aparecían cada día.
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    onSave({ title: title.trim(), time, description, section, icon, dotColor, date: today })
   }
 
   return (

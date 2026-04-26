@@ -226,6 +226,19 @@ export function useEvents() {
       isReminder: isReminderItem({ title }),
     })
 
+    // Anclamos `date` a un YYYY-MM-DD concreto SIEMPRE. Antes, los callers que
+    // no pasaban `date` (Nova foto, AddEventModal viejo, eventos de Nova sin
+    // fecha explícita) terminaban guardando date=null en Supabase. Como el
+    // filtro de "Mi Día" hacía `!e.date || e.date === todayISO`, ese evento
+    // se mostraba como del día actual TODOS los días — un evento fantasma
+    // que no se podía sacar marcándolo HECHO. Defaulting a hoy fija el bug
+    // de raíz: el evento existe en una fecha real y sigue las reglas normales.
+    const resolvedDate = (() => {
+      if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date
+      const d = new Date()
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    })()
+
     const newEvent = {
       // Sufijo aleatorio para garantizar unicidad cuando se disparan varios
       // addEvent en el mismo tick (ej: al crear 12 repeticiones de una
@@ -234,7 +247,8 @@ export function useEvents() {
       id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       title: cleanGeneratedTitle(title) || title,
       time: finalTime,
-      description, section, featured: false, icon, dotColor, date,
+      description, section, featured: false, icon, dotColor,
+      date: resolvedDate,
       reminderOffsets,
       timezone: tz,
     }
