@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="robots" content="index,follow">
+<title>Soporte — Focus</title>
+<link rel="icon" href="/icons/icon-192.png?v=1">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0f;
+    --fg: #f4f4f8;
+    --muted: #9aa0aa;
+    --accent: #7c6bff;
+    --card: #15151c;
+    --border: #22222c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    line-height: 1.6;
+    padding: max(24px, env(safe-area-inset-top)) 20px max(40px, env(safe-area-inset-bottom));
+    max-width: 720px;
+    margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { margin-bottom: 28px; }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--fg);
+    font-weight: 600;
+  }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; }
+  h1 {
+    font-size: 28px;
+    margin: 16px 0 4px;
+    letter-spacing: -0.02em;
+  }
+  .lede { color: var(--muted); font-size: 15px; margin-bottom: 20px; }
+  h2 {
+    font-size: 18px;
+    margin: 28px 0 8px;
+    letter-spacing: -0.01em;
+  }
+  h3 {
+    font-size: 16px;
+    margin: 18px 0 6px;
+  }
+  p, li { color: #d8d8e0; font-size: 15px; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  a { color: var(--accent); }
+  .cta {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    text-decoration: none;
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-weight: 600;
+    margin: 12px 0;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin: 16px 0;
+  }
+  .faq summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 12px 0;
+    color: var(--fg);
+    list-style: none;
+  }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::before {
+    content: '+';
+    display: inline-block;
+    width: 20px;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .faq details[open] summary::before { content: '−'; }
+  .faq details {
+    border-bottom: 1px solid var(--border);
+  }
+  .faq details:last-child { border-bottom: 0; }
+  .faq p { margin: 0 0 14px 20px; }
+  footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+  }
+  footer a { margin-right: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">
+    <img src="/icons/icon-192.png?v=1" alt="Focus">
+    <span>Focus</span>
+  </a>
+  <h1>Soporte</h1>
+  <p class="lede">¿Algo no funciona o tienes una idea? Estamos para ayudarte.</p>
+</header>
+
+<div class="card">
+  <h3 style="margin-top:0">Escríbenos</h3>
+  <p>Respondemos en menos de 48 horas hábiles.</p>
+  <a class="cta" href="mailto:manunezdom@gmail.com?subject=Soporte%20Focus">Enviar un correo</a>
+  <p style="font-size:13px;color:var(--muted);margin-top:8px">manunezdom@gmail.com</p>
+</div>
+
+<h2>Preguntas frecuentes</h2>
+<div class="faq">
+
+<details>
+  <summary>No me llega el código de inicio de sesión</summary>
+  <p>Revisa la carpeta de spam. Si después de un par de minutos no llega, vuelve a solicitarlo. Si sigue sin llegar, escríbenos y revisamos qué pasó con tu envío.</p>
+</details>
+
+<details>
+  <summary>No recibo notificaciones en el iPhone</summary>
+  <p>Para recibir notificaciones en iPhone necesitas instalar Focus desde Safari (Compartir → Añadir a pantalla de inicio) y abrir la app desde el icono. En Ajustes → Notificaciones de tu iPhone, asegúrate de que Focus esté habilitada. Si tienes la app nativa instalada desde la App Store, basta con aceptar el permiso al abrirla por primera vez.</p>
+</details>
+
+<details>
+  <summary>El icono no se actualiza después de una actualización</summary>
+  <p>iOS guarda en caché el icono cuando instalas una PWA. Para forzar el cambio, mantén presionado el icono → Eliminar app, y vuelve a añadirla desde Safari → Compartir → Añadir a pantalla de inicio.</p>
+</details>
+
+<details>
+  <summary>Nova no me entiende cuando le hablo</summary>
+  <p>Verifica que diste permiso al micrófono. En iPhone: Ajustes → Focus → Micrófono. Habla cerca del teléfono y en un ambiente sin ruido fuerte. Si Nova sigue sin transcribir bien, escríbenos.</p>
+</details>
+
+<details>
+  <summary>¿Puedo usar Focus sin conexión?</summary>
+  <p>Focus funciona offline para consultar tu calendario y crear eventos locales. Cuando vuelva la conexión sincroniza automáticamente. Algunas funciones (Nova, ubicación, notificaciones) sí requieren red.</p>
+</details>
+
+<details>
+  <summary>¿Cómo elimino mi cuenta?</summary>
+  <p>Envíanos un correo a <a href="mailto:manunezdom@gmail.com">manunezdom@gmail.com</a> desde el email asociado a tu cuenta y borramos todos tus datos en un máximo de 30 días.</p>
+</details>
+
+<details>
+  <summary>Encontré un error o tengo una idea</summary>
+  <p>¡Cuéntanos! Cualquier reporte de error o sugerencia nos ayuda a mejorar Focus. Escríbenos por correo con todo el detalle posible (qué intentabas hacer, qué pasó, qué dispositivo usas).</p>
+</details>
+
+</div>
+
+<footer>
+  <a href="/">Volver a Focus</a>
+  <a href="/privacidad">Política de privacidad</a>
+</footer>
+</body>
+</html>

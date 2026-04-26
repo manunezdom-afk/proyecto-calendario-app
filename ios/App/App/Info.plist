@@ -24,6 +24,16 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Focus usa el micrófono para que puedas dictar eventos por voz y conversar con Nova, tu asistente.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Focus usa el reconocimiento de voz para convertir lo que dices en eventos y notas dentro de tu calendario.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Focus usa la cámara para escanear códigos QR de calendarios y capturar fotos de tu agenda en papel.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Focus accede a tu biblioteca de fotos para que cargues imágenes de tu agenda y Nova extraiga los eventos automáticamente.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Focus usa tu ubicación para darle contexto a Nova y personalizar sugerencias según tu zona horaria.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

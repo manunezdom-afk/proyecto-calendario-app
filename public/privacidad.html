@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="robots" content="index,follow">
+<title>Política de privacidad — Focus</title>
+<link rel="icon" href="/icons/icon-192.png?v=1">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0f;
+    --fg: #f4f4f8;
+    --muted: #9aa0aa;
+    --accent: #7c6bff;
+    --card: #15151c;
+    --border: #22222c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    line-height: 1.6;
+    padding: max(24px, env(safe-area-inset-top)) 20px max(40px, env(safe-area-inset-bottom));
+    max-width: 720px;
+    margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { margin-bottom: 32px; }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--fg);
+    font-weight: 600;
+  }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; }
+  h1 {
+    font-size: 28px;
+    margin: 16px 0 4px;
+    letter-spacing: -0.02em;
+  }
+  .updated { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  h2 {
+    font-size: 18px;
+    margin: 28px 0 8px;
+    letter-spacing: -0.01em;
+  }
+  p, li { color: #d8d8e0; font-size: 15px; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  a { color: var(--accent); }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin: 16px 0;
+  }
+  footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+  }
+  footer a { margin-right: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">
+    <img src="/icons/icon-192.png?v=1" alt="Focus">
+    <span>Focus</span>
+  </a>
+  <h1>Política de privacidad</h1>
+  <div class="updated">Última actualización: 26 de abril de 2026</div>
+</header>
+
+<p>En Focus respetamos tu privacidad. Este documento explica qué datos recolectamos, por qué y cómo los usamos. Si tienes preguntas, escríbenos a <a href="mailto:manunezdom@gmail.com">manunezdom@gmail.com</a>.</p>
+
+<h2>1. Qué datos recolectamos</h2>
+<p>Para que Focus funcione necesitamos almacenar la siguiente información, asociada a tu cuenta:</p>
+<ul>
+  <li><strong>Email</strong>: para iniciar sesión mediante código de un solo uso (OTP).</li>
+  <li><strong>Eventos, tareas y notas</strong> que creas dentro de la app.</li>
+  <li><strong>Memorias y preferencias</strong> que tu asistente Nova guarda para personalizar sugerencias.</li>
+  <li><strong>Conversaciones con Nova</strong>: mensajes que envías al asistente y sus respuestas.</li>
+  <li><strong>Identificadores técnicos</strong>: ID de usuario, tokens de notificaciones push, navegador/dispositivo (user agent).</li>
+  <li><strong>Señales de uso</strong>: registros agregados de cuándo completas tareas o aceptas sugerencias, para mejorar las recomendaciones de Nova.</li>
+  <li><strong>Ubicación aproximada</strong> (opcional): solo cuando abres Nova y otorgas permiso, para dar contexto local a las sugerencias. Puedes denegar el permiso sin perder funcionalidad.</li>
+  <li><strong>Fotos y dictado por voz</strong> (opcional): cuando usas estas funciones, las imágenes y la transcripción se envían para análisis y se descartan tras procesarlas. No almacenamos audio.</li>
+</ul>
+
+<h2>2. Cómo usamos tus datos</h2>
+<ul>
+  <li>Para que Focus funcione: mostrar tu calendario, sincronizar entre dispositivos, enviar notificaciones que tú configuraste.</li>
+  <li>Para que Nova te ayude: el asistente recibe tus eventos, tareas, memorias y preferencias en cada conversación para darte respuestas relevantes.</li>
+  <li>Para mejorar la experiencia: las señales de uso ajustan las sugerencias de Nova a tus hábitos reales.</li>
+</ul>
+<p>No vendemos tus datos. No usamos tus datos para publicidad. No hacemos seguimiento entre apps ni sitios web de terceros.</p>
+
+<h2>3. Con quién compartimos datos</h2>
+<p>Compartimos solo lo estrictamente necesario con estos proveedores que procesan datos por nosotros:</p>
+<div class="card">
+  <ul>
+    <li><strong>Supabase</strong> (almacenamiento y autenticación): guarda tu cuenta, eventos, tareas, memorias y tokens de notificación.</li>
+    <li><strong>Anthropic</strong> (Claude): procesa tus conversaciones con Nova y los datos de contexto que le envías. No entrena modelos con tus datos.</li>
+    <li><strong>Resend</strong> (correo): envía los códigos OTP a tu email.</li>
+    <li><strong>Apple Push Notification service</strong> y <strong>Web Push</strong>: entregan las notificaciones a tu dispositivo.</li>
+    <li><strong>OpenStreetMap / Nominatim</strong>: convierte tus coordenadas en el nombre de la ciudad cuando autorizas la ubicación.</li>
+    <li><strong>Vercel</strong> (hosting): entrega la web y las APIs que usa la app.</li>
+  </ul>
+</div>
+
+<h2>4. Cómo protegemos tus datos</h2>
+<ul>
+  <li>Toda la comunicación va cifrada por HTTPS.</li>
+  <li>Cada usuario solo puede leer y escribir sus propios datos (Row Level Security en la base de datos).</li>
+  <li>Los códigos de inicio de sesión expiran rápidamente y son de un solo uso.</li>
+</ul>
+
+<h2>5. Tus derechos</h2>
+<p>Puedes:</p>
+<ul>
+  <li>Acceder a tus datos directamente desde la app.</li>
+  <li>Editar o borrar eventos, tareas y memorias en cualquier momento.</li>
+  <li>Solicitar la eliminación completa de tu cuenta enviando un correo a <a href="mailto:manunezdom@gmail.com">manunezdom@gmail.com</a>. Atendemos la solicitud en un plazo máximo de 30 días.</li>
+  <li>Revocar permisos del sistema (notificaciones, ubicación, micrófono, cámara, fotos) desde los ajustes de tu dispositivo.</li>
+</ul>
+
+<h2>6. Retención</h2>
+<p>Conservamos tus datos mientras tu cuenta esté activa. Si pides eliminación, borramos tu cuenta y datos asociados. Algunos registros agregados o anonimizados pueden mantenerse por motivos técnicos o legales.</p>
+
+<h2>7. Menores</h2>
+<p>Focus no está dirigido a menores de 13 años. Si crees que un menor nos envió datos, contáctanos para eliminarlos.</p>
+
+<h2>8. Cambios en esta política</h2>
+<p>Si actualizamos esta política, modificaremos la fecha al inicio del documento y, si los cambios son sustanciales, te lo informaremos dentro de la app.</p>
+
+<h2>9. Contacto</h2>
+<p>Para cualquier consulta sobre privacidad: <a href="mailto:manunezdom@gmail.com">manunezdom@gmail.com</a>.</p>
+
+<footer>
+  <a href="/">Volver a Focus</a>
+  <a href="/soporte">Soporte</a>
+</footer>
+</body>
+</html>
