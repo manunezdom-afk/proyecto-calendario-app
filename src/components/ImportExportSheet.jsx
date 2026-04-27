@@ -691,12 +691,16 @@ function TextTab({ onImport }) {
         id:          `evt-txt-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
         title:       result.title,
         time:        result.time,
-        description: result.date !== 'Hoy' ? result.date : '',
+        // El parser ya resuelve fechas relativas a YYYY-MM-DD. Antes
+        // copiábamos esa fecha al campo `description` y guardábamos
+        // `date: null`, lo que mandaba todos los eventos importados a
+        // "hoy" para siempre (drift). Ahora persistimos `date` real.
+        description: '',
         section:     result.section,
         featured:    false,
         icon:        result.icon,
         dotColor:    result.dotColor,
-        date:        null,
+        date:        result.date,
       }
     })
     setPreview(parsed)

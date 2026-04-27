@@ -7,7 +7,45 @@ import { useCoalescedRefetch } from './useCoalescedRefetch'
 import { cleanGeneratedTitle } from '../utils/titleCleanup'
 import { composeTimeRange, parseTimeRange } from '../utils/eventDuration'
 import { isReminderItem } from '../utils/reminders'
+import { idToTimestampMs } from '../utils/resolveEventDate'
 import { focusLog } from '../utils/debug'
+
+// Backfill de la fecha de eventos viejos. Existió un período en que los
+// eventos se guardaban con date=null (o "Hoy") y reaparecían cada día como
+// "del día actual" — un evento creado el lunes seguía mostrándose el
+// martes, miércoles, jueves… porque los filtros caían a `todayISO`.
+//
+// Para sanear esos datos sin pedir al usuario que borre uno por uno,
+// detectamos el caso al cargar y anclamos el evento a su fecha real de
+// creación, recuperada del Date.now() embebido en el id. Lo dejamos en
+// un evento NUEVO (no muta el original) y, si el caller pasa un
+// `onAnchor`, le notifica para que lo persista en la nube.
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function anchorEventDate(event) {
+  if (!event) return event
+  if (typeof event.date === 'string' && ISO_DATE_RE.test(event.date)) return event
+  const ms = idToTimestampMs(event.id)
+  if (ms === null) return event
+  const d = new Date(ms)
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return { ...event, date: iso }
+}
+
+// Mapea una lista, devolviendo además los items que cambiaron (para que
+// el caller los persista). Si nada cambió, devuelve la lista original
+// para preservar identidad referencial.
+function backfillEventDates(events) {
+  if (!Array.isArray(events) || events.length === 0) return { events, changed: [] }
+  const changed = []
+  let mutated = false
+  const next = events.map((ev) => {
+    const fixed = anchorEventDate(ev)
+    if (fixed !== ev) { mutated = true; changed.push(fixed) }
+    return fixed
+  })
+  return { events: mutated ? next : events, changed }
+}
 
 // Extrae la hora (0-23) de un string "HH:MM" o "HH:MM – HH:MM"
 function parseEventHour(time) {
@@ -90,7 +128,19 @@ export function useEvents() {
   const refetch = useCoalescedRefetch(async (tag = '') => {
     if (!user) return
     try {
-      const cloudEvents = await dataService.fetchEvents(user.id)
+      const rawCloud = await dataService.fetchEvents(user.id)
+      // Saneamos eventos sin fecha o con fecha relativa stale ("Hoy",
+      // null) anclándolos a su fecha real de creación. Los corregidos
+      // se reupload-ean para que la próxima carga ya venga limpia. Sin
+      // esto, un evento viejo seguía drifting al día actual cada vez
+      // que se cargaba la app.
+      const { events: cloudEvents, changed: backfilled } = backfillEventDates(rawCloud)
+      if (backfilled.length > 0) {
+        focusLog(`[Focus] 🩹 Anclando fecha en ${backfilled.length} evento(s) viejo(s)`)
+        for (const ev of backfilled) {
+          dataService.upsertEvent(ev, user.id).catch(() => {})
+        }
+      }
       const pendingDeletes = pendingDeletesRef.current
       const cloudFiltered = pendingDeletes.size > 0
         ? cloudEvents.filter(e => !pendingDeletes.has(e.id))
@@ -153,8 +203,12 @@ export function useEvents() {
       return
     }
 
-    // Al cambiar de usuario, partimos del cache propio (no del global compartido)
-    setEvents(dataService.getCachedEvents(user.id))
+    // Al cambiar de usuario, partimos del cache propio (no del global compartido).
+    // Sanitizamos el cache también — la nube se sanea en `refetch` pero el
+    // cache local puede tener residuos de versiones anteriores que mostrarían
+    // eventos fantasma durante el primer paint antes de que llegue el refetch.
+    const cached = dataService.getCachedEvents(user.id)
+    setEvents(backfillEventDates(cached).events)
 
     refetchWithRetry.current('(init)')
 

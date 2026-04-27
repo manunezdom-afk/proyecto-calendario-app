@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { resolveEventDate } from '../utils/resolveEventDate'
+import { resolveEventDate, todayISO } from '../utils/resolveEventDate'
 import { eventStatusAtNow } from '../utils/eventDuration'
 
 // useAppBadge
@@ -26,12 +26,12 @@ export function useAppBadge(events = [], tasks = [], signedIn = true) {
     }
 
     const now = new Date()
-    const todayISO = resolveEventDate({}) // resuelve "hoy" en local
+    const today = todayISO()
 
     let pendingEvents = 0
     for (const ev of events || []) {
       if (!ev) continue
-      if (resolveEventDate(ev) !== todayISO) continue
+      if (resolveEventDate(ev) !== today) continue
       const status = eventStatusAtNow(ev, now)
       // 'future' y 'active' cuentan; 'past' y 'undated' no mueven el badge.
       if (status === 'future' || status === 'active') pendingEvents += 1
