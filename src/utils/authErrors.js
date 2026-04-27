@@ -15,6 +15,18 @@ const PATTERNS = [
   { match: /token has expired|otp.*expired|invalid.*token|invalid.*otp/i,
     msg: 'El código es incorrecto o expiró. Pide uno nuevo.' },
 
+  // Errores del backend de email (send-otp)
+  { match: /email_not_configured/i,
+    msg: 'El servicio de email no está configurado. Usa otro método o contáctanos.' },
+  { match: /no_backend_supabase/i,
+    msg: 'Error de configuración del servidor. Contáctanos si el problema persiste.' },
+  { match: /email_send_failed/i,
+    msg: 'No se pudo enviar el correo. Reintenta o usa otro método de acceso.' },
+  { match: /otp_generation_failed/i,
+    msg: 'No pudimos generar el código de acceso. Reintenta en un momento.' },
+  { match: /user_create_failed/i,
+    msg: 'No pudimos registrarte en el servidor. Reintenta en un momento.' },
+
   // Password — credenciales inválidas (signin)
   { match: /invalid login credentials|invalid.*credentials|wrong password/i,
     msg: 'Email o contraseña incorrectos.' },

@@ -876,15 +876,33 @@ export default function AuthModal({ isOpen, onClose }) {
                       </span>
                       <p className="text-[13px] font-bold text-emerald-900 mt-2">Revisa tu correo</p>
                       <p className="text-[12px] text-emerald-800 mt-1 leading-snug">
-                        Te enviamos un enlace a <span className="font-semibold break-all">{email}</span> para confirmar tu cuenta. Tras confirmar, vuelve aquí e inicia sesión.
+                        Te enviamos un enlace de confirmación a <span className="font-semibold break-all">{email}</span>. Revisa también la carpeta de spam.
                       </p>
                       <button
                         type="button"
                         onClick={() => { setSignupSuccess(false); setPasswordMode('signin'); setError(null) }}
                         className="mt-3 text-primary text-[12.5px] font-semibold hover:underline"
                       >
-                        Iniciar sesión
+                        Ya confirmé, iniciar sesión
                       </button>
+                      <div className="mt-3 pt-3 border-t border-emerald-200">
+                        <p className="text-[11px] text-emerald-700 mb-2">
+                          ¿No llegó el correo? Entra con código de un solo uso.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSignupSuccess(false)
+                            setPassword('')
+                            setError(null)
+                            setStep('email')
+                          }}
+                          className="w-full py-2 bg-emerald-700 text-white rounded-xl text-[12.5px] font-semibold active:scale-[0.98] transition-transform flex items-center justify-center gap-1.5"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">mail</span>
+                          Acceder con código OTP
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <>
