@@ -1317,7 +1317,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                 // propia variante compacta más abajo).
                 const showBigCard = !(isDesktop && emptyDayBannerDismissed)
                 return (
-                  <div className={`w-full mx-auto ${isDesktop ? 'max-w-none' : 'max-w-[300px]'} space-y-4`}>
+                  <div className={`w-full mx-auto ${isDesktop ? 'max-w-none' : 'max-w-[320px] mt-10'} space-y-4`}>
                     {showBigCard && (
                     <div className={`${isDesktop ? 'relative rounded-[28px] border border-primary/10 bg-gradient-to-br from-white via-primary/5 to-secondary/10 px-6 py-6 shadow-[0_22px_60px_rgba(27,27,29,0.06)]' : 'space-y-1 text-center'}`}>
                       {isDesktop && (
@@ -1363,7 +1363,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                       </div>
                     </div>
                     )}
-                    {isFirstUse && (
+                    {/* Mostramos los chips siempre que el día esté vacío en mobile
+                        (no solo en isFirstUse). Da algo útil que tocar en lugar
+                        de un párrafo flotando. En desktop respetamos el flujo
+                        previo: solo en first use. */}
+                    {(isFirstUse || !isDesktop) && (
                       <ul className={isDesktop ? 'grid grid-cols-3 gap-3' : 'space-y-2'}>
                         {chips.map((chip) => (
                           <li key={chip.label}>

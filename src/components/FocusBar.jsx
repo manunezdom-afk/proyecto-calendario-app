@@ -102,37 +102,53 @@ function resolveLinkedEventId(events, task) {
 }
 
 async function callFocusAssistant({ message, events, tasks, memories, history }) {
-  const res = await apiFetch('/api/focus-assistant', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message,
-      events,
-      tasks,
-      history,
-      memories,
-      clientNow: Date.now(),
-      clientTimezone: (typeof Intl !== 'undefined' && Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC',
-      // Personalidad local → system prompt del LLM. Lectura síncrona de la
-      // preferencia para que el valor enviado corresponda al estado de
-      // Ajustes en este instante, sin depender de re-renders.
-      novaPersonality: readPreferenceSync('novaPersonality'),
-    }),
-  })
+  let res
+  try {
+    res = await apiFetch('/api/focus-assistant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        events,
+        tasks,
+        history,
+        memories,
+        clientNow: Date.now(),
+        clientTimezone: (typeof Intl !== 'undefined' && Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC',
+        // Personalidad local → system prompt del LLM. Lectura síncrona de la
+        // preferencia para que el valor enviado corresponda al estado de
+        // Ajustes en este instante, sin depender de re-renders.
+        novaPersonality: readPreferenceSync('novaPersonality'),
+      }),
+    })
+  } catch (netErr) {
+    // Sin esto, una desconexión de red o un AbortController por timeout dejaba
+    // al cliente colgado en "Focus está pensando…". Ahora propagamos un código
+    // que el caller mapea a un mensaje útil.
+    const aborted = netErr?.name === 'AbortError'
+    const err = new Error(aborted ? 'timeout' : 'network_error')
+    err.code = aborted ? 'timeout' : 'network_error'
+    throw err
+  }
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
     const code = data?.error
     const friendly = {
-      auth_required:    'Inicia sesión para hablar con Nova.',
-      quota_exceeded:   'Llegaste al límite diario de mensajes con Nova. Vuelve mañana.',
-      rate_limit:       'Muchos mensajes seguidos. Espera unos segundos.',
+      auth_required:       'Inicia sesión para hablar con Nova.',
+      quota_exceeded:      'Llegaste al límite diario de mensajes con Nova. Vuelve mañana.',
+      rate_limit:          'Muchos mensajes seguidos. Espera unos segundos.',
       upstream_rate_limit: 'Muchos mensajes seguidos. Espera unos segundos.',
       upstream_overloaded: 'El servicio está sobrecargado. Reintenta.',
-      timeout:          'La respuesta tardó demasiado. Intenta otra vez.',
+      timeout:             'La respuesta tardó demasiado. Intenta otra vez.',
+      no_api_key:          'Servicio no configurado. Vuelve a intentarlo en un rato.',
+      invalid_api_key:     'Servicio temporalmente no disponible. Reintenta más tarde.',
+      llm_bad_output:      'Tuve un problema procesando la respuesta. Repite el mensaje.',
+      internal_error:      'Error interno. Reintenta en un momento.',
     }[code]
     const err = new Error(friendly || code || 'error')
     err.code = code
+    err.status = res.status
     throw err
   }
   return res.json()
@@ -558,10 +574,14 @@ export default function FocusBar({
 
       setReply({ content: replyText, actions })
     } catch (err) {
-      const errMsg =
-        err.code === 'no_api_key' || err.code === 'invalid_api_key'
-          ? 'Configura tu API key en Importar/Exportar → Foto.'
-          : novaSay('error_connection', readPreferenceSync('novaPersonality'))
+      // Mensaje preciso por código. Si callFocusAssistant ya armó un texto
+      // amigable, usamos ese; si no, caemos al fallback genérico de Nova.
+      // Siempre liberamos isThinking en el finally — el spinner no debe
+      // sobrevivir a un error.
+      console.warn('[Nova] focus-assistant fallo:', err?.code || err?.message || err)
+      const errMsg = err?.message && err.message !== 'error' && err.message !== err.code
+        ? err.message
+        : novaSay('error_connection', readPreferenceSync('novaPersonality'))
       setReply({ content: errMsg, actions: [] })
     } finally {
       setIsThinking(false)

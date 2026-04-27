@@ -19,6 +19,13 @@ export function apiUrl(path) {
   return `${apiOrigin()}${value}`
 }
 
+// Timeout por defecto del cliente. El backend (focus-assistant) puede tardar
+// hasta ~45s en respuestas largas con maxDuration=60, así que dejamos 55s
+// para no cortar al usuario antes de que el handler logre responder. Sin
+// este timeout, una caída de red dejaba el spinner "Focus está pensando…"
+// para siempre porque fetch nunca se rechaza solo.
+const DEFAULT_TIMEOUT_MS = 55_000
+
 // Inyecta automáticamente el Bearer token de la sesión Supabase actual cuando
 // el caller no setea Authorization manualmente. Necesario para endpoints que
 // identifican al usuario (focus-assistant, analyze-photo, push, calendar-feeds)
@@ -38,5 +45,20 @@ export async function apiFetch(path, options = {}) {
       // es esperada y no rompe nada.
     }
   }
-  return fetch(apiUrl(path), { ...options, headers })
+
+  // AbortController garantiza que fetch se rechace si la red queda colgada.
+  // Si el caller pasó su propio signal, lo encadenamos con el nuestro para
+  // respetar ambas vías de cancelación.
+  const ctrl = new AbortController()
+  const timeoutId = setTimeout(() => ctrl.abort(), options.timeoutMs || DEFAULT_TIMEOUT_MS)
+  if (options.signal) {
+    if (options.signal.aborted) ctrl.abort()
+    else options.signal.addEventListener('abort', () => ctrl.abort(), { once: true })
+  }
+
+  try {
+    return await fetch(apiUrl(path), { ...options, headers, signal: ctrl.signal })
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }

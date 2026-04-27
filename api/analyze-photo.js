@@ -8,6 +8,10 @@ const MAX_IMAGES = 4
 const MAX_BASE64_CHARS = 6_000_000
 const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
 
+// Vision con varias imágenes puede tardar; el default de 10s en Vercel
+// cortaba antes de tiempo dejando al cliente sin respuesta.
+export const maxDuration = 60
+
 export default async function handler(req, res) {
   setCorsHeaders(req, res, { methods: 'POST, OPTIONS' })
 

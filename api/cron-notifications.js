@@ -294,11 +294,21 @@ async function recordSentNotification(admin, row) {
   console.warn('[cron] sent_notifications upsert failed', error.message)
 }
 
+// El cron procesa muchos eventos × usuarios. En Hobby el corte default de 10s
+// puede dejar al handler matando a mitad de iteración (eventos vistos pero
+// no marcados como sent). Pro permite hasta 60s; Hobby ignora valores >10s.
+export const maxDuration = 60
+
 export default async function handler(req, res) {
   const authHeader = req.headers?.authorization || req.headers?.Authorization
-  const expected = process.env.CRON_SECRET
+  // .trim() defiende contra whitespace accidental en GitHub Secrets / Vercel
+  // env vars (un \n o espacio al pegar el secreto en el dashboard hacía que
+  // todas las requests devolvieran 401 sin pista clara — el cron se veía
+  // "configurado" pero no enviaba ninguna notificación).
+  const expected = process.env.CRON_SECRET?.trim()
   if (!expected) return res.status(503).json({ error: 'no_cron_secret_configured' })
-  if (authHeader !== `Bearer ${expected}`) {
+  if (typeof authHeader !== 'string' || authHeader.trim() !== `Bearer ${expected}`) {
+    console.warn('[cron] unauthorized request — verifica que CRON_SECRET coincida en Vercel y GitHub Secrets')
     return res.status(401).json({ error: 'unauthorized' })
   }
 

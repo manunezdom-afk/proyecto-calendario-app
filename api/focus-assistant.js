@@ -9,6 +9,12 @@ import { rejectCrossSiteUnsafe, setCorsHeaders } from './_lib/security.js'
 import { getSupabaseAdmin, getUserIdFromAuth } from './_supabaseAdmin.js'
 import { enforceAiQuota } from './_lib/aiUsage.js'
 
+// Necesario en Pro plan: por defecto Vercel mata la función a los 10s, lo
+// cual era menor que el timeout de 25s del SDK de Anthropic — el handler
+// moría sin responder y el cliente quedaba en "Focus está pensando…".
+// En Hobby Vercel ignora valores >10s y mantiene 10s. En Pro respeta 60s.
+export const maxDuration = 60
+
 export default async function handler(req, res) {
   setCorsHeaders(req, res, { methods: 'POST, OPTIONS' })
 
@@ -79,7 +85,10 @@ export default async function handler(req, res) {
     novaPersonality,
   })
 
-  const anthropic = new Anthropic({ apiKey, timeout: 25_000, maxRetries: 1 })
+  // Timeout del SDK 45s para aprovechar maxDuration=60s sin agotarlo. Antes
+  // estaba en 25s pero competía con el corte default de Vercel a los 10s,
+  // lo que dejaba al cliente colgado en "Focus está pensando…" sin error.
+  const anthropic = new Anthropic({ apiKey, timeout: 45_000, maxRetries: 1 })
   const messages = [
     ...history.map(h => ({ role: h.role, content: h.content })),
     { role: 'user', content: message },
