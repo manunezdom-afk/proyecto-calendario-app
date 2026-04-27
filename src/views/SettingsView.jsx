@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { apiFetch } from '../lib/apiClient'
 import {
   getPushStatus,
   forceResubscribe,
@@ -549,6 +550,209 @@ function RemindersRow() {
   )
 }
 
+// KairosLinkSection — vincular la cuenta con la app hermana Kairos.
+//
+// Flujo: el usuario copia su focusCode y lo pega en Kairos → Ajustes
+// → Vincular Focus. A partir de ese momento los eventos creados en
+// Kairos llegan al inbox de Focus como sugerencias para que Nova las
+// proponga. Si pega el código de Kairos en el campo "Pegar código",
+// guardamos esa referencia para mostrarla aquí (es solo informativo:
+// el flujo real lo activa el envío de eventos desde Kairos).
+function KairosLinkSection() {
+  const { user } = useAuth()
+  const [focusCode, setFocusCode] = useState(null)
+  const [kairosCode, setKairosCode] = useState(null)
+  const [linkedAt, setLinkedAt] = useState(null)
+  const [pasteValue, setPasteValue] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [copied, setCopied] = useState(false)
+
+  const fetchLink = useCallback(async () => {
+    if (!user) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch('/api/kairos/link', { method: 'GET' })
+      if (!res.ok) throw new Error('fetch_failed')
+      const data = await res.json()
+      setFocusCode(data.focusCode)
+      setKairosCode(data.kairosCode)
+      setLinkedAt(data.linkedAt)
+    } catch {
+      setError('No pudimos cargar tu código. Reintenta en un momento.')
+    } finally {
+      setLoading(false)
+    }
+  }, [user])
+
+  useEffect(() => { fetchLink() }, [fetchLink])
+
+  async function handleCopy() {
+    if (!focusCode) return
+    try {
+      await navigator.clipboard.writeText(focusCode)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    } catch {
+      // Si clipboard API no está disponible, no hacemos nada — el usuario
+      // puede copiar manualmente del input visible.
+    }
+  }
+
+  async function handleLink(e) {
+    e?.preventDefault?.()
+    const cleaned = pasteValue.trim().toUpperCase().replace(/\s+/g, '')
+    if (cleaned.length < 4) {
+      setError('El código debe tener al menos 4 caracteres.')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch('/api/kairos/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kairosCode: cleaned }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data?.error || 'link_failed')
+      }
+      const data = await res.json()
+      setKairosCode(data.kairosCode)
+      setLinkedAt(data.linkedAt)
+      setPasteValue('')
+    } catch (err) {
+      setError(err.message === 'invalid_code'
+        ? 'Ese código no parece válido.'
+        : 'No pudimos vincular. Reintenta.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleRegenerate() {
+    if (!confirm('¿Generar un código nuevo? El anterior dejará de funcionar.')) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch('/api/kairos/link', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clear: false }),
+      })
+      if (!res.ok) throw new Error('regenerate_failed')
+      const data = await res.json()
+      setFocusCode(data.focusCode)
+      setKairosCode(data.kairosCode)
+      setLinkedAt(data.linkedAt)
+    } catch {
+      setError('No pudimos regenerar el código. Reintenta.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!user) {
+    return (
+      <SectionCard title="Vincular con Kairos">
+        <div className="px-5 py-5">
+          <p className="text-[13px] text-slate-500 leading-relaxed">
+            Inicia sesión en Focus para vincular tu cuenta con Kairos y recibir
+            ahí los eventos que crees desde la app hermana.
+          </p>
+        </div>
+      </SectionCard>
+    )
+  }
+
+  return (
+    <SectionCard title="Vincular con Kairos">
+      <div className="px-5 py-5 space-y-5 border-t border-slate-50 first:border-t-0">
+        <p className="text-[13px] text-slate-500 leading-relaxed">
+          Conecta Focus con Kairos. Los eventos que crees en Kairos llegarán
+          aquí como propuestas de Nova para que decidas si los agendas.
+        </p>
+
+        <div>
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-2">
+            Tu código de Focus
+          </p>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
+              <span className="material-symbols-outlined text-[18px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
+                key
+              </span>
+              <span className="font-mono tracking-[0.18em] text-[15px] font-semibold text-slate-800 select-all">
+                {focusCode || '······'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopy}
+              disabled={!focusCode || loading}
+              className="rounded-xl px-3 py-2.5 text-[12px] font-semibold text-primary border border-primary/20 hover:bg-primary/5 active:scale-[0.97] transition-all disabled:opacity-40"
+            >
+              {copied ? 'Copiado' : 'Copiar'}
+            </button>
+          </div>
+          <p className="mt-2 text-[11.5px] text-slate-400 leading-snug">
+            Pégalo en Kairos → Ajustes → Vincular Focus. Cualquiera con el
+            código puede mandarte propuestas, así que regenera si lo filtras.
+          </p>
+        </div>
+
+        <form onSubmit={handleLink}>
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-2">
+            Pegar el código de Kairos
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={pasteValue}
+              onChange={(e) => { setPasteValue(e.target.value); setError(null) }}
+              placeholder="Ej. THW33R"
+              maxLength={32}
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              className="flex-1 px-3 py-2.5 rounded-xl border border-slate-200 font-mono tracking-[0.16em] text-[14px] text-slate-800 placeholder:font-sans placeholder:tracking-normal placeholder:text-slate-300 focus:outline-none focus:border-primary"
+            />
+            <button
+              type="submit"
+              disabled={loading || !pasteValue.trim()}
+              className="rounded-xl px-4 py-2.5 text-[12.5px] font-semibold text-white bg-primary active:scale-[0.97] transition-transform disabled:opacity-40"
+            >
+              Vincular
+            </button>
+          </div>
+          {kairosCode && (
+            <p className="mt-2 text-[11.5px] text-emerald-600 font-medium">
+              Vinculado a Kairos · {kairosCode}
+              {linkedAt && <span className="text-slate-400 font-normal"> · {timeAgo(linkedAt)}</span>}
+            </p>
+          )}
+          {error && (
+            <p className="mt-2 text-[11.5px] text-red-500">
+              {error}
+            </p>
+          )}
+        </form>
+
+        <button
+          type="button"
+          onClick={handleRegenerate}
+          disabled={loading}
+          className="text-[11.5px] font-medium text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-40"
+        >
+          Generar un código nuevo
+        </button>
+      </div>
+    </SectionCard>
+  )
+}
+
 function timeAgo(iso) {
   if (!iso) return 'hace un rato'
   const diffMs = Date.now() - new Date(iso).getTime()
@@ -764,6 +968,9 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
         <QuietHoursRow />
         <PushDiagnostic />
       </SectionCard>
+
+      {/* ── Vincular con Kairos ──────────────────────────────────────────── */}
+      <KairosLinkSection />
 
       {/* ── Datos ────────────────────────────────────────────────────────── */}
       <SectionCard title="Datos">

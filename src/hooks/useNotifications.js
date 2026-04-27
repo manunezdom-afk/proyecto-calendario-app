@@ -213,35 +213,52 @@ export function useNotifications({ events = [] } = {}) {
   }, [])
 
   const requestPermission = useCallback(async () => {
-    if (isNativePushSupported()) {
-      const r = await registerNativePush({ prompt: true })
-      const s = await getNativePushStatus().catch(() => null)
-      if (s?.permission) setPermissionState(normalizeNativePermission(s.permission))
-      setPushSubscribed(!!r?.ok)
-      if (!r?.ok) console.warn('[Focus] native push subscribe failed:', r?.reason)
-      return
-    }
+    // Antes: rechazos del API de push (sin VAPID, quota, denied) propagaban
+    // como excepción al caller (NovaHint.handleAction), que no las capturaba
+    // y la UI quedaba en estado inconsistente. Ahora cualquier fallo se
+    // captura y se loggea — el spinner de la burbuja vuelve a su estado
+    // base aunque el subscribe haya fallado.
+    try {
+      if (isNativePushSupported()) {
+        const r = await registerNativePush({ prompt: true })
+        const s = await getNativePushStatus().catch(() => null)
+        if (s?.permission) setPermissionState(normalizeNativePermission(s.permission))
+        setPushSubscribed(!!r?.ok)
+        if (!r?.ok) console.warn('[Focus] native push subscribe failed:', r?.reason)
+        return
+      }
 
-    if (typeof Notification === 'undefined') return
-    const result = await Notification.requestPermission()
-    setPermissionState(result)
-    if (result === 'granted') {
-      const r = await subscribeToPush()
-      setPushSubscribed(!!r.ok)
-      if (!r.ok) console.warn('[Focus] push subscribe failed:', r.reason)
+      if (typeof Notification === 'undefined') return
+      const result = await Notification.requestPermission()
+      setPermissionState(result)
+      if (result === 'granted') {
+        const r = await subscribeToPush()
+        setPushSubscribed(!!r.ok)
+        if (!r.ok) console.warn('[Focus] push subscribe failed:', r.reason)
+      }
+    } catch (err) {
+      console.warn('[Focus] requestPermission falló:', err?.message || err)
     }
   }, [])
 
   const disablePush = useCallback(async () => {
-    if (isNativePushSupported()) {
-      await unregisterNativePush()
-      setPushSubscribed(false)
-      setPushDisconnected(false)
-      return
-    }
+    // Si la des-suscripción falla en backend o en SW, no queremos arrastrar
+    // la excepción al caller — el switch UI debe quedar consistente con el
+    // estado local aunque el cleanup remoto haya fallado.
+    try {
+      if (isNativePushSupported()) {
+        await unregisterNativePush()
+        setPushSubscribed(false)
+        setPushDisconnected(false)
+        return
+      }
 
-    await unsubscribeFromPush()
-    setPushSubscribed(false)
+      await unsubscribeFromPush()
+      setPushSubscribed(false)
+    } catch (err) {
+      console.warn('[Focus] disablePush falló:', err?.message || err)
+      setPushSubscribed(false)
+    }
   }, [])
 
   const dismissPermissionCard = useCallback(() => {
