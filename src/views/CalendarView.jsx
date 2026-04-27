@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DayTimeGrid from '../components/DayTimeGrid'
-import QuickAddSheet from '../components/QuickAddSheet'
 import MonthCalendar from '../components/MonthCalendar'
+// QuickAddSheet sólo aparece cuando el usuario toca "+". Lazy para que no
+// quede en el chunk de CalendarView (ni filtre al main por static-import).
+const QuickAddSheet = lazy(() => import('../components/QuickAddSheet'))
 import WeekTimeGrid from '../components/WeekTimeGrid'
 import { resolveEventDate } from '../utils/resolveEventDate'
 import { eventStatusAtNow } from '../utils/eventDuration'
@@ -911,14 +913,16 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
       </main>
 
       {showModal && (
-        <QuickAddSheet
-          onSave={handleSave}
-          onCancel={closeAdd}
-          existingEvents={events}
-          initialText={quickAddInitial}
-          targetDate={pendingDate ?? activeDayISO}
-          targetDateLabel={formatTargetDateLabel(pendingDate ?? activeDayISO)}
-        />
+        <Suspense fallback={null}>
+          <QuickAddSheet
+            onSave={handleSave}
+            onCancel={closeAdd}
+            existingEvents={events}
+            initialText={quickAddInitial}
+            targetDate={pendingDate ?? activeDayISO}
+            targetDateLabel={formatTargetDateLabel(pendingDate ?? activeDayISO)}
+          />
+        </Suspense>
       )}
 
       {/* Menú de acciones rápidas de long-press. Vive a nivel de CalendarView

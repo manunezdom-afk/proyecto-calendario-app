@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import DayTimeGrid from '../components/DayTimeGrid'
-import QuickAddSheet from '../components/QuickAddSheet'
+const QuickAddSheet = lazy(() => import('../components/QuickAddSheet'))
 import { resolveEventDate, todayISO } from '../utils/resolveEventDate'
 import { eventStatusAtNow } from '../utils/eventDuration'
 
@@ -290,14 +290,16 @@ export default function DayView({ events = [], tasks = [], onAddEvent, onOpenTas
         )}
 
         {showAdd && (
-          <QuickAddSheet
-            onSave={(d) => { handleSave(d); setQuickAddInitial('') }}
-            onCancel={() => { setShowAdd(false); setQuickAddInitial('') }}
-            targetDate={activeDate}
-            targetDateLabel={label}
-            initialText={quickAddInitial}
-            existingEvents={events}
-          />
+          <Suspense fallback={null}>
+            <QuickAddSheet
+              onSave={(d) => { handleSave(d); setQuickAddInitial('') }}
+              onCancel={() => { setShowAdd(false); setQuickAddInitial('') }}
+              targetDate={activeDate}
+              targetDateLabel={label}
+              initialText={quickAddInitial}
+              existingEvents={events}
+            />
+          </Suspense>
         )}
       </main>
     </div>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { downloadICS }        from '../utils/icsExport'
+import { downloadICS, eventsToICS } from '../utils/icsExport'
 import { parseICS }           from '../utils/icsImport'
 import { parseEvent }         from '../utils/parseEvent'
 import { googleCalendarUrl }  from '../utils/googleCalendarUrl'
@@ -120,7 +120,6 @@ function ExportTab({ events }) {
   }
 
   async function handleCopy() {
-    const { eventsToICS } = await import('../utils/icsExport')
     try {
       await navigator.clipboard.writeText(eventsToICS(filteredEvents))
       setCopied(true)

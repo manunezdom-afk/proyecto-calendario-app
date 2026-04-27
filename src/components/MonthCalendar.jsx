@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import QuickAddSheet from './QuickAddSheet'
+import { useState, lazy, Suspense } from 'react'
 import { resolveEventDate } from '../utils/resolveEventDate'
 import EmptyState from './EmptyState'
+const QuickAddSheet = lazy(() => import('./QuickAddSheet'))
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -240,13 +240,15 @@ export default function MonthCalendar({ events, onAddEvent, onDeleteEvent }) {
 
       {/* Quick add sheet with target date label */}
       {showSheet && (
-        <QuickAddSheet
-          targetDate={selectedDate}
-          targetDateLabel={formatLabel(selectedDate)}
-          onSave={handleSave}
-          onCancel={() => setShowSheet(false)}
-          existingEvents={events}
-        />
+        <Suspense fallback={null}>
+          <QuickAddSheet
+            targetDate={selectedDate}
+            targetDateLabel={formatLabel(selectedDate)}
+            onSave={handleSave}
+            onCancel={() => setShowSheet(false)}
+            existingEvents={events}
+          />
+        </Suspense>
       )}
     </div>
   )

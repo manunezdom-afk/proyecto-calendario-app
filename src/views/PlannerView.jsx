@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
-import QuickAddSheet     from '../components/QuickAddSheet'
 import FocusBar          from '../components/FocusBar'
 import MorningBrief      from '../components/MorningBrief'
-// Lazy: el wizard de reunión semanal solo carga si el usuario toca el chip.
-// En cold start del planner nos ahorra ~7-8 KB.
+// Lazy: sheets que solo aparecen al tocarse. El planner es la primera vista
+// del cold start — sacarlos del chunk principal ahorra ~30 KB en iPhone.
+const QuickAddSheet         = lazy(() => import('../components/QuickAddSheet'))
 const RecurringMeetingSheet = lazy(() => import('../components/RecurringMeetingSheet'))
 import { useUserProfile } from '../hooks/useUserProfile'
 import { todayISO as todayISODate, parseTimeToDecimal } from '../utils/time'
@@ -1799,11 +1799,13 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
       )}
 
       {showModal && (
-        <QuickAddSheet
-          onSave={handleModalSave}
-          onCancel={() => setShowModal(false)}
-          existingEvents={events}
-        />
+        <Suspense fallback={null}>
+          <QuickAddSheet
+            onSave={handleModalSave}
+            onCancel={() => setShowModal(false)}
+            existingEvents={events}
+          />
+        </Suspense>
       )}
 
       {recurringSheetOpen && (

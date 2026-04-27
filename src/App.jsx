@@ -17,7 +17,6 @@ import BottomNavBar                from './components/BottomNavBar'
 import DesktopSideBar              from './components/DesktopSideBar'
 import NotificationPanel           from './components/NotificationPanel'
 import AuthModal                   from './components/AuthModal'
-import NovaWidget                  from './components/NovaWidget'
 import MorningBrief                from './components/MorningBrief'
 import WelcomeScreen, { useWelcomeGate } from './components/WelcomeScreen'
 import BootSplash, { useBootSplash } from './components/BootSplash'
@@ -34,6 +33,10 @@ import { writeIncomingPairCode, normalizeUserCode } from './utils/devicePairing'
 // ellas, con lo que el bundle inicial en iPhone baja ~200 KB (parse+eval
 // en devices antiguos pasa de ~2 s a ~1 s). Cada una queda en su propio
 // chunk de Vite y se cachea agresivamente (mismo hash en el filename).
+// NovaWidget pesa ~30 KB y solo se renderiza fuera del planner (calendar/
+// tasks/settings). En cold start aterrizamos en planner, así que sacarlo del
+// main chunk ahorra ese peso del primer parse.
+const NovaWidget            = lazy(() => import('./components/NovaWidget'))
 const loadCalendarView      = () => import('./views/CalendarView')
 const loadDayView           = () => import('./views/DayView')
 const loadTaskDetailView    = () => import('./views/TaskDetailView')
@@ -894,20 +897,22 @@ export default function App() {
 
       {/* ── Nova Widget — solo en vistas sin FocusBar (calendar, tasks, settings) ── */}
       {activeView !== 'planner' && (
-        <NovaWidget
-          events={events}
-          tasks={tasks}
-          onAddEvent={addEvent}
-          onEditEvent={editEvent}
-          onDeleteEvent={deleteEvent}
-          onAddTask={addTask}
-          onToggleTask={toggleTask}
-          onDeleteTask={deleteTask}
-          onProposeActions={handleProposeActions}
-          onOpenInbox={() => setInboxOpen(true)}
-          proposeMode={true}
-          isDesktop={isDesktop}
-        />
+        <Suspense fallback={null}>
+          <NovaWidget
+            events={events}
+            tasks={tasks}
+            onAddEvent={addEvent}
+            onEditEvent={editEvent}
+            onDeleteEvent={deleteEvent}
+            onAddTask={addTask}
+            onToggleTask={toggleTask}
+            onDeleteTask={deleteTask}
+            onProposeActions={handleProposeActions}
+            onOpenInbox={() => setInboxOpen(true)}
+            proposeMode={true}
+            isDesktop={isDesktop}
+          />
+        </Suspense>
       )}
 
       {/* ── Bandeja de sugerencias ──────────────────────────────────────────
