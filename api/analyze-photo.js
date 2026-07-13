@@ -1,7 +1,7 @@
 import { rateLimited, clientIp } from './_lib/rateLimit.js'
 import { rejectCrossSiteUnsafe, setCorsHeaders } from './_lib/security.js'
 import { getSupabaseAdmin, getUserIdFromAuth } from './_supabaseAdmin.js'
-import { ACTION_TYPES, checkLimit, getUserPlan, recordUsage } from './_lib/usageLimits.js'
+import { ACTION_TYPES, checkGlobalBudget, checkLimit, getUserPlan, recordUsage } from './_lib/usageLimits.js'
 import { trackAIUsageEvent } from './_lib/aiUsageTracking.js'
 
 const MODEL_ID = 'claude-haiku-4-5-20251001'
@@ -57,6 +57,13 @@ export default async function handler(req, res) {
       reset_at: check.resetAt,
       message: check.message,
     })
+  }
+
+  // Tope de plata del dueño: si el gasto acumulado de IA superó el presupuesto,
+  // no gastamos tokens de visión. El cliente puede agregar el evento a mano.
+  const budget = await checkGlobalBudget(admin)
+  if (!budget.ok) {
+    return res.status(503).json({ error: 'ai_budget_reached', message: budget.message })
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim()

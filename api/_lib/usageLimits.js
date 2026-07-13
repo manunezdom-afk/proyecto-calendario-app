@@ -494,6 +494,116 @@ export async function getUsageSnapshot(admin, userId, plan) {
   return out
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Corta-circuito de presupuesto global (tope de gasto de IA)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Protege el bolsillo del dueño: si el gasto ACUMULADO de IA (sumando TODOS los
+// usuarios) supera el presupuesto configurado, cortamos las llamadas pagas y
+// Nova degrada al parser local. Es una malla BLANDA — la malla DURA es el
+// límite de gasto que el dueño pone en los dashboards de OpenAI/Anthropic
+// (auto-recharge OFF + usage hard limit). Esta capa corta ANTES, en el número
+// que el dueño elija, con un aviso amable.
+//
+// Se activa solo si hay presupuesto por env:
+//   AI_DAILY_BUDGET_USD   — tope de gasto por día UTC
+//   AI_MONTHLY_BUDGET_USD — tope de gasto en los últimos 30 días
+// Sin ninguno seteado → no hay corte.
+//
+// Cacheamos el resultado ~60s para no consultar `ai_usage_events` en cada
+// request. Consecuencia: el tope se puede sobrepasar por hasta ~60s de tráfico
+// — aceptable; el tope duro del proveedor es la garantía real. Depende de que
+// los precios en aiPricing.js estén bien (si no, el costo estimado es erróneo).
+
+const BUDGET_CACHE_TTL_MS = 60_000
+let _budgetCache = { at: 0, result: null }
+
+function round6(n) { return Number((Number(n) || 0).toFixed(6)) }
+
+function budgetLimitsFromEnv() {
+  const daily = Number(process.env.AI_DAILY_BUDGET_USD)
+  const monthly = Number(process.env.AI_MONTHLY_BUDGET_USD)
+  return {
+    daily: Number.isFinite(daily) && daily > 0 ? daily : null,
+    monthly: Number.isFinite(monthly) && monthly > 0 ? monthly : null,
+  }
+}
+
+/**
+ * ¿Queda presupuesto de IA para atender esta request? NO escribe.
+ *
+ * Devuelve:
+ *   { ok: true, soft: true, reason }              — sin presupuesto configurado / DB caída
+ *   { ok: true, dailySpent, monthlySpent }        — dentro del presupuesto
+ *   { ok: false, period, spent, budget, message } — presupuesto agotado → degradar a local
+ */
+export async function checkGlobalBudget(admin) {
+  const { daily, monthly } = budgetLimitsFromEnv()
+  if (daily == null && monthly == null) {
+    return { ok: true, soft: true, reason: 'no_budget' }
+  }
+
+  const now = Date.now()
+  if (_budgetCache.result && (now - _budgetCache.at) < BUDGET_CACHE_TTL_MS) {
+    return _budgetCache.result
+  }
+  if (!admin) return { ok: true, soft: true, reason: 'no_admin' }
+
+  const startOfTodayUtc = new Date()
+  startOfTodayUtc.setUTCHours(0, 0, 0, 0)
+  const todayStartMs = startOfTodayUtc.getTime()
+  const windowStart = monthly != null
+    ? new Date(now - 30 * 24 * 60 * 60 * 1000)
+    : startOfTodayUtc
+
+  try {
+    const { data, error } = await admin
+      .from('ai_usage_events')
+      .select('estimated_cost_usd, created_at')
+      .gte('created_at', windowStart.toISOString())
+
+    if (error) {
+      // Tabla ausente / error → NO bloqueamos (el tope duro del proveedor
+      // sigue protegiendo). Cacheamos para no reintentar en loop.
+      const soft = { ok: true, soft: true, reason: 'db_error' }
+      _budgetCache = { at: now, result: soft }
+      return soft
+    }
+
+    let dailySpent = 0
+    let monthlySpent = 0
+    for (const rowu of data || []) {
+      const cost = Number(rowu.estimated_cost_usd || 0)
+      monthlySpent += cost
+      if (new Date(rowu.created_at).getTime() >= todayStartMs) dailySpent += cost
+    }
+
+    let result
+    if (daily != null && dailySpent >= daily) {
+      result = {
+        ok: false, period: 'daily', spent: round6(dailySpent), budget: daily,
+        message: 'Nova está descansando por hoy. Puedes seguir creando eventos y recordatorios; vuelve mañana.',
+      }
+    } else if (monthly != null && monthlySpent >= monthly) {
+      result = {
+        ok: false, period: 'monthly', spent: round6(monthlySpent), budget: monthly,
+        message: 'Nova está descansando este mes. Puedes seguir creando eventos y recordatorios.',
+      }
+    } else {
+      result = { ok: true, dailySpent: round6(dailySpent), monthlySpent: round6(monthlySpent) }
+    }
+    _budgetCache = { at: now, result }
+    return result
+  } catch {
+    const soft = { ok: true, soft: true, reason: 'unexpected' }
+    _budgetCache = { at: now, result: soft }
+    return soft
+  }
+}
+
+// Solo para tests: permite resetear el caché entre casos.
+export function __resetBudgetCache() { _budgetCache = { at: 0, result: null } }
+
 // Re-exports legacy: usados por tests/auth-required.test.js antes de la
 // migración. Mantenemos hasta limpiar tests viejos.
 export const __test__ = { LIMITS, normalizePlan, isExpired }

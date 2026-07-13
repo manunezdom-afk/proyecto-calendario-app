@@ -95,6 +95,11 @@ const ALLOWED_METADATA_KEYS = new Set([
   'had_actions',
   'limit_status',
   'retry_attempt',
+  // Router de OpenAI: tier elegido ('nano'|'mini'|'hard'|'forced') y proveedor
+  // ('openai'|'anthropic'). Permiten cortar costo por tier/proveedor en los
+  // reportes de `ai_usage_events`. Neutrales (no identifican al usuario).
+  'tier',
+  'provider',
   // Voice AI / Whisper: duración del audio transcrito en segundos. No
   // identifica al usuario; solo permite reportes de costo por minuto.
   'audio_seconds',
