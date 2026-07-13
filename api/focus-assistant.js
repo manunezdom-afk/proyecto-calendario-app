@@ -427,7 +427,11 @@ export default async function handler(req, res) {
   // El cliente iOS NO conoce el provider — recibe el mismo shape de
   // respuesta gracias a los adapters (deepseekNova.js / openaiNova.js).
   const explicitProvider = (process.env.NOVA_PROVIDER || process.env.AI_PROVIDER_PRIMARY || '').toLowerCase().trim()
-  const deepseekKeyAvailable = (process.env.DEEPSEEK_API_KEY?.trim()?.length || 0) > 0
+  // DEEPSEEK_API_KEY es el nombre canónico; API_DE_DEEPSEEK es el alias con
+  // el que quedó creado el secreto en Vercel (2026-07-13). Aceptamos ambos
+  // para no obligar a re-crear/renombrar el secreto en el dashboard.
+  const deepseekKey = (process.env.DEEPSEEK_API_KEY || process.env.API_DE_DEEPSEEK || '').trim()
+  const deepseekKeyAvailable = deepseekKey.length > 0
   const openaiKeyAvailable = (process.env.OPENAI_API_KEY?.trim()?.length || 0) > 0
   const provider = explicitProvider
     || (deepseekKeyAvailable ? 'deepseek' : openaiKeyAvailable ? 'openai' : 'anthropic')
@@ -474,7 +478,6 @@ export default async function handler(req, res) {
     })
   }
   if (provider === 'deepseek' && deepseekKeyAvailable) {
-    const deepseekKey = process.env.DEEPSEEK_API_KEY.trim()
     const deepseekPrompt = openaiPrompt + buildDeepSeekJsonAppendix(dateContext.todayISO)
 
     // Un intento con `route`: llama, parsea, normaliza, convierte, filtra

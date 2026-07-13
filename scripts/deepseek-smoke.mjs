@@ -76,9 +76,11 @@ if (DRY) {
   process.exit(0)
 }
 
-const apiKey = process.env.DEEPSEEK_API_KEY?.trim()
+// Mismo alias que el backend: API_DE_DEEPSEEK es el nombre real del secreto
+// en Vercel (2026-07-13).
+const apiKey = (process.env.DEEPSEEK_API_KEY || process.env.API_DE_DEEPSEEK || '').trim()
 if (!apiKey) {
-  console.error('Falta DEEPSEEK_API_KEY en el entorno. No se gastó nada.')
+  console.error('Falta DEEPSEEK_API_KEY (o API_DE_DEEPSEEK) en el entorno. No se gastó nada.')
   console.error('Cuando la key esté en Vercel/local: DEEPSEEK_API_KEY=... node scripts/deepseek-smoke.mjs')
   process.exit(1)
 }
