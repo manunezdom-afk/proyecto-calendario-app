@@ -8,7 +8,7 @@ import { safeParseAssistantJSON } from './_lib/neutralize.js'
 import { normalizeNovaPersonality } from './_lib/personality.js'
 import { rejectCrossSiteUnsafe, setCorsHeaders } from './_lib/security.js'
 import { getSupabaseAdmin, getUserIdFromAuth } from './_supabaseAdmin.js'
-import { ACTION_TYPES, checkLimit, getUserPlan, recordUsage } from './_lib/usageLimits.js'
+import { ACTION_TYPES, checkLimit, checkGlobalBudget, getUserPlan, recordUsage } from './_lib/usageLimits.js'
 import { trackAIUsageEvent } from './_lib/aiUsageTracking.js'
 import { filterCalendarEditActions, strippedEditMessage } from './_lib/calendarIntent.js'
 import {
@@ -17,6 +17,13 @@ import {
   extractResponsesText,
   convertOpenAIToBackendResponse,
 } from './_lib/openaiNova.js'
+import {
+  buildDeepSeekJsonAppendix,
+  callDeepSeekNova,
+  extractDeepSeekText,
+  normalizeDeepSeekPayload,
+  estimateDeepSeekCostUSD,
+} from './_lib/deepseekNova.js'
 
 const MODEL_ID = 'claude-haiku-4-5-20251001'
 // Sonnet 4.6 = fallback "premium" cuando Haiku falla en escenarios críticos
@@ -178,6 +185,108 @@ function isClarificationReply(history) {
     && /\?\s*$/.test(last.content.trim())
 }
 
+// ─── Router de modelos OpenAI por complejidad ───────────────────────────────
+// nano (barato, el grueso del tráfico) → mini (complejo) → gpt-5.5 (difícil).
+// El costo por mensaje baja mucho al mandar lo simple a nano. Reutiliza
+// detectComplexInput/isClarificationReply. OPENAI_NOVA_MODEL fuerza un modelo
+// único (kill-switch / debug) y desactiva router + escalada. Cada tier se puede
+// sobreescribir con OPENAI_MODEL_NANO/MINI/HARD.
+const OPENAI_TIER_MODELS = {
+  nano: process.env.OPENAI_MODEL_NANO || 'gpt-5.4-nano',
+  mini: process.env.OPENAI_MODEL_MINI || 'gpt-5.4-mini',
+  hard: process.env.OPENAI_MODEL_HARD || 'gpt-5.5',
+}
+const OPENAI_TIER_EFFORT = { nano: 'low', mini: 'medium', hard: 'medium', forced: 'medium' }
+const OPENAI_TIER_MAXTOK = { nano: 800, mini: 1024, hard: 1280, forced: 1024 }
+
+function routeForTier(tier) {
+  return {
+    model: OPENAI_TIER_MODELS[tier],
+    tier,
+    effort: OPENAI_TIER_EFFORT[tier],
+    maxOutputTokens: OPENAI_TIER_MAXTOK[tier],
+  }
+}
+
+// "Muy complejo" = candidato al tier caro (gpt-5.5). Comparte vocabulario con
+// detectComplexInput; solo dispara en lo REALMENTE enredado para no encarecer.
+function detectVeryComplexInput(text) {
+  if (typeof text !== 'string') return false
+  const lower = text.toLowerCase()
+  // ≥3 marcadores de hora = varios eventos encadenados.
+  const timeRe = /(\ba la(?:s)?\s+\d{1,2}(?::\d{2})?\b|\ba la(?:s)?\s+(?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)\b|(?<!\d)\d{1,2}:\d{2}(?!\d)|\ben\s+(?:una|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|media|\d{1,3})\s*(?:min|minutos?|h|hs|hrs?|horas?)\b)/gi
+  const timeHits = (lower.match(timeRe) || []).length
+  if (timeHits >= 3) return true
+  // Muy largo → razonamiento pesado.
+  if (text.length >= 200) return true
+  // Conector fuerte + trigger de recordatorio a la vez = multi-cláusula pesada.
+  const strongConnector = /( y luego | y despu[eé]s | y tambi[eé]n | y adem[aá]s )/i.test(lower)
+  const reminder = /\b(?:recu[eé]rdame|acu[eé]rdame|acordame|av[ií]same|recordame)\b/i.test(lower)
+  if (strongConnector && reminder) return true
+  return false
+}
+
+// Elige {model, tier, effort, maxOutputTokens} para esta request.
+function selectOpenAIModel(message, history) {
+  const forced = process.env.OPENAI_NOVA_MODEL?.trim()
+  if (forced) {
+    return { model: forced, tier: 'forced', effort: OPENAI_TIER_EFFORT.forced, maxOutputTokens: OPENAI_TIER_MAXTOK.forced }
+  }
+  let tier
+  if (detectVeryComplexInput(message)) tier = premiumFallbackEnabled() ? 'hard' : 'mini'
+  else if (detectComplexInput(message) || isClarificationReply(history)) tier = 'mini'
+  else tier = 'nano'
+  return routeForTier(tier)
+}
+
+// ¿Tier premium (gpt-5.5) habilitado? Por defecto NO: en beta se enciende
+// explícitamente con AI_ENABLE_PREMIUM_FALLBACK=true. Apagado, lo "muy
+// complejo" va a mini (resuelve bien y cuesta ~7× menos) y la escalada por
+// error termina en mini → Claude.
+function premiumFallbackEnabled() {
+  return String(process.env.AI_ENABLE_PREMIUM_FALLBACK || '').trim().toLowerCase() === 'true'
+}
+
+// ─── Router DeepSeek (proveedor principal barato, 2026-07-13) ───────────────
+// flash para lo simple Y lo normal (el grueso del tráfico), pro solo para lo
+// complejo (multi-instrucción, emocional, clarificaciones). El pro sigue
+// siendo barato (~$0.004/mensaje pesado) — la palanca real de ahorro es que
+// NADA va a GPT/Claude salvo fallback manual (AI_ENABLE_PROVIDER_FALLBACK).
+const DEEPSEEK_TIER_MODELS = {
+  cheap: process.env.DEEPSEEK_MODEL_CHEAP || process.env.AI_MODEL_CHEAP || 'deepseek-v4-flash',
+  pro: process.env.DEEPSEEK_MODEL_PRO || process.env.AI_MODEL_MEDIUM || 'deepseek-v4-pro',
+}
+const DEEPSEEK_TIER_MAXTOK = { cheap: 800, pro: 1024, forced: 900 }
+
+function deepseekRouteForTier(tier) {
+  return {
+    model: DEEPSEEK_TIER_MODELS[tier],
+    tier,
+    maxOutputTokens: Number(process.env.AI_MAX_OUTPUT_TOKENS) || DEEPSEEK_TIER_MAXTOK[tier],
+  }
+}
+
+// Elige {model, tier, maxOutputTokens} para DeepSeek. DEEPSEEK_NOVA_MODEL
+// fuerza un modelo único (kill-switch / debug) y desactiva router + escalada.
+function selectDeepSeekModel(message, history) {
+  const forced = process.env.DEEPSEEK_NOVA_MODEL?.trim()
+  if (forced) {
+    return { model: forced, tier: 'forced', maxOutputTokens: Number(process.env.AI_MAX_OUTPUT_TOKENS) || DEEPSEEK_TIER_MAXTOK.forced }
+  }
+  const complex = detectVeryComplexInput(message)
+    || detectComplexInput(message)
+    || isClarificationReply(history)
+  return deepseekRouteForTier(complex ? 'pro' : 'cheap')
+}
+
+// Sube un tier (nano→mini→hard) para la escalada por error reintentable.
+// Devuelve null si no hay tier superior disponible (premium apagado) —
+// el caller cae al fallback Claude.
+function escalateOpenAITier(route) {
+  if (route.tier === 'nano') return routeForTier('mini')
+  return premiumFallbackEnabled() ? routeForTier('hard') : null
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(req, res, { methods: 'POST, OPTIONS' })
 
@@ -236,12 +345,28 @@ export default async function handler(req, res) {
   const smartCheck = await checkLimit(admin, userId, plan, ACTION_TYPES.NOVA_SMART_ACTION)
   const smartActionsBlocked = !smartCheck.ok
 
+  // Corta-circuito de presupuesto global (tope de plata del dueño). Si el gasto
+  // acumulado de IA supera AI_DAILY/MONTHLY_BUDGET_USD, NO llamamos a ningún
+  // proveedor pago: devolvemos 503 ai_budget_reached → el cliente degrada al
+  // parser local (sigue creando eventos simples, sin costo). Malla blanda; la
+  // dura es el límite de gasto en el dashboard de OpenAI/Anthropic.
+  const budget = await checkGlobalBudget(admin)
+  if (!budget.ok) {
+    console.warn(`[focus-assistant][${reqId}] presupuesto IA agotado (${budget.period}: $${budget.spent}/$${budget.budget})`)
+    return res.status(503).json({
+      error: 'ai_budget_reached',
+      requestId: reqId,
+      reply: budget.message,
+      actions: [],
+    })
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
   // Necesitamos AL MENOS un provider configurado. Antes exigíamos siempre
   // ANTHROPIC_API_KEY incluso para el path OpenAI — un setup OpenAI-only (o
   // un Anthropic key borrado en una reconfig) devolvía 503 y el cliente caía
   // al parser local en silencio (bug 2026-05-28).
-  if (!apiKey && !(process.env.OPENAI_API_KEY?.trim())) {
+  if (!apiKey && !(process.env.OPENAI_API_KEY?.trim()) && !(process.env.DEEPSEEK_API_KEY?.trim())) {
     return res.status(503).json({ error: 'no_api_key' })
   }
 
@@ -295,60 +420,238 @@ export default async function handler(req, res) {
   const reqId = (typeof req.headers['x-request-id'] === 'string' && req.headers['x-request-id'].trim())
     || crypto.randomUUID()
 
-  // Provider switch — user spec 2026-05-27: queremos OpenAI con reasoning
-  // como provider principal. Para fallback a Anthropic Claude (legacy):
-  // setear NOVA_PROVIDER=anthropic. Para forzar OpenAI explícito: ='openai'
-  // (default si OPENAI_API_KEY está seteado).
+  // Provider switch — 2026-07-13: DeepSeek es el proveedor principal (el más
+  // barato). Prioridad: NOVA_PROVIDER (o su alias AI_PROVIDER_PRIMARY) >
+  // autodetección por key disponible (deepseek > openai > anthropic).
   //
   // El cliente iOS NO conoce el provider — recibe el mismo shape de
-  // respuesta gracias al adapter en openaiNova.js.
-  const explicitProvider = (process.env.NOVA_PROVIDER || '').toLowerCase().trim()
+  // respuesta gracias a los adapters (deepseekNova.js / openaiNova.js).
+  const explicitProvider = (process.env.NOVA_PROVIDER || process.env.AI_PROVIDER_PRIMARY || '').toLowerCase().trim()
+  // DEEPSEEK_API_KEY es el nombre canónico; API_DE_DEEPSEEK es el alias con
+  // el que quedó creado el secreto en Vercel (2026-07-13). Aceptamos ambos
+  // para no obligar a re-crear/renombrar el secreto en el dashboard.
+  const deepseekKey = (process.env.DEEPSEEK_API_KEY || process.env.API_DE_DEEPSEEK || '').trim()
+  const deepseekKeyAvailable = deepseekKey.length > 0
   const openaiKeyAvailable = (process.env.OPENAI_API_KEY?.trim()?.length || 0) > 0
   const provider = explicitProvider
-    || (openaiKeyAvailable ? 'openai' : 'anthropic')
-  if (provider === 'openai' && process.env.OPENAI_API_KEY?.trim()) {
-    const openaiKey = process.env.OPENAI_API_KEY.trim()
-    // Memorias del usuario — el cliente las manda en `userMemories` (array
-    // de strings humanas). Se inyectan al system prompt para que el LLM
-    // pueda resolver referencias y NO repreguntar lo que ya sabe.
-    const userMemories = Array.isArray(req?.body?.userMemories)
-      ? req.body.userMemories.filter(s => typeof s === 'string' && s.trim().length > 0).slice(0, 30)
-      : []
-    const openaiPrompt = buildOpenAISystemPrompt({
-      tz: dateContext.tz,
-      todayISO: dateContext.todayISO,
-      tomorrow: dateContext.tomorrow,
-      dayAfter: dateContext.dayAfter,
-      currentTime24: dateContext.currentTime24,
-      weekDates: dateContext.weekDates,
-      memories: userMemories,
-      // Contexto de agenda (QA-closure 2026-06-10): sin esto el path
-      // OpenAI no podía responder "qué tengo hoy", evitar duplicados,
-      // anclar recordatorios al tema en discusión ni editar/borrar por id.
-      events,
-      tasks,
-      discussedEventIds,
+    || (deepseekKeyAvailable ? 'deepseek' : openaiKeyAvailable ? 'openai' : 'anthropic')
+
+  // Memorias del usuario — el cliente las manda en `userMemories` (array
+  // de strings humanas). Se inyectan al system prompt para que el LLM
+  // pueda resolver referencias y NO repreguntar lo que ya sabe.
+  const userMemories = Array.isArray(req?.body?.userMemories)
+    ? req.body.userMemories.filter(s => typeof s === 'string' && s.trim().length > 0).slice(0, 30)
+    : []
+  // Prompt compartido por los paths DeepSeek y OpenAI (mismo contrato JSON).
+  const openaiPrompt = buildOpenAISystemPrompt({
+    tz: dateContext.tz,
+    todayISO: dateContext.todayISO,
+    tomorrow: dateContext.tomorrow,
+    dayAfter: dateContext.dayAfter,
+    currentTime24: dateContext.currentTime24,
+    weekDates: dateContext.weekDates,
+    memories: userMemories,
+    // Contexto de agenda (QA-closure 2026-06-10): sin esto el path
+    // OpenAI no podía responder "qué tengo hoy", evitar duplicados,
+    // anclar recordatorios al tema en discusión ni editar/borrar por id.
+    events,
+    tasks,
+    discussedEventIds,
+  })
+
+  // ─── Path DeepSeek (proveedor principal) ──────────────────────────────────
+  // Si DeepSeek falla del todo: por defecto NO se escala a GPT/Claude (eso
+  // gasta plata sin permiso) — se devuelve 502 y el cliente degrada al parser
+  // local visible. Con AI_ENABLE_PROVIDER_FALLBACK=true, cae al path OpenAI/
+  // Claude de abajo como red de seguridad manual.
+  let providerFellThrough = false
+  // Provider deepseek EXPLÍCITO sin key (falta, o mal nombrada como el
+  // OPENAI_API_KEYY de junio): cortar acá. Sin este guard caeríamos en
+  // silencio al path Claude — plata gastada en el proveedor "apagado".
+  if (provider === 'deepseek' && !deepseekKeyAvailable) {
+    console.error(`[focus-assistant][${reqId}] provider=deepseek sin DEEPSEEK_API_KEY — no se llama a ningún proveedor pago`)
+    return res.status(503).json({
+      error: 'no_api_key',
+      requestId: reqId,
+      reply: 'Nova está en pausa por configuración. Puedes seguir creando eventos a mano.',
+      actions: [],
     })
+  }
+  if (provider === 'deepseek' && deepseekKeyAvailable) {
+    const deepseekPrompt = openaiPrompt + buildDeepSeekJsonAppendix(dateContext.todayISO)
+
+    // Un intento con `route`: llama, parsea, normaliza, convierte, filtra
+    // ediciones y registra SU PROPIO evento de costo (cache-aware).
+    const runDeepSeek = async (route) => {
+      const start = Date.now()
+      const data = await callDeepSeekNova({
+        message,
+        systemPrompt: deepseekPrompt,
+        model: route.model,
+        apiKey: deepseekKey,
+        reqId,
+        history,
+        maxOutputTokens: route.maxOutputTokens,
+      })
+      let parsed
+      try {
+        parsed = JSON.parse(extractDeepSeekText(data))
+      } catch (e) {
+        const err = new Error(`DeepSeek ${route.tier} bad JSON/empty: ${e.message}`)
+        err.retriable = true
+        throw err
+      }
+      const mapped = convertOpenAIToBackendResponse({
+        openaiPayload: normalizeDeepSeekPayload(parsed),
+        dateContext,
+        message,
+        reqId,
+        events,
+      })
+      // Misma red server-side que los otros paths: ediciones/borrados solo
+      // con verbo explícito. Scope = último turno del usuario + mensaje.
+      const lastUserTurn = [...history].reverse().find(h => h.role === 'user')?.content || ''
+      const editFilter = filterCalendarEditActions(mapped.actions, `${lastUserTurn}\n${message}`)
+      if (editFilter.stripped.length > 0) {
+        console.warn(
+          `[focus-assistant][${reqId}] DeepSeek(${route.tier}) stripped edits without intent:`,
+          editFilter.stripped.map(a => a.type).join(','),
+        )
+        mapped.actions = editFilter.actions
+        const note = strippedEditMessage(editFilter.stripped)
+        mapped.reply = `${mapped.reply || ''}${mapped.reply ? '\n\n' : ''}${note}`
+      }
+      trackAIUsageEvent({
+        admin,
+        userId,
+        action_type: ACTION_TYPES.NOVA_MESSAGE,
+        endpoint: 'focus-assistant',
+        model: data?.model || route.model || 'deepseek',
+        usage: {
+          input_tokens: data?.usage?.prompt_tokens ?? 0,
+          output_tokens: data?.usage?.completion_tokens ?? 0,
+        },
+        // Costo cache-aware (hit $0.0028/1M vs miss $0.14/1M): más preciso
+        // que la tarifa plana de aiPricing. null → cae al pricing genérico.
+        cost_override_usd: estimateDeepSeekCostUSD(data?.model || route.model, data?.usage),
+        success: true,
+        duration_ms: Date.now() - start,
+        metadata: { plan, provider: 'deepseek', tier: route.tier, request_id: reqId, dropped: mapped._dropped?.length || 0 },
+      }).catch(() => {})
+      return mapped
+    }
+
+    const isWeakDeepSeekResult = (mapped) =>
+      (typeof mapped?.confidence === 'number' && mapped.confidence < 0.55) ||
+      (mapped?.mode === 'clarification' && (mapped.actions?.length || 0) === 0 && (mapped._dropped?.length || 0) > 0)
+
     try {
+      let route = selectDeepSeekModel(message, history)
+      let mapped
+      try {
+        mapped = await runDeepSeek(route)
+        // flash flojo → UN reintento en pro (sigue siendo barato).
+        if (route.tier === 'cheap' && isWeakDeepSeekResult(mapped)) {
+          console.log(`[focus-assistant][${reqId}] deepseek flash débil (conf ${mapped.confidence}) → reintento en pro`)
+          route = deepseekRouteForTier('pro')
+          mapped = await runDeepSeek(route)
+        }
+      } catch (attemptErr) {
+        // JSON malo/vacío en flash → UNA escalada a pro. En pro (o forced) no
+        // hay tier superior: lanza al catch externo.
+        if (attemptErr?.retriable && route.tier === 'cheap') {
+          route = deepseekRouteForTier('pro')
+          console.log(`[focus-assistant][${reqId}] deepseek flash falló → escala a pro`)
+          mapped = await runDeepSeek(route)
+        } else {
+          throw attemptErr
+        }
+      }
+
+      if (smartActionsBlocked && mapped.actions.length > 0) {
+        const allowed = mapped.actions.filter(a => a.type === 'remember')
+        mapped.actions = allowed
+        mapped.smart_actions_blocked = true
+        mapped.smart_actions_message = smartCheck.message
+      }
+      Promise.resolve()
+        .then(() => recordUsage(admin, userId, ACTION_TYPES.NOVA_MESSAGE))
+        .then(() => mapped.actions.length > 0
+          ? recordUsage(admin, userId, ACTION_TYPES.NOVA_SMART_ACTION)
+          : null)
+        .catch(() => {})
+
+      if (mapped._dropped && mapped._dropped.length > 0) {
+        console.warn(`[focus-assistant][${reqId}] DeepSeek dropped ${mapped._dropped.length}:`, mapped._dropped.join(' | '))
+      }
+      delete mapped._dropped
+      return res.status(200).json(mapped)
+    } catch (err) {
+      const status = err?.status || 500
+      const fallbackEnabled = String(process.env.AI_ENABLE_PROVIDER_FALLBACK || '').trim().toLowerCase() === 'true'
+      const canFallThrough = fallbackEnabled && (openaiKeyAvailable || !!apiKey)
+      console.error(`[focus-assistant][${reqId}] DeepSeek call failed (${status}): ${err?.message?.slice(0, 200)}${canFallThrough ? ' — fallback a OpenAI/Claude' : ' — sin fallback pago (AI_ENABLE_PROVIDER_FALLBACK off)'}`)
+      trackAIUsageEvent({
+        admin,
+        userId,
+        action_type: ACTION_TYPES.NOVA_MESSAGE,
+        endpoint: 'focus-assistant',
+        model: 'deepseek',
+        usage: { input_tokens: 0, output_tokens: 0 },
+        success: false,
+        error_type: `http_${status}`,
+        metadata: { plan, provider: 'deepseek', request_id: reqId },
+      }).catch(() => {})
+      if (!canFallThrough) {
+        if (status === 401 || status === 403) {
+          return res.status(503).json({ error: 'invalid_deepseek_key', requestId: reqId, message: 'Provider DeepSeek no autorizado.' })
+        }
+        if (status === 402) {
+          // 402 = sin saldo en DeepSeek. Mensaje honesto para el dueño.
+          return res.status(503).json({ error: 'deepseek_no_balance', requestId: reqId, reply: 'Nova está descansando (sin saldo del proveedor). Puedes seguir creando eventos a mano.', actions: [] })
+        }
+        if (status === 429) {
+          return res.status(429).json({ error: 'upstream_rate_limit', requestId: reqId, message: 'Demasiadas solicitudes al proveedor. Espera un momento.' })
+        }
+        return res.status(502).json({
+          error: 'upstream_error',
+          requestId: reqId,
+          reply: 'Tuve un problema con Nova. Vuelve a intentarlo.',
+          actions: [],
+        })
+      }
+      providerFellThrough = true  // sigue al path OpenAI (si hay key) o Claude
+    }
+  }
+
+  if ((provider === 'openai' || (providerFellThrough && openaiKeyAvailable)) && process.env.OPENAI_API_KEY?.trim()) {
+    const openaiKey = process.env.OPENAI_API_KEY.trim()
+    // ── Router + escalada de tiers (nano→mini→gpt-5.5) ─────────────────────
+    // runOpenAI ejecuta UN intento con `route`: llama al modelo, parsea,
+    // convierte y filtra ediciones. Registra su PROPIO evento de costo (cada
+    // intento cuenta con su tier/modelo). Lanza si el intento falla (JSON
+    // malo/truncado, HTTP error) para que el caller decida escalar o caer a Claude.
+    const runOpenAI = async (route) => {
       const start = Date.now()
       const data = await callOpenAINova({
         message,
         systemPrompt: openaiPrompt,
-        model: process.env.OPENAI_NOVA_MODEL,
+        model: route.model,
         apiKey: openaiKey,
         reqId,
         history,  // turnos previos del chat (ya viene parseado arriba)
-        reasoningEffort: process.env.OPENAI_REASONING_EFFORT || 'medium',
+        reasoningEffort: route.effort,
+        maxOutputTokens: route.maxOutputTokens,
       })
-      const rawText = extractResponsesText(data)
       let parsed
       try {
-        parsed = JSON.parse(rawText)
+        parsed = JSON.parse(extractResponsesText(data))
       } catch (e) {
-        // JSON inválido de OpenAI → tratar como fallo del provider y caer a
-        // Claude (catch externo). Antes devolvía 502 y el cliente caía al
-        // parser local.
-        throw new Error(`OpenAI bad JSON: ${e.message}`)
+        // JSON inválido o truncado (tope de tokens) → reintentable: el caller
+        // sube de tier antes de caer a Claude.
+        const err = new Error(`OpenAI ${route.tier} bad JSON/truncated: ${e.message}`)
+        err.retriable = true
+        throw err
       }
       const mapped = convertOpenAIToBackendResponse({
         openaiPayload: parsed,
@@ -357,29 +660,26 @@ export default async function handler(req, res) {
         reqId,
         events,
       })
-      // Misma red server-side que el path Anthropic: ediciones/borrados
-      // solo con verbo explícito del usuario ("mueve", "cambia", "borra"…).
-      // El scope incluye el último turno del usuario: en continuaciones
-      // ("cambia lo de fútbol" → "¿a qué hora?" → "a las 6") el verbo de
-      // edición vive en el turno anterior, no en el mensaje actual.
+      // Misma red server-side que el path Anthropic: ediciones/borrados solo
+      // con verbo explícito. Scope = último turno del usuario + mensaje actual.
       const lastUserTurn = [...history].reverse().find(h => h.role === 'user')?.content || ''
-      const openaiEditFilter = filterCalendarEditActions(mapped.actions, `${lastUserTurn}\n${message}`)
-      if (openaiEditFilter.stripped.length > 0) {
+      const editFilter = filterCalendarEditActions(mapped.actions, `${lastUserTurn}\n${message}`)
+      if (editFilter.stripped.length > 0) {
         console.warn(
-          `[focus-assistant][${reqId}] OpenAI stripped edit actions without explicit intent:`,
-          openaiEditFilter.stripped.map(a => a.type).join(','),
+          `[focus-assistant][${reqId}] OpenAI(${route.tier}) stripped edits without intent:`,
+          editFilter.stripped.map(a => a.type).join(','),
         )
-        mapped.actions = openaiEditFilter.actions
-        const note = strippedEditMessage(openaiEditFilter.stripped)
+        mapped.actions = editFilter.actions
+        const note = strippedEditMessage(editFilter.stripped)
         mapped.reply = `${mapped.reply || ''}${mapped.reply ? '\n\n' : ''}${note}`
       }
-      // Tracking de costo — OpenAI Responses API devuelve usage en `data.usage`.
+      // Costo por intento (cada tier registra su propia fila con su modelo).
       trackAIUsageEvent({
         admin,
         userId,
         action_type: ACTION_TYPES.NOVA_MESSAGE,
         endpoint: 'focus-assistant',
-        model: data?.model || process.env.OPENAI_NOVA_MODEL || 'openai',
+        model: data?.model || route.model || 'openai',
         usage: {
           input_tokens: data?.usage?.input_tokens ?? data?.usage?.prompt_tokens ?? 0,
           output_tokens: data?.usage?.output_tokens ?? data?.usage?.completion_tokens ?? 0,
@@ -387,8 +687,57 @@ export default async function handler(req, res) {
         },
         success: true,
         duration_ms: Date.now() - start,
-        metadata: { plan, provider: 'openai', request_id: reqId, dropped: mapped._dropped?.length || 0 },
+        metadata: { plan, provider: 'openai', tier: route.tier, request_id: reqId, dropped: mapped._dropped?.length || 0 },
       }).catch(() => {})
+      return mapped
+    }
+
+    // ¿Resultado "débil"? (confianza baja, o schema-válido pero todo cayó como
+    // basura). Solo decide un reintento barato nano→mini.
+    const isWeakOpenAIResult = (mapped) =>
+      (typeof mapped?.confidence === 'number' && mapped.confidence < 0.55) ||
+      (mapped?.mode === 'clarification' && (mapped.actions?.length || 0) === 0 && (mapped._dropped?.length || 0) > 0)
+
+    // Tope por-usuario de gpt-5.5: cada request al tier 'hard' consume cuota
+    // nova_premium_message (misma que la escalada a Sonnet). Sin cuota →
+    // degrada a mini en silencio (mini resuelve bien y cuesta ~7× menos).
+    // Devuelve null si ni siquiera mini aplica (caller decide).
+    const gatePremiumTier = async (route) => {
+      if (route?.tier !== 'hard') return route
+      const premiumCheck = await checkLimit(admin, userId, plan, ACTION_TYPES.NOVA_PREMIUM_MESSAGE)
+      if (premiumCheck.ok) return route
+      console.warn(`[focus-assistant][${reqId}] cuota premium agotada (${premiumCheck.used}/${premiumCheck.limit}) → degrada hard→mini`)
+      return routeForTier('mini')
+    }
+
+    try {
+      let route = await gatePremiumTier(selectOpenAIModel(message, history))
+      let mapped
+      try {
+        mapped = await runOpenAI(route)
+        // Escalada barata: nano flojo → reintenta UNA vez en mini.
+        if (route.tier === 'nano' && isWeakOpenAIResult(mapped)) {
+          console.log(`[focus-assistant][${reqId}] nano débil (conf ${mapped.confidence}) → reintento en mini`)
+          route = routeForTier('mini')
+          mapped = await runOpenAI(route)
+        }
+      } catch (attemptErr) {
+        // Error reintentable (JSON malo/truncado) y no estamos en el tier tope
+        // → sube un tier antes de rendirse. 401/403/429/timeout NO son
+        // reintentables acá: caen al catch externo (→ Claude). La subida a
+        // 'hard' respeta premium apagado (null) y la cuota por-usuario: si
+        // el gate la degrada al MISMO tier que ya falló, no reintentamos.
+        let upped = attemptErr?.retriable && route.tier !== 'hard'
+          ? await gatePremiumTier(escalateOpenAITier(route))
+          : null
+        if (upped && upped.tier !== route.tier) {
+          console.log(`[focus-assistant][${reqId}] ${route.tier} falló → escala a ${upped.tier}`)
+          route = upped
+          mapped = await runOpenAI(route)  // si esto lanza → catch externo → Claude
+        } else {
+          throw attemptErr
+        }
+      }
 
       // Mismo enforcement de cuota que Anthropic: si actions ≠ vacío,
       // contamos NOVA_SMART_ACTION; si smartActionsBlocked, las strippeamos.
@@ -402,6 +751,12 @@ export default async function handler(req, res) {
         .then(() => recordUsage(admin, userId, ACTION_TYPES.NOVA_MESSAGE))
         .then(() => mapped.actions.length > 0
           ? recordUsage(admin, userId, ACTION_TYPES.NOVA_SMART_ACTION)
+          : null)
+        // gpt-5.5 consume cuota premium (misma que la escalada a Sonnet):
+        // así el tope diario por-usuario de nova_premium_message aplica igual
+        // para ambos proveedores.
+        .then(() => route.tier === 'hard'
+          ? recordUsage(admin, userId, ACTION_TYPES.NOVA_PREMIUM_MESSAGE)
           : null)
         .catch(() => {})
 
@@ -890,4 +1245,8 @@ function buildTodaySummary({ todayEvents, analysis, hour }) {
 // local dentro del handler; estos exports no afectan el bundle de Vercel.
 export { detectComplexInput as __detectComplexInput }
 export { isClarificationReply as __isClarificationReply }
+export { detectVeryComplexInput as __detectVeryComplexInput }
+export { selectOpenAIModel as __selectOpenAIModel }
+export { escalateOpenAITier as __escalateOpenAITier }
+export { selectDeepSeekModel as __selectDeepSeekModel }
 

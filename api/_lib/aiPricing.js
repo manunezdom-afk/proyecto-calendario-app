@@ -30,6 +30,21 @@ const PRICING_PER_MILLION = Object.freeze({
   'claude-sonnet-4-6': { input: 3.00, output: 15.00 },
   // Opus 4.7 — top tier (improbable en Focus por costo)
   'claude-opus-4-7':   { input: 15.00, output: 75.00 },
+
+  // OpenAI (Responses API) — Nova chat con router por tiers. Precios en USD
+  // por 1M tokens, tomados de developers.openai.com/api/docs/pricing el
+  // 2026-07-01. RE-VERIFICAR si OpenAI cambia precios o se agrega un tier.
+  'gpt-5.4-nano': { input: 0.20, output: 1.25 },   // tier simple (default barato)
+  'gpt-5.4-mini': { input: 0.75, output: 4.50 },   // tier complejo
+  'gpt-5.4':      { input: 2.50, output: 15.00 },  // por si se usa el full
+  'gpt-5.5':      { input: 5.00, output: 30.00 },  // tier "difícil" (caro, uso escaso)
+
+  // DeepSeek — proveedor principal de Nova desde 2026-07-13. Precios de
+  // api-docs.deepseek.com/quick_start/pricing (tarifa CACHE MISS, la
+  // conservadora). El path DeepSeek pasa un cost_override_usd cache-aware
+  // (hit $0.0028/1M) calculado en deepseekNova.js; esta tabla es fallback.
+  'deepseek-v4-flash': { input: 0.14, output: 0.28 },
+  'deepseek-v4-pro':   { input: 0.435, output: 0.87 },
 })
 
 // Fallback conservador: si llega un modelo desconocido, asumimos un precio
@@ -52,6 +67,22 @@ const FALLBACK_PRICING = Object.freeze({ input: 3.00, output: 15.00 })
 export function normalizeModelName(modelId) {
   if (!modelId || typeof modelId !== 'string') return null
   const lower = modelId.toLowerCase().trim()
+  // OpenAI (Nova chat): 'gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5',
+  // tolerando el sufijo de snapshot que OpenAI puede añadir
+  // ('gpt-5.4-mini-2026-03-17' → 'gpt-5.4-mini'). Solo reconocemos la familia
+  // gpt-5.x que SÍ tiene precio configurado; cualquier otro gpt (ej. gpt-4o)
+  // devuelve null → el caller usa fallback conservador, igual que antes.
+  if (lower.startsWith('gpt-')) {
+    const g = lower.match(/^(gpt-5\.\d+(?:-(?:nano|mini))?)/)
+    return g ? g[1] : null
+  }
+  // DeepSeek: 'deepseek-v4-flash', 'deepseek-v4-pro', tolerando sufijo de
+  // snapshot. IDs legacy ('deepseek-chat'/'deepseek-reasoner', deprecados
+  // 2026-07-24) devuelven null → fallback conservador.
+  if (lower.startsWith('deepseek-')) {
+    const d = lower.match(/^(deepseek-v\d+(?:\.\d+)?-(?:flash|pro))/)
+    return d ? d[1] : null
+  }
   if (!lower.startsWith('claude-')) return null
   // Familia: claude-(haiku|sonnet|opus)-(major)-(minor)
   const m = lower.match(/^(claude-(?:haiku|sonnet|opus)-\d+-\d+)/)

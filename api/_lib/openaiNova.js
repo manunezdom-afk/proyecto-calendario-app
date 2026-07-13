@@ -21,11 +21,15 @@ import {
 } from './durations.js'
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
-// gpt-5-mini — reasoning + costo razonable. Override con
-// OPENAI_NOVA_MODEL=gpt-5 (premium) o gpt-5-nano (cheap) según necesidad.
-// El user spec del 2026-05-27 pidió "razonamiento propio" — esta familia
-// tiene chain-of-thought interno habilitado por default.
-const DEFAULT_MODEL = 'gpt-5-mini'
+// Modelo por defecto = tier "nano" del router (el más barato). Normalmente
+// focus-assistant.js (selectOpenAIModel) pasa un `model` explícito por
+// complejidad (nano/mini/hard); este DEFAULT solo aplica si nadie pasa model
+// y no hay OPENAI_NOVA_MODEL. Familia gpt-5.x = reasoning interno por default.
+const DEFAULT_MODEL = 'gpt-5.4-nano'
+// Tope de salida (Responses API). El JSON de Nova es chico, pero los tokens de
+// reasoning cuentan contra este presupuesto → 1024 como piso seguro. El router
+// pasa un valor por-tier (nano 800 / mini 1024 / hard 1280).
+const DEFAULT_MAX_OUTPUT_TOKENS = 1024
 const DEFAULT_TIMEOUT_MS = 45_000
 
 // ─── Schema (Structured Outputs) ────────────────────────────────────────────
@@ -435,6 +439,7 @@ export async function callOpenAINova({
   signal,
   history,
   reasoningEffort,
+  maxOutputTokens,
 }) {
   // Mapear history del backend ({role: 'user'|'assistant', content}) al
   // formato Responses API (mismo role + content). Mantenemos orden cronológico.
@@ -450,6 +455,11 @@ export async function callOpenAINova({
 
   const body = {
     model: model || process.env.OPENAI_NOVA_MODEL || DEFAULT_MODEL,
+    // Tope de salida — Responses API usa `max_output_tokens` (NO `max_tokens`).
+    // Acota costo y latencia; los tokens de reasoning cuentan acá adentro.
+    max_output_tokens: maxOutputTokens
+      || Number(process.env.OPENAI_NOVA_MAX_OUTPUT_TOKENS)
+      || DEFAULT_MAX_OUTPUT_TOKENS,
     input: [
       { role: 'system', content: systemPrompt },
       ...historyMessages,
