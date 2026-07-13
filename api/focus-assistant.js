@@ -461,6 +461,18 @@ export default async function handler(req, res) {
   // local visible. Con AI_ENABLE_PROVIDER_FALLBACK=true, cae al path OpenAI/
   // Claude de abajo como red de seguridad manual.
   let providerFellThrough = false
+  // Provider deepseek EXPLÍCITO sin key (falta, o mal nombrada como el
+  // OPENAI_API_KEYY de junio): cortar acá. Sin este guard caeríamos en
+  // silencio al path Claude — plata gastada en el proveedor "apagado".
+  if (provider === 'deepseek' && !deepseekKeyAvailable) {
+    console.error(`[focus-assistant][${reqId}] provider=deepseek sin DEEPSEEK_API_KEY — no se llama a ningún proveedor pago`)
+    return res.status(503).json({
+      error: 'no_api_key',
+      requestId: reqId,
+      reply: 'Nova está en pausa por configuración. Puedes seguir creando eventos a mano.',
+      actions: [],
+    })
+  }
   if (provider === 'deepseek' && deepseekKeyAvailable) {
     const deepseekKey = process.env.DEEPSEEK_API_KEY.trim()
     const deepseekPrompt = openaiPrompt + buildDeepSeekJsonAppendix(dateContext.todayISO)
