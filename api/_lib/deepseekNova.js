@@ -179,6 +179,11 @@ export async function callDeepSeekNova({
     ],
     // JSON mode — el prompt ya contiene "JSON" + ejemplo (requisitos DeepSeek).
     response_format: { type: 'json_object' },
+    // CRÍTICO (bug 2026-07-24): los V4 traen thinking ENABLED por defecto y
+    // el razonamiento consume max_tokens → `content` llega VACÍO y Nova caía
+    // al parser local en el 100% de los mensajes. Para extracción JSON el
+    // thinking no aporta; se apaga. DEEPSEEK_THINKING=enabled lo re-activa.
+    thinking: { type: process.env.DEEPSEEK_THINKING === 'enabled' ? 'enabled' : 'disabled' },
     // max_tokens evita el JSON truncado a mitad (recomendación oficial) y es
     // el tope duro de costo de salida por request.
     max_tokens: maxOutputTokens

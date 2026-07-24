@@ -13,6 +13,7 @@ import {
   normalizeDeepSeekPayload,
   extractDeepSeekText,
   buildDeepSeekJsonAppendix,
+  callDeepSeekNova,
 } from '../api/_lib/deepseekNova.js'
 import { calculateAICost, normalizeModelName } from '../api/_lib/aiPricing.js'
 
@@ -149,6 +150,32 @@ test('extractDeepSeekText: quita fences markdown y lanza con contenido vacío', 
   assert.equal(extractDeepSeekText(wrap('```json\n{"a":1}\n```')), '{"a":1}')
   assert.throws(() => extractDeepSeekText(wrap('')), /empty content/)
   assert.throws(() => extractDeepSeekText({}), /empty content/)
+})
+
+test('callDeepSeekNova manda thinking DISABLED por defecto (bug prod 2026-07-24: content vacío)', async (t) => {
+  // Los V4 traen thinking enabled por defecto; el razonamiento consume
+  // max_tokens y deja content vacío → Nova degradaba al parser local en el
+  // 100% de los mensajes. Este test fija el contrato del request.
+  const originalFetch = globalThis.fetch
+  let sentBody = null
+  globalThis.fetch = async (_url, opts) => {
+    sentBody = JSON.parse(opts.body)
+    return { ok: true, json: async () => ({ choices: [{ message: { content: '{}' } }] }) }
+  }
+  t.after(() => { globalThis.fetch = originalFetch })
+
+  await callDeepSeekNova({ message: 'hola', systemPrompt: 'json', apiKey: 'test', history: [] })
+  assert.deepEqual(sentBody.thinking, { type: 'disabled' })
+  assert.equal(sentBody.response_format.type, 'json_object')
+  assert.ok(sentBody.max_tokens > 0)
+
+  process.env.DEEPSEEK_THINKING = 'enabled'
+  try {
+    await callDeepSeekNova({ message: 'hola', systemPrompt: 'json', apiKey: 'test', history: [] })
+    assert.deepEqual(sentBody.thinking, { type: 'enabled' })
+  } finally {
+    delete process.env.DEEPSEEK_THINKING
+  }
 })
 
 test('buildDeepSeekJsonAppendix cumple los requisitos de JSON mode (palabra json + ejemplo)', () => {
