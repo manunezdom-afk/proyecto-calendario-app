@@ -45,11 +45,13 @@
 		</dict>
 	</array>
 
-	<!-- Permission strings (mic + speech). -->
+	<!-- Permission strings (mic + speech + calendario). -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Focus usa el micrófono para que puedas pedirle a Nova que organice tu día con la voz.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Focus transcribe tu voz para convertirla en tareas, eventos y recordatorios.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Focus muestra los eventos de tu calendario del iPhone junto a los tuyos, para que veas todo tu día en un solo lugar. No los modifica.</string>
 
 	<!-- Scene manifest + indirect input. -->
 	<key>UIApplicationSceneManifest</key>

@@ -18,6 +18,7 @@ struct CalendarioView: View {
     @EnvironmentObject private var toast: ToastManager
     @EnvironmentObject private var nav: NavigationCoordinator
     @EnvironmentObject private var coachMarks: CoachMarksStore
+    @Environment(\.openURL) private var openURL
     @State private var selectedDate: Date = Calendar.current.startOfDay(for: Date())
     @State private var viewMode: ViewMode = .week
     @State private var showCreateEvent = false
@@ -30,7 +31,9 @@ struct CalendarioView: View {
     /// - Si NO tiene eventos Y está LOGUEADO → array vacío. La cuenta real
     ///   NUNCA debe mostrar eventos demo falsos como si fueran del usuario.
     private var displayEvents: [FocusEvent] {
-        if store.hasUserEvents {
+        // Con eventos propios O del calendario del iPhone → los reales
+        // (eventsFor ya mergea ambos). Demo solo cuando no hay nada real.
+        if store.hasUserEvents || !store.systemEvents.isEmpty {
             return store.eventsFor(date: selectedDate)
         }
         guard store.isInDemoMode else { return [] }
@@ -41,14 +44,14 @@ struct CalendarioView: View {
     }
 
     private var showingExamples: Bool {
-        !store.hasUserEvents && store.isInDemoMode
+        !store.hasUserEvents && store.systemEvents.isEmpty && store.isInDemoMode
     }
 
     /// Cuenta eventos para un día dado (para el dot indicator).
     private func eventsCount(for date: Date) -> Int {
         let cal = Calendar.current
-        if store.hasUserEvents {
-            return store.events.filter { cal.isDate($0.startTime, inSameDayAs: date) }.count
+        if store.hasUserEvents || !store.systemEvents.isEmpty {
+            return store.eventsFor(date: date).count
         }
         guard store.isInDemoMode else { return 0 }
         return DemoDataProvider.shared.exampleWeekEvents()
@@ -327,8 +330,11 @@ struct CalendarioView: View {
         } else {
             VStack(spacing: Theme.Spacing.md) {
                 ForEach(displayEvents) { event in
-                    let isDemoEvent = !store.hasUserEvents
-                    SwipeToDelete(enabled: !isDemoEvent) {
+                    let isDemoEvent = showingExamples
+                    // Los del calendario del iPhone son read-only: sin
+                    // swipe-delete ni editar (Focus no escribe en EventKit).
+                    let isSystemEvent = event.effectiveSource == .apple
+                    SwipeToDelete(enabled: !isDemoEvent && !isSystemEvent) {
                         store.deleteEvent(event.id)
                         toast.success("Evento eliminado", symbol: "trash.fill")
                     } content: {
@@ -339,7 +345,15 @@ struct CalendarioView: View {
                     // todas comparten `dayContent`. Solo se desactiva
                     // cuando estamos mostrando eventos de demostración.
                     .contextMenu {
-                        if !isDemoEvent {
+                        if isSystemEvent {
+                            Button {
+                                if let url = URL(string: "calshow:\(event.startTime.timeIntervalSinceReferenceDate)") {
+                                    openURL(url)
+                                }
+                            } label: {
+                                Label("Abrir en Calendario", systemImage: "arrow.up.forward.app")
+                            }
+                        } else if !isDemoEvent {
                             Button {
                                 editingEvent = event
                             } label: {
@@ -496,6 +510,21 @@ private struct CalendarEventCard: View {
                 .clipShape(Capsule())
 
             VStack(alignment: .leading, spacing: 3) {
+                // Chip de origen para eventos del calendario del iPhone
+                // (read-only) — paridad con TimelineEventRow en Mi Día.
+                if event.effectiveSource == .apple {
+                    HStack(spacing: 3) {
+                        Image(systemName: "iphone")
+                            .font(.system(size: 8, weight: .semibold))
+                        Text("IPHONE")
+                            .font(Theme.Typography.captionMono)
+                            .tracking(Theme.Tracking.captionMono)
+                    }
+                    .foregroundStyle(Theme.Colors.textTertiary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Theme.Colors.surfaceHigh))
+                }
                 Text(event.title)
                     .font(Theme.Typography.bodyEmphasized)
                     .foregroundStyle(Theme.Colors.textPrimary)

@@ -1,7 +1,31 @@
 import SwiftUI
+import UIKit
+
+/// Delegate mínimo para recibir el device token de APNs. SwiftUI no expone
+/// estos callbacks — el adaptor lo conecta al ciclo de vida de UIKit.
+final class FocusAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        let token = deviceToken.map { String(format: "%02x", $0) }.joined()
+        Task { @MainActor in
+            PushRegistrationService.shared.handleDeviceToken(token)
+        }
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        // Esperado en simulador sin soporte APNs — no es un error de app.
+        debugLog("[Push] registro APNs falló: \(error.localizedDescription)")
+    }
+}
 
 @main
 struct FocusApp: App {
+    @UIApplicationDelegateAdaptor(FocusAppDelegate.self) private var appDelegate
     @StateObject private var dataStore = FocusDataStore()
     @StateObject private var authStore = AuthStore()
     @StateObject private var coachMarks = CoachMarksStore()
@@ -111,6 +135,10 @@ struct FocusApp: App {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     authStore.refreshIfNeeded()
+                    // Push remotas: si el permiso de notificaciones ya está
+                    // concedido, pedir/renovar el device token de APNs.
+                    // Idempotente y barato — iOS re-entrega el token cacheado.
+                    Task { await PushRegistrationService.shared.registerIfAuthorized() }
                 }
             }
             // Bootstrap notificaciones locales: al arrancar la app,
@@ -148,8 +176,16 @@ struct FocusApp: App {
                 accessToken: session.accessToken,
                 userId: userId
             )
+            // Con sesión activa: subir el device token de APNs al backend
+            // (si ya llegó) y pedirlo si el permiso de notifs existe.
+            PushRegistrationService.shared.updateCredentials(
+                accessToken: session.accessToken,
+                userId: session.userId
+            )
+            Task { await PushRegistrationService.shared.registerIfAuthorized() }
         } else {
             dataStore.applyAuthChange(accessToken: nil, userId: nil)
+            PushRegistrationService.shared.updateCredentials(accessToken: nil, userId: nil)
         }
     }
 }

@@ -76,6 +76,12 @@ final class LocalNotificationService: NSObject, UNUserNotificationCenterDelegate
         }
         do {
             let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
+            if granted {
+                // Recién concedido → aprovechar para pedir el device token
+                // de APNs (push remotas). Sin esto, el token solo se pedía
+                // en el próximo relanzamiento de la app.
+                await PushRegistrationService.shared.registerIfAuthorized()
+            }
             return granted ? .authorized : .denied
         } catch {
             // El request falló por una razón rara (raro). Tratamos como denied.

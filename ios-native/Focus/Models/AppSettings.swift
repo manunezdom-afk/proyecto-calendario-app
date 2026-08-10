@@ -65,6 +65,15 @@ struct AppSettings: Codable, Hashable {
     var novaVoiceEnabled: Bool
     var plan: PlanName
     var demoMode: Bool
+    /// Mostrar eventos del calendario del iPhone (EventKit, read-only)
+    /// dentro de Mi Día y Calendario. Optional a propósito: el JSON
+    /// persistido antes de esta versión no tiene la key y un Bool no
+    /// opcional haría fallar el decode completo → reset de settings.
+    /// nil → false (ver `systemCalendarOn`).
+    var showSystemCalendar: Bool?
+
+    /// Lectura segura del flag del calendario del sistema.
+    var systemCalendarOn: Bool { showSystemCalendar ?? false }
 
     static let defaults = AppSettings(
         notificationsEnabled: true,

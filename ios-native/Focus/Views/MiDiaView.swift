@@ -9,6 +9,7 @@ struct MiDiaView: View {
     // (privacy: no dejar mic activo cuando el usuario sale de la app).
     @Environment(\.scenePhase) private var scenePhase
     @State private var focusBarText: String = ""
+    @Environment(\.openURL) private var openURL
     // Texto retenido a la espera del consentimiento IA (5.1.2(i)) — solo se
     // envía al backend después de que el usuario acepte en la sheet.
     @State private var aiConsentPendingText: String? = nil
@@ -47,7 +48,10 @@ struct MiDiaView: View {
     /// real — nunca eventos falsos como si fueran propios.
     /// Recordatorios vencidos van separados en `overdueReminders`.
     private var displayEvents: [FocusEvent] {
-        if store.hasUserEvents {
+        // Con eventos propios O del calendario del iPhone, mostrar los
+        // reales (mergeados en eventsFor). Los ejemplos demo solo aparecen
+        // cuando no hay NINGÚN dato real que mostrar.
+        if store.hasUserEvents || !store.systemEvents.isEmpty {
             return store.upcomingAndCurrentEventsToday()
         }
         guard store.isInDemoMode else { return [] }
@@ -69,7 +73,7 @@ struct MiDiaView: View {
     /// cancelados defensivamente (en práctica eliminar = borrar físicamente,
     /// pero respetamos el contrato del enum) y ordenamos por hora.
     private var tomorrowEvents: [FocusEvent] {
-        guard store.hasUserEvents else { return [] }
+        guard store.hasUserEvents || !store.systemEvents.isEmpty else { return [] }
         let cal = Calendar.current
         guard let tomorrow = cal.date(byAdding: .day, value: 1, to: Date()) else {
             return []
@@ -1967,7 +1971,7 @@ struct MiDiaView: View {
             if NovaActionNormalizer.isLikelyDuplicate(
                 title: title,
                 startTime: date,
-                existingEvents: store.events
+                existingEvents: store.events + store.systemEvents
             ) {
                 return InlineNovaResponse(
                     userText: userText,
@@ -2896,7 +2900,10 @@ struct MiDiaView: View {
 
                 VStack(spacing: density.rowSpacing) {
                     ForEach(Array(shown.enumerated()), id: \.element.id) { idx, event in
-                        SwipeToDelete(enabled: true) {
+                        // Los eventos del calendario del iPhone son
+                        // read-only: sin swipe-delete ni editar (Focus no
+                        // escribe en EventKit). Solo "Abrir en Calendario".
+                        SwipeToDelete(enabled: event.effectiveSource != .apple) {
                             if store.hasUserEvents {
                                 store.deleteEvent(event.id)
                             } else {
@@ -2914,22 +2921,32 @@ struct MiDiaView: View {
                             )
                         }
                         .contextMenu {
-                            if store.hasUserEvents {
+                            if event.effectiveSource == .apple {
                                 Button {
-                                    editingEvent = event
+                                    if let url = URL(string: "calshow:\(event.startTime.timeIntervalSinceReferenceDate)") {
+                                        openURL(url)
+                                    }
                                 } label: {
-                                    Label("Editar", systemImage: "pencil")
+                                    Label("Abrir en Calendario", systemImage: "arrow.up.forward.app")
                                 }
-                            }
-                            Button(role: .destructive) {
+                            } else {
                                 if store.hasUserEvents {
-                                    store.deleteEvent(event.id)
-                                } else {
-                                    store.dismissDemoEvent(title: event.title)
+                                    Button {
+                                        editingEvent = event
+                                    } label: {
+                                        Label("Editar", systemImage: "pencil")
+                                    }
                                 }
-                                toast.success("Evento eliminado", symbol: "trash.fill")
-                            } label: {
-                                Label("Eliminar", systemImage: "trash")
+                                Button(role: .destructive) {
+                                    if store.hasUserEvents {
+                                        store.deleteEvent(event.id)
+                                    } else {
+                                        store.dismissDemoEvent(title: event.title)
+                                    }
+                                    toast.success("Evento eliminado", symbol: "trash.fill")
+                                } label: {
+                                    Label("Eliminar", systemImage: "trash")
+                                }
                             }
                         }
                     }
@@ -3293,6 +3310,22 @@ private struct TimelineEventRow: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Theme.Colors.surfaceHigh))
+                    }
+                    // Origen: eventos del calendario del iPhone llevan un
+                    // chip para distinguirlos de los de Focus (son
+                    // read-only — sin swipe ni editar).
+                    if event.effectiveSource == .apple {
+                        HStack(spacing: 3) {
+                            Image(systemName: "iphone")
+                                .font(.system(size: 8, weight: .semibold))
+                            Text("IPHONE")
+                                .font(Theme.Typography.captionMono)
+                                .tracking(Theme.Tracking.captionMono)
+                        }
+                        .foregroundStyle(Theme.Colors.textTertiary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Theme.Colors.surfaceHigh))
                     }
                     Text(event.title)
                         .font(density.titleFont)

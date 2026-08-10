@@ -5006,6 +5006,12 @@ enum NovaResponder {
 @MainActor
 final class FocusDataStore: ObservableObject {
     @Published var events: [FocusEvent]
+    /// Eventos del calendario del iPhone (EventKit, `source: .apple`).
+    /// Array SEPARADO de `events` a propósito: `SupabaseSyncService` lee
+    /// `events` y jamás debe subir a la nube un evento que no es de Focus.
+    /// Solo se mergean en la capa de lectura (`eventsFor(date:)`). No se
+    /// persisten — se re-fetchean del sistema en cada launch/refresh.
+    @Published private(set) var systemEvents: [FocusEvent] = []
     @Published var tasks: [FocusTask]
     @Published var suggestions: [NovaSuggestion]
     @Published var novaMessages: [NovaMessage]
@@ -5095,6 +5101,31 @@ final class FocusDataStore: ObservableObject {
         let pendingTaskIds = FocusLocalStore.load([UUID].self, forKey: .pendingDeleteTasks) ?? []
         self.pendingDeleteEventIds = Set(pendingEvtIds)
         self.pendingDeleteTaskIds = Set(pendingTaskIds)
+
+        // Calendario del iPhone: fetch inicial (no-op si el toggle está off
+        // o falta permiso) + re-fetch cuando el calendario del sistema
+        // cambie por fuera (editar en la app Calendario, invite entrante…).
+        SystemCalendarService.shared.onStoreChanged = { [weak self] in
+            self?.refreshSystemEvents()
+        }
+        refreshSystemEvents()
+    }
+
+    // MARK: - Calendario del sistema (EventKit, read-only)
+
+    /// Re-fetchea los eventos del iPhone para la ventana visible
+    /// (ayer → +45 días). Barato: query síncrona de EventKit (~ms).
+    /// Si el toggle está off o no hay permiso, vacía el array.
+    func refreshSystemEvents() {
+        guard settings.systemCalendarOn, SystemCalendarService.shared.isAuthorized else {
+            if !systemEvents.isEmpty { systemEvents = [] }
+            return
+        }
+        let cal = Calendar.current
+        let todayStart = cal.startOfDay(for: Date())
+        let windowStart = cal.date(byAdding: .day, value: -1, to: todayStart) ?? todayStart
+        let windowEnd = cal.date(byAdding: .day, value: 45, to: todayStart) ?? todayStart
+        systemEvents = SystemCalendarService.shared.events(from: windowStart, to: windowEnd)
     }
 
     private func persistPendingDeleteEvents() {
@@ -5485,7 +5516,10 @@ final class FocusDataStore: ObservableObject {
 
     func eventsFor(date target: Date) -> [FocusEvent] {
         let cal = Calendar.current
-        return events
+        // Merge de lectura: eventos de Focus + calendario del iPhone
+        // (read-only). El array `systemEvents` está vacío si el toggle
+        // está off, así que el caso común no paga nada.
+        return (events + systemEvents)
             .filter { cal.isDate($0.startTime, inSameDayAs: target) }
             .sorted { $0.startTime < $1.startTime }
     }

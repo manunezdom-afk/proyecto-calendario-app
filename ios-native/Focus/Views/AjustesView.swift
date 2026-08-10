@@ -12,6 +12,8 @@ struct AjustesView: View {
     @State private var showResetConfirm = false
     @State private var showClearConfirm = false
     @State private var showSignOutConfirm = false
+    /// Permiso de calendario denegado — alert con salto a Ajustes de iOS.
+    @State private var showCalendarDeniedAlert = false
     // Eliminación de cuenta (Guideline 5.1.1(v)): alert con confirmación
     // tipeada. El error se muestra en un alert aparte para poder reintentar.
     @State private var showDeleteAccountAlert = false
@@ -39,6 +41,7 @@ struct AjustesView: View {
 
                         cuentaSection
                         sincronizacionSection
+                        calendarioIphoneSection
                         novaSection
                         // Ocultas para App Review: son catálogos de features
                         // "Próximamente" (Guideline 2.1). Restaurar cuando
@@ -151,6 +154,16 @@ struct AjustesView: View {
                 Button("Entendido", role: .cancel) { deleteAccountError = nil }
             } message: {
                 Text(deleteAccountError ?? "")
+            }
+            .alert("Permiso de calendario", isPresented: $showCalendarDeniedAlert) {
+                Button("Abrir Ajustes") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        openURL(url)
+                    }
+                }
+                Button("Ahora no", role: .cancel) {}
+            } message: {
+                Text("Focus no tiene acceso a tu calendario. Actívalo en Ajustes del iPhone → Focus → Calendarios para ver tus eventos aquí.")
             }
         }
     }
@@ -686,6 +699,59 @@ struct AjustesView: View {
     private var isLoggedInWithAccount: Bool {
         if case .loggedIn = auth.state { return true }
         return false
+    }
+
+    // MARK: - Calendario del iPhone (EventKit, read-only)
+
+    private var calendarioIphoneSubtitle: String {
+        if store.settings.systemCalendarOn {
+            return "Tus eventos del iPhone se muestran junto a los de Focus. Solo lectura."
+        }
+        if SystemCalendarService.shared.isDenied {
+            return "Permiso denegado. Actívalo en Ajustes del iPhone → Focus → Calendarios."
+        }
+        return "Ve tus eventos de iCloud, Google u Outlook dentro de Focus. Solo lectura."
+    }
+
+    private var calendarioIphoneSection: some View {
+        settingsSection(title: "Calendario del iPhone") {
+            VStack(spacing: 0) {
+                AjustesRow(
+                    symbol: "calendar",
+                    tint: Theme.Colors.focusAccent,
+                    title: "Mostrar eventos del iPhone",
+                    subtitle: calendarioIphoneSubtitle,
+                    trailing: .toggle(Binding(
+                        get: { store.settings.systemCalendarOn },
+                        set: { handleSystemCalendarToggle($0) }
+                    ))
+                )
+            }
+            .focusCardContainer()
+        }
+    }
+
+    /// ON → pide permiso si falta y recién ahí persiste el setting (el
+    /// toggle solo queda encendido si el permiso se concedió). OFF →
+    /// persiste y vacía los eventos del sistema al instante.
+    private func handleSystemCalendarToggle(_ on: Bool) {
+        if !on {
+            store.updateSettings { $0.showSystemCalendar = false }
+            store.refreshSystemEvents()
+            return
+        }
+        Task { @MainActor in
+            let service = SystemCalendarService.shared
+            let granted = service.isAuthorized ? true : await service.requestAccess()
+            if granted {
+                store.updateSettings { $0.showSystemCalendar = true }
+                store.refreshSystemEvents()
+            } else {
+                store.updateSettings { $0.showSystemCalendar = false }
+                showCalendarDeniedAlert = true
+                HapticManager.shared.warning()
+            }
+        }
     }
 
     private var privacidadSection: some View {
