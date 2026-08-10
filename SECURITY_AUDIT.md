@@ -305,3 +305,27 @@ Ninguno bloquea el punto 2. La tabla `ai_usage_events` ya está lista. Pendiente
 3. **`send-otp` pre-create** de cuentas (PEND-1 del audit original) — sigue abierto.
 4. **Rate limit persistente en Postgres** (PEND-2) — útil cuando lleguen los límites finos.
 5. **Rotación trimestral de `CRON_SECRET`** (PEND-3).
+
+---
+
+## Hardening 2026-08-10 — `/api/push` action `renew`
+
+**Hallazgo**: `handleRenew` autenticaba solo por posesión del `old_endpoint`
+(sin auth, sin rate limit). El modelo "posesión del endpoint" se había
+validado para `snooze` (que solo pospone); `renew` **escribe** — re-apunta la
+suscripción a un endpoint aportado por el request. Un endpoint filtrado (logs,
+backups, tráfico interno) permitía secuestrar las notificaciones del usuario.
+
+**Fix aplicado** (`api/push.js` + `public/sw.js`):
+1. Prueba de posesión completa: el SW ahora manda también `old_keys`
+   (`p256dh`/`auth` de la sub vieja, que nunca salen del browser) y el backend
+   las compara contra la fila guardada antes de tocar nada (`403
+   old_keys_mismatch` si no coinciden).
+2. Rate limit 5/min por IP (`renew` es un evento raro — rotación de provider).
+3. SW viejos que no mandan `old_keys` reciben `400 missing_old_keys` y
+   degradan al auto-healer de `useNotifications` (re-suscribe con JWT al
+   abrir la app). Ventana de exposición: hasta que el browser refresque
+   `sw.js` (no-cache + version stamp por build → horas, no semanas).
+
+Sigue pendiente PEND-2 (rate limit in-memory por instancia) — aplica también
+a este límite nuevo, pero 5/min/IP por instancia ya corta el scan barato.

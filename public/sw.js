@@ -444,14 +444,17 @@ self.addEventListener('notificationclick', (event) => {
 // Renovar suscripción si el navegador la invalida (APNs/FCM rotan, iOS
 // deployment de PWA, Chrome cambia de proveedor…). El SW corre aislado del
 // main thread, sin acceso al JWT de Supabase, así que el POST 'subscribe'
-// normal fallaba con 401 y la sub vieja quedaba huérfana en el backend. Ahora
-// usamos la acción 'renew' que autentica por posesión del endpoint viejo: el
-// SW manda oldEndpoint (prueba que es él) + new subscription, y el backend
-// resuelve al user_id del endpoint viejo, reemplazándola.
+// normal fallaba con 401 y la sub vieja quedaba huérfana en el backend. La
+// acción 'renew' autentica por posesión COMPLETA de la sub vieja: endpoint +
+// keys (el endpoint solo puede filtrarse en logs; las keys nunca salen del
+// browser), y el backend las compara contra la fila guardada antes de
+// reemplazarla por la nueva.
 self.addEventListener('pushsubscriptionchange', (event) => {
   event.waitUntil(
     (async () => {
-      const oldEndpoint = event.oldSubscription?.endpoint || null
+      const oldJson = event.oldSubscription?.toJSON?.() || null
+      const oldEndpoint = oldJson?.endpoint || null
+      const oldKeys = oldJson?.keys?.p256dh && oldJson?.keys?.auth ? oldJson.keys : null
       try {
         const newSub = await self.registration.pushManager.subscribe({
           userVisibleOnly: true,
@@ -459,23 +462,24 @@ self.addEventListener('pushsubscriptionchange', (event) => {
         })
         if (!newSub) return
 
-        if (oldEndpoint) {
-          // Camino principal: renew autenticado por endpoint viejo
+        if (oldEndpoint && oldKeys) {
+          // Camino principal: renew autenticado por endpoint + keys viejos
           await fetch('/api/push', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               action: 'renew',
               old_endpoint: oldEndpoint,
+              old_keys: oldKeys,
               subscription: newSub.toJSON(),
             }),
           })
         } else {
-          // Fallback: sin oldEndpoint, la próxima vez que el cliente abra la
-          // app el auto-healer (useNotifications) detecta el mismatch contra
-          // /api/push?health y llama forceResubscribe() con token válido.
-          // No hacemos nada aquí — intentar subscribe sin auth solo generaría
-          // un 401 y ruido en logs.
+          // Fallback: sin la sub vieja completa, la próxima vez que el
+          // cliente abra la app el auto-healer (useNotifications) detecta el
+          // mismatch contra /api/push?health y llama forceResubscribe() con
+          // token válido. No hacemos nada aquí — intentar subscribe sin auth
+          // solo generaría un 401 y ruido en logs.
         }
       } catch {}
     })()

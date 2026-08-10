@@ -12,6 +12,7 @@ import webpush from 'web-push'
 import { getSupabaseAdmin, getUserIdFromAuth } from './_supabaseAdmin.js'
 import { getApnsConfig, normalizeApnsToken, sendApnsNotification } from './_lib/apns.js'
 import { rejectCrossSiteUnsafe, setCorsHeaders } from './_lib/security.js'
+import { clientIp, rateLimited } from './_lib/rateLimit.js'
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res, { methods: 'POST, OPTIONS' })
@@ -87,34 +88,49 @@ async function handleNativeUnsubscribe(req, res, body) {
   return res.status(200).json({ ok: true })
 }
 
-// handleRenew — reemplaza una suscripción expirada por una nueva, autenticando
-// por posesión del endpoint viejo. El SW dispara pushsubscriptionchange sin
-// acceso al JWT del usuario (corre aislado del main thread, sin sesión
-// Supabase). Conocer el endpoint viejo — que es una URL opaca larga emitida
-// por FCM/APNs solo al dispositivo suscrito — es prueba suficiente de que
-// quien llama era el dueño de esa sub. Si el endpoint viejo no existe en la
-// tabla, rechazamos. Esto cierra la fuga en la que APNs/FCM rotan la sub, el
-// SW crea una nueva, pero el backend se queda con la vieja (muerta) y ya nadie
-// recibe notificaciones hasta que el usuario abre la PWA otra vez.
+// handleRenew — reemplaza una suscripción expirada por una nueva. El SW
+// dispara pushsubscriptionchange sin acceso al JWT del usuario (corre aislado
+// del main thread, sin sesión Supabase), así que no puede usar 'subscribe'.
+// La prueba de identidad es posesión COMPLETA de la sub vieja: endpoint +
+// keys (p256dh/auth), comparadas contra la fila guardada. El endpoint solo no
+// alcanza — puede filtrarse en logs o backups, y quien lo tuviera podía
+// redirigirse las notificaciones de otro usuario (hardening 2026-08-10).
+// Las keys nunca salen del browser salvo hacia este backend, así que
+// endpoint+keys sí identifican al dispositivo dueño. SW viejos que no mandan
+// old_keys reciben 400 y degradan al auto-healer (useNotifications) que
+// re-suscribe con JWT al abrir la app. Rate limit agresivo: renew es un
+// evento raro (rotación de provider), más de un puñado por minuto es un scan.
 async function handleRenew(req, res, body) {
+  if (rateLimited(`renew:${clientIp(req)}`, { max: 5, windowMs: 60_000 })) {
+    return res.status(429).json({ error: 'rate_limit' })
+  }
+
   const admin = getSupabaseAdmin()
   if (!admin) return res.status(503).json({ error: 'no_backend_supabase' })
 
   const oldEndpoint = typeof body.old_endpoint === 'string' ? body.old_endpoint : null
+  const oldKeys = body.old_keys
   const sub = body.subscription
   if (!oldEndpoint) return res.status(400).json({ error: 'missing_old_endpoint' })
+  if (typeof oldKeys?.p256dh !== 'string' || !oldKeys.p256dh
+    || typeof oldKeys?.auth !== 'string' || !oldKeys.auth) {
+    return res.status(400).json({ error: 'missing_old_keys' })
+  }
   if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
     return res.status(400).json({ error: 'invalid_subscription' })
   }
 
-  // Resolver dueño del endpoint viejo
+  // Resolver dueño del endpoint viejo y verificar posesión de sus keys
   const { data: oldRow, error: findErr } = await admin
     .from('push_subscriptions')
-    .select('user_id')
+    .select('user_id, p256dh, auth')
     .eq('endpoint', oldEndpoint)
     .maybeSingle()
   if (findErr) return res.status(500).json({ error: 'db_error', message: findErr.message })
   if (!oldRow?.user_id) return res.status(404).json({ error: 'old_endpoint_not_found' })
+  if (oldRow.p256dh !== oldKeys.p256dh || oldRow.auth !== oldKeys.auth) {
+    return res.status(403).json({ error: 'old_keys_mismatch' })
+  }
 
   const userId = oldRow.user_id
 

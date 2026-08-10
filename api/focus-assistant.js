@@ -312,6 +312,15 @@ export default async function handler(req, res) {
     })
   }
 
+  // Request ID — trazabilidad end-to-end. Si el cliente mandó uno (header
+  // X-Request-Id), lo respetamos; si no, generamos uno. Lo devolvemos en
+  // el body para que iOS lo loguee en sus telemetrías. Sin PII.
+  // Declarado ANTES del corte de presupuesto: ese branch lo loguea, y con
+  // la declaración más abajo tiraba ReferenceError (TDZ) → 500 crudo en
+  // lugar del 503 ai_budget_reached que degrada al parser local.
+  const reqId = (typeof req.headers['x-request-id'] === 'string' && req.headers['x-request-id'].trim())
+    || crypto.randomUUID()
+
   // Modo alterno "today-context": cliente pide el JSON del Resumen ejecutivo
   // (ambient level + summary + weather tip + flags). Vive aquí y no como
   // /api/today-context independiente porque el plan Hobby de Vercel limita
@@ -413,12 +422,6 @@ export default async function handler(req, res) {
     dateContext, weatherContext, contacts, profile, behavior, memories, events, tasks,
     novaPersonality, discussedEventIds,
   })
-
-  // Request ID — trazabilidad end-to-end. Si el cliente mandó uno (header
-  // X-Request-Id), lo respetamos; si no, generamos uno. Lo devolvemos en
-  // el body para que iOS lo loguee en sus telemetrías. Sin PII.
-  const reqId = (typeof req.headers['x-request-id'] === 'string' && req.headers['x-request-id'].trim())
-    || crypto.randomUUID()
 
   // Provider switch — 2026-07-13: DeepSeek es el proveedor principal (el más
   // barato). Prioridad: NOVA_PROVIDER (o su alias AI_PROVIDER_PRIMARY) >
