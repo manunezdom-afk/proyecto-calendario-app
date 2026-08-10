@@ -78,7 +78,7 @@
     <span>Focus</span>
   </a>
   <h1>Política de privacidad</h1>
-  <div class="updated">Última actualización: 26 de abril de 2026</div>
+  <div class="updated">Última actualización: 10 de agosto de 2026</div>
 </header>
 
 <p>En Focus respetamos tu privacidad. Este documento explica qué datos recolectamos, por qué y cómo los usamos. Si tienes preguntas, escríbenos a <a href="mailto:manunezdom@gmail.com">manunezdom@gmail.com</a>.</p>
@@ -89,11 +89,11 @@
   <li><strong>Email</strong>: para iniciar sesión mediante código de un solo uso (OTP).</li>
   <li><strong>Eventos, tareas y notas</strong> que creas dentro de la app.</li>
   <li><strong>Memorias y preferencias</strong> que tu asistente Nova guarda para personalizar sugerencias.</li>
-  <li><strong>Conversaciones con Nova</strong>: mensajes que envías al asistente y sus respuestas.</li>
+  <li><strong>Conversaciones con Nova</strong>: tus mensajes al asistente <em>no se guardan en nuestra base de datos</em>. Viven en tu dispositivo y se envían al proveedor de inteligencia artificial únicamente para generar cada respuesta (ver sección 3).</li>
   <li><strong>Identificadores técnicos</strong>: ID de usuario, tokens de notificaciones push, navegador/dispositivo (user agent).</li>
   <li><strong>Señales de uso</strong>: registros agregados de cuándo completas tareas o aceptas sugerencias, para mejorar las recomendaciones de Nova.</li>
   <li><strong>Ubicación aproximada</strong> (opcional): solo cuando abres Nova y otorgas permiso, para dar contexto local a las sugerencias. Puedes denegar el permiso sin perder funcionalidad.</li>
-  <li><strong>Fotos y dictado por voz</strong> (opcional): cuando usas estas funciones, las imágenes y la transcripción se envían para análisis y se descartan tras procesarlas. No almacenamos audio.</li>
+  <li><strong>Fotos y dictado por voz</strong> (opcional): cuando usas estas funciones, las imágenes y el audio se envían para análisis y se descartan tras procesarlos. No almacenamos audio ni imágenes. En la app de iOS el dictado se transcribe en tu propio dispositivo (no sale de él).</li>
 </ul>
 
 <h2>2. Cómo usamos tus datos</h2>
@@ -106,47 +106,65 @@
 
 <h2>3. Con quién compartimos datos</h2>
 <p>Compartimos solo lo estrictamente necesario con estos proveedores que procesan datos por nosotros:</p>
+
+<p><strong>Proveedores de inteligencia artificial.</strong> Cuando hablas con Nova, tu mensaje y el contexto necesario para responder (eventos visibles, tareas y las memorias que guardaste) se envían al proveedor de IA que genera la respuesta. Te pedimos tu consentimiento explícito antes de tu primer mensaje, y puedes dejar de usar Nova en cualquier momento sin perder el resto de la app.</p>
+<div class="card">
+  <ul>
+    <li><strong>DeepSeek</strong>: proveedor principal del chat de Nova. Procesa tus conversaciones y el contexto de agenda conforme a sus términos de API. Sus servidores pueden estar fuera de tu país (ver sección 4).</li>
+    <li><strong>OpenAI</strong>: transcripción de dictados por voz en la versión web (Whisper) y proveedor alternativo del chat.</li>
+    <li><strong>Anthropic</strong> (Claude): análisis de fotos (por ejemplo, extraer eventos de un horario) y proveedor alternativo del chat. No entrena modelos con tus datos.</li>
+  </ul>
+</div>
+<p>En todos los casos enviamos el mínimo necesario para cada respuesta y no usamos tus conversaciones para publicidad ni las vendemos. Los proveedores pueden conservar los datos temporalmente según sus propias políticas de API; te recomendamos revisarlas si el tema te importa.</p>
+
+<p><strong>Infraestructura y servicios.</strong></p>
 <div class="card">
   <ul>
     <li><strong>Supabase</strong> (almacenamiento y autenticación): guarda tu cuenta, eventos, tareas, memorias y tokens de notificación.</li>
-    <li><strong>Anthropic</strong> (Claude): procesa tus conversaciones con Nova y los datos de contexto que le envías. No entrena modelos con tus datos.</li>
     <li><strong>Resend</strong> (correo): envía los códigos OTP a tu email.</li>
     <li><strong>Apple Push Notification service</strong> y <strong>Web Push</strong>: entregan las notificaciones a tu dispositivo.</li>
     <li><strong>OpenStreetMap / Nominatim</strong>: convierte tus coordenadas en el nombre de la ciudad cuando autorizas la ubicación.</li>
+    <li><strong>Open-Meteo</strong> (clima): recibe tus coordenadas aproximadas —sin ningún identificador tuyo— para darte el pronóstico.</li>
     <li><strong>Vercel</strong> (hosting): entrega la web y las APIs que usa la app.</li>
   </ul>
 </div>
 
-<h2>4. Cómo protegemos tus datos</h2>
+<h2>4. Transferencias internacionales</h2>
+<p>Nuestros proveedores operan servidores en distintos países (Estados Unidos y otros). Al usar Focus, aceptas que tus datos se procesen en esos lugares. Elegimos proveedores con compromisos contractuales de protección de datos y les enviamos solo lo necesario para cada función.</p>
+
+<h2>5. Cómo protegemos tus datos</h2>
 <ul>
   <li>Toda la comunicación va cifrada por HTTPS.</li>
   <li>Cada usuario solo puede leer y escribir sus propios datos (Row Level Security en la base de datos).</li>
   <li>Los códigos de inicio de sesión expiran rápidamente y son de un solo uso.</li>
 </ul>
 
-<h2>5. Tus derechos</h2>
+<h2>6. Tus derechos</h2>
 <p>Puedes:</p>
 <ul>
   <li>Acceder a tus datos directamente desde la app.</li>
   <li>Editar o borrar eventos, tareas y memorias en cualquier momento.</li>
-  <li>Solicitar la eliminación completa de tu cuenta enviando un correo a <a href="mailto:manunezdom@gmail.com">manunezdom@gmail.com</a>. Atendemos la solicitud en un plazo máximo de 30 días.</li>
+  <li><strong>Eliminar tu cuenta al instante desde la app</strong>: Ajustes → Cuenta → Eliminar cuenta. Borra tu cuenta y todos tus datos asociados de forma inmediata e irreversible. También puedes pedirlo por correo a <a href="mailto:manunezdom@gmail.com">manunezdom@gmail.com</a> y lo atendemos en un plazo máximo de 30 días.</li>
+  <li>Solicitar una copia de tus datos escribiendo al mismo correo (portabilidad).</li>
   <li>Revocar permisos del sistema (notificaciones, ubicación, micrófono, cámara, fotos) desde los ajustes de tu dispositivo.</li>
+  <li>Retirar tu consentimiento para el uso de proveedores de IA dejando de usar Nova; el resto de la app sigue funcionando.</li>
 </ul>
 
-<h2>6. Retención</h2>
-<p>Conservamos tus datos mientras tu cuenta esté activa. Si pides eliminación, borramos tu cuenta y datos asociados. Algunos registros agregados o anonimizados pueden mantenerse por motivos técnicos o legales.</p>
+<h2>7. Retención</h2>
+<p>Conservamos tus datos mientras tu cuenta esté activa. Si eliminas tu cuenta, borramos tu cuenta y datos asociados de inmediato. Mantenemos metadatos de uso de la IA (contadores y costos, <em>sin el contenido de tus mensajes</em>) para controlar el gasto del servicio, y registros de notificaciones enviadas para evitar duplicados. Algunos registros agregados o anonimizados pueden mantenerse por motivos técnicos o legales.</p>
 
-<h2>7. Menores</h2>
+<h2>8. Menores</h2>
 <p>Focus no está dirigido a menores de 13 años. Si crees que un menor nos envió datos, contáctanos para eliminarlos.</p>
 
-<h2>8. Cambios en esta política</h2>
+<h2>9. Cambios en esta política</h2>
 <p>Si actualizamos esta política, modificaremos la fecha al inicio del documento y, si los cambios son sustanciales, te lo informaremos dentro de la app.</p>
 
-<h2>9. Contacto</h2>
+<h2>10. Contacto</h2>
 <p>Para cualquier consulta sobre privacidad: <a href="mailto:manunezdom@gmail.com">manunezdom@gmail.com</a>.</p>
 
 <footer>
   <a href="/">Volver a Focus</a>
+  <a href="/terminos">Términos de Servicio</a>
   <a href="/soporte">Soporte</a>
 </footer>
 </body>

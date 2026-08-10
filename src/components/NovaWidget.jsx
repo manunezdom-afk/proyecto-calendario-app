@@ -12,6 +12,8 @@ import { readPreferenceSync } from '../hooks/useAppPreferences'
 import { novaSay } from '../utils/novaPersonality'
 import { expandRecurrence } from '../utils/expandRecurrence'
 import { subscribeModalStack } from '../utils/modalStack'
+import { hasAIConsent, grantAIConsent } from '../lib/aiConsent'
+import AIConsentCard from './AIConsentCard'
 
 // En Safari iPhone webkitSpeechRecognition existe desde iOS 14.5 y sí funciona
 // en Safari regular con permiso concedido. Antes gateábamos SR=null
@@ -89,6 +91,9 @@ function NovaWidget({
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false)
   const [photoPreview, setPhotoPreview]         = useState(null)
   const [modalCount, setModalCount]             = useState(0)
+  // Mensaje retenido a la espera del consentimiento de IA (Guideline
+  // 5.1.2(i)): el primer envío se pausa hasta que el usuario acepte.
+  const [consentPendingMsg, setConsentPendingMsg] = useState(null)
 
   // Escondemos la pastilla de Nova mientras haya algún sheet/modal abierto
   // (QuickAdd, RecurringMeeting, etc.): superponerla sobre el contenido del
@@ -692,6 +697,13 @@ function NovaWidget({
       return
     }
 
+    // Primer uso de Nova en este dispositivo: retener el mensaje y pedir
+    // consentimiento para el envío a proveedores de IA antes de transmitir.
+    if (!hasAIConsent()) {
+      setConsentPendingMsg(msg)
+      return
+    }
+
     setInput('')
     setReply('')
     setChips([])
@@ -935,6 +947,25 @@ function NovaWidget({
             </motion.div>
           )
         })}
+
+        {/* Consentimiento IA de primer uso — retiene el mensaje hasta aceptar */}
+        <AnimatePresence>
+          {consentPendingMsg != null && (
+            <AIConsentCard
+              onAccept={() => {
+                grantAIConsent()
+                const msg = consentPendingMsg
+                setConsentPendingMsg(null)
+                sendMessage(msg)
+              }}
+              onCancel={() => {
+                // Devolver el mensaje al input (pudo venir de dictado).
+                setInput(consentPendingMsg)
+                setConsentPendingMsg(null)
+              }}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Burbuja de respuesta en curso */}
         {isLoading && (

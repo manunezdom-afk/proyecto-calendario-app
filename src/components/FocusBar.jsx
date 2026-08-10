@@ -8,6 +8,8 @@ import { createVAD } from '../lib/voiceActivityDetector'
 import { readPreferenceSync } from '../hooks/useAppPreferences'
 import { novaSay } from '../utils/novaPersonality'
 import { expandRecurrence } from '../utils/expandRecurrence'
+import { hasAIConsent, grantAIConsent } from '../lib/aiConsent'
+import AIConsentCard from './AIConsentCard'
 
 // En Safari iPhone webkitSpeechRecognition existe desde iOS 14.5 y sí funciona
 // en muchos contextos (Safari regular con permiso concedido). Antes gateábamos
@@ -184,6 +186,10 @@ export default function FocusBar({
   // terminar handleSend y se usa para el pill "Deshacer" inline. Se limpia
   // al cerrar la burbuja o al mandar otro turno.
   const [lastApplied, setLastApplied] = useState(null) // { eventIds:[], taskIds:[], memoryIds:[] } | null
+  // Mensaje retenido a la espera del consentimiento de IA (Guideline
+  // 5.1.2(i)): el primer envío se pausa, se muestra la tarjeta y recién al
+  // aceptar se transmite. null = sin tarjeta visible.
+  const [consentPendingMsg, setConsentPendingMsg] = useState(null)
   // Rotación de placeholder para que la barra no se sienta muerta — cambia
   // cada 4s entre ejemplos conversacionales. Se detiene al enfocar/escuchar.
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
@@ -448,6 +454,13 @@ export default function FocusBar({
   async function handleSend(input) {
     const msg = (input ?? text).trim()
     if (!msg || isThinking) return
+
+    // Primer uso de Nova en este dispositivo: retener el mensaje y pedir
+    // consentimiento para el envío a proveedores de IA antes de transmitir.
+    if (!hasAIConsent()) {
+      setConsentPendingMsg(msg)
+      return
+    }
 
     setText('')
     setComposerContext(null)
@@ -786,6 +799,26 @@ export default function FocusBar({
   if (inline) {
     return (
       <div className="mb-8 space-y-2">
+        {/* Consentimiento IA de primer uso — retiene el mensaje hasta aceptar */}
+        <AnimatePresence>
+          {consentPendingMsg != null && (
+            <AIConsentCard
+              onAccept={() => {
+                grantAIConsent()
+                const msg = consentPendingMsg
+                setConsentPendingMsg(null)
+                handleSend(msg)
+              }}
+              onCancel={() => {
+                // Devolver el mensaje al input para no perder lo escrito
+                // (pudo venir de dictado, con el input ya vacío).
+                setText(consentPendingMsg)
+                setConsentPendingMsg(null)
+              }}
+            />
+          )}
+        </AnimatePresence>
+
         {/* Burbuja de respuesta IA */}
         <AnimatePresence>
           {(isThinking || reply) && (
