@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "build:icons": "node scripts/build-icons.mjs",
     "build:ios-icons": "node scripts/build-ios-icons.mjs",
+    "build:native-icon": "node scripts/build-native-ios-icon.mjs",
     "native:ios:open": "open ios-native/Focus.xcodeproj",
     "cap:ios:sync": "npm run build && npx cap sync ios",
     "cap:ios:open": "npx cap open ios",
