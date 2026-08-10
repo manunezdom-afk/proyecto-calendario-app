@@ -627,20 +627,25 @@ struct SwipeToDelete<Content: View>: View {
     }
 }
 
-// MARK: - LocationLabel (tap → sheet "Próximamente Maps")
+// MARK: - LocationLabel (tap → abrir en Apple Maps)
 
-/// Etiqueta de ubicación tappable. Cuando se conecten integraciones (C5+)
-/// abrirá Apple Maps / Google Maps / Waze; por ahora explica el flujo
-/// futuro vía `ComingSoonSheet`. No agrega navegación externa.
+/// Etiqueta de ubicación tappable: abre la ubicación como búsqueda en
+/// Apple Maps. Antes mostraba un `ComingSoonSheet` ("próximamente Maps");
+/// abrir Maps con query es trivial y convierte la promesa en feature.
 struct LocationLabel: View {
     let location: String
 
-    @State private var showSheet: Bool = false
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         Button {
             HapticManager.shared.tick()
-            showSheet = true
+            let query = location.addingPercentEncoding(
+                withAllowedCharacters: .urlQueryAllowed
+            ) ?? location
+            if let url = URL(string: "https://maps.apple.com/?q=\(query)") {
+                openURL(url)
+            }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "mappin")
@@ -654,16 +659,6 @@ struct LocationLabel: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .sheet(isPresented: $showSheet) {
-            ComingSoonSheet(
-                title: location,
-                message: "Más adelante podrás abrir esta ubicación en Apple Maps, Google Maps o Waze con un tap. Por ahora la guardamos como texto.",
-                icon: "map.fill",
-                iconTint: Theme.Colors.warning
-            )
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-        }
     }
 }
 
@@ -2225,6 +2220,72 @@ struct FocusToggle: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled)
+    }
+}
+
+// MARK: - Consentimiento IA (Guideline 5.1.2(i))
+
+/// Sheet que se presenta ANTES del primer mensaje a Nova que sale al
+/// backend: nombra a los proveedores de IA externos y pide permiso
+/// explícito. El caller retiene el texto pendiente y decide qué hacer en
+/// cada cierre (`onAccept` reenvía; `onDecline` devuelve el texto al input).
+/// Compartida por Mi Día (inline) y la tab Nova (chat).
+struct NovaAIConsentSheet: View {
+    let onAccept: () -> Void
+    let onDecline: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+            HStack(spacing: Theme.Spacing.md) {
+                IconBadge(symbol: "sparkles", tint: Theme.Colors.novaAccent, size: 40)
+                Text("Nova usa IA externa")
+                    .font(Theme.Typography.title2)
+                    .foregroundStyle(Theme.Colors.textPrimary)
+            }
+            .padding(.top, Theme.Spacing.xl)
+
+            Text("Para responder, tu mensaje y el contexto de tu agenda (eventos visibles, tareas y las memorias que guardaste) se envían a proveedores externos de inteligencia artificial: **DeepSeek** como principal, con OpenAI o Anthropic como alternativa. No se usan para publicidad ni se venden.")
+                .font(Theme.Typography.body)
+                .foregroundStyle(Theme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("El dictado por voz se transcribe en tu iPhone y no sale de él. Si prefieres no usar IA externa, puedes seguir usando el resto de Focus con normalidad.")
+                .font(Theme.Typography.body)
+                .foregroundStyle(Theme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let url = URL(string: "https://www.usefocus.me/privacidad") {
+                Link("Más información en la Política de Privacidad", destination: url)
+                    .font(Theme.Typography.bodyBold)
+                    .foregroundStyle(Theme.Colors.novaAccent)
+            }
+
+            Spacer(minLength: 0)
+
+            VStack(spacing: Theme.Spacing.md) {
+                FocusPrimaryButton(label: "Aceptar y continuar", icon: "checkmark") {
+                    onAccept()
+                }
+                Button {
+                    HapticManager.shared.tap()
+                    onDecline()
+                } label: {
+                    Text("Ahora no")
+                        .font(Theme.Typography.bodyBold)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.bottom, Theme.Spacing.lg)
+        }
+        .padding(.horizontal, Theme.Spacing.xl)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        // Cerrar con swipe = no aceptar. El caller trata el dismiss como
+        // "Ahora no" vía onDisappear en su propio wiring si hace falta.
+        .interactiveDismissDisabled(false)
     }
 }
 

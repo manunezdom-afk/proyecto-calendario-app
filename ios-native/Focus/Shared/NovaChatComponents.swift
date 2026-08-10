@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Nova Chat (glassmorphic dark) — solo segmento Chat
 //
@@ -404,6 +405,30 @@ struct NovaGlassUserBubble: View {
 /// y code blocks respiren.
 struct NovaGlassNovaBubble: View {
     let content: String
+    @Environment(\.openURL) private var openURL
+
+    /// Moderación de contenido IA (Guideline 1.2): mail pre-armado a
+    /// soporte con la respuesta reportada. Al volumen actual no se
+    /// justifica un endpoint dedicado; el contrato es que cada reporte se
+    /// revisa y ajusta los filtros del asistente.
+    private static func reportURL(for content: String) -> URL {
+        var comps = URLComponents()
+        comps.scheme = "mailto"
+        comps.path = "manunezdom@gmail.com"
+        comps.queryItems = [
+            URLQueryItem(name: "subject", value: "Reporte de respuesta de Nova"),
+            URLQueryItem(name: "body", value: """
+            Hola, quiero reportar esta respuesta de Nova:
+
+            ---
+            \(content)
+            ---
+
+            Motivo (cuéntanos brevemente):
+            """),
+        ]
+        return comps.url ?? URL(string: "mailto:manunezdom@gmail.com")!
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -453,6 +478,19 @@ struct NovaGlassNovaBubble: View {
                     )
             )
             .shadow(color: Color.black.opacity(0.20), radius: 8, x: 0, y: 4)
+            // Long-press: copiar o reportar la respuesta (moderación 1.2).
+            .contextMenu {
+                Button {
+                    UIPasteboard.general.string = content
+                } label: {
+                    Label("Copiar", systemImage: "doc.on.doc")
+                }
+                Button(role: .destructive) {
+                    openURL(Self.reportURL(for: content))
+                } label: {
+                    Label("Reportar respuesta", systemImage: "flag")
+                }
+            }
         }
     }
 }

@@ -84,7 +84,7 @@ enum FocusLocalStore {
                 let data = try encoder.encode(value)
                 defaults.set(data, forKey: key.rawValue)
             } catch {
-                print("[FocusLocalStore] save '\(key.rawValue)' failed: \(error)")
+                debugLog("[FocusLocalStore] save '\(key.rawValue)' failed: \(error)")
             }
         }
     }
@@ -97,7 +97,7 @@ enum FocusLocalStore {
             let data = try encoder.encode(value)
             defaults.set(data, forKey: key.rawValue)
         } catch {
-            print("[FocusLocalStore] saveSync '\(key.rawValue)' failed: \(error)")
+            debugLog("[FocusLocalStore] saveSync '\(key.rawValue)' failed: \(error)")
         }
     }
 
@@ -108,7 +108,7 @@ enum FocusLocalStore {
         do {
             return try decoder.decode(type, from: data)
         } catch {
-            print("[FocusLocalStore] load '\(key.rawValue)' failed: \(error)")
+            debugLog("[FocusLocalStore] load '\(key.rawValue)' failed: \(error)")
             return nil
         }
     }

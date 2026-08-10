@@ -325,6 +325,26 @@ final class AuthStore: ObservableObject {
         HapticManager.shared.tick()
     }
 
+    /// Borra la cuenta en el backend (irreversible) y limpia la sesión
+    /// local. Los datos locales (FocusDataStore) los borra la vista que
+    /// llama — este store no conoce al data store.
+    /// Lanza `AuthError` si el backend falla; en ese caso la sesión local
+    /// queda intacta para poder reintentar.
+    func deleteAccount() async throws {
+        guard case .loggedIn(let session) = state else {
+            throw AuthError.unknown("Necesitas una sesión activa para eliminar la cuenta.")
+        }
+        try await AuthService.deleteAccount(accessToken: session.accessToken)
+        // La cuenta ya no existe en el backend: limpiar todo rastro local
+        // de auth (Keychain + Google SDK + expiración persistida).
+        AuthService.signOut()
+        AuthService.signOutGoogleNative()
+        UserDefaults.standard.removeObject(forKey: expiresAtKey)
+        lastError = nil
+        state = .loggedOut
+        HapticManager.shared.tick()
+    }
+
     // MARK: - Persistencia
 
     private func loadPersistedSession() -> SupabaseSession? {

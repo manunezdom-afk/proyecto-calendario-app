@@ -37,6 +37,13 @@ enum FocusConfig {
     /// SOLO debe estar set durante QA local; nil en builds productivas.
     static let vercelBypassToken: String? = nil
 
+    /// Superficies "Próximamente" (importar/exportar calendario, calendarios
+    /// conectados, resumen diario, sugerencias inteligentes, apariencia).
+    /// Ocultas para App Review — Guideline 2.1/2.3.1 objeta features
+    /// anunciadas no funcionales. Volver a true cuando cada una exista de
+    /// verdad (o mejor: borrar el flag e ir mostrándolas al implementarlas).
+    static let showComingSoonSurfaces = false
+
     /// True si la auth real puede funcionar (anon key presente).
     static var isAuthConfigured: Bool {
         !supabaseAnonKey.isEmpty
@@ -60,4 +67,35 @@ enum FocusConfig {
     /// OAuth no completa.
     static let googleReversedClientID =
         "com.googleusercontent.apps.587696845191-f1fh55ukaaqtk7odfb8stntmeoqlglglub"
+}
+
+/// Consentimiento explícito para enviar datos a proveedores de IA externos
+/// (Apple Guideline 5.1.2(i), nov 2025): antes del PRIMER mensaje que sale
+/// al backend hay que nombrar al proveedor (DeepSeek) y pedir permiso.
+/// Solo aplica al path remoto — el parser local del modo demo no manda nada
+/// fuera del dispositivo, así que no gatea.
+///
+/// La key lleva versión: si cambia el proveedor principal o el texto del
+/// aviso de forma sustancial, bumpear a `.v2` para volver a pedirlo.
+enum NovaAIConsent {
+    private static let key = "focus.v1.novaAIConsentGiven"
+
+    static var granted: Bool {
+        UserDefaults.standard.bool(forKey: key)
+    }
+
+    static func grant() {
+        UserDefaults.standard.set(true, forKey: key)
+    }
+}
+
+/// Log solo-DEBUG. En Release no imprime nada — los `print` en producción
+/// son ruido en Console y rozan fuga de metadata del usuario (keys de
+/// memorias, labels de fallback). `@autoclosure` evita hasta el costo de
+/// armar el string interpolado en Release.
+@inline(__always)
+func debugLog(_ message: @autoclosure () -> String) {
+    #if DEBUG
+    print(message())
+    #endif
 }

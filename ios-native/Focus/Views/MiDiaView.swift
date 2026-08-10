@@ -9,6 +9,9 @@ struct MiDiaView: View {
     // (privacy: no dejar mic activo cuando el usuario sale de la app).
     @Environment(\.scenePhase) private var scenePhase
     @State private var focusBarText: String = ""
+    // Texto retenido a la espera del consentimiento IA (5.1.2(i)) — solo se
+    // envía al backend después de que el usuario acepte en la sheet.
+    @State private var aiConsentPendingText: String? = nil
     @State private var showAllEvents: Bool = false
     /// Servicio de dictado inline en el FocusBar. NO es Nova Live.
     /// El transcript se va metiendo en `focusBarText` mientras el usuario
@@ -280,6 +283,36 @@ struct MiDiaView: View {
             .presentationDetents([.medium])
             .presentationBackground(Theme.Colors.background)
         }
+        .sheet(
+            isPresented: Binding(
+                get: { aiConsentPendingText != nil },
+                set: { presented in
+                    // Swipe-down = "Ahora no": devolver el texto al input
+                    // para que no se pierda lo escrito/dictado.
+                    if !presented, let pending = aiConsentPendingText {
+                        focusBarText = pending
+                        aiConsentPendingText = nil
+                    }
+                }
+            )
+        ) {
+            NovaAIConsentSheet(
+                onAccept: {
+                    NovaAIConsent.grant()
+                    if let pending = aiConsentPendingText {
+                        aiConsentPendingText = nil
+                        processNovaInline(text: pending)
+                    }
+                },
+                onDecline: {
+                    if let pending = aiConsentPendingText {
+                        focusBarText = pending
+                        aiConsentPendingText = nil
+                    }
+                }
+            )
+            .presentationBackground(Theme.Colors.background)
+        }
     }
 
     // MARK: - Header
@@ -457,6 +490,16 @@ struct MiDiaView: View {
     private func processNovaInline(text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+
+        // Consentimiento IA (5.1.2(i)): con sesión activa el mensaje sale al
+        // backend, así que antes del PRIMER envío pedimos permiso nombrando
+        // al proveedor. En demo el parser local no manda nada fuera del
+        // dispositivo — no gatea.
+        if store.syncCredentials != nil && !NovaAIConsent.granted {
+            aiConsentPendingText = trimmed
+            return
+        }
+
         HapticManager.shared.tap()
 
         // Loading inmediato — el usuario ve la card "processing" mientras se
@@ -682,7 +725,7 @@ struct MiDiaView: View {
             if error.canFallbackToLocal {
                 // LOG CLARO del error REAL (user spec 2026-06-13): el fallback
                 // logueado debe verse en consola, no pasar desapercibido.
-                print("[Nova] ⚠️ FALLBACK LOGUEADO (Mi Día): backend falló → \(error.debugLabel). Usando parser local de respaldo.")
+                debugLog("[Nova] ⚠️ FALLBACK LOGUEADO (Mi Día): backend falló → \(error.debugLabel). Usando parser local de respaldo.")
                 await MainActor.run {
                     NovaDevLog.shared.recordModelSelection(id: logId, model: .localFallback,
                                                           reason: "backend error: \(error.debugLabel)")
@@ -706,7 +749,7 @@ struct MiDiaView: View {
         } catch {
             // Error inesperado (no NovaServiceError): también visible + logueado.
             // El fallback logueado NUNCA es silencioso (user spec 2026-06-13).
-            print("[Nova] ⚠️ FALLBACK LOGUEADO (Mi Día): error inesperado → \(error). Usando parser local de respaldo.")
+            debugLog("[Nova] ⚠️ FALLBACK LOGUEADO (Mi Día): error inesperado → \(error). Usando parser local de respaldo.")
             await MainActor.run {
                 NovaDevLog.shared.recordModelSelection(id: logId, model: .localFallback,
                                                       reason: "unknown error fallback")
@@ -1407,7 +1450,7 @@ struct MiDiaView: View {
             }
             // Loggeamos el motivo a console para diagnóstico.
             for (_, reason) in validation.rejected {
-                print("[NovaValidator] rechazo: \(reason)")
+                debugLog("[NovaValidator] rechazo: \(reason)")
             }
             if let logId {
                 await MainActor.run {

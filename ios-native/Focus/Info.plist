@@ -25,6 +25,11 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 
+	<!-- Export compliance: solo HTTPS estándar (exempt). Evita el
+	     cuestionario manual de encriptación en cada upload a TestFlight. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
 	<!-- URL Types: GoogleSignIn reversed iOS Client ID. -->
 	<key>CFBundleURLTypes</key>
 	<array>

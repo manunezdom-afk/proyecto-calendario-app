@@ -169,7 +169,7 @@ enum NovaService {
                 #if DEBUG
                 if let rid = decoded.requestId, !rid.isEmpty {
                     // Trazabilidad e2e — solo DEBUG, sin PII (UUID).
-                    print("[NovaService] reqId=\(rid) actions=\(decoded.actions.count) mode=\(resolvedMode.rawValue)")
+                    debugLog("[NovaService] reqId=\(rid) actions=\(decoded.actions.count) mode=\(resolvedMode.rawValue)")
                 }
                 #endif
                 return Result(

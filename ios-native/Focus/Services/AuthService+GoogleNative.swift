@@ -144,7 +144,7 @@ extension AuthService {
             // console.log para no exponer texto técnico.
             if let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let msg = payload["error_description"] as? String ?? payload["msg"] as? String {
-                print("[GoogleNative] Supabase rejected token: \(msg)")
+                debugLog("[GoogleNative] Supabase rejected token: \(msg)")
             }
             throw AuthError.oauthCallbackInvalid
         }

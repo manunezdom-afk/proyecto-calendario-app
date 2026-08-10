@@ -326,6 +326,47 @@ enum AuthService {
         KeychainStore.clearAllAuth()
     }
 
+    // MARK: - Delete account
+
+    private struct DeleteAccountBody: Encodable { let confirm: String }
+
+    /// Borra la cuenta del usuario y TODOS sus datos en el backend
+    /// (Guideline 5.1.1(v) — eliminación de cuenta in-app). Irreversible.
+    /// La UI pide confirmación tipeando "ELIMINAR" ANTES de llamar aquí; el
+    /// literal "DELETE" del body es el cinturón que exige el endpoint
+    /// (`api/auth/delete-account.js`), no el texto que ve el usuario.
+    static func deleteAccount(accessToken: String) async throws {
+        let url = FocusConfig.apiOrigin.appendingPathComponent("/api/auth/delete-account")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try encoder.encode(DeleteAccountBody(confirm: "DELETE"))
+
+        do {
+            let (_, resp) = try await session.data(for: req)
+            guard let http = resp as? HTTPURLResponse else {
+                throw AuthError.unknown("Respuesta HTTP inválida")
+            }
+            switch http.statusCode {
+            case 200:
+                return
+            case 401:
+                throw AuthError.unknown("Tu sesión expiró. Inicia sesión de nuevo e inténtalo otra vez.")
+            case 429:
+                throw AuthError.rateLimited
+            default:
+                throw AuthError.unknown("No se pudo eliminar la cuenta (HTTP \(http.statusCode)). Inténtalo de nuevo.")
+            }
+        } catch let err as AuthError {
+            throw err
+        } catch let err as URLError {
+            throw AuthError.network(err.localizedDescription)
+        } catch {
+            throw AuthError.network(error.localizedDescription)
+        }
+    }
+
     // MARK: - OAuth (Google)
 
     /// URL scheme custom registrado en pbxproj (`CFBundleURLTypes`). Tiene

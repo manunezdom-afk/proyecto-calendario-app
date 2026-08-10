@@ -6217,7 +6217,7 @@ final class FocusDataStore: ObservableObject {
                     outcome.summary = "Listo, guardé eso."
                 }
                 HapticManager.shared.success()
-                print("[NovaMemory:llm] saved \(saved.category.rawValue) key=\(saved.key)")
+                debugLog("[NovaMemory:llm] saved \(saved.category.rawValue) key=\(saved.key)")
 
             case .forgetMemory(let key):
                 // V2: el user pidió olvidar algo. "__all__" = clear total.
@@ -6838,7 +6838,7 @@ final class FocusDataStore: ObservableObject {
         // estabilizar tiempos. Cubren los 4 segmentos críticos:
         // userSend → fastPath → ai → save → uiVisible.
         let userSendTs = CFAbsoluteTimeGetCurrent()
-        print("[NovaLatency] userSend")
+        debugLog("[NovaLatency] userSend")
 
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -6887,14 +6887,14 @@ final class FocusDataStore: ObservableObject {
         // viajar 600ms+ al modelo es perder UX. Si el parser sugiere
         // clarify con título, guardamos pending para que el siguiente
         // turno corto pueda completarlo localmente.
-        print("[NovaLatency] fastPathStart")
+        debugLog("[NovaLatency] fastPathStart")
         let fastPathStartTs = CFAbsoluteTimeGetCurrent()
         let preIntent = NovaResponder.parse(expandedTrimmed, context: novaContext)
         if shouldShortCircuitLocally(preIntent),
            let localReply = applyLocalNovaIntent(preIntent, userText: trimmed) {
             let fastPathEndTs = CFAbsoluteTimeGetCurrent()
             let fastPathMs = (fastPathEndTs - fastPathStartTs) * 1000
-            print(String(format: "[NovaLatency] fastPathEnd ms=%.1f", fastPathMs))
+            debugLog(String(format: "[NovaLatency] fastPathEnd ms=%.1f", fastPathMs))
 
             // Typing indicator floor reducido: 80ms en fast path (vs 350ms
             // antes). El item ya está en Mi Día (mutación síncrona del
@@ -6910,14 +6910,14 @@ final class FocusDataStore: ObservableObject {
                     self.isNovaTyping = false
                     let uiTs = CFAbsoluteTimeGetCurrent()
                     let totalMs = (uiTs - userSendTs) * 1000
-                    print(String(format: "[NovaLatency] uiVisible(fastPath) totalMs=%.1f", totalMs))
+                    debugLog(String(format: "[NovaLatency] uiVisible(fastPath) totalMs=%.1f", totalMs))
                 }
             }
             return
         }
         let fastPathEndTs = CFAbsoluteTimeGetCurrent()
         let fastPathMissedMs = (fastPathEndTs - fastPathStartTs) * 1000
-        print(String(format: "[NovaLatency] fastPathMiss ms=%.1f intent=%@", fastPathMissedMs, String(describing: preIntent)))
+        debugLog(String(format: "[NovaLatency] fastPathMiss ms=%.1f intent=%@", fastPathMissedMs, String(describing: preIntent)))
         if case .clarify(let reason) = preIntent,
            let pending = buildChatPendingClarification(from: reason, userText: trimmed) {
             setPendingClarification(pending)
@@ -6986,7 +6986,7 @@ final class FocusDataStore: ObservableObject {
 
             if let creds = self.syncCredentialsSnapshot() {
                 do {
-                    print("[NovaLatency] aiStart")
+                    debugLog("[NovaLatency] aiStart")
                     let aiStartTs = CFAbsoluteTimeGetCurrent()
                     let result = try await NovaService.send(
                         message: trimmed,
@@ -7001,7 +7001,7 @@ final class FocusDataStore: ObservableObject {
                             .map { $0.text }
                     )
                     let aiMs = (CFAbsoluteTimeGetCurrent() - aiStartTs) * 1000
-                    print(String(format: "[NovaLatency] aiEnd ms=%.1f", aiMs))
+                    debugLog(String(format: "[NovaLatency] aiEnd ms=%.1f", aiMs))
                     replyText = result.reply
                     actions = result.actions
                     smartActionsBlocked = result.smartActionsBlocked
@@ -7012,7 +7012,7 @@ final class FocusDataStore: ObservableObject {
                     // logueado, si el backend falla, queremos verlo en consola,
                     // no que pase desapercibido. La nota humana visible se arma
                     // abajo con fallbackNoteForChat.
-                    print("[Nova] ⚠️ FALLBACK LOGUEADO (chat): backend falló → \(err.debugLabel). Usando parser local de respaldo.")
+                    debugLog("[Nova] ⚠️ FALLBACK LOGUEADO (chat): backend falló → \(err.debugLabel). Usando parser local de respaldo.")
                     // Fallback local CON ejecución: parsea + aplica intents.
                     // Antes solo generaba texto y no creaba eventos — por eso
                     // un 500 + "acuérdame X mañana" no creaba nada.
@@ -7044,7 +7044,7 @@ final class FocusDataStore: ObservableObject {
                 } catch {
                     // Error inesperado (no NovaServiceError). También se loguea
                     // y se muestra nota honesta — el fallback NO es silencioso.
-                    print("[Nova] ⚠️ FALLBACK LOGUEADO (chat): error inesperado → \(error). Usando parser local de respaldo.")
+                    debugLog("[Nova] ⚠️ FALLBACK LOGUEADO (chat): error inesperado → \(error). Usando parser local de respaldo.")
                     let replyJoined = await MainActor.run {
                         () -> String in
                         let expanded = NovaMemoryStore.shared.expandAliases(in: trimmed)
@@ -7091,11 +7091,11 @@ final class FocusDataStore: ObservableObject {
 
             await MainActor.run {
                 // Aplicar las actions en el main actor (mutaciones del store).
-                print("[NovaLatency] saveStart")
+                debugLog("[NovaLatency] saveStart")
                 let saveStartTs = CFAbsoluteTimeGetCurrent()
                 let outcome = self.applyBackendActions(actions, userText: trimmed)
                 let saveMs = (CFAbsoluteTimeGetCurrent() - saveStartTs) * 1000
-                print(String(format: "[NovaLatency] saveEnd ms=%.1f", saveMs))
+                debugLog(String(format: "[NovaLatency] saveEnd ms=%.1f", saveMs))
                 // Componer texto final del mensaje de Nova:
                 // 1. reply del backend (si vino)
                 // 2. resumen de la mutación (si hubo)
@@ -7129,7 +7129,7 @@ final class FocusDataStore: ObservableObject {
                 self.persistNovaMessages()
                 self.isNovaTyping = false
                 let totalMs = (CFAbsoluteTimeGetCurrent() - userSendTs) * 1000
-                print(String(format: "[NovaLatency] uiVisible(backend) totalMs=%.1f fallback=%@", totalMs, usedFallback ? "yes" : "no"))
+                debugLog(String(format: "[NovaLatency] uiVisible(backend) totalMs=%.1f fallback=%@", totalMs, usedFallback ? "yes" : "no"))
             }
         }
     }
@@ -8385,7 +8385,7 @@ final class NovaMemoryStore {
         do {
             cache = try decoder.decode([NovaMemory].self, from: data)
         } catch {
-            print("[NovaMemory] load failed: \(error). Reset cache.")
+            debugLog("[NovaMemory] load failed: \(error). Reset cache.")
             cache = []
         }
     }
@@ -8397,7 +8397,7 @@ final class NovaMemoryStore {
             let data = try encoder.encode(cache)
             UserDefaults.standard.set(data, forKey: userDefaultsKey)
         } catch {
-            print("[NovaMemory] save failed: \(error)")
+            debugLog("[NovaMemory] save failed: \(error)")
         }
     }
 

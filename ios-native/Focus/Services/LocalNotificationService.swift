@@ -192,7 +192,7 @@ final class LocalNotificationService: NSObject, UNUserNotificationCenterDelegate
             do {
                 try await center.add(request)
             } catch {
-                print("[LocalNotificationService] schedule failed: \(error.localizedDescription)")
+                debugLog("[LocalNotificationService] schedule failed: \(error.localizedDescription)")
             }
         }
     }

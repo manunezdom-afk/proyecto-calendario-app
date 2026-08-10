@@ -12,6 +12,13 @@ struct AjustesView: View {
     @State private var showResetConfirm = false
     @State private var showClearConfirm = false
     @State private var showSignOutConfirm = false
+    // Eliminación de cuenta (Guideline 5.1.1(v)): alert con confirmación
+    // tipeada. El error se muestra en un alert aparte para poder reintentar.
+    @State private var showDeleteAccountAlert = false
+    @State private var deleteConfirmText = ""
+    @State private var isDeletingAccount = false
+    @State private var deleteAccountError: String? = nil
+    @Environment(\.openURL) private var openURL
     @State private var calendarSheet: CalendarConnectionSheet? = nil
     /// Estado del permiso de notificaciones — se refresca cuando la vista
     /// aparece y después de pedir autorización.
@@ -33,9 +40,16 @@ struct AjustesView: View {
                         cuentaSection
                         sincronizacionSection
                         novaSection
-                        calendariosSection
+                        // Ocultas para App Review: son catálogos de features
+                        // "Próximamente" (Guideline 2.1). Restaurar cuando
+                        // existan de verdad (EventKit, dark mode).
+                        if FocusConfig.showComingSoonSurfaces {
+                            calendariosSection
+                        }
                         notificacionesSection
-                        aparienciaSection
+                        if FocusConfig.showComingSoonSurfaces {
+                            aparienciaSection
+                        }
                         privacidadSection
                         datosLocalesSection
                         acercaSection
@@ -104,6 +118,39 @@ struct AjustesView: View {
                 Button("Cancelar", role: .cancel) {}
             } message: {
                 Text("Vas a salir de tu cuenta. Tus datos locales en este iPhone no se borran.")
+            }
+            .alert("¿Eliminar tu cuenta?", isPresented: $showDeleteAccountAlert) {
+                TextField("Escribe ELIMINAR", text: $deleteConfirmText)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.characters)
+                Button("Eliminar definitivamente", role: .destructive) {
+                    let typed = deleteConfirmText
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .uppercased()
+                    deleteConfirmText = ""
+                    if typed == "ELIMINAR" {
+                        Task { await performDeleteAccount() }
+                    } else {
+                        // Validación al confirmar (no .disabled dinámico):
+                        // los botones de alert no siempre re-evalúan estado
+                        // del TextField de forma confiable.
+                        deleteAccountError = "Para confirmar, escribe ELIMINAR tal cual."
+                    }
+                }
+                Button("Cancelar", role: .cancel) { deleteConfirmText = "" }
+            } message: {
+                Text("Borra tu cuenta y todos tus datos del servidor de forma inmediata e irreversible. Los datos locales de este iPhone también se eliminan.")
+            }
+            .alert(
+                "Eliminar cuenta",
+                isPresented: Binding(
+                    get: { deleteAccountError != nil },
+                    set: { if !$0 { deleteAccountError = nil } }
+                )
+            ) {
+                Button("Entendido", role: .cancel) { deleteAccountError = nil }
+            } message: {
+                Text(deleteAccountError ?? "")
             }
         }
     }
@@ -482,28 +529,34 @@ struct AjustesView: View {
                         set: { v in store.updateSettings { $0.remindersEnabled = v } }
                     ))
                 )
-                Divider().overlay(Theme.Colors.border).padding(.leading, 60)
-                AjustesRow(
-                    symbol: "sun.max.fill",
-                    tint: Theme.Colors.warning,
-                    title: "Resumen diario",
-                    subtitle: "Cada mañana, tu día de un vistazo (próximamente).",
-                    trailing: .toggle(Binding(
-                        get: { store.settings.dailySummaryEnabled },
-                        set: { v in store.updateSettings { $0.dailySummaryEnabled = v } }
-                    ))
-                )
-                Divider().overlay(Theme.Colors.border).padding(.leading, 60)
-                AjustesRow(
-                    symbol: "sparkles",
-                    tint: Theme.Colors.novaAccent,
-                    title: "Sugerencias inteligentes",
-                    subtitle: "Nova te avisa cuando detecta algo útil (próximamente).",
-                    trailing: .toggle(Binding(
-                        get: { store.settings.smartSuggestionsEnabled },
-                        set: { v in store.updateSettings { $0.smartSuggestionsEnabled = v } }
-                    ))
-                )
+                // Resumen diario y Sugerencias inteligentes: toggles de
+                // features que aún no existen — ocultos para App Review
+                // (Guideline 2.1). Los settings persisten, así que al
+                // restaurarlos vuelven con el valor que el usuario dejó.
+                if FocusConfig.showComingSoonSurfaces {
+                    Divider().overlay(Theme.Colors.border).padding(.leading, 60)
+                    AjustesRow(
+                        symbol: "sun.max.fill",
+                        tint: Theme.Colors.warning,
+                        title: "Resumen diario",
+                        subtitle: "Cada mañana, tu día de un vistazo (próximamente).",
+                        trailing: .toggle(Binding(
+                            get: { store.settings.dailySummaryEnabled },
+                            set: { v in store.updateSettings { $0.dailySummaryEnabled = v } }
+                        ))
+                    )
+                    Divider().overlay(Theme.Colors.border).padding(.leading, 60)
+                    AjustesRow(
+                        symbol: "sparkles",
+                        tint: Theme.Colors.novaAccent,
+                        title: "Sugerencias inteligentes",
+                        subtitle: "Nova te avisa cuando detecta algo útil (próximamente).",
+                        trailing: .toggle(Binding(
+                            get: { store.settings.smartSuggestionsEnabled },
+                            set: { v in store.updateSettings { $0.smartSuggestionsEnabled = v } }
+                        ))
+                    )
+                }
             }
             .focusCardContainer()
         }
@@ -629,6 +682,12 @@ struct AjustesView: View {
 
     // MARK: - Privacidad
 
+    /// True solo con sesión real (no demo) — gatea la fila de eliminar cuenta.
+    private var isLoggedInWithAccount: Bool {
+        if case .loggedIn = auth.state { return true }
+        return false
+    }
+
     private var privacidadSection: some View {
         settingsSection(title: "Privacidad") {
             VStack(spacing: 0) {
@@ -636,32 +695,87 @@ struct AjustesView: View {
                     symbol: "lock.shield",
                     tint: Theme.Colors.success,
                     title: "Tus datos",
-                    subtitle: "Hoy todo vive en este iPhone. Nada sale sin que lo apruebes.",
+                    subtitle: isLoggedInWithAccount
+                        ? "Se sincronizan con tu cuenta. Nova solo ve lo necesario para ayudarte."
+                        : "En modo demo todo vive en este iPhone. Nada sale sin que lo apruebes.",
                     trailing: .nothing
                 )
                 Divider().overlay(Theme.Colors.border).padding(.leading, 60)
-                // Privacidad y eliminación de cuenta requieren backend real
-                // (Supabase + endpoint de delete). Mientras tanto se muestran
-                // como "Próximamente" para no prometer algo que no funciona.
-                AjustesRow(
-                    symbol: "doc.text",
-                    tint: Theme.Colors.textSecondary,
-                    title: "Política de privacidad",
-                    subtitle: "Próximamente disponible.",
-                    trailing: .nothing
-                )
-                .opacity(0.55)
+                Button {
+                    HapticManager.shared.tap()
+                    if let url = URL(string: "https://www.usefocus.me/privacidad") {
+                        openURL(url)
+                    }
+                } label: {
+                    AjustesRow(
+                        symbol: "doc.text",
+                        tint: Theme.Colors.textSecondary,
+                        title: "Política de privacidad",
+                        subtitle: "Qué datos usamos y con quién se comparten.",
+                        trailing: .chevron
+                    )
+                }
+                .buttonStyle(.plain)
                 Divider().overlay(Theme.Colors.border).padding(.leading, 60)
-                AjustesRow(
-                    symbol: "trash",
-                    tint: Theme.Colors.textTertiary,
-                    title: "Eliminar cuenta",
-                    subtitle: "Próximamente. Por ahora puedes borrar tus datos locales debajo.",
-                    trailing: .nothing
-                )
-                .opacity(0.55)
+                Button {
+                    HapticManager.shared.tap()
+                    if let url = URL(string: "https://www.usefocus.me/terminos") {
+                        openURL(url)
+                    }
+                } label: {
+                    AjustesRow(
+                        symbol: "doc.plaintext",
+                        tint: Theme.Colors.textSecondary,
+                        title: "Términos de Servicio",
+                        subtitle: "Las reglas del servicio, en claro.",
+                        trailing: .chevron
+                    )
+                }
+                .buttonStyle(.plain)
+                // Eliminar cuenta solo aplica con sesión real: en modo demo
+                // no existe cuenta que borrar (los datos locales se borran
+                // desde la sección de abajo).
+                if isLoggedInWithAccount {
+                    Divider().overlay(Theme.Colors.border).padding(.leading, 60)
+                    Button {
+                        HapticManager.shared.warning()
+                        showDeleteAccountAlert = true
+                    } label: {
+                        AjustesRow(
+                            symbol: "trash",
+                            tint: Theme.Colors.danger,
+                            title: isDeletingAccount ? "Eliminando cuenta…" : "Eliminar cuenta",
+                            subtitle: "Borra tu cuenta y todos tus datos. Irreversible.",
+                            trailing: .chevron
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isDeletingAccount)
+                    .opacity(isDeletingAccount ? 0.55 : 1)
+                }
             }
             .focusCardContainer()
+        }
+    }
+
+    /// Borra la cuenta en backend + limpia datos locales. Al terminar, el
+    /// router raíz reacciona a `auth.state = .loggedOut` y vuelve a Login.
+    @MainActor
+    private func performDeleteAccount() async {
+        guard !isDeletingAccount else { return }
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+        do {
+            try await auth.deleteAccount()
+            // La cuenta ya no existe en el backend: este iPhone no debe
+            // conservar datos de una cuenta borrada.
+            store.clearAllLocalData()
+        } catch let err as AuthError {
+            deleteAccountError = err.errorDescription ?? "No se pudo eliminar la cuenta. Inténtalo de nuevo."
+            HapticManager.shared.warning()
+        } catch {
+            deleteAccountError = error.localizedDescription
+            HapticManager.shared.warning()
         }
     }
 

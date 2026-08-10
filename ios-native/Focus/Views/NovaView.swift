@@ -83,6 +83,9 @@ struct NovaView: View {
     @EnvironmentObject private var coachMarks: CoachMarksStore
 
     @State private var draft: String = ""
+    // Texto retenido a la espera del consentimiento IA (5.1.2(i)) — solo se
+    // envía al backend después de que el usuario acepte en la sheet.
+    @State private var aiConsentPendingText: String? = nil
     @State private var showCreateTask: Bool = false
     @State private var showCreateEvent: Bool = false
     @State private var showImportCalendar: Bool = false
@@ -238,8 +241,38 @@ struct NovaView: View {
             NovaLiveView { transcript in
                 // Misma puerta de entrada que el input escrito del chat.
                 // Backend o fallback local + acciones reales + sync.
-                store.sendNovaMessage(transcript)
+                submitToNova(transcript)
             }
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { aiConsentPendingText != nil },
+                set: { presented in
+                    // Swipe-down = "Ahora no": devolver el texto al input
+                    // para que no se pierda lo escrito/dictado.
+                    if !presented, let pending = aiConsentPendingText {
+                        draft = pending
+                        aiConsentPendingText = nil
+                    }
+                }
+            )
+        ) {
+            NovaAIConsentSheet(
+                onAccept: {
+                    NovaAIConsent.grant()
+                    if let pending = aiConsentPendingText {
+                        aiConsentPendingText = nil
+                        store.sendNovaMessage(pending)
+                    }
+                },
+                onDecline: {
+                    if let pending = aiConsentPendingText {
+                        draft = pending
+                        aiConsentPendingText = nil
+                    }
+                }
+            )
+            .presentationBackground(Theme.Colors.background)
         }
         .onChange(of: dictationService.state) { _, newState in
             switch newState {
@@ -294,7 +327,7 @@ struct NovaView: View {
             guard let prompt = newPrompt,
                   !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             else { return }
-            store.sendNovaMessage(prompt)
+            submitToNova(prompt)
             nav.pendingNovaPrompt = nil
         }
         .onAppear {
@@ -302,13 +335,29 @@ struct NovaView: View {
             // dispara onChange si el valor ya estaba seteado).
             if let prompt = nav.pendingNovaPrompt,
                !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                store.sendNovaMessage(prompt)
+                submitToNova(prompt)
                 nav.pendingNovaPrompt = nil
             }
         }
     }
 
     // MARK: - Quick action dispatch
+
+    /// Acciones visibles en el grid: fuera importar/exportar mientras sean
+    /// "Próximamente" (Guideline 2.1) y fuera "Crear tarea" en modo
+    /// SOLO-EVENTOS (`addTask` es no-op — sería un flujo que no guarda nada).
+    private var visibleQuickActions: [NovaQuickAction] {
+        NovaQuickAction.allCases.filter { action in
+            switch action {
+            case .importarCalendario, .exportarCalendario:
+                return FocusConfig.showComingSoonSurfaces
+            case .crearTarea:
+                return FocusConfig.tasksEnabled
+            default:
+                return true
+            }
+        }
+    }
 
     /// Routea cada quick action a su efecto real: sheets, segmentos, mensajes
     /// + sugerencias en bandeja. Nada decorativo.
@@ -498,7 +547,7 @@ struct NovaView: View {
                     ],
                     spacing: Theme.Spacing.md
                 ) {
-                    ForEach(NovaQuickAction.allCases) { action in
+                    ForEach(visibleQuickActions) { action in
                         NovaActionCard(action: action) {
                             handleQuickAction(action)
                         }
@@ -749,6 +798,18 @@ struct NovaView: View {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         draft = ""
+        submitToNova(text)
+    }
+
+    /// Puerta única de entrada al chat (teclado y voz). Gatea el
+    /// consentimiento IA (5.1.2(i)) solo cuando el mensaje va a salir al
+    /// backend — en modo demo el parser local no manda nada fuera del
+    /// dispositivo, así que no hay nada que consentir.
+    private func submitToNova(_ text: String) {
+        if store.syncCredentials != nil && !NovaAIConsent.granted {
+            aiConsentPendingText = text
+            return
+        }
         store.sendNovaMessage(text)
     }
 
