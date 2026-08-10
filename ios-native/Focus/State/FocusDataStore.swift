@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import Foundation
+import WidgetKit
 
 /// Quick action que el usuario puede tocar en la pestaña Acciones de Nova.
 /// Cubre el ciclo del día (planificar / agregar / revisar / cerrar) más el
@@ -5126,6 +5127,7 @@ final class FocusDataStore: ObservableObject {
         let windowStart = cal.date(byAdding: .day, value: -1, to: todayStart) ?? todayStart
         let windowEnd = cal.date(byAdding: .day, value: 45, to: todayStart) ?? todayStart
         systemEvents = SystemCalendarService.shared.events(from: windowStart, to: windowEnd)
+        syncWidgetSnapshot()
     }
 
     private func persistPendingDeleteEvents() {
@@ -5484,7 +5486,43 @@ final class FocusDataStore: ObservableObject {
 
     // MARK: - Persistencia (privado)
 
-    private func persistEvents()       { FocusLocalStore.save(events, forKey: .events) }
+    private func persistEvents()       { FocusLocalStore.save(events, forKey: .events); syncWidgetSnapshot() }
+
+    // MARK: - Widget snapshot (App Group)
+
+    /// Hex por sección — espejo de Theme.Colors.section* (el widget no
+    /// comparte el target, así que viaja como string en el snapshot).
+    private static let widgetSectionHex: [EventSection: String] = [
+        .foco: "2563EB", .reunion: "6366F1", .personal: "06B6D4",
+        .estudio: "8B5CF6", .descanso: "0D9488",
+        .entrenamiento: "16A34A", .reminder: "D97706",
+    ]
+
+    /// Escribe el snapshot de eventos de HOY (propios + calendario del
+    /// iPhone) al App Group y pide a WidgetKit que refresque. Formato JSON
+    /// mínimo: t=título, s/e=epoch inicio/fin, c=hex. Se llama en cada
+    /// persistEvents() y refreshSystemEvents() — barato (pocos KB).
+    func syncWidgetSnapshot() {
+        guard let defaults = UserDefaults(suiteName: "group.me.usefocus.app") else { return }
+        let cal = Calendar.current
+        let today = (events + systemEvents)
+            .filter { cal.isDateInToday($0.startTime) }
+            .sorted { $0.startTime < $1.startTime }
+            .prefix(12)
+        let payload: [[String: Any]] = today.map { ev in
+            var item: [String: Any] = [
+                "t": ev.title,
+                "s": ev.startTime.timeIntervalSince1970,
+                "c": Self.widgetSectionHex[ev.section] ?? "2563EB",
+            ]
+            if let end = ev.endTime { item["e"] = end.timeIntervalSince1970 }
+            return item
+        }
+        if let data = try? JSONSerialization.data(withJSONObject: payload) {
+            defaults.set(data, forKey: "widget.events.v1")
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+    }
     private func persistTasks()        { FocusLocalStore.save(tasks, forKey: .tasks) }
     private func persistSuggestions()  { FocusLocalStore.save(suggestions, forKey: .suggestions) }
     private func persistNovaMessages() { FocusLocalStore.save(novaMessages, forKey: .novaMessages) }

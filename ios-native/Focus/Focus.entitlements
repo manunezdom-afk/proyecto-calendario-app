@@ -9,5 +9,12 @@
 	     body.environment). -->
 	<key>aps-environment</key>
 	<string>development</string>
+
+	<!-- App Group compartido con FocusWidgetExtension: la app escribe el
+	     snapshot de eventos del día y el widget lo lee. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.me.usefocus.app</string>
+	</array>
 </dict>
 </plist>

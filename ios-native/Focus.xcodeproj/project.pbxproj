@@ -50,6 +50,9 @@
 		FA00000000000000000000E0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000E1 /* PrivacyInfo.xcprivacy */; };
 		FA00000000000000000000E2 /* SystemCalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000E3 /* SystemCalendarService.swift */; };
 		FA00000000000000000000E4 /* PushRegistrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000E5 /* PushRegistrationService.swift */; };
+		FA00000000000000000000E9 /* FocusWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000E8 /* FocusWidgetBundle.swift */; };
+		FA00000000000000000000EB /* FocusWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000EA /* FocusWidget.swift */; };
+		FA00000000000000000000F7 /* FocusWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000E7 /* FocusWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -98,10 +101,22 @@
 		FA00000000000000000000E3 /* SystemCalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemCalendarService.swift; sourceTree = "<group>"; };
 		FA00000000000000000000E5 /* PushRegistrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistrationService.swift; sourceTree = "<group>"; };
 		FA00000000000000000000E6 /* Focus.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Focus.entitlements; sourceTree = "<group>"; };
+		FA00000000000000000000E7 /* FocusWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FocusWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FA00000000000000000000E8 /* FocusWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusWidgetBundle.swift; sourceTree = "<group>"; };
+		FA00000000000000000000EA /* FocusWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusWidget.swift; sourceTree = "<group>"; };
+		FA00000000000000000000EC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		FA00000000000000000000ED /* FocusWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FocusWidget.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		FA0000000000000000000010 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA00000000000000000000F4 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -115,6 +130,7 @@
 			isa = PBXGroup;
 			children = (
 				FA000000000000000000000F /* Focus */,
+				FA00000000000000000000EE /* FocusWidget */,
 				FA0000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -123,6 +139,7 @@
 			isa = PBXGroup;
 			children = (
 				FA0000000000000000000004 /* Focus.app */,
+				FA00000000000000000000E7 /* FocusWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -218,6 +235,17 @@
 			path = State;
 			sourceTree = "<group>";
 		};
+		FA00000000000000000000EE /* FocusWidget */ = {
+			isa = PBXGroup;
+			children = (
+				FA00000000000000000000E8 /* FocusWidgetBundle.swift */,
+				FA00000000000000000000EA /* FocusWidget.swift */,
+				FA00000000000000000000EC /* Info.plist */,
+				FA00000000000000000000ED /* FocusWidget.entitlements */,
+			);
+			path = FocusWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -228,10 +256,12 @@
 				FA000000000000000000000C /* Sources */,
 				FA000000000000000000000D /* Resources */,
 				FA0000000000000000000010 /* Frameworks */,
+				FA00000000000000000000F6 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				FA00000000000000000000F9 /* PBXTargetDependency */,
 			);
 			name = Focus;
 			packageProductDependencies = (
@@ -241,6 +271,23 @@
 			productName = Focus;
 			productReference = FA0000000000000000000004 /* Focus.app */;
 			productType = "com.apple.product-type.application";
+		};
+		FA00000000000000000000EF /* FocusWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA00000000000000000000F2 /* Build configuration list for PBXNativeTarget "FocusWidgetExtension" */;
+			buildPhases = (
+				FA00000000000000000000F3 /* Sources */,
+				FA00000000000000000000F4 /* Frameworks */,
+				FA00000000000000000000F5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FocusWidgetExtension;
+			productName = FocusWidgetExtension;
+			productReference = FA00000000000000000000E7 /* FocusWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -275,6 +322,7 @@
 			projectRoot = "";
 			targets = (
 				FA0000000000000000000006 /* Focus */,
+				FA00000000000000000000EF /* FocusWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -289,7 +337,46 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FA00000000000000000000F5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		FA00000000000000000000F6 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				FA00000000000000000000F7 /* FocusWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXContainerItemProxy section */
+		FA00000000000000000000F8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FA0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FA00000000000000000000EF;
+			remoteInfo = FocusWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		FA00000000000000000000F9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FA00000000000000000000EF /* FocusWidgetExtension */;
+			targetProxy = FA00000000000000000000F8 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXSourcesBuildPhase section */
 		FA000000000000000000000C /* Sources */ = {
@@ -337,6 +424,15 @@
 				FA0000000000000000000083 /* NovaInboxView.swift in Sources */,
 				FA000000000000000000004A /* TareasView.swift in Sources */,
 				FA000000000000000000004B /* AjustesView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA00000000000000000000F3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA00000000000000000000E9 /* FocusWidgetBundle.swift in Sources */,
+				FA00000000000000000000EB /* FocusWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -511,6 +607,56 @@
 			};
 			name = Release;
 		};
+		FA00000000000000000000F0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = FocusWidget/FocusWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 25;
+				DEVELOPMENT_TEAM = D8UM897B2T;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FocusWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = me.usefocus.app.FocusWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		FA00000000000000000000F1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = FocusWidget/FocusWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 25;
+				DEVELOPMENT_TEAM = D8UM897B2T;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FocusWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = me.usefocus.app.FocusWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -528,6 +674,15 @@
 			buildConfigurations = (
 				FA000000000000000000000E /* Debug */,
 				FA000000000000000000001B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FA00000000000000000000F2 /* Build configuration list for PBXNativeTarget "FocusWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA00000000000000000000F0 /* Debug */,
+				FA00000000000000000000F1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
