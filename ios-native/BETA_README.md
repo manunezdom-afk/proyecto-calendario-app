@@ -1,6 +1,6 @@
 # Focus — Beta cerrada (TestFlight)
 
-Build **1.0 (3)** — beta cerrada. 2–5 testers.
+Build **1.0 (25)** — beta cerrada. 2–5 testers.
 
 ---
 
@@ -145,8 +145,8 @@ Si la app crashea: TestFlight te ofrece "Send Beta Feedback" con un screenshot �
 
 - Tu correo y tus eventos se guardan en una base de datos Supabase con RLS (cada usuario ve solo lo suyo).
 - El audio del micrófono **no** sale del iPhone — la transcripción la hace Apple en el dispositivo.
-- Cuando escribes a Nova, el texto sí va a un modelo de IA (Anthropic Haiku 4.5 para frases simples, Sonnet 4.6 para frases complejas con múltiples acciones). No se entrena con tu data.
-- Para borrar todo lo local: **Ajustes → "Borrar todo"**. Para borrar la cuenta entera (cuenta + datos en la nube): pídelo por mensaje.
+- Cuando escribes a Nova, el texto y el contexto de tu agenda van a un modelo de IA externo: **DeepSeek** (v4-flash para frases simples, v4-pro para complejas), con OpenAI/Anthropic como alternativa según configuración del backend. La app te pide consentimiento explícito antes del primer mensaje. Detalle completo en usefocus.me/privacidad.
+- Para borrar todo lo local: **Ajustes → "Borrar todo"**. Para borrar la cuenta entera (cuenta + datos en la nube): **Ajustes → Privacidad → Eliminar cuenta** (inmediato, tipeando ELIMINAR).
 
 ---
 
@@ -154,8 +154,8 @@ Si la app crashea: TestFlight te ofrece "Send Beta Feedback" con un screenshot �
 
 Para que entiendas qué esperar:
 
-- **Frases simples** ("comprar pan", "comer a las 8", "reunión con Juan mañana 5"): parser local o Haiku 4.5. Rápido, gratis o casi.
-- **Frases complejas** (varias acciones, conectores "y/luego/después", múltiples horas, "en una hora", "a las tres"): Sonnet 4.6 directo, sin pasar por Haiku. Mejor razonamiento estructural.
+- **Frases simples** ("comprar pan", "comer a las 8", "reunión con Juan mañana 5"): parser local o DeepSeek v4-flash. Rápido y barato.
+- **Frases complejas** (varias acciones, conectores "y/luego/después", múltiples horas, "en una hora", "a las tres"): DeepSeek v4-pro directo. Mejor razonamiento estructural.
 - **Si Nova no está segura** (ambigüedad real): pregunta antes de crear. No adivina.
 - **Si el backend falla** y la frase es compleja: te pide enviarlas por separado en vez de inventar un evento.
 - **Si pides un aviso sobre un evento existente** ("acuérdame X min antes de Y"): se adjunta al evento como chip. No crea otro bloque.

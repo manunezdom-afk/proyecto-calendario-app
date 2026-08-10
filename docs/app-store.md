@@ -1,5 +1,13 @@
 # Subir Focus al App Store — guía paso a paso
 
+> ⚠️ **LEGACY (Capacitor) — NO SEGUIR.** Esta guía describe el viejo wrapper
+> Capacitor (`ios/App`), archivado en 2026-05. La app que se sube al App
+> Store es la **nativa SwiftUI** en `ios-native/Focus.xcodeproj`. La guía
+> vigente de submission es
+> [`app-store-submission-checklist.md`](app-store-submission-checklist.md);
+> la metadata de la ficha sigue válida en
+> [`app-store-metadata.md`](app-store-metadata.md).
+
 Esta guía asume que ya está hecho todo lo del repo (Capacitor instalado, `ios/` generado, iconos listos). Lo que sigue depende de cosas que solo tú puedes hacer en tu Mac y en cuentas de Apple.
 
 ---

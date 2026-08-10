@@ -14,7 +14,7 @@ Texto listo para pegar en App Store Connect cuando crees la app. Todo está en e
 | Categoría primaria | Productivity |
 | Categoría secundaria | Lifestyle |
 | Idioma principal | Español (España) |
-| Edad recomendada | 4+ |
+| Edad recomendada | 13+ (chat con IA sin restricción de edad — cuestionario nuevo 2026, ver `app-store-submission-checklist.md`) |
 | Copyright | `2026 Martín Nuñez` |
 | Precio | Gratis (o el modelo que decidas) |
 
