@@ -2690,6 +2690,81 @@ enum NovaActionNormalizerTests {
             expected: 15, failures: &failures
         )
 
+        // ───── FIX chat→Mi Día 2026-08-10: nunca crear en el pasado ────
+        //
+        // "acuérdame de tomar mis remedios a las 8" a las 21h resolvía
+        // HOY 08:00 (pasado) → el recordatorio nacía vencido y Mi Día lo
+        // escondía del timeline. `resolveNonPastStartTime` salta a la
+        // próxima ocurrencia razonable. Helper puro con `now` inyectable
+        // → determinista a cualquier hora que corra la suite.
+        do {
+            let cal = Calendar.current
+            let todayStart = cal.startOfDay(for: Date())
+            func at(_ h: Int, _ m: Int = 0, dayOffset: Int = 0) -> Date {
+                let day = cal.date(byAdding: .day, value: dayOffset, to: todayStart)!
+                return cal.date(bySettingHour: h, minute: m, second: 0, of: day)!
+            }
+            // 1. Noche (21h): "a las 8" resuelta 08:00 hoy → mañana 08:00.
+            let r1 = NovaActionNormalizer.resolveNonPastStartTime(
+                startTime: at(8), userText: "acuérdame de tomar mis remedios a las 8",
+                now: at(21)
+            )
+            check(label: "rollForward: remedios 8 AM a las 21h → mañana 08:00",
+                  actual: r1.startTime, expected: at(8, 0, dayOffset: 1), failures: &failures)
+            check(label: "rollForward: remedios 8 AM a las 21h → didRoll",
+                  actual: r1.didRollForward, expected: true, failures: &failures)
+            // 2. Tarde (14h): "a las 8" resuelta 08:00 hoy → hoy 20:00 (PM).
+            let r2 = NovaActionNormalizer.resolveNonPastStartTime(
+                startTime: at(8), userText: "acuérdame de tomar mis remedios a las 8",
+                now: at(14)
+            )
+            check(label: "rollForward: remedios 8 AM a las 14h → hoy 20:00",
+                  actual: r2.startTime, expected: at(20), failures: &failures)
+            // 3. AM explícito ("de la mañana") NO se convierte en PM → mañana.
+            let r3 = NovaActionNormalizer.resolveNonPastStartTime(
+                startTime: at(7), userText: "gimnasio a las 7 de la mañana",
+                now: at(10)
+            )
+            check(label: "rollForward: '7 de la mañana' pasada → mañana 07:00 (no PM)",
+                  actual: r3.startTime, expected: at(7, 0, dayOffset: 1), failures: &failures)
+            // 4. Día explícito ("hoy") se respeta aunque quede en pasado.
+            let r4 = NovaActionNormalizer.resolveNonPastStartTime(
+                startTime: at(16), userText: "dentista hoy a las 4",
+                now: at(20)
+            )
+            check(label: "rollForward: 'hoy a las 4' NO se mueve (día explícito)",
+                  actual: r4.startTime, expected: at(16), failures: &failures)
+            // 4b. Weekday explícito también ancla.
+            let r4b = NovaActionNormalizer.resolveNonPastStartTime(
+                startTime: at(16), userText: "dentista el lunes a las 4",
+                now: at(20)
+            )
+            check(label: "rollForward: weekday explícito NO se mueve",
+                  actual: r4b.didRollForward, expected: false, failures: &failures)
+            // 5. Hora futura queda intacta.
+            let r5 = NovaActionNormalizer.resolveNonPastStartTime(
+                startTime: at(17), userText: "reunión con Juan a las 5",
+                now: at(10)
+            )
+            check(label: "rollForward: hora futura intacta",
+                  actual: r5.startTime, expected: at(17), failures: &failures)
+            // 6. Gracia: pasó hace 1 min → se considera "ahora", no se mueve.
+            let r6 = NovaActionNormalizer.resolveNonPastStartTime(
+                startTime: at(9), userText: "llamar a mamá a las 9",
+                now: at(9, 1)
+            )
+            check(label: "rollForward: hace 1 min → dentro de gracia, intacta",
+                  actual: r6.didRollForward, expected: false, failures: &failures)
+            // 7. Contexto de mañana-del-día (verbo despertar) NUNCA sube a
+            //    PM: "despertarme a las 7" a las 14h es mañana 07:00.
+            let r7 = NovaActionNormalizer.resolveNonPastStartTime(
+                startTime: at(7), userText: "recuérdame despertarme a las 7",
+                now: at(14)
+            )
+            check(label: "rollForward: 'despertarme a las 7' → mañana 07:00 (no 19:00)",
+                  actual: r7.startTime, expected: at(7, 0, dayOffset: 1), failures: &failures)
+        }
+
         // ───── Resultado ───────────────────────────────────────────────
 
         if failures.isEmpty {

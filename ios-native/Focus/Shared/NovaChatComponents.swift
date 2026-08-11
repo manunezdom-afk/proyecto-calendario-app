@@ -23,9 +23,9 @@ struct NovaChatBackdrop: View {
     var body: some View {
         ZStack {
             // `.container` (no `.all`) — extiende el fondo bajo el tab bar
-            // pero RESPETA el keyboard safe area. Sin esto, el `safeAreaInset`
-            // del inputBar no se reposiciona cuando aparece el teclado y la
-            // barra queda atrapada detrás del keyboard (solo se ve "Listo").
+            // pero RESPETA el keyboard safe area. Con `.all`, el layout del
+            // chat dejaba de reaccionar al teclado y el composer (overlay
+            // con lift manual en NovaView) quedaba atrapado detrás.
             Theme.Colors.novaChatBackground
                 .ignoresSafeArea(.container, edges: [.bottom, .horizontal])
 
@@ -729,7 +729,9 @@ struct NovaGlassInputBar: View {
                 }
             }
 
-            // Send
+            // Send — gradient de marca cuando hay texto; deshabilitado se
+            // apaga completo (fondo neutro + flecha atenuada + sin glow)
+            // para que el estado "no se puede enviar" se lea de una.
             Button(action: {
                 if canSubmit {
                     HapticManager.shared.tap()
@@ -738,7 +740,7 @@ struct NovaGlassInputBar: View {
             }) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.white.opacity(canSubmit ? 1.0 : 0.45))
                     .frame(width: 34, height: 34)
                     .background(
                         Circle()

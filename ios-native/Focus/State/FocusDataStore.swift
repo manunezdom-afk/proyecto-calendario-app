@@ -6086,7 +6086,30 @@ final class FocusDataStore: ObservableObject {
                 // o el horario "razonable" del verbo). En el spec del
                 // producto, sin hora explícita = tarea/pendiente.
                 if !NovaActionNormalizer.userMentionedAnyTimeOfDay(in: userText) {
-                    if let task = makeTaskFromTimelessEventPayload(payload) {
+                    if !FocusConfig.tasksEnabled {
+                        // SOLO-EVENTOS (fix 2026-08-10): degradar a tarea acá
+                        // era mentira — `addTask` es no-op con el flag off y
+                        // el summary decía "Tarea agregada" sin que existiera
+                        // en ninguna superficie. Dejamos pending para que el
+                        // follow-up con hora cree el evento; la respuesta
+                        // visible la pone el reply del backend (su prompt
+                        // SOLO-EVENTOS ya pide la hora en estos casos).
+                        let cleaned = NovaActionNormalizer.cleanTitle(payload.title)
+                        if !cleaned.isEmpty {
+                            setPendingClarification(PendingClarification(
+                                originalInput: userText,
+                                kind: .event,
+                                proposedTitle: cleaned,
+                                proposedDate: NovaTimeFormatter.parseISODate(payload.dateString),
+                                proposedSection: NovaResponder.guessSection(for: userText),
+                                wantsReminder: false,
+                                missingFields: [.time],
+                                questionAsked: "¿A qué hora lo agendo?",
+                                source: .novaChat
+                            ))
+                        }
+                        outcome.ignored.append("add_event(no_time_tasks_disabled)")
+                    } else if let task = makeTaskFromTimelessEventPayload(payload) {
                         addTask(task)
                         outcome.didMutate = true
                         outcome.summary = "Tarea «\(task.title)» agregada."
@@ -6226,6 +6249,13 @@ final class FocusDataStore: ObservableObject {
                 clearNovaContext()
 
             case .addTask(let payload):
+                // SOLO-EVENTOS (fix 2026-08-10): el backend no debería emitir
+                // add_task con el prompt actual, pero si llega, no fingimos
+                // haberla guardado (`addTask` es no-op con el flag off).
+                guard FocusConfig.tasksEnabled else {
+                    outcome.ignored.append("add_task(tasks_disabled)")
+                    continue
+                }
                 if let task = makeTask(from: payload) {
                     addTask(task)
                     outcome.didMutate = true
@@ -6400,7 +6430,8 @@ final class FocusDataStore: ObservableObject {
     private func makeEvent(
         from payload: BackendEventCreate,
         userText: String,
-        isMultiEventBatch: Bool = false
+        isMultiEventBatch: Bool = false,
+        allowPastRollForward: Bool = true
     ) -> FocusEvent? {
         // PASO 1: Limpiar título via normalizer (centralizado).
         // El backend puede devolver "Acuérdame buscar a Juan" sin limpiar
@@ -6422,7 +6453,7 @@ final class FocusDataStore: ObservableObject {
         guard !cleanedTitle.isEmpty else { return nil }
 
         let cal = Calendar.current
-        guard let startTime = NovaTimeFormatter.resolveDate(
+        guard var startTime = NovaTimeFormatter.resolveDate(
             dateString: payload.dateString,
             timeString: payload.timeString
         ) else { return nil }
@@ -6477,6 +6508,26 @@ final class FocusDataStore: ObservableObject {
            ),
            end > startTime {
             explicitEnd = end
+        }
+
+        // PASO 3.5 (fix chat→Mi Día 2026-08-10): nunca crear en el pasado
+        // silenciosamente. El backend suele mandar dateString = HOY aunque
+        // la hora del usuario ya haya pasado ("remedios a las 8" a las 21h
+        // → hoy 08:00) y el recordatorio nacía vencido/oculto en Mi Día.
+        // Mismo roll-forward que el path local (hoy PM si alcanza, si no
+        // mañana), gateado en que el usuario NO haya anclado el día. En
+        // expansión recurrente se desactiva (`allowPastRollForward=false`):
+        // mover la primera ocurrencia duplicaría la del día siguiente.
+        if allowPastRollForward {
+            let rolled = NovaActionNormalizer.resolveNonPastStartTime(
+                startTime: startTime, userText: userText
+            )
+            if rolled.didRollForward {
+                explicitEnd = explicitEnd?.addingTimeInterval(
+                    rolled.startTime.timeIntervalSince(startTime)
+                )
+                startTime = rolled.startTime
+            }
         }
 
         // PASO 4: Sección. Si isReminder → .reminder. Si no, primero icon
@@ -6847,7 +6898,15 @@ final class FocusDataStore: ObservableObject {
                     notes: payload.notes,
                     subtitle: payload.subtitle
                 )
-                if let event = makeEvent(from: single, userText: userText, isMultiEventBatch: isMultiEventBatch) {
+                if let event = makeEvent(
+                    from: single,
+                    userText: userText,
+                    isMultiEventBatch: isMultiEventBatch,
+                    // Serie recurrente: cada ocurrencia se ancla a SU fecha
+                    // del patrón; roll-forward acá duplicaría la del día
+                    // siguiente cuando la primera ya pasó.
+                    allowPastRollForward: false
+                ) {
                     addEvent(event)
                     created.append(event)
                     added += 1
@@ -7370,8 +7429,27 @@ final class FocusDataStore: ObservableObject {
     /// Devuelve nil si el intent no debería ejecutarse acá (caller fall-through).
     func applyLocalNovaIntent(_ intent: NovaIntent, userText: String, isMultiIntent: Bool = false) -> String? {
         switch intent {
-        case .createEvent(let rawTitle, let when, let explicitEnd, let location, let section, let wantsReminder, let recurrence, let segReminderOffset, let segReminderNote):
-            guard let date = when else { return nil }
+        case .createEvent(let rawTitle, let when, let rawExplicitEnd, let location, let section, let wantsReminder, let recurrence, let segReminderOffset, let segReminderNote):
+            guard let rawDate = when else { return nil }
+            // PASO 0 (fix chat→Mi Día 2026-08-10): nunca crear en el pasado
+            // silenciosamente. "Acuérdame de tomar mis remedios a las 8" a
+            // las 21h resolvía HOY 08:00 → recordatorio nacía vencido y Mi
+            // Día lo escondía del timeline. Si el usuario NO ancló el día y
+            // la hora ya pasó, saltamos a la próxima ocurrencia (hoy PM si
+            // alcanza; si no, mañana). Con recurrencia NO aplica: la serie
+            // se ancla al patrón, no a "ahora". El endTime explícito se
+            // traslada junto al inicio para conservar la duración.
+            let date: Date
+            if recurrence == nil {
+                date = NovaActionNormalizer.resolveNonPastStartTime(
+                    startTime: rawDate, userText: userText
+                ).startTime
+            } else {
+                date = rawDate
+            }
+            let explicitEnd: Date? = rawExplicitEnd.map {
+                $0.addingTimeInterval(date.timeIntervalSince(rawDate))
+            }
             // PASO 1: Limpiar título via normalizer (mismo pipeline que
             // backend path → consistencia 100%).
             let cleanedTitle = NovaActionNormalizer.cleanTitle(rawTitle)
@@ -7590,6 +7668,27 @@ final class FocusDataStore: ObservableObject {
             // Mismo pipeline de limpieza para tareas.
             let title = NovaActionNormalizer.cleanTitle(rawTitle)
             guard !title.isEmpty else { return nil }
+            // SOLO-EVENTOS (fix 2026-08-10): con tasksEnabled=false,
+            // `addTask` es no-op — pero este path seguía respondiendo
+            // "Anoto «X» como tarea" y el ítem no existía en ninguna
+            // superficie (misma familia del bug chat→Mi Día: Nova afirma
+            // algo que no quedó guardado). Mismo redirect que Mi Día
+            // inline: pedimos la hora y dejamos pending para que el
+            // follow-up ("a las 5") lo cree como evento real.
+            guard FocusConfig.tasksEnabled else {
+                setPendingClarification(PendingClarification(
+                    originalInput: userText,
+                    kind: wantsReminder ? .reminder : .event,
+                    proposedTitle: title,
+                    proposedDate: dueDate,
+                    proposedSection: NovaResponder.guessSection(for: userText),
+                    wantsReminder: wantsReminder,
+                    missingFields: [.time],
+                    questionAsked: "¿A qué hora lo agendo?",
+                    source: .novaChat
+                ))
+                return "¿A qué hora agendo «\(title)»? Dime la hora y lo dejo como bloque en tu día."
+            }
             let category: TaskCategory = {
                 guard let dueDate else { return .hoy }
                 let cal = Calendar.current

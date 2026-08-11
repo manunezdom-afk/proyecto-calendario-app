@@ -107,6 +107,13 @@ struct NovaView: View {
     /// posición REAL medida y no con la altura del teclado a secas.
     @State private var containerBottomY: CGFloat = 0
 
+    /// Alto REAL del composer, medido con GeometryReader. Antes el inset
+    /// inferior del chat usaba un 88 fijo "≈ alto del inputBar" — con el
+    /// TextField auto-expandido (2-6 líneas) o el visualizador de dictado
+    /// abierto, el composer crecía y TAPABA los últimos mensajes; y cuando
+    /// era más bajo, quedaba un hueco. Medir el alto real elimina ambos.
+    @State private var inputBarHeight: CGFloat = 88
+
     /// Cuántos puntos hay que subir el composer para que su borde inferior
     /// quede exactamente en el borde superior del teclado.
     private var composerLift: CGFloat {
@@ -149,11 +156,12 @@ struct NovaView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // En chat: el viewport del scroll termina sobre el composer
-                // flotante (88 ≈ alto del inputBar) y sobre el teclado
-                // cuando está abierto — así el último mensaje nunca queda
-                // tapado y scrollToBottom ancla visible.
-                .padding(.bottom, nav.novaSegment == .chat ? 88 + composerLift : 0)
+                // El inset inferior del chat (composer + teclado) vive DENTRO
+                // de `chatContent`, no acá: así la zona compensada queda
+                // cubierta por el backdrop dark del chat. Antes el padding
+                // iba en este Group (fuera del backdrop) y el hueco mostraba
+                // el canvas CLARO de la app bajo el composer — los "agujeros
+                // claros" reportados al abrir/cerrar teclado en iPhone.
             }
             // Anchor invisible: mide la Y global REAL del borde inferior
             // del VStack. Dentro del pager horizontal de MainTabView la
@@ -181,10 +189,24 @@ struct NovaView: View {
             .overlay(alignment: .bottom) {
                 if nav.novaSegment == .chat {
                     inputBar
+                        // Medir el alto REAL del composer (auto-expand del
+                        // TextField, visualizador de dictado, etc.) ANTES
+                        // del offset — el inset del chat usa este valor en
+                        // vez del 88 fijo que tapaba mensajes al crecer.
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear
+                                    .onAppear { inputBarHeight = proxy.size.height }
+                                    .onChange(of: proxy.size.height) { _, h in
+                                        inputBarHeight = h
+                                    }
+                            }
+                        )
                         .offset(y: -composerLift)
                 }
             }
             .animation(.easeOut(duration: 0.25), value: composerLift)
+            .animation(.easeOut(duration: 0.20), value: inputBarHeight)
             .background(
                 FocusAmbientCanvas(state: store.isNovaTyping ? .thinking : .idle)
             )
@@ -627,9 +649,13 @@ struct NovaView: View {
     // habla, los otros segmentos son workflow productivo.
 
     private var chatContent: some View {
-        // El `inputBar` se monta en el body principal vía
-        // `safeAreaInset(edge: .bottom)` aplicado al NavigationStack.
-        // Acá solo el contenido (backdrop + hero/scroll).
+        // El `inputBar` se monta como overlay bottom del NavigationStack
+        // con lift manual (ver arriba, QA-closure 2026-06-10). Acá va el
+        // contenido: backdrop dark + hero/scroll con el inset inferior
+        // que compensa composer + teclado. El padding vive DENTRO de este
+        // ZStack a propósito — el backdrop cubre también la zona compensada
+        // y no se asoman "agujeros" del canvas claro durante las
+        // animaciones del teclado.
         ZStack {
             NovaChatBackdrop()
                 .onTapGesture {
@@ -656,6 +682,7 @@ struct NovaView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .padding(.bottom, inputBarHeight + composerLift)
         }
     }
 
@@ -672,11 +699,18 @@ struct NovaView: View {
                             }
                         }
                         .id(msg.id)
-                        // Entrada suave: fade-in + slide-up sutil para cada
-                        // nuevo mensaje. La salida es solo opacity para que
-                        // los message id changes no muevan la altura.
+                        // Entrada suave: fade-in + slide-up + scale sutil
+                        // (98% → 100%, anclado al lado de la burbuja) con el
+                        // spring de entrada — la burbuja "aterriza" en vez de
+                        // aparecer. La salida es solo opacity para que los
+                        // message id changes no muevan la altura.
                         .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .offset(y: 10)),
+                            insertion: .opacity
+                                .combined(with: .offset(y: 10))
+                                .combined(with: .scale(
+                                    scale: 0.98,
+                                    anchor: msg.role == .user ? .bottomTrailing : .bottomLeading
+                                )),
                             removal: .opacity
                         ))
                     }
@@ -703,22 +737,35 @@ struct NovaView: View {
             // el estado vacío, y el toolbar "Listo" se quitó a propósito.
             // Sin esto NO existía gesto alguno para cerrar el teclado.
             //
-            // `.immediately` (no `.interactively`) a propósito: el composer
-            // se eleva con el tracking MANUAL de keyboardOverlap (padding +
-            // ignoresSafeArea(.keyboard) en el VStack root, ver arriba), no
-            // con el avoidance nativo. Un dismiss interactivo dejaría el
-            // padding manual desincronizado del frame real del teclado
-            // durante el drag (hueco fantasma bajo el composer). Con
-            // `.immediately`, el gesto de scroll dispara un willHide
-            // discreto y el padding anima a 0 en sincronía. Si algún día
-            // se migra a keyboard avoidance nativo, cambiar a
-            // `.interactively`.
-            .scrollDismissesKeyboard(.immediately)
+            // `.interactively` (2026-08-11): arrastrar hacia abajo baja el
+            // teclado siguiendo el dedo, como iMessage. El composer usa
+            // lift manual (KeyboardObserver), así que durante el drag se
+            // queda elevado hasta que iOS postea willHide al soltar — ese
+            // desfase era la razón del `.immediately` anterior, pero ya no
+            // muestra huecos claros: la franja que se revela bajo el
+            // composer ahora es el backdrop DARK (el inset del chat vive
+            // dentro del ZStack del backdrop) y el lift anima a 0 al
+            // confirmarse el dismiss.
+            .scrollDismissesKeyboard(.interactively)
             .onChange(of: store.novaMessages.count) { _, _ in
                 scrollToBottom(proxy: proxy, animated: true)
+                // Háptico sutil cuando ATERRIZA una respuesta de Nova (el
+                // envío ya vibra en el botón). Solo el último mensaje —
+                // los redraws del ForEach no pasan por acá.
+                if store.novaMessages.last?.role == .nova {
+                    HapticManager.shared.tick()
+                }
             }
             .onChange(of: store.isNovaTyping) { _, typing in
                 if typing { scrollToBottom(proxy: proxy, animated: true) }
+            }
+            // Al abrir el teclado, el viewport se encoge (sube el inset) y
+            // el final de la conversación quedaba tapado hasta el próximo
+            // mensaje. Re-anclamos al fondo apenas iOS anuncia el teclado.
+            .onReceive(NotificationCenter.default.publisher(
+                for: UIResponder.keyboardWillShowNotification
+            )) { _ in
+                scrollToBottom(proxy: proxy, animated: true)
             }
             .onAppear {
                 scrollToBottom(proxy: proxy, animated: false)

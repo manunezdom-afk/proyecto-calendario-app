@@ -1140,6 +1140,127 @@ enum NovaActionNormalizer {
         return (nil, true)  // duración inferida, mostrar como punto
     }
 
+    // MARK: - Nunca crear en el pasado (fix chat→Mi Día 2026-08-10)
+
+    /// Margen de gracia contra el "recién pasado": una hora que pasó hace
+    /// ≤ 2 min se considera "ahora" ("a las 9" dicho a las 9:01 es ese
+    /// momento, no mañana). También se acepta un candidato PM que quede
+    /// dentro del margen ("a las 8" a las 20:01 → hoy 20:00).
+    private static let pastGraceInterval: TimeInterval = 2 * 60
+
+    /// True cuando el usuario ancló EXPLÍCITAMENTE el día en su texto:
+    /// "hoy", "mañana", "pasado mañana", un día de semana, una fecha ISO o
+    /// "N de <mes>". En esos casos NUNCA movemos el evento de día — el
+    /// usuario fue claro y moverlo sería peor que respetarlo.
+    ///
+    /// Ojo con "de la mañana": es franja horaria (AM), no el día "mañana".
+    /// Se strippea antes de buscar `\bmañana\b` para no dar falso positivo
+    /// en frases como "gimnasio a las 7 de la mañana".
+    static func userAnchoredExplicitDay(in text: String) -> Bool {
+        let lower = text.lowercased()
+        let withoutDayparts = lower.replacingOccurrences(
+            of: #"\b(de|en|por)\s+la\s+(mañana|manana|madrugada)\b"#,
+            with: " ",
+            options: .regularExpression
+        )
+        let dayPatterns: [String] = [
+            #"\bhoy\b"#,
+            #"\bma(ñ|n)ana\b"#,          // cubre también "pasado mañana"
+            #"\b(lunes|martes|mi(é|e)rcoles|jueves|viernes|s(á|a)bado|domingo)\b"#,
+            #"\b\d{4}-\d{2}-\d{2}\b"#,
+            #"\b\d{1,2}\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b"#,
+        ]
+        return dayPatterns.contains {
+            withoutDayparts.range(of: $0, options: .regularExpression) != nil
+        }
+    }
+
+    /// True cuando el texto trae un marcador AM explícito ("7 am",
+    /// "de la mañana", "madrugada"). Con AM explícito, un roll-forward
+    /// jamás debe convertir la hora en PM — solo puede saltar a mañana.
+    static func userGaveExplicitAmMarker(in text: String) -> Bool {
+        let lower = text.lowercased()
+        if lower.range(of: #"\b\d{1,2}\s*(am|a\.m\.)\b"#, options: .regularExpression) != nil {
+            return true
+        }
+        return lower.contains("de la mañana")
+            || lower.contains("de la manana")
+            || lower.contains("madrugada")
+    }
+
+    /// Contextos que el parser resuelve como AM por SEMÁNTICA aunque no
+    /// haya marcador explícito (espejo del forceAM de `detectHourContext`):
+    /// despertar/levantar/amanecer/desayunar + ámbito escolar. Para estos,
+    /// el upgrade a PM del mismo día no tiene sentido — "despertarme a las
+    /// 7" pedido a las 14h es MAÑANA 07:00, jamás hoy 19:00.
+    private static let morningContextPattern: String =
+        #"\b(despertar(me|te|se|nos|los)?|despertame|despertarnos|despierto|despierta|levantar(me|te|se|nos|los)?|levantame|levantarnos|levanto|levanta|amanecer|amanezca|amanezco|desayunar|desayuno|desayunamos|clase|clases|universidad|colegio|escuela|facultad|liceo|preescolar)\b"#
+
+    private static func impliesMorningContext(in text: String) -> Bool {
+        text.range(
+            of: morningContextPattern,
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil
+    }
+
+    /// Regla de producto (fix del bug chat→Mi Día): **nunca crear un ítem
+    /// en el pasado silenciosamente**. Caso real: "acuérdame de tomar mis
+    /// remedios a las 8" pedido a las 21h resolvía HOY 08:00 — hora ya
+    /// pasada — y el recordatorio nacía "vencido": Mi Día lo esconde del
+    /// timeline (va a la sección Vencidos) y la notificación nunca se
+    /// programa. El usuario percibía que el chat "no creó nada".
+    ///
+    /// Si la hora resuelta ya pasó hoy Y el usuario NO ancló el día:
+    ///   1. Hora 1–11 sin marcador AM explícito → probar la versión PM de
+    ///      HOY ("remedios a las 8" a las 14h → hoy 20:00).
+    ///   2. Si la PM también pasó (o había AM explícito / hora ≥ 12) →
+    ///      MAÑANA a esa misma hora ("remedios a las 8" a las 21h →
+    ///      mañana 08:00).
+    ///
+    /// Con día explícito ("hoy", "mañana", weekday) no se toca nada — se
+    /// respeta lo que el usuario dijo aunque quede en el pasado (Mi Día lo
+    /// muestra como vencido, que es honesto).
+    ///
+    /// `now`/`calendar` son inyectables para tests deterministas.
+    static func resolveNonPastStartTime(
+        startTime: Date,
+        userText: String,
+        now: Date = Date(),
+        calendar: Calendar = Calendar.current
+    ) -> (startTime: Date, didRollForward: Bool) {
+        // ¿Realmente pasado? (con margen de gracia para el "recién ahora").
+        guard startTime < now.addingTimeInterval(-pastGraceInterval) else {
+            return (startTime, false)
+        }
+        guard !userAnchoredExplicitDay(in: userText) else {
+            return (startTime, false)
+        }
+        let hour = calendar.component(.hour, from: startTime)
+        let minute = calendar.component(.minute, from: startTime)
+
+        // Paso 1: upgrade AM → PM del MISMO día, solo si el usuario no
+        // dijo AM explícito, la frase no implica mañana-del-día (verbos de
+        // despertar / contexto escolar) y la versión PM todavía alcanza.
+        if (1...11).contains(hour),
+           !userGaveExplicitAmMarker(in: userText),
+           !impliesMorningContext(in: userText),
+           let pmCandidate = calendar.date(
+               bySettingHour: hour + 12, minute: minute, second: 0, of: startTime
+           ),
+           pmCandidate > now.addingTimeInterval(-pastGraceInterval) {
+            return (pmCandidate, true)
+        }
+
+        // Paso 2: mañana a la misma hora.
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: startTime),
+           let rolled = calendar.date(
+               bySettingHour: hour, minute: minute, second: 0, of: tomorrow
+           ) {
+            return (rolled, true)
+        }
+        return (startTime, false)
+    }
+
     // MARK: - Gates de hora explícita en `userText`
 
     /// True si el usuario mencionó explícitamente una **hora-fin** o

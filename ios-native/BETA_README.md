@@ -32,12 +32,8 @@ Marca cada uno cuando lo verifiques. Si algo falla, anota la frase exacta y la h
 - [ ] Deslizas el bloque a la izquierda y lo borras → confirma con toast.
 - [ ] Cierras la app completamente, la reabres, el evento borrado **no** vuelve.
 
-### Tareas
-- [ ] Creas una tarea: "comprar pan".
-- [ ] Aparece en la pestaña Tareas y en "Pendientes de hoy" de Mi Día.
-- [ ] La marcas como hecha (toque al círculo) → se tacha.
-- [ ] La eliminas (swipe o long-press) → desaparece.
-- [ ] Cierras y reabres → la tarea borrada no vuelve.
+### Tareas (deshabilitadas en esta beta — SOLO-EVENTOS)
+Las tareas están apagadas temporalmente: **todo se agenda como evento con hora**. Si le pides algo sin hora ("comprar pan"), Nova te pregunta "¿A qué hora lo agendo?" y con tu respuesta lo deja como bloque en Mi Día. No debe aparecer ninguna superficie de tareas ni mensajes tipo "Tarea agregada".
 
 ### Recordatorios / notificaciones locales
 - [ ] Creas un recordatorio para dentro de 2 minutos: "acuérdame llamar a mamá en 2 min".
@@ -106,7 +102,7 @@ Estas existen en el código pero **no se muestran** porque todavía no están li
 | **Continuar con Google** | Requiere el SDK GoogleSignIn-iOS + URL Scheme en Info.plist. Mientras eso no esté integrado, tocar el botón daba error. Solo OTP por email en beta. |
 | **Importar Google Calendar / Apple Calendar / .ics** | Aparece en Ajustes como "Próximamente" sin acción real. La sincronización con calendarios externos llega en una versión siguiente. |
 | **Abrir ubicación en Maps / Waze** | El campo "ubicación" guarda texto pero no abre apps externas. |
-| **Notificaciones push remotas (APNs)** | Solo locales (programadas en este iPhone). No hay servidor de push remoto. |
+| **Tareas** | Modo SOLO-EVENTOS temporal: la creación de tareas está apagada; Nova convierte todo en eventos con hora (te pregunta la hora si falta). |
 
 Si ves algo más que parezca "a medias" o "Próximamente", **no es bug, es ocultado a propósito** — confírmalo por mensaje y seguimos.
 
