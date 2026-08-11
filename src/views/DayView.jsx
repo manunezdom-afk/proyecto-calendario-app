@@ -4,6 +4,7 @@ import DayTimeGrid from '../components/DayTimeGrid'
 const QuickAddSheet = lazy(() => import('../components/QuickAddSheet'))
 import { resolveEventDate, todayISO } from '../utils/resolveEventDate'
 import { eventStatusAtNow } from '../utils/eventDuration'
+import { parseEventHour } from '../utils/time'
 
 const DAY_FULL = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const MONTHS_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -60,6 +61,21 @@ export default function DayView({ events = [], tasks = [], onAddEvent, onOpenTas
   const dayEvents = useMemo(
     () => (events || []).filter((e) => resolveEventDate(e) === activeDate),
     [events, activeDate],
+  )
+
+  // Separamos los eventos del día en "con hora" y "sin hora". El grid sólo
+  // sabe ubicar eventos con una hora parseable; los que no la tienen (un
+  // recordatorio "pagar la luz", un pendiente "llamar al dentista", o
+  // cualquier evento que Nova creó sin horario) se filtraban silenciosamente
+  // en DayTimeGrid y desaparecían de la vista. Aquí los rescatamos para
+  // mostrarlos en una sección visible junto a las tareas.
+  const timedEvents = useMemo(
+    () => dayEvents.filter((e) => parseEventHour(e.time) != null),
+    [dayEvents],
+  )
+  const untimedEvents = useMemo(
+    () => dayEvents.filter((e) => parseEventHour(e.time) == null),
+    [dayEvents],
   )
 
   // Tareas "agendadas" en la fecha seleccionada. El modelo de tareas no tiene
@@ -246,35 +262,43 @@ export default function DayView({ events = [], tasks = [], onAddEvent, onOpenTas
           </div>
         )}
 
-        <AnimatePresence>
-        {dayEvents.length > 0 && (
-          <motion.div
-            key="day-grid"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <DayTimeGrid
-              events={dayEvents}
-              referenceDate={now}
-              onAdd={() => setShowAdd(true)}
-              onOpenTask={onOpenTask}
-            />
-          </motion.div>
-        )}
-        </AnimatePresence>
-
-        {/* Lista compacta de tareas "hoy" — sólo aparece cuando activeDate es
-            hoy y hay tareas. No pretendemos reemplazar la vista de Tareas,
-            sólo dar contexto de lo que quedó por hacer en este día para que
-            el empty-state se calcule correctamente. */}
-        {dayTasks.length > 0 && (
+        {/* Sección "Sin hora" — pendientes del día que no van en la línea de
+            tiempo: eventos sin horario (recordatorios, "llamar al dentista")
+            y las tareas de hoy. Va ARRIBA del grid para que quede a la vista:
+            son justo las cosas que antes se perdían porque el grid sólo sabe
+            ubicar eventos con hora. */}
+        {(untimedEvents.length > 0 || dayTasks.length > 0) && (
           <section className="space-y-2">
-            <h2 className="text-sm font-bold text-outline uppercase tracking-wide">
-              Tareas de hoy
+            <h2 className="text-sm font-bold text-outline uppercase tracking-wide flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[16px]">checklist</span>
+              Sin hora
             </h2>
             <ul className="space-y-1.5">
+              {untimedEvents.map((ev) => {
+                const isPast = eventStatusAtNow(ev, now) === 'past'
+                return (
+                  <li key={ev.id}>
+                    <button
+                      type="button"
+                      onClick={() => onOpenTask?.(ev)}
+                      className={`w-full flex items-start gap-2 text-left bg-surface-container-lowest hover:bg-surface-container rounded-lg px-3 py-2 border-l-2 transition-colors active:scale-[0.99] ${
+                        isPast ? 'border-outline-variant opacity-60' : 'border-primary'
+                      }`}
+                    >
+                      <span
+                        className={`material-symbols-outlined text-[16px] mt-0.5 flex-shrink-0 ${
+                          isPast ? 'text-outline/60' : 'text-primary'
+                        }`}
+                      >
+                        schedule
+                      </span>
+                      <span className={`text-[13px] min-w-0 flex-1 ${isPast ? 'line-through text-outline' : 'text-on-surface'}`}>
+                        {ev.title}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
               {dayTasks.map((t) => (
                 <li
                   key={t.id}
@@ -298,6 +322,25 @@ export default function DayView({ events = [], tasks = [], onAddEvent, onOpenTas
             </ul>
           </section>
         )}
+
+        <AnimatePresence>
+        {timedEvents.length > 0 && (
+          <motion.div
+            key="day-grid"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <DayTimeGrid
+              events={timedEvents}
+              referenceDate={now}
+              onAdd={() => setShowAdd(true)}
+              onOpenTask={onOpenTask}
+            />
+          </motion.div>
+        )}
+        </AnimatePresence>
 
         {showAdd && (
           <Suspense fallback={null}>
