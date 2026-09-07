@@ -1,3 +1,9 @@
+# ARCHIVADO — Ficha anterior de App Store
+
+Este material corresponde a versiones anteriores y contiene funciones, rutas y datos que ya no describen la app actual. No usar como texto de publicación. La fuente vigente es [Preparación de release — Focus 2.0](focus-2/RELEASE.md).
+
+---
+
 # Ficha de App Store — Focus
 
 Texto listo para pegar en App Store Connect cuando crees la app. Todo está en español neutral (la regla del proyecto). Si quieres versión en inglés también, traduce estas mismas piezas.

@@ -1,3 +1,9 @@
+# HISTÓRICO — QA de Capacitor
+
+Este procedimiento pertenece al wrapper anterior. No ejecutarlo para validar la app nativa actual. Usa [Preparación de release — Focus 2.0](docs/focus-2/RELEASE.md#evidencia-y-validación-local) y el [registro de la reconstrucción](docs/focus-2/README.md).
+
+---
+
 # iOS Real QA — Cómo asegurar que Xcode corre la build nueva
 
 Este documento describe el flujo exacto para que cuando pruebes Focus en
