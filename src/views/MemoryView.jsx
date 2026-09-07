@@ -56,7 +56,7 @@ function MemoryCard({ memory, onPin, onEdit, onDelete }) {
           {lowConfidence && (
             <span
               className="text-[9.5px] font-bold uppercase tracking-wide rounded-full px-1.5 py-0.5 bg-rose-50 text-rose-600"
-              title="Nova no está segura — revísalo"
+              title="Hilante tiene dudas — revísalo"
             >
               Dudoso
             </span>
@@ -171,7 +171,7 @@ function EditDialog({ memory, onClose, onSave }) {
           <textarea
             value={content}
             onChange={e => setContent(e.target.value)}
-            placeholder="Qué debe recordar Nova..."
+            placeholder="Qué debe recordar Hilante..."
             rows={3}
             className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-[13px] resize-none focus:outline-none focus:border-slate-400"
           />
@@ -239,9 +239,9 @@ export default function MemoryView() {
     <div className="max-w-lg lg:max-w-2xl mx-auto px-4 py-6 space-y-4 pb-40">
       <div className="px-1 mb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-extrabold text-slate-900">Lo que Nova sabe de ti</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">Lo que Hilante sabe de ti</h1>
           <p className="text-[12.5px] text-slate-500 mt-1">
-            Memorias que Nova aprende en tus conversaciones para personalizar sus respuestas.
+            Memorias que Hilante aprende en tus conversaciones para personalizar sus respuestas.
           </p>
         </div>
         <button
@@ -312,7 +312,7 @@ export default function MemoryView() {
                 className="w-full max-w-[360px] rounded-3xl bg-white p-6 shadow-2xl text-center pointer-events-auto"
               >
                 <p className="text-[15px] font-bold text-slate-900 mb-2">¿Eliminar esta memoria?</p>
-                <p className="text-[12.5px] text-slate-500 mb-5">Nova dejará de recordarlo en futuras conversaciones.</p>
+                <p className="text-[12.5px] text-slate-500 mb-5">Hilante dejará de recordarlo en futuras conversaciones.</p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setDeletingId(null)}
@@ -368,7 +368,7 @@ function EmptyState({ onAdd, hasAny }) {
         </span>
       </div>
       <p className="text-[15px] font-bold text-slate-800 mb-1.5">
-        {hasAny ? 'Sin memorias en esta categoría' : 'Nova aún no sabe nada sobre ti'}
+        {hasAny ? 'Sin memorias en esta categoría' : 'Hilante aún no sabe nada sobre ti'}
       </p>
       <p className="text-[12.5px] text-slate-500 max-w-[320px] mx-auto mb-5">
         {hasAny

@@ -974,7 +974,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
               </h2>
               {isDesktop && (
                 <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-outline/75">
-                  Captura cualquier cosa en lenguaje natural. Nova lo convierte en agenda, tareas y recordatorios con deshacer siempre visible.
+                  Captura cualquier cosa en lenguaje natural. Hilante lo convierte en agenda, tareas y recordatorios con deshacer siempre visible.
                 </p>
               )}
             </header>
@@ -1342,11 +1342,11 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                           <p className={`${isDesktop ? 'mt-2 max-w-xl text-sm leading-relaxed text-outline/75' : 'text-outline/70 text-xs leading-relaxed'}`}>
                         {isFirstUse
                           ? isDesktop
-                            ? 'Agrega un evento o pídele a Nova que arme tu agenda.'
-                            : '¿Por dónde empezamos? Toca un ejemplo o escríbele a Nova.'
+                            ? 'Agrega un evento o pídele a Hilante que arme tu agenda.'
+                            : '¿Por dónde empezamos? Toca un ejemplo o escríbele a Hilante.'
                           : pendingTotal > 0
                           ? `Tienes ${pendingTotal} tarea${pendingTotal !== 1 ? 's' : ''} pendiente${pendingTotal !== 1 ? 's' : ''}. Buen momento para avanzar una.`
-                          : 'Agrega un evento o pídele a Nova que arme tu agenda.'}
+                          : 'Agrega un evento o pídele a Hilante que arme tu agenda.'}
                           </p>
                           {isDesktop && (
                             <button
@@ -1355,7 +1355,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                               className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-slate-950 px-5 py-2.5 text-sm font-bold text-white shadow-[0_18px_42px_rgba(15,23,42,0.22)] transition-transform hover:scale-[1.01] active:scale-[0.98]"
                             >
                               <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
-                              Planificar mi día con Nova
+                              Planificar mi día con Hilante
                             </button>
                           )}
                         </div>
@@ -1486,7 +1486,7 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                   <div className="relative">
                     <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/10 bg-primary/5 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-primary">
                       <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>psychology</span>
-                      Nova en tu día
+                      Hilante en tu día
                     </div>
                     <h3 className="font-headline text-2xl font-semibold leading-tight tracking-tight text-slate-950">
                       No es solo guardar eventos. Es quitarte decisiones pequeñas.
@@ -1699,14 +1699,14 @@ export default function PlannerView({ onAddEvent, onEditEvent, onDeleteEvent, on
                     calendar_today
                   </span>
                   <p className="text-sm font-semibold text-outline">Tu día está vacío.</p>
-                  <p className="text-xs text-outline/60 leading-relaxed">Pídele a Nova que lo arme.</p>
+                  <p className="text-xs text-outline/60 leading-relaxed">Pídele a Hilante que lo arme.</p>
                   {onOpenAssistant && (
                     <button
                       onClick={onOpenAssistant}
                       className="mx-auto flex items-center gap-1.5 text-xs font-bold text-white bg-primary px-4 py-2 rounded-full shadow-lg shadow-primary/20 transition-transform active:scale-95"
                     >
                       <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
-                      Hablar con Nova
+                      Hablar con Hilante
                     </button>
                   )}
                 </div>

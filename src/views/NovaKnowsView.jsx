@@ -161,7 +161,7 @@ export default function NovaKnowsView({ onBack }) {
   }, [user?.id, profile])
 
   const handleClear = useCallback(async () => {
-    if (!confirm('¿Borrar todo lo que Nova aprendió de ti? Esto borra el historial de señales y el modelo. No afecta tus eventos ni tareas.')) return
+    if (!confirm('¿Borrar todo lo que Hilante aprendió de ti? Esto borra el historial de señales y el modelo. No afecta tus eventos ni tareas.')) return
     await clearAllSignals()
     setModel(null)
     setJustCleared(true)
@@ -190,10 +190,10 @@ export default function NovaKnowsView({ onBack }) {
           </button>
         )}
         <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 font-headline">
-          Lo que Nova sabe de ti
+          Lo que Hilante sabe de ti
         </h1>
         <p className="text-[13.5px] text-slate-500 mt-1 leading-snug">
-          Un resumen transparente de los patrones que Nova aprendió de tu uso.
+          Un resumen transparente de los patrones que Hilante aprendió de tu uso.
           No es mágico — son tus datos, analizados.
         </p>
       </div>
@@ -210,7 +210,7 @@ export default function NovaKnowsView({ onBack }) {
             </span>
           </div>
           <p className="text-[15px] font-bold text-slate-900">
-            {justCleared ? '¡Listo! Nova ya no recuerda nada.' : 'Nova todavía no tiene suficientes datos'}
+            {justCleared ? '¡Listo! Hilante ya no recuerda nada.' : 'Hilante todavía no tiene suficientes datos'}
           </p>
           <p className="text-[13px] text-slate-500 mt-2 leading-snug max-w-sm mx-auto">
             {justCleared
@@ -244,7 +244,7 @@ export default function NovaKnowsView({ onBack }) {
               hint={model.approval_rate != null ? `${Math.round(model.approval_rate * 100)}% tasa` : null}
             />
             <StatTile
-              label="Con Nova"
+              label="Con Hilante"
               value={model.nova_daily_avg ? `${model.nova_daily_avg}/día` : '—'}
               hint="mensajes promedio"
             />

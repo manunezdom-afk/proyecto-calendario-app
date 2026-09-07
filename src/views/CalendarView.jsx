@@ -700,7 +700,7 @@ export default function CalendarView({ events, tasks = [], onAddEvent, onDeleteE
                   <p className="text-[12.5px] text-outline mt-1 max-w-[280px] mx-auto">
                     {activeDayISO === todayISOStr
                       ? 'Bloquea tu atención, agenda algo o trae tu agenda externa.'
-                      : 'Agrega un evento o pide a Nova que planifique este día.'}
+                      : 'Agrega un evento o pide a Hilante que planifique este día.'}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2 justify-center">

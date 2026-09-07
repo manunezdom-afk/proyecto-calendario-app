@@ -197,7 +197,7 @@ function DemoSuggestionCard({ onApprove, onEdit, onDismiss }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p className="font-nova text-[14px] font-semibold leading-snug text-slate-800">
-              Ejemplo de propuesta de Nova
+              Ejemplo de propuesta de Hilante
             </p>
             <span className="mt-0.5 whitespace-nowrap rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 flex-shrink-0">
               Ejemplo
@@ -205,7 +205,7 @@ function DemoSuggestionCard({ onApprove, onEdit, onDismiss }) {
           </div>
 
           <p className="mt-1.5 text-[12.5px] leading-snug text-slate-600">
-            Nova propone reservar mañana de 9:00 a 11:00 para trabajar en lo importante porque tu mañana está libre.
+            Hilante propone reservar mañana de 9:00 a 11:00 para trabajar en lo importante porque tu mañana está libre.
           </p>
 
           <div className="mt-3 flex items-center justify-end gap-1.5">
@@ -301,7 +301,7 @@ export default function SuggestionsInbox({
                 </div>
                 <div>
                   <h2 className="text-[15px] font-semibold text-slate-900">
-                    Bandeja de Nova
+                    Bandeja de Hilante
                   </h2>
                   <p className="text-[11px] text-slate-500">
                     {pending.length > 0
@@ -329,10 +329,10 @@ export default function SuggestionsInbox({
                     </span>
                   </div>
                   <p className="text-center text-[14px] font-semibold text-slate-700">
-                    Aquí caen las propuestas de Nova
+                    Aquí caen las propuestas de Hilante
                   </p>
                   <p className="mt-1 max-w-[280px] text-center text-[12.5px] leading-relaxed text-slate-500">
-                    Cuando Nova detecta un conflicto o espacio que no puede resolver sola, manda una propuesta aquí para que tú decidas.
+                    Cuando Hilante detecta un conflicto o espacio que no puede resolver, manda una propuesta aquí para que tú decidas.
                   </p>
                   {!demoDismissed && (
                     <div className="mt-5 w-full">
@@ -399,7 +399,7 @@ export default function SuggestionsInbox({
             {/* Footer con info */}
             <footer className="border-t border-slate-200 bg-white px-5 py-3">
               <p className="text-[11px] leading-relaxed text-slate-500">
-                Nova nunca cambia tu calendario sin tu confirmación. Revisa cada propuesta antes de aplicarla.
+                Hilante nunca cambia tu calendario sin tu confirmación. Revisa cada propuesta antes de aplicarla.
               </p>
             </footer>
           </motion.aside>

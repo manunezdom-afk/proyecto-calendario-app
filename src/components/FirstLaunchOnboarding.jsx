@@ -200,7 +200,7 @@ function SlideIllustrationNova() {
           }}
         >
           <div className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-white/40">
-            Nova propone
+            Hilante propone
           </div>
           <div className="text-[12.5px] leading-snug text-white/90">
             Tu reunión pisa el evento de las 11. ¿La muevo a las 15?
@@ -282,7 +282,7 @@ const SLIDES = [
     illustration: <SlideIllustrationHero />,
     eyebrow: 'Bienvenido',
     title: 'Focus es tu día, con una IA a tu lado.',
-    body: 'Nova ve tu calendario, te ayuda a organizarlo y crea al momento. Cualquier cambio lo puedes deshacer en un toque.',
+    body: 'Hilante ve tu calendario, te ayuda a organizarlo y crea al momento. Cualquier cambio lo puedes deshacer en un toque.',
   },
   {
     id: 'planner',
@@ -296,21 +296,21 @@ const SLIDES = [
     illustration: <SlideIllustrationTasksEvents />,
     eyebrow: 'Todo junto',
     title: 'Tareas y eventos, sin apps aparte.',
-    body: 'Lo que quieres hacer y el tiempo para hacerlo, en el mismo lugar. Nova también te recuerda los dos.',
+    body: 'Lo que quieres hacer y el tiempo para hacerlo, en el mismo lugar. Hilante también te recuerda los dos.',
   },
   {
     id: 'nova',
     illustration: <SlideIllustrationNova />,
-    eyebrow: 'Nova',
+    eyebrow: 'Hilante',
     title: 'Actúa rápido. Tú siempre mandas.',
-    body: 'Nova crea eventos, tareas y bloques al instante. Cada acción trae un "Deshacer" visible y puedes editarlo después sin perder ritmo.',
+    body: 'Hilante crea eventos, tareas y bloques al instante. Cada acción trae un "Deshacer" visible y puedes editarlo después sin perder ritmo.',
   },
   {
     id: 'start',
     illustration: <SlideIllustrationStart />,
     eyebrow: 'Listo',
     title: 'Armamos tu primer día.',
-    body: 'Añade una tarea o evento, o pídele a Nova que organice tu día. Tu día arranca aquí.',
+    body: 'Añade una tarea o evento, o pídele a Hilante que organice tu día. Tu día arranca aquí.',
     cta: 'Empezar',
   },
 ]

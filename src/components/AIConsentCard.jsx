@@ -23,7 +23,7 @@ export default function AIConsentCard({ onAccept, onCancel }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-bold text-on-surface">
-            Nova usa inteligencia artificial externa
+            Hilante usa inteligencia artificial externa
           </p>
           <p className="mt-0.5 text-[12px] leading-snug text-outline">
             Para responder, tu mensaje y el contexto de tu agenda (eventos, tareas

@@ -142,8 +142,8 @@ async function callFocusAssistant({ message, events, tasks, memories, history })
     const friendly = code === 'quota_exceeded' && data?.message
       ? data.message
       : {
-          auth_required:       'Inicia sesión para hablar con Nova.',
-          quota_exceeded:      'Llegaste al límite diario de mensajes con Nova. Vuelve mañana.',
+          auth_required:       'Inicia sesión para hablar con Hilante.',
+          quota_exceeded:      'Llegaste al límite diario de mensajes con Hilante. Vuelve mañana.',
           rate_limit:          'Muchos mensajes seguidos. Espera unos segundos.',
           upstream_rate_limit: 'Muchos mensajes seguidos. Espera unos segundos.',
           upstream_overloaded: 'El servicio está sobrecargado. Reintenta.',
@@ -194,7 +194,7 @@ export default function FocusBar({
   // cada 4s entre ejemplos conversacionales. Se detiene al enfocar/escuchar.
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const PLACEHOLDER_EXAMPLES = [
-    'Habla con Nova…',
+    'Habla con Hilante…',
     'Ej: "Agenda dentista el viernes a las 10"',
     'Ej: "Bloquea 90 min para estudiar mañana"',
     'Ej: "Mueve mi reunión a las 4"',

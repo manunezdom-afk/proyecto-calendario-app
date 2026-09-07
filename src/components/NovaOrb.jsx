@@ -12,7 +12,7 @@ export default function NovaOrb({ size = 72, pulse = false, ambient = true, onCl
     <button
       type="button"
       onClick={onClick}
-      aria-label="Nova"
+      aria-label="Hilante"
       className={`relative inline-flex items-center justify-center ${onClick ? 'cursor-pointer' : 'cursor-default'} ${className}`}
       style={{ width: s, height: s, background: 'transparent', border: 0, padding: 0, ...style }}
     >

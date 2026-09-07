@@ -94,8 +94,8 @@ export default function TopAppBar({
         {onInboxClick && (
           <button
             onClick={onInboxClick}
-            aria-label="Bandeja de Nova"
-            title="Bandeja de Nova"
+            aria-label="Bandeja de Hilante"
+            title="Bandeja de Hilante"
             className="relative min-h-[44px] min-w-[44px] flex items-center justify-center gap-1.5 px-2.5 lg:px-3 rounded-full text-slate-400 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 duration-100"
           >
             <span

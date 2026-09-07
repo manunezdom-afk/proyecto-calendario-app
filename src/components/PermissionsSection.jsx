@@ -338,7 +338,7 @@ export default function PermissionsSection() {
   const micUsesKeyboardDictation = !hasWorkingSpeechRecognition() && isIOSSafari()
   const micDescription = micUsesKeyboardDictation
     ? 'En iPhone el dictado se hace con el teclado del sistema'
-    : 'Dictado con Nova y comandos de voz'
+    : 'Dictado con Hilante y comandos de voz'
 
   return (
     <section className="bg-white rounded-[20px] border border-slate-100 shadow-sm overflow-hidden">
@@ -371,7 +371,7 @@ export default function PermissionsSection() {
       <PermissionRow
         icon="photo_camera"
         label="Cámara"
-        description="Foto de eventos y capturas para Nova"
+        description="Foto de eventos y capturas para Hilante"
         state={cam}
         onRequest={handleCam}
         kind="camera"

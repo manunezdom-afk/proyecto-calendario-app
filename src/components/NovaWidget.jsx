@@ -756,7 +756,7 @@ function NovaWidget({
               no_api_key:           'Servicio no disponible en este momento.',
               message_too_long:     'Mensaje demasiado largo.',
               llm_bad_output:       'No pude procesarlo. Repite por favor.',
-              auth_required:        'Inicia sesión para hablar con Nova.',
+              auth_required:        'Inicia sesión para hablar con Hilante.',
               quota_exceeded:       'Llegaste al límite diario de mensajes. Vuelve mañana.',
             }[code] || data?.message || `Error ${res.status}`)
         const err = new Error(statusMsg)
@@ -872,7 +872,7 @@ function NovaWidget({
           >
             auto_awesome
           </motion.span>
-          <span className="text-[13px] font-semibold text-slate-700">Nova</span>
+          <span className="text-[13px] font-semibold text-slate-700">Hilante</span>
         </div>
         <div className="flex items-center gap-1">
           {isDesktop && (
@@ -880,7 +880,7 @@ function NovaWidget({
           )}
           <button
             onClick={() => setIsOpen(false)}
-            aria-label="Cerrar Nova"
+            aria-label="Cerrar Hilante"
             className={`flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors ${isDesktop ? 'w-6 h-6' : 'w-10 h-10'}`}
           >
             <span className={`material-symbols-outlined ${isDesktop ? 'text-[13px]' : 'text-[18px]'}`}>close</span>
@@ -1065,7 +1065,7 @@ function NovaWidget({
           disabled={isLoading || isListening || isAnalyzingPhoto}
           className={`flex-shrink-0 flex items-center justify-center rounded-full text-slate-400 hover:text-blue-500 hover:bg-blue-50 active:scale-90 transition-all disabled:opacity-30 ${isDesktop ? 'w-8 h-8' : 'w-11 h-11'}`}
           style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
-          aria-label="Enviar foto a Nova"
+          aria-label="Enviar foto a Hilante"
         >
           <motion.span
             className={`material-symbols-outlined ${isDesktop ? 'text-[17px]' : 'text-[20px]'}`}
@@ -1174,7 +1174,7 @@ function NovaWidget({
                   background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)',
                   boxShadow: '0 8px 24px rgba(59,130,246,0.35), 0 2px 8px rgba(0,0,0,0.1)',
                 }}
-                aria-label="Abrir Nova"
+                aria-label="Abrir Hilante"
               >
                 <motion.span
                   className="material-symbols-outlined text-[17px]"
@@ -1184,7 +1184,7 @@ function NovaWidget({
                 >
                   auto_awesome
                 </motion.span>
-                Nova
+                Hilante
               </button>
             </div>
           </motion.div>
@@ -1241,7 +1241,7 @@ function NovaWidget({
                 paddingBottom: 'env(safe-area-inset-bottom, 0px)',
               }}
               role="dialog"
-              aria-label="Nova"
+              aria-label="Hilante"
             >
               {/* Drag handle */}
               <div className="flex justify-center pt-2 pb-1 flex-shrink-0">

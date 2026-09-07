@@ -246,7 +246,7 @@ function PhaseTomorrow({ tomorrowEvents, tasks, onClose }) {
               calendar_today
             </span>
             <p className="text-sm text-slate-400">Mañana está despejado.</p>
-            <p className="text-xs text-slate-300">Usa Nova para armar el skeleton.</p>
+            <p className="text-xs text-slate-300">Usa Hilante para armar el skeleton.</p>
           </div>
         )}
       </div>

@@ -1,3 +1,5 @@
+import { ASSISTANT_NAME } from './assistantBrand.js'
+
 // Configuración centralizada de planes y límites de uso.
 //
 // Por qué archivo y no tabla en DB:
@@ -127,9 +129,9 @@ const LIMITS = Object.freeze({
 export const MESSAGES = Object.freeze({
   [PLANS.FREE]: {
     [ACTION_TYPES.NOVA_MESSAGE]:
-      'Llegaste al límite diario de Nova en el plan gratis. Puedes seguir usando tareas, eventos y notificaciones manualmente. Tu límite se reinicia mañana.',
+      `Llegaste al límite diario de ${ASSISTANT_NAME} en el plan gratis. Puedes seguir usando tareas, eventos y notificaciones manualmente. Tu límite se reinicia mañana.`,
     [ACTION_TYPES.NOVA_SMART_ACTION]:
-      'Llegaste al límite diario de acciones inteligentes de Nova. Puedes seguir conversando, pero las acciones automáticas se reanudan mañana.',
+      `Llegaste al límite diario de acciones inteligentes de ${ASSISTANT_NAME}. Puedes seguir conversando, pero las acciones automáticas se reanudan mañana.`,
     [ACTION_TYPES.ORGANIZE_DAY]:
       'Ya organizaste tu día las veces que el plan gratis permite hoy. Puedes hacerlo de nuevo mañana.',
     [ACTION_TYPES.WEEKLY_PLANNING]:
@@ -139,7 +141,7 @@ export const MESSAGES = Object.freeze({
     [ACTION_TYPES.PHOTO_ANALYSIS]:
       'Llegaste al límite diario de análisis de fotos en el plan gratis. Vuelve mañana o agrega los eventos manualmente.',
     [ACTION_TYPES.NOVA_PREMIUM_MESSAGE]:
-      'Llegaste al límite diario de respuestas avanzadas de Nova en el plan gratis. Las respuestas normales siguen disponibles.',
+      `Llegaste al límite diario de respuestas avanzadas de ${ASSISTANT_NAME} en el plan gratis. Las respuestas normales siguen disponibles.`,
   },
   [PLANS.EARLY_ACCESS]: {
     [ACTION_TYPES.NOVA_MESSAGE]:
@@ -155,7 +157,7 @@ export const MESSAGES = Object.freeze({
     [ACTION_TYPES.PHOTO_ANALYSIS]:
       'Llegaste al límite de análisis de fotos en Early Access por hoy. Vuelve mañana.',
     [ACTION_TYPES.NOVA_PREMIUM_MESSAGE]:
-      'Llegaste al límite ampliado de respuestas avanzadas de Nova en Early Access. Las respuestas normales siguen disponibles.',
+      `Llegaste al límite ampliado de respuestas avanzadas de ${ASSISTANT_NAME} en Early Access. Las respuestas normales siguen disponibles.`,
   },
 })
 
@@ -547,7 +549,7 @@ function budgetLimitsFromEnv() {
  */
 const unavailableBudget = () => ({
   ok: false, unavailable: true, reason: 'budget_unavailable', period: 'unavailable',
-  message: 'Nova no está disponible por un momento. Puedes crear tus pendientes manualmente y volver a intentarlo.',
+  message: `${ASSISTANT_NAME} no está disponible por un momento. Puedes crear tus pendientes manualmente y volver a intentarlo.`,
 })
 
 export async function checkGlobalBudget(admin) {
@@ -603,10 +605,10 @@ export async function checkGlobalBudget(admin) {
     if (![dailySpent, monthlySpent].every(n => Number.isFinite(n) && n >= 0)) return unavailableBudget()
     const result = daily != null && dailySpent >= daily
       ? { ok: false, period: 'daily', spent: round6(dailySpent), budget: daily,
-          message: 'Llegaste al límite de Nova por hoy. Puedes seguir creando tus pendientes manualmente.' }
+          message: `Llegaste al límite de ${ASSISTANT_NAME} por hoy. Puedes seguir creando tus pendientes manualmente.` }
       : monthly != null && monthlySpent >= monthly
         ? { ok: false, period: 'monthly', spent: round6(monthlySpent), budget: monthly,
-            message: 'Llegaste al límite de Nova de este periodo. Puedes seguir creando tus pendientes manualmente.' }
+            message: `Llegaste al límite de ${ASSISTANT_NAME} de este periodo. Puedes seguir creando tus pendientes manualmente.` }
         : { ok: true, dailySpent: round6(dailySpent), monthlySpent: round6(monthlySpent) }
     _budgetCache = { at: now, key: cacheKey, result }
     return result

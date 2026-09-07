@@ -1,4 +1,5 @@
 import { sanitizeNovaRequest, novaRequestId, providerFallbackEnabled, runNovaAttempt } from './_lib/novaSafety.js'
+import { ASSISTANT_NAME } from './_lib/assistantBrand.js'
 import Anthropic from '@anthropic-ai/sdk'
 import crypto from 'node:crypto'
 import { rateLimited, clientIp } from './_lib/rateLimit.js'
@@ -309,7 +310,7 @@ export default async function handler(req, res) {
   if (!userId) {
     return res.status(401).json({
       error: 'auth_required',
-      message: 'Inicia sesión para hablar con Nova.',
+      message: `Inicia sesión para hablar con ${ASSISTANT_NAME}.`,
     })
   }
 
@@ -341,7 +342,7 @@ export default async function handler(req, res) {
   const messageCheck = await checkLimit(admin, userId, plan, ACTION_TYPES.NOVA_MESSAGE)
   if (['db_error', 'table_missing'].includes(messageCheck.reason)) {
     return res.status(503).json({ error: 'usage_unavailable', requestId: reqId,
-      message: 'Nova no está disponible por un momento. Puedes crear tus pendientes manualmente.' })
+      message: `${ASSISTANT_NAME} no está disponible por un momento. Puedes crear tus pendientes manualmente.` })
   }
   if (!messageCheck.ok) {
     return res.status(429).json({
@@ -484,7 +485,7 @@ export default async function handler(req, res) {
     return res.status(503).json({
       error: 'no_api_key',
       requestId: reqId,
-      reply: 'Nova está en pausa por configuración. Puedes seguir creando eventos a mano.',
+      reply: `${ASSISTANT_NAME} está en pausa por configuración. Puedes seguir creando eventos a mano.`,
       actions: [],
     })
   }
@@ -611,7 +612,7 @@ export default async function handler(req, res) {
         }
         if (status === 402) {
           // 402 = sin saldo en DeepSeek. Mensaje honesto para el dueño.
-          return res.status(503).json({ error: 'deepseek_no_balance', requestId: reqId, reply: 'Nova está descansando (sin saldo del proveedor). Puedes seguir creando eventos a mano.', actions: [] })
+          return res.status(503).json({ error: 'deepseek_no_balance', requestId: reqId, reply: `${ASSISTANT_NAME} está descansando (sin saldo del proveedor). Puedes seguir creando eventos a mano.`, actions: [] })
         }
         if (status === 429) {
           return res.status(429).json({ error: 'upstream_rate_limit', requestId: reqId, message: 'Demasiadas solicitudes al proveedor. Espera un momento.' })
@@ -619,7 +620,7 @@ export default async function handler(req, res) {
         return res.status(502).json({
           error: 'upstream_error',
           requestId: reqId,
-          reply: 'Tuve un problema con Nova. Vuelve a intentarlo.',
+          reply: `Tuve un problema con ${ASSISTANT_NAME}. Vuelve a intentarlo.`,
           actions: [],
         })
       }
@@ -792,7 +793,7 @@ export default async function handler(req, res) {
         return res.status(502).json({
           error: 'upstream_error',
           requestId: reqId,
-          reply: 'Tuve un problema con Nova. Vuelve a intentarlo.',
+          reply: `Tuve un problema con ${ASSISTANT_NAME}. Vuelve a intentarlo.`,
           actions: [],
         })
       }
@@ -1254,4 +1255,3 @@ export { detectVeryComplexInput as __detectVeryComplexInput }
 export { selectOpenAIModel as __selectOpenAIModel }
 export { escalateOpenAITier as __escalateOpenAITier }
 export { selectDeepSeekModel as __selectDeepSeekModel }
-

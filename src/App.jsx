@@ -80,7 +80,7 @@ const VIEW_LABELS = {
   settings: 'Ajustes',
   'task-detail': 'Detalle',
   memory: 'Memoria',
-  'nova-knows': 'Nova aprende',
+  'nova-knows': 'Hilante aprende',
 }
 
 function prefersReducedMotion() {
@@ -456,7 +456,7 @@ export default function App() {
     // cubre ese caso.
     const seedText = 'Reserva mañana de 9:00 a 11:00 para trabajar en lo importante'
     const seedContext = {
-      label: 'Editando propuesta de Nova',
+      label: 'Editando propuesta de Hilante',
       body: 'Ajusta esta propuesta antes de guardarla en tu calendario.',
     }
     try {
@@ -773,7 +773,7 @@ export default function App() {
     } else {
       setApprovalToast({
         id: `day-start-${Date.now()}`,
-        label: 'Día libre. Pídele a Nova un plan.',
+        label: 'Día libre. Pídele a Hilante un plan.',
       })
     }
 
@@ -1107,7 +1107,7 @@ export default function App() {
           delayMs={1400}
           liftAboveInstallCard={showInstallCard}
         >
-          Soy Nova. Agrego eventos, tareas y bloques al instante — y cada cambio trae un "Deshacer" visible. Háblame tocando el orbe.
+          Soy Hilante. Agrego eventos, tareas y bloques al instante — y cada cambio trae un "Deshacer" visible. Háblame tocando el orbe.
         </NovaHint>
       )}
       {!gatesBlocking && hasNovaEmptyHint && (

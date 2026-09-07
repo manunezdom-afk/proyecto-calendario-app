@@ -285,7 +285,7 @@ export default function CommandPalette({ isOpen, onClose, events = [], tasks = [
               )}
 
               {results.memories.length > 0 && (
-                <Section title="Memoria de Nova">
+                <Section title="Memoria de Hilante">
                   {results.memories.map((m, i) => {
                     const idx = results.actions.length + results.events.length + results.tasks.length + i
                     return (

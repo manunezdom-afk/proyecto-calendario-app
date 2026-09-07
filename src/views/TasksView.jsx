@@ -114,7 +114,7 @@ export default function TasksView({ tasks = [], events = [], addTask = () => {},
                 <span className="material-symbols-outlined text-[15px]" style={{ fontVariationSettings: "'FILL' 1" }}>
                   auto_awesome
                 </span>
-                Nova, organízame
+                Hilante, organízame
               </button>
             )}
           </div>

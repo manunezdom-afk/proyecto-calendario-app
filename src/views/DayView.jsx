@@ -179,7 +179,7 @@ export default function DayView({ events = [], tasks = [], onAddEvent, onOpenTas
                 </p>
                 <p className="text-[12px] text-outline mt-0.5 leading-snug">
                   {isToday
-                    ? 'Dile a Nova qué tienes hoy, o añade algo tú mismo.'
+                    ? 'Dile a Hilante qué tienes hoy, o añade algo tú mismo.'
                     : 'Planifica con anticipación para este día.'}
                 </p>
               </div>

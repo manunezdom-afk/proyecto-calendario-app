@@ -93,7 +93,7 @@ export default function MorningBrief({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
-            <span className="text-[10px] font-bold text-primary">Nova · Brief del día</span>
+            <span className="text-[10px] font-bold text-primary">Hilante · Brief del día</span>
           </div>
           <button
             onClick={handleDismiss}

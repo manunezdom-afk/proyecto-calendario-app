@@ -143,7 +143,7 @@ export default function NextWindowPanel({
 
       <div className="space-y-2">
         <p className="text-[10.5px] font-bold uppercase tracking-wider text-outline/70">
-          Nova sugiere meter
+          Hilante sugiere meter
         </p>
         {suggestedTasks.map((task) => (
           <div

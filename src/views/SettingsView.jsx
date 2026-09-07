@@ -614,18 +614,18 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
           </span>
           <p className="text-[12px] text-slate-500 leading-snug">
             Focus aprende tus patrones solo — cuándo completas tareas, qué
-            sugerencias aceptas, qué días rindes más. Revisa lo que Nova va
-            entendiendo en <b>Nova IA → Lo que Nova sabe de ti</b>.
+            sugerencias aceptas, qué días rindes más. Revisa lo que Hilante va
+            entendiendo en <b>Hilante IA → Lo que Hilante sabe de ti</b>.
           </p>
         </div>
       </SectionCard>
 
       {/* ── Nova IA ──────────────────────────────────────────────────────── */}
-      <SectionCard title="Nova IA">
+      <SectionCard title="Hilante IA">
         <Row
           icon="auto_awesome"
           label="Acción directa con Deshacer"
-          sub="Nova crea al momento y deja un botón de Deshacer tras cada cambio"
+          sub="Hilante crea al momento y deja un botón de Deshacer tras cada cambio"
         >
           <div className="w-10 h-6 rounded-full bg-primary flex items-center justify-end px-1 flex-shrink-0">
             <div className="w-4 h-4 rounded-full bg-white shadow-sm" />
@@ -633,7 +633,7 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
         </Row>
         <Row
           icon="insights"
-          label="Lo que Nova sabe de ti"
+          label="Lo que Hilante sabe de ti"
           sub="Patrones que aprendió de tu uso — días fuertes, tipos rechazados, categorías"
           onClick={onOpenNovaKnows}
         >
@@ -641,7 +641,7 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
         </Row>
         <Row
           icon="psychology"
-          label="Memorias de Nova"
+          label="Memorias de Hilante"
           sub={memoriesCount > 0
             ? `${memoriesCount} ${memoriesCount === 1 ? 'memoria guardada' : 'memorias guardadas'} — relaciones, metas, contextos`
             : 'Datos explícitos que te pido recordar (relaciones, metas, contextos)'}
@@ -656,7 +656,7 @@ export default function SettingsView({ onOpenImport, onOpenMemory, onOpenNovaKno
         </Row>
         <Row
           icon="tune"
-          label="Personalidad de Nova"
+          label="Personalidad de Hilante"
           sub={currentPersonality.description}
           onClick={() => setPersonalityPickerOpen((v) => !v)}
         >
@@ -859,7 +859,7 @@ function DeleteAccountRow({ onSignOut }) {
           <div className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
             <h2 id="delete-account-title" className="text-[16px] font-bold text-slate-900">Eliminar tu cuenta</h2>
             <p className="mt-2 text-[13px] text-slate-600 leading-snug">
-              Borraremos definitivamente tu perfil, eventos, tareas, memorias de Nova y suscripciones a notificaciones. <b>Esta acción es irreversible.</b>
+              Borraremos definitivamente tu perfil, eventos, tareas, memorias de Hilante y suscripciones a notificaciones. <b>Esta acción es irreversible.</b>
             </p>
             <p className="mt-3 text-[12px] text-slate-500">
               Para confirmar, escribe <b>DELETE</b> abajo.
