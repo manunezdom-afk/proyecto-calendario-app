@@ -79,8 +79,11 @@ enum NovaActionValidator {
                     safe.append(action)
                 }
 
+            case .unsupported:
+                rejected.append((action, "Acción no disponible"))
+
             case .editEvent, .deleteEvent, .toggleTask, .deleteTask,
-                 .remember, .saveMemory, .forgetMemory, .unsupported:
+                 .remember, .saveMemory, .forgetMemory:
                 // Acciones de mantenimiento/edición + memoria — el riesgo es
                 // bajo, pasan tal cual. saveMemory/forgetMemory (V2 2026-05-27)
                 // van directo al NovaMemoryStore sin tocar calendario, así que
@@ -103,6 +106,18 @@ enum NovaActionValidator {
         )
     }
 
+    static func isDestructive(_ action: BackendAction) -> Bool {
+        switch action {
+        case .deleteEvent, .deleteTask, .forgetMemory: return true
+        default: return false
+        }
+    }
+
+    static func requiresLocationTrigger(_ text: String) -> Bool {
+        text.range(of: #"(?i)(cuando|al)\s+(lleg(?:ue|ues|ar)|sal(?:ga|gas|ir))\b|al volver a casa"#,
+                   options: .regularExpression) != nil
+    }
+
     // MARK: - Validaciones de eventos
 
     /// Devuelve la razón (legible) si el evento es "sospechoso" y debería
@@ -114,6 +129,12 @@ enum NovaActionValidator {
     /// que el cliente puede corregir sin involucrar al usuario.
     private static func risky(event: BackendEventCreate, userTextLower lower: String) -> String? {
         if let r = riskyEventTitle(event.title) { return r }
+        if let date = event.dateString, NovaTimeFormatter.parseISODate(date) == nil {
+            return "Fecha inválida"
+        }
+        if let time = event.timeString, !time.isEmpty, NovaTimeFormatter.parseHourMinute(time) == nil {
+            return "Hora inválida"
+        }
         return nil
     }
 
@@ -401,8 +422,11 @@ enum NovaActionValidator {
             switch action {
             case .addEvent, .addTask, .addRecurringEvent:
                 demoted.append(action)
+            case .unsupported:
+                demoted.append(action)
+
             case .editEvent, .deleteEvent, .toggleTask, .deleteTask,
-                 .remember, .saveMemory, .forgetMemory, .unsupported:
+                 .remember, .saveMemory, .forgetMemory:
                 safe.append(action)
             }
         }

@@ -17,62 +17,38 @@ struct CalendarioView: View {
     @EnvironmentObject private var store: FocusDataStore
     @EnvironmentObject private var toast: ToastManager
     @EnvironmentObject private var nav: NavigationCoordinator
-    @EnvironmentObject private var coachMarks: CoachMarksStore
     @Environment(\.openURL) private var openURL
     @State private var selectedDate: Date = Calendar.current.startOfDay(for: Date())
     @State private var viewMode: ViewMode = .week
     @State private var showCreateEvent = false
     @State private var editingEvent: FocusEvent? = nil
 
-    /// Eventos a mostrar para el día seleccionado.
-    /// - Si tiene eventos reales → los muestra (logueado o demo).
-    /// - Si NO tiene eventos Y está en modo demo (no logueado) → muestra
-    ///   ejemplos para ilustrar la app.
-    /// - Si NO tiene eventos Y está LOGUEADO → array vacío. La cuenta real
-    ///   NUNCA debe mostrar eventos demo falsos como si fueran del usuario.
     private var displayEvents: [FocusEvent] {
-        // Con eventos propios O del calendario del iPhone → los reales
-        // (eventsFor ya mergea ambos). Demo solo cuando no hay nada real.
-        if store.hasUserEvents || !store.systemEvents.isEmpty {
-            return store.eventsFor(date: selectedDate)
-        }
-        guard store.isInDemoMode else { return [] }
-        let cal = Calendar.current
-        return DemoDataProvider.shared.exampleWeekEvents()
-            .filter { cal.isDate($0.startTime, inSameDayAs: selectedDate) }
-            .sorted { $0.startTime < $1.startTime }
+        store.eventsFor(date: selectedDate).filter { $0.status != .cancelled }
     }
 
-    private var showingExamples: Bool {
-        !store.hasUserEvents && store.systemEvents.isEmpty && store.isInDemoMode
-    }
-
-    /// Cuenta eventos para un día dado (para el dot indicator).
     private func eventsCount(for date: Date) -> Int {
-        let cal = Calendar.current
-        if store.hasUserEvents || !store.systemEvents.isEmpty {
-            return store.eventsFor(date: date).count
-        }
-        guard store.isInDemoMode else { return 0 }
-        return DemoDataProvider.shared.exampleWeekEvents()
-            .filter { cal.isDate($0.startTime, inSameDayAs: date) }.count
+        store.eventsFor(date: date).filter { $0.status != .cancelled }.count
     }
 
     var body: some View {
         NavigationStack {
             ZStack {
-                // Theme 2.0 v4: mismo ambient canvas animado que Mi Día y
-                // Nova. Estado .idle — Calendario no tiene flow de IA
-                // activo. Coherencia visual cruzando tabs.
-                FocusAmbientCanvas(state: .idle)
+                Theme.Colors.background.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                        header
+                        if let error = store.localSaveError {
+                            Label(error, systemImage: "exclamationmark.circle")
+                                .foregroundStyle(Theme.Colors.danger)
+                                .padding(.horizontal, Theme.Spacing.xl)
+                                .accessibilityIdentifier("agenda.saveError")
+                        }
+                        Text(monthYearLabel)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                             .padding(.horizontal, Theme.Spacing.xl)
-                            // `.lg` consistente con Mi Día/Ajustes/Nova —
-                            // aire respecto al notch/Dynamic Island.
-                            .padding(.top, Theme.Spacing.lg)
+                            .padding(.top, Theme.Spacing.sm)
 
                         modePicker
                             .padding(.horizontal, Theme.Spacing.xl)
@@ -92,28 +68,40 @@ struct CalendarioView: View {
                     }
                 }
             }
+            .navigationTitle("Agenda")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showCreateEvent = true } label: {
+                        Image(systemName: "plus").frame(minWidth: 44, minHeight: 44)
+                    }
+                    .accessibilityLabel("Nuevo evento")
+                    .accessibilityIdentifier("event.new")
+                }
+            }
             .sheet(isPresented: $showCreateEvent) {
                 NuevoEventoSheet(initialDate: selectedDate) { newEvent in
-                    store.addEvent(newEvent)
-                    toast.success("Evento creado")
-                    selectedDate = Calendar.current.startOfDay(for: newEvent.startTime)
+                    let saved = store.addEvent(newEvent)
+                    if saved {
+                        toast.success("Evento creado")
+                        selectedDate = Calendar.current.startOfDay(for: newEvent.startTime)
+                    }
+                    return saved
                 }
                 .presentationDetents([.medium, .large])
                 .presentationBackground(Theme.Colors.background)
             }
             .sheet(item: $editingEvent) { event in
                 NuevoEventoSheet(editing: event) { updated in
-                    store.updateEvent(updated)
-                    toast.success("Evento actualizado")
-                    selectedDate = Calendar.current.startOfDay(for: updated.startTime)
+                    let saved = store.updateEvent(updated)
+                    if saved {
+                        toast.success("Evento actualizado")
+                        selectedDate = Calendar.current.startOfDay(for: updated.startTime)
+                    }
+                    return saved
                 }
                 .presentationDetents([.medium, .large])
                 .presentationBackground(Theme.Colors.background)
             }
-            // Coach mark de Calendario la primera vez que el usuario llega
-            // a esta tab. `.task(id: nav.selectedTab)` se redispara cada
-            // vez que el usuario cambia de tab — el guard interno asegura
-            // que solo presente cuando realmente entró acá.
             .task(id: nav.selectedTab) {
                 if nav.selectedTab == .calendario {
                     // Consumir una fecha pendiente (ej. usuario tocó el
@@ -127,8 +115,6 @@ struct CalendarioView: View {
                         }
                         nav.pendingCalendarDate = nil
                     }
-                    try? await Task.sleep(nanoseconds: 500_000_000)
-                    coachMarks.presentIfNeeded(.calendar)
                 }
             }
         }
@@ -137,38 +123,13 @@ struct CalendarioView: View {
     // MARK: - Mode picker
 
     private var modePicker: some View {
-        HStack(spacing: 0) {
-            ForEach(ViewMode.allCases) { mode in
-                modePickerButton(mode)
-            }
+        Picker("Vista de agenda", selection: $viewMode) {
+            ForEach(ViewMode.allCases) { Text($0.label).tag($0) }
         }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                .fill(Theme.Colors.surfaceHigh)
-        )
-    }
-
-    private func modePickerButton(_ mode: ViewMode) -> some View {
-        let isSelected = viewMode == mode
-        return Button {
-            HapticManager.shared.tick()
-            withAnimation(.easeInOut(duration: 0.20)) {
-                viewMode = mode
-            }
-        } label: {
-            Text(mode.label)
-                .font(Theme.Typography.subheadEmphasized)
-                .foregroundStyle(isSelected ? Theme.Colors.textPrimary : Theme.Colors.textTertiary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, Theme.Spacing.sm)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                        .fill(isSelected ? Theme.Colors.surface : Color.clear)
-                        .focusCardShadow()
-                )
-        }
-        .buttonStyle(.plain)
+        .pickerStyle(.segmented)
+        .frame(minHeight: 44)
+        .accessibilityIdentifier("agenda.mode")
+        .padding(.horizontal, 1)
     }
 
     // MARK: - Modes
@@ -220,50 +181,6 @@ struct CalendarioView: View {
 
     // MARK: - Header
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.md) {
-            VStack(alignment: .leading, spacing: 6) {
-                // Theme 2.0: meta-label en captionMono UPPERCASE (coherente
-                // con badges del timeline y headers de Mi Día).
-                Text(monthYearLabel)
-                    .font(Theme.Typography.captionMono)
-                    .tracking(Theme.Tracking.captionMono)
-                    .foregroundStyle(Theme.Colors.textTertiary)
-                    .textCase(.uppercase)
-                Text("Calendario")
-                    .font(Theme.Typography.displayHero)
-                    .tracking(Theme.Tracking.displayHero)
-                    .foregroundStyle(Theme.Colors.textPrimary)
-            }
-            Spacer()
-            addButton
-                .padding(.top, 8)
-        }
-    }
-
-    private var addButton: some View {
-        Button {
-            HapticManager.shared.tap()
-            showCreateEvent = true
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 38, height: 38)
-                // Theme 2.0: focusDeepGradient + sombra cobalto más intensa.
-                .background(
-                    Circle()
-                        .fill(Theme.Colors.focusDeepGradient)
-                        .shadow(color: Theme.Colors.focusAccent.opacity(0.40), radius: 14, x: 0, y: 5)
-                )
-                .overlay(
-                    Circle().strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Nuevo evento")
-    }
-
     private var monthYearLabel: String {
         DateFormatters.capitalizeFirst(DateFormatters.monthYear.string(from: selectedDate))
     }
@@ -289,8 +206,7 @@ struct CalendarioView: View {
         return DateFormatters.capitalizeFirst(DateFormatters.weekdayDay.string(from: selectedDate))
     }
 
-    /// Resumen del día: "6 eventos · 5h 30m ocupadas" — diferencia
-    /// el Calendario de Mi Día dando contexto cuantitativo.
+    /// Cantidad y duración total de los eventos del día.
     private var dayMetadataLabel: String {
         let events = displayEvents
         if events.isEmpty { return "Sin eventos agendados." }
@@ -313,7 +229,7 @@ struct CalendarioView: View {
         } else {
             timeStr = "\(m) min"
         }
-        return "\(eventStr) · \(timeStr) ocupadas"
+        return "\(eventStr) · \(timeStr) en agenda"
     }
 
     @ViewBuilder
@@ -330,43 +246,39 @@ struct CalendarioView: View {
         } else {
             VStack(spacing: Theme.Spacing.md) {
                 ForEach(displayEvents) { event in
-                    let isDemoEvent = showingExamples
                     // Los del calendario del iPhone son read-only: sin
                     // swipe-delete ni editar (Focus no escribe en EventKit).
                     let isSystemEvent = event.effectiveSource == .apple
-                    SwipeToDelete(enabled: !isDemoEvent && !isSystemEvent) {
-                        store.deleteEvent(event.id)
-                        toast.success("Evento eliminado", symbol: "trash.fill")
-                    } content: {
-                        CalendarEventCard(event: event)
-                    }
-                    // Long-press → Editar / Eliminar. Igual que Mi Día,
-                    // funciona en cualquier vista (Día/Semana/Mes) porque
-                    // todas comparten `dayContent`. Solo se desactiva
-                    // cuando estamos mostrando eventos de demostración.
-                    .contextMenu {
-                        if isSystemEvent {
-                            Button {
-                                if let url = URL(string: "calshow:\(event.startTime.timeIntervalSinceReferenceDate)") {
-                                    openURL(url)
+                    HStack(spacing: 0) {
+                        Button {
+                            if isSystemEvent {
+                                if let url = URL(string: "calshow:\(event.startTime.timeIntervalSinceReferenceDate)") { openURL(url) }
+                            } else {
+                                editingEvent = event
+                            }
+                        } label: {
+                            CalendarEventCard(event: event)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("event.edit.\(event.id.uuidString)")
+
+                        if !isSystemEvent {
+                            Menu {
+                                Button("Editar", systemImage: "pencil") { editingEvent = event }
+                                Button("Eliminar", systemImage: "trash", role: .destructive) {
+                                    if store.deleteEvent(event.id) { toast.success("Evento eliminado", symbol: "trash.fill") }
                                 }
                             } label: {
-                                Label("Abrir en Calendario", systemImage: "arrow.up.forward.app")
+                                Image(systemName: "ellipsis")
+                                    .frame(width: 44, height: 44)
                             }
-                        } else if !isDemoEvent {
-                            Button {
-                                editingEvent = event
-                            } label: {
-                                Label("Editar", systemImage: "pencil")
-                            }
-                            Button(role: .destructive) {
-                                store.deleteEvent(event.id)
-                                toast.success("Evento eliminado", symbol: "trash.fill")
-                            } label: {
-                                Label("Eliminar", systemImage: "trash")
-                            }
+                            .accessibilityLabel("Opciones de \(event.title)")
+                            .accessibilityIdentifier("event.options.\(event.id.uuidString)")
                         }
                     }
+                    .padding(.trailing, 4)
+                    .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 16))
+
                 }
             }
         }
@@ -415,73 +327,31 @@ private struct DayPill: View {
     let isSelected: Bool
     let eventsCount: Int
     let action: () -> Void
-
-    /// Theme 2.0: si el día representa "hoy" pero NO está seleccionado,
-    /// recibe un ring sutil cobalto + dot indicador — el usuario ubica
-    /// el presente sin tener que contar pills.
-    private var isToday: Bool {
-        Calendar.current.isDateInToday(date)
-    }
+    @ScaledMetric(relativeTo: .body) private var width = 54.0
+    @ScaledMetric(relativeTo: .body) private var height = 76.0
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Text(weekdayShort)
-                    .font(Theme.Typography.captionMono)
-                    .tracking(Theme.Tracking.captionMono)
-                    .foregroundStyle(isSelected ? .white : Theme.Colors.textTertiary)
-                Text("\(dayNumber)")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(isSelected ? .white : Theme.Colors.textPrimary)
+                Text(DateFormatters.weekdayShort.string(from: date))
+                    .font(.caption)
+                Text("\(Calendar.current.component(.day, from: date))")
+                    .font(.headline)
                 Circle()
-                    .fill(eventsCount > 0
-                          ? (isSelected ? Color.white.opacity(0.85) : Theme.Colors.focusAccent)
-                          : Color.clear)
+                    .fill(eventsCount > 0 ? (isSelected ? Color.white : Theme.Colors.focusAccent) : .clear)
                     .frame(width: 5, height: 5)
             }
-            .frame(width: 50, height: 72)
-            // Theme 2.0: selected → focusDeepGradient (no sólido) + sombra
-            // contextual. isToday no-selected → ring focusAccent 0.55 +
-            // glow cobalto sutil. Resto → surface plano + borderHairline.
-            .background(
-                RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? AnyShapeStyle(Theme.Colors.focusDeepGradient)
-                            : AnyShapeStyle(Theme.Colors.surface)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                            .strokeBorder(
-                                isSelected
-                                    ? Color.clear
-                                    : (isToday
-                                        ? Theme.Colors.focusAccent.opacity(0.55)
-                                        : Theme.Colors.borderHairline),
-                                lineWidth: isToday && !isSelected ? 1.2 : Theme.Stroke.hairline
-                            )
-                    )
-                    .shadow(
-                        color: isSelected
-                            ? Theme.Colors.focusAccent.opacity(0.32)
-                            : (isToday
-                                ? Theme.Colors.focusAccent.opacity(0.18)
-                                : Theme.Colors.cardShadow),
-                        radius: isSelected ? 14 : (isToday ? 8 : 6),
-                        x: 0,
-                        y: isSelected ? 6 : 3
-                    )
-            )
+            .foregroundStyle(isSelected ? .white : Theme.Colors.textPrimary)
+            .frame(width: width, height: height)
+            .background(isSelected ? Theme.Colors.focusAccent : Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(
+                Calendar.current.isDateInToday(date) && !isSelected ? Theme.Colors.focusAccent : .clear, lineWidth: 1))
         }
         .buttonStyle(.plain)
-    }
-
-    private var weekdayShort: String {
-        DateFormatters.weekdayShort.string(from: date).uppercased()
-    }
-
-    private var dayNumber: Int {
-        Calendar.current.component(.day, from: date)
+        .accessibilityLabel(date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+        .accessibilityValue("\(eventsCount) eventos")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("agenda.day.\(Int(Calendar.current.startOfDay(for: date).timeIntervalSince1970))")
     }
 }
 
@@ -489,81 +359,54 @@ private struct DayPill: View {
 
 private struct CalendarEventCard: View {
     let event: FocusEvent
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var layout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
+    }
 
     var body: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.md) {
-            VStack(alignment: .leading, spacing: 2) {
+        layout {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(event.timeRangeLabel)
-                    .font(Theme.Typography.timestamp)
-                    .foregroundStyle(Theme.Colors.textPrimary)
-                if let dur = event.durationLabel {
-                    Text(dur)
-                        .font(Theme.Typography.caption)
-                        .foregroundStyle(Theme.Colors.textTertiary)
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                if let duration = event.durationLabel {
+                    Text(duration).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .frame(width: 80, alignment: .leading)
-
-            Rectangle()
-                .fill(event.section.color)
-                .frame(width: 3)
-                .clipShape(Capsule())
-
-            VStack(alignment: .leading, spacing: 3) {
-                // Chip de origen para eventos del calendario del iPhone
-                // (read-only) — paridad con TimelineEventRow en Mi Día.
-                if event.effectiveSource == .apple {
-                    HStack(spacing: 3) {
-                        Image(systemName: "iphone")
-                            .font(.system(size: 8, weight: .semibold))
-                        Text("IPHONE")
-                            .font(Theme.Typography.captionMono)
-                            .tracking(Theme.Tracking.captionMono)
-                    }
-                    .foregroundStyle(Theme.Colors.textTertiary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Theme.Colors.surfaceHigh))
-                }
+            .frame(minWidth: 72, alignment: .leading)
+            VStack(alignment: .leading, spacing: 6) {
                 Text(event.title)
-                    .font(Theme.Typography.bodyEmphasized)
-                    .foregroundStyle(Theme.Colors.textPrimary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-
-                // Subtítulo / detalle (ej. "Llevar la pelota") dentro de la
-                // misma card, debajo del título — paridad con TimelineEventRow
-                // en Mi Día. Antes el Calendario solo mostraba el título y el
-                // contexto del evento se perdía.
-                if let subtitle = event.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines),
-                   !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(Theme.Typography.footnote)
-                        .foregroundStyle(Theme.Colors.textSecondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .multilineTextAlignment(.leading)
+                    .font(.body.weight(.medium))
+                    .strikethrough(event.status == .done)
+                if let subtitle = event.subtitle, !subtitle.isEmpty {
+                    Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
                 }
-
-                // Solo ubicación si hay. Notes/descripción quedan para detalle.
-                // Tap → ComingSoonSheet anticipando Maps/Waze.
-                if let loc = event.location, !loc.isEmpty {
-                    LocationLabel(location: loc)
+                if let location = event.location, !location.isEmpty {
+                    Label(location, systemImage: "mappin")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if event.status == .done {
+                    Label("Completado", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary)
+                }
+                if event.effectiveSource == .apple {
+                    Text("Calendario del iPhone").font(.caption).foregroundStyle(.secondary)
+                } else if let offsets = event.reminderOffsets, !offsets.isEmpty {
+                    Label(offsets.map { $0 == 0 ? "A la hora" : "\($0) min antes" }.joined(separator: " · "), systemImage: "bell")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
-
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(Theme.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                .fill(Theme.Colors.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                        .strokeBorder(Theme.Colors.border, lineWidth: Theme.Stroke.hairline)
-                )
-                .focusCardShadow()
-        )
+        .foregroundStyle(Theme.Colors.textPrimary)
+        .multilineTextAlignment(.leading)
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(event.effectiveSource == .apple ? "Abre Calendario del iPhone" : "Editar evento")
     }
 }
 
@@ -571,238 +414,171 @@ private struct CalendarEventCard: View {
 
 struct NuevoEventoSheet: View {
     @Environment(\.dismiss) private var dismiss
-    /// Si está editando, conservamos el id + flags para hacer update en vez
-    /// de insert.
-    private let editingId: UUID?
-    private let editingIsReminder: Bool?
-    private let editingDisplayAsPoint: Bool?
-    let onSave: (FocusEvent) -> Void
-
-    @State private var title: String = ""
-    @State private var location: String = ""
-    @State private var notes: String = ""
-    @State private var date: Date
+    private let original: FocusEvent?
+    let onSave: (FocusEvent) -> Bool
+    @State private var title: String
+    @State private var location: String
+    @State private var notes: String
     @State private var startTime: Date
     @State private var endTime: Date
-    @State private var section: EventSection = .reunion
+    @State private var hasEndTime: Bool
+    @State private var section: EventSection
+    @State private var reminder: Int
+    @State private var saveError: String?
 
-    /// Inicializador de "nuevo evento": prefija fecha y deja título vacío.
-    init(initialDate: Date, onSave: @escaping (FocusEvent) -> Void) {
-        self.editingId = nil
-        self.editingIsReminder = nil
-        self.editingDisplayAsPoint = nil
-        self.onSave = onSave
-        let cal = Calendar.current
-        let baseDay = cal.startOfDay(for: initialDate)
-        let nextHour = cal.date(bySettingHour: max(9, cal.component(.hour, from: Date()) + 1), minute: 0, second: 0, of: baseDay) ?? baseDay
-        let oneHourLater = cal.date(byAdding: .hour, value: 1, to: nextHour) ?? nextHour
-        _date = State(initialValue: baseDay)
-        _startTime = State(initialValue: nextHour)
-        _endTime = State(initialValue: oneHourLater)
+    init(initialDate: Date, onSave: @escaping (FocusEvent) -> Bool) {
+        self.init(original: nil, initialDate: initialDate, onSave: onSave)
     }
 
-    /// Inicializador de "editar evento": precarga todos los campos del evento
-    /// y conserva su id para que `onSave` produzca un update.
-    init(editing event: FocusEvent, onSave: @escaping (FocusEvent) -> Void) {
-        self.editingId = event.id
-        self.editingIsReminder = event.isReminder
-        self.editingDisplayAsPoint = event.displayAsPointInTime ? true : nil
+    init(editing event: FocusEvent, onSave: @escaping (FocusEvent) -> Bool) {
+        self.init(original: event, initialDate: event.startTime, onSave: onSave)
+    }
+
+    private init(original: FocusEvent?, initialDate: Date, onSave: @escaping (FocusEvent) -> Bool) {
+        self.original = original
         self.onSave = onSave
-        let cal = Calendar.current
-        let baseDay = cal.startOfDay(for: event.startTime)
-        _title = State(initialValue: event.title)
-        _location = State(initialValue: event.location ?? "")
-        _notes = State(initialValue: event.notes ?? "")
-        _date = State(initialValue: baseDay)
-        _startTime = State(initialValue: event.startTime)
-        _endTime = State(initialValue: event.endTime ?? cal.date(byAdding: .hour, value: 1, to: event.startTime) ?? event.startTime)
-        _section = State(initialValue: event.section)
+        let calendar = Calendar.current
+        let now = Date()
+        let defaultStart: Date
+        if calendar.isDateInToday(initialDate) {
+            defaultStart = Date(timeIntervalSince1970: ceil(now.timeIntervalSince1970 / 900) * 900)
+        } else {
+            defaultStart = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: initialDate) ?? initialDate
+        }
+        let start = original?.startTime ?? defaultStart
+        _title = State(initialValue: original?.title ?? "")
+        _location = State(initialValue: original?.location ?? "")
+        _notes = State(initialValue: original?.notes ?? "")
+        _startTime = State(initialValue: start)
+        _endTime = State(initialValue: original?.endTime ?? start.addingTimeInterval(3600))
+        _hasEndTime = State(initialValue: original.map { $0.endTime != nil && !$0.displayAsPointInTime } ?? true)
+        _section = State(initialValue: original?.section ?? .personal)
+        _reminder = State(initialValue: Self.reminderSelection(original))
     }
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Theme.Colors.background.ignoresSafeArea()
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: Theme.Spacing.xl) {
-                        sheetField(label: "TÍTULO") {
-                            TextField("Clase, foco, reunión…", text: $title, axis: .vertical)
-                                .font(Theme.Typography.headline)
-                                .foregroundStyle(Theme.Colors.textPrimary)
-                                .tint(Theme.Colors.focusAccent)
-                                .lineLimit(1...3)
-                        }
-
-                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                            Text("DÍA").sectionLabelStyle()
-                            DatePicker("", selection: $date, displayedComponents: .date)
-                                .datePickerStyle(.compact)
-                                .labelsHidden()
-                                .tint(Theme.Colors.focusAccent)
-                                .padding(Theme.Spacing.md)
-                                .background(
-                                    RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                                        .fill(Theme.Colors.surface)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                                                .strokeBorder(Theme.Colors.border, lineWidth: Theme.Stroke.hairline)
-                                        )
-                                )
-                        }
-
-                        HStack(spacing: Theme.Spacing.md) {
-                            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                                Text("INICIO").sectionLabelStyle()
-                                DatePicker("", selection: $startTime, displayedComponents: .hourAndMinute)
-                                    .datePickerStyle(.compact)
-                                    .labelsHidden()
-                                    .tint(Theme.Colors.focusAccent)
-                                    .padding(Theme.Spacing.md)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                                            .fill(Theme.Colors.surface)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                                                    .strokeBorder(Theme.Colors.border, lineWidth: Theme.Stroke.hairline)
-                                            )
-                                    )
-                            }
-                            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                                Text("FIN").sectionLabelStyle()
-                                DatePicker("", selection: $endTime, displayedComponents: .hourAndMinute)
-                                    .datePickerStyle(.compact)
-                                    .labelsHidden()
-                                    .tint(Theme.Colors.focusAccent)
-                                    .padding(Theme.Spacing.md)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                                            .fill(Theme.Colors.surface)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                                                    .strokeBorder(Theme.Colors.border, lineWidth: Theme.Stroke.hairline)
-                                            )
-                                    )
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                            Text("TIPO").sectionLabelStyle()
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: Theme.Spacing.sm) {
-                                    ForEach(EventSection.allCases) { s in
-                                        sectionChip(s)
-                                    }
-                                }
-                            }
-                        }
-
-                        // Ubicación libre: sala, oficina, link de Meet/Zoom o dirección.
-                        // Por ahora se muestra como texto plano en la vista de evento.
-                        // FUTURO: si el texto parece dirección física, ofrecer
-                        // "Abrir en Apple Maps / Google Maps / Waze" desde el
-                        // detalle del evento. No implementar acá — solo guardar el
-                        // string crudo y dejar la decisión para la vista de detalle.
-                        sheetField(label: "UBICACIÓN (OPCIONAL)") {
-                            TextField("Sala, oficina, link o dirección…", text: $location)
-                                .font(Theme.Typography.body)
-                                .foregroundStyle(Theme.Colors.textPrimary)
-                                .tint(Theme.Colors.focusAccent)
-                        }
-
-                        Spacer(minLength: Theme.Spacing.lg)
+            Form {
+                if let saveError {
+                    Section {
+                        Label(saveError, systemImage: "exclamationmark.circle")
+                            .foregroundStyle(Theme.Colors.danger)
+                            .accessibilityIdentifier("event.saveError")
                     }
-                    .padding(.horizontal, Theme.Spacing.xl)
-                    .padding(.top, Theme.Spacing.md)
+                }
+                Section("Qué tienes planeado") {
+                    TextField("Título del evento", text: $title, axis: .vertical)
+                        .lineLimit(1...5)
+                        .accessibilityIdentifier("event.title")
+                }
+
+                Section("Cuándo") {
+                    DatePicker("Inicio", selection: $startTime, displayedComponents: [.date, .hourAndMinute])
+                        .accessibilityIdentifier("event.start")
+                    Toggle("Hora de término", isOn: $hasEndTime)
+                        .accessibilityIdentifier("event.hasEndTime")
+                    if hasEndTime {
+                        DatePicker("Término", selection: $endTime, displayedComponents: [.date, .hourAndMinute])
+                            .accessibilityIdentifier("event.end")
+                        if endTime <= startTime {
+                            Text("El término debe ser después del inicio.")
+                                .font(.footnote)
+                                .foregroundStyle(Theme.Colors.danger)
+                                .accessibilityIdentifier("event.dateError")
+                        }
+                    }
+                }
+
+                Section {
+                    Picker("Recordatorio", selection: $reminder) {
+                        Text("Sin aviso").tag(-1)
+                        Text("A la hora de inicio").tag(0)
+                        Text("5 minutos antes").tag(5)
+                        Text("10 minutos antes").tag(10)
+                        Text("15 minutos antes").tag(15)
+                        Text("30 minutos antes").tag(30)
+                        Text("1 hora antes").tag(60)
+                        Text("1 día antes").tag(1440)
+                        if let original, Self.reminderSelection(original) == -2 {
+                            Text("Conservar avisos actuales").tag(-2)
+                        }
+                    }
+                    .accessibilityIdentifier("event.reminder")
+                } footer: {
+                    Text("Los avisos necesitan permiso de notificaciones en este iPhone.")
+                }
+
+                Section("Detalles") {
+                    Picker("Tipo", selection: $section) {
+                        ForEach(EventSection.allCases) { Text($0.displayName).tag($0) }
+                    }
+                    .accessibilityIdentifier("event.section")
+                    TextField("Ubicación (opcional)", text: $location)
+                        .accessibilityIdentifier("event.location")
+                    TextField("Notas (opcional)", text: $notes, axis: .vertical)
+                        .lineLimit(2...6)
+                        .accessibilityIdentifier("event.notes")
                 }
             }
-            .navigationTitle("Nuevo evento")
+            .navigationTitle(original == nil ? "Nuevo evento" : "Editar evento")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Theme.Colors.background, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") { dismiss() }
-                        .foregroundStyle(Theme.Colors.textSecondary)
+                        .accessibilityIdentifier("event.cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Guardar", action: save)
-                        .foregroundStyle(canSave ? Theme.Colors.focusAccent : Theme.Colors.textTertiary)
                         .disabled(!canSave)
+                        .accessibilityIdentifier("event.save")
                 }
             }
-        }
-    }
-
-    private func sectionChip(_ s: EventSection) -> some View {
-        Button {
-            HapticManager.shared.tick()
-            section = s
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: s.symbol)
-                    .font(.system(size: 11, weight: .semibold))
-                Text(s.displayName)
-                    .font(Theme.Typography.subheadEmphasized)
-            }
-            .foregroundStyle(section == s ? .white : Theme.Colors.textSecondary)
-            .padding(.horizontal, Theme.Spacing.md + 2)
-            .padding(.vertical, Theme.Spacing.sm)
-            .background(
-                Capsule()
-                    .fill(section == s ? s.color : Theme.Colors.surface)
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(section == s ? Color.clear : Theme.Colors.border, lineWidth: Theme.Stroke.hairline)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func sheetField<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            Text(label).sectionLabelStyle()
-            content()
-                .padding(Theme.Spacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                        .fill(Theme.Colors.surface)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                                .strokeBorder(Theme.Colors.border, lineWidth: Theme.Stroke.hairline)
-                        )
-                )
         }
     }
 
     private var canSave: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && endTime > startTime
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && (!hasEndTime || endTime > startTime)
+    }
+
+    private static func reminderSelection(_ event: FocusEvent?) -> Int {
+        guard let event else { return -1 }
+        let offsets = event.reminderOffsets ?? []
+        if offsets.count > 1 { return -2 }
+        if let offset = offsets.first {
+            return [0, 5, 10, 15, 30, 60, 1440].contains(offset) ? offset : -2
+        }
+        return event.isReminder == true ? 0 : -1
     }
 
     private func save() {
-        let cal = Calendar.current
-        let dayStart = cal.startOfDay(for: date)
-        func combine(_ time: Date) -> Date {
-            let comps = cal.dateComponents([.hour, .minute], from: time)
-            return cal.date(bySettingHour: comps.hour ?? 9, minute: comps.minute ?? 0, second: 0, of: dayStart) ?? dayStart
+        guard canSave else { return }
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        var event = original ?? FocusEvent(title: cleaned, startTime: startTime, section: .personal)
+        event.title = cleaned
+        let cleanNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
+        event.notes = cleanNotes.isEmpty ? nil : cleanNotes
+        event.location = cleanLocation.isEmpty ? nil : cleanLocation
+        event.startTime = startTime
+        event.section = section
+        let originalHasEnd = original.map { $0.endTime != nil && !$0.displayAsPointInTime } ?? true
+        if original == nil || hasEndTime != originalHasEnd || startTime != original?.startTime || (hasEndTime && endTime != original?.endTime) {
+            event.endTime = hasEndTime ? endTime : nil
+            event.inferredDuration = hasEndTime ? false : true
         }
-        // Si estoy editando, conservar el id original + isReminder; si no,
-        // crear evento nuevo con un id fresco. Editar manualmente desde el
-        // sheet implica que el usuario eligió un rango explícito → ya no
-        // tratamos el evento como "point in time" salvo que fuera reminder.
-        let event = FocusEvent(
-            id: editingId ?? UUID(),
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes,
-            startTime: combine(startTime),
-            endTime: combine(endTime),
-            section: section,
-            location: location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : location,
-            isReminder: editingIsReminder
-        )
-        onSave(event)
-        dismiss()
+
+        // Preserve every untouched field, including completion, links,
+        // custom reminder notes, subtitle and external calendar metadata.
+        if reminder != Self.reminderSelection(original) {
+            event.reminderOffsets = reminder >= 0 ? [reminder] : nil
+            event.reminderNotes = nil
+            if reminder == -1 { event.isReminder = false }
+        }
+        if onSave(event) {
+            dismiss()
+        } else {
+            saveError = "No pudimos guardar el evento. Revisa el espacio disponible e inténtalo de nuevo."
+        }
     }
 }
 
@@ -867,28 +643,32 @@ private struct MonthGridView: View {
                     monthOffset -= 1
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.Colors.focusAccent)
-                        .frame(width: 30, height: 30)
+                        .frame(width: 44, height: 44)
                         .background(Circle().fill(Theme.Colors.focusAccentSoft))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Mes anterior")
+                .accessibilityIdentifier("agenda.previousMonth")
                 Button {
                     HapticManager.shared.tick()
                     monthOffset += 1
                 } label: {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.Colors.focusAccent)
-                        .frame(width: 30, height: 30)
+                        .frame(width: 44, height: 44)
                         .background(Circle().fill(Theme.Colors.focusAccentSoft))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Mes siguiente")
+                .accessibilityIdentifier("agenda.nextMonth")
             }
 
             // Encabezado de días de la semana (L M M J V S D).
             HStack(spacing: 0) {
-                ForEach(["L", "M", "M", "J", "V", "S", "D"], id: \.self) { letter in
+                ForEach(Array(["L", "M", "M", "J", "V", "S", "D"].enumerated()), id: \.offset) { _, letter in
                     Text(letter)
                         .font(Theme.Typography.caption)
                         .foregroundStyle(Theme.Colors.textTertiary)
@@ -928,27 +708,25 @@ private struct MonthGridView: View {
             } label: {
                 VStack(spacing: 2) {
                     Text("\(calendar.component(.day, from: day))")
-                        .font(.system(size: 13, weight: selected || isToday ? .semibold : .regular))
+                        .font(.subheadline.weight(selected || isToday ? .semibold : .regular))
                         .foregroundStyle(selected ? .white : (isToday ? Theme.Colors.focusAccent : Theme.Colors.textPrimary))
                     // Dot cuando hay eventos. Cobalto si seleccionado fondo blanco.
                     Circle()
                         .fill(count > 0 ? (selected ? Color.white : Theme.Colors.focusAccent) : Color.clear)
                         .frame(width: 4, height: 4)
                 }
-                .frame(maxWidth: .infinity, minHeight: 38)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(selected ? Theme.Colors.focusAccent : Color.clear)
                 )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+            .accessibilityValue("\(count) eventos")
+            .accessibilityAddTraits(selected ? .isSelected : [])
         } else {
-            Color.clear.frame(minHeight: 38)
+            Color.clear.frame(minHeight: 44)
         }
     }
-}
-
-#Preview {
-    CalendarioView()
-        .environmentObject(FocusDataStore())
 }

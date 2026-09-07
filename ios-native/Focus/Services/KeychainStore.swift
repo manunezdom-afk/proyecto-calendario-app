@@ -69,5 +69,6 @@ enum KeychainStore {
         delete(.refreshToken)
         delete(.userId)
         delete(.email)
+        delete(.fullName)
     }
 }

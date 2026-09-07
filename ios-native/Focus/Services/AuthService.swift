@@ -20,15 +20,15 @@ enum AuthError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .configMissing:
-            return "Auth no configurada. Falta el anon key de Supabase en FocusConfig.swift."
+            return "El acceso a tu cuenta no está disponible ahora. Inténtalo de nuevo más tarde."
         case .invalidEmail:
-            return "El correo no parece válido."
+            return "Revisa que el correo tenga el formato nombre@dominio.com."
         case .rateLimited:
-            return "Demasiados intentos. Espera un minuto antes de pedir otro código."
+            return "Hubo demasiados intentos. Espera un momento antes de intentarlo de nuevo."
         case .emailNotConfigured:
-            return "El servidor de envío de correos no está configurado todavía."
+            return "No podemos enviar códigos en este momento. Inténtalo de nuevo más tarde."
         case .emailSendFailed:
-            return "No pudimos enviar el correo. Prueba de nuevo en un minuto."
+            return "No pudimos enviar el código. Inténtalo de nuevo en unos momentos."
         case .invalidCode:
             return "El código es incorrecto. Revísalo o pide uno nuevo."
         case .otpExpired:
@@ -36,13 +36,13 @@ enum AuthError: Error, LocalizedError {
         case .oauthCanceled:
             return "Inicio de sesión cancelado."
         case .oauthProviderNotConfigured:
-            return "Google sign-in todavía no está configurado en Supabase. Avísanos."
+            return "El acceso con Google no está disponible ahora. Intenta iniciar sesión con tu correo."
         case .oauthCallbackInvalid:
-            return "Recibimos una respuesta inválida de Google. Vuelve a intentar."
-        case .network(let msg):
-            return "Error de red: \(msg)"
-        case .unknown(let msg):
-            return msg
+            return "No pudimos completar el acceso con Google. Inténtalo de nuevo o usa tu correo."
+        case .network:
+            return "No pudimos conectar con Focus. Revisa tu conexión a internet e inténtalo de nuevo."
+        case .unknown:
+            return "No pudimos completar la solicitud. Inténtalo de nuevo en unos momentos."
         }
     }
 }

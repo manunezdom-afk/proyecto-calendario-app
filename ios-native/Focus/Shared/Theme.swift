@@ -1,402 +1,117 @@
 import SwiftUI
+import UIKit
 
-/// Paleta y tokens de Focus 2.0 — "Precision Etherealism".
-///
-/// Dirección: convergencia entre la utilidad quirúrgica de Linear/Raycast y
-/// el flujo orgánico de la IA (Arc / Apple Intelligence). NO Apple plano,
-/// NO neón futurista. Orden mental con límites físicos claros + IA fluida.
-///
-/// Cambios visuales 2026-05-21 (Theme 2.0):
-/// - Canvas L0 más denso (#F1F3F7) para forzar el despegue visual de las
-///   cards blancas. El #FAFBFD anterior se confundía con `surface`.
-/// - Sombras táctiles más sutiles (opacity 0.04 vs 0.06) — depth real
-///   por profundidad de capa, no por sombra agresiva.
-/// - Sections con tonos un punto más profundos (teal #0D9488, amber #D97706)
-///   para evitar saturación infantil.
-/// - Semantic ajustado: success a esmeralda profunda (#059669), danger a
-///   rojo más oscuro (#DC2626), nuevo `info` cian (#0891B2).
-/// - Nueva escala de superficies L0/L1/L2 + bordes hairline/soft.
-/// - Catálogo de gradients con 5 entradas nombradas (FocusDeep, NovaPrism,
-///   AmbientCalm, HeroSunset, DangerMelt).
-/// - Motion tokens (snap/quick/standard/slow) + Springs (entrance/dismiss/
-///   interactive/settle) tokenizados — antes cada vista los definía a mano.
-/// - Tracking system separado (Theme.Tracking) para aplicar tracking
-///   tipográfico opinado sin romper Font call sites existentes.
-///
-/// **Backward-compat**: TODOS los call sites previos (`Theme.Colors.focusAccent`,
-/// `Theme.Typography.title`, etc.) siguen funcionando. Los nuevos tokens
-/// son aditivos. El único cambio que se ve inmediato en TODA la app es
-/// `Theme.Colors.background` (de #FAFBFD a #F1F3F7) — intencional.
-///
-/// Family system: Focus / Kairos (violet) / Spark (orange) comparten
-/// estructura. Para portar, basta cambiar `focusAccent` → brand primario.
+/// Semantic system colors and text styles follow appearance, contrast and Dynamic Type.
 enum Theme {
-
-    // MARK: - Colors
-
     enum Colors {
-        // MARK: Canvas + superficies (sistema 3-tier)
+        static let background = Color(uiColor: .systemGroupedBackground)
+        static let canvasL0 = background
+        static let surface = Color(uiColor: .secondarySystemGroupedBackground)
+        static let surfaceL1 = surface
+        static let surfaceElevated = surface
+        static let surfaceHigh = Color(uiColor: .tertiarySystemGroupedBackground)
+        static let surfaceL2 = surfaceHigh
+        static let surfaceTinted = Color(uiColor: .secondarySystemBackground)
+        static let border = Color(uiColor: .separator).opacity(0.5)
+        static let borderEmphasis = Color(uiColor: .separator)
+        static let borderHairline = border
+        static let borderSoft = border
+        static let textPrimary = Color(uiColor: .label)
+        static let textSecondary = Color(uiColor: .secondaryLabel)
+        static let textTertiary = Color(uiColor: .secondaryLabel)
+        static let textQuaternary = Color(uiColor: .tertiaryLabel)
 
-        /// Lienzo base — el fondo general de pantallas. Theme 2.0 v6:
-        /// cobalto-slate medio (#DDE6F2). El #C5D2E8 anterior se sentía
-        /// demasiado saturado/pesado; este tono mantiene la identidad
-        /// azul/cobalto pero respira más hacia limpio. El FocusAmbientCanvas
-        /// agrega un linear gradient vertical que termina en blanco para
-        /// dar aire en la mitad inferior — el resultado se siente premium
-        /// sin saturar.
-        static let background = Color(red: 0.867, green: 0.902, blue: 0.949)  // #DDE6F2
-        /// Canvas alias explícito por claridad — mismo valor que background.
-        static let canvasL0 = Color(red: 0.867, green: 0.902, blue: 0.949)    // #DDE6F2
-        /// Superficie de cards interactivas — blanco puro contra el canvas.
-        static let surface = Color.white                                       // #FFFFFF
-        /// Alias semántico de surface.
-        static let surfaceL1 = Color.white                                     // #FFFFFF
-        /// Superficie elevada para sheets / modals / dropdowns.
-        static let surfaceElevated = Color.white                               // #FFFFFF
-        /// Hover/pressed / sub-superficie. Antes #F2F4F8, ahora un punto
-        /// más cálido para diferenciarse del canvas.
-        static let surfaceHigh = Color(red: 0.973, green: 0.980, blue: 0.988)  // #F8FAFC
-        /// Alias semántico de surfaceHigh.
-        static let surfaceL2 = Color(red: 0.973, green: 0.980, blue: 0.988)    // #F8FAFC
-        /// Tinte azul muy suave para acentos sutiles (tomorrow preview, etc).
-        static let surfaceTinted = Color(red: 0.937, green: 0.965, blue: 0.996) // #EFF6FE-ish
+        static let focusAccent = Color(uiColor: .systemBlue)
+        static let focusAccentSoft = focusAccent.opacity(0.10)
+        static let focusAccentHover = focusAccent
+        static let novaAccent = focusAccent
+        static let novaAccentSoft = focusAccentSoft
+        static let novaAccentDeep = focusAccent
+        static let novaElectric = focusAccent
+        static let novaHalo = Color.clear
 
-        // MARK: Bordes (sistema hairline/soft/emphasis)
+        static let success = Color(uiColor: .systemGreen)
+        static let successSoft = success.opacity(0.10)
+        static let warning = Color(uiColor: .systemOrange)
+        static let warningSoft = warning.opacity(0.10)
+        static let danger = Color(uiColor: .systemRed)
+        static let dangerSoft = danger.opacity(0.10)
+        static let info = focusAccent
+        static let infoSoft = focusAccentSoft
 
-        /// Border principal — antes #E5E7EB sólido. Ahora derivado de slate-900
-        /// con opacity bajísima para que se mezcle con el canvas.
-        static let border = Color(red: 0.06, green: 0.09, blue: 0.16).opacity(0.08)
-        /// Border con énfasis (focus, hover, selección).
-        static let borderEmphasis = Color(red: 0.06, green: 0.09, blue: 0.16).opacity(0.18)
-        /// Hairline puro 0.06 para divisiones casi imperceptibles.
-        static let borderHairline = Color(red: 0.06, green: 0.09, blue: 0.16).opacity(0.06)
-        /// Soft border 0.12 para containers que necesitan presencia leve.
-        static let borderSoft = Color(red: 0.06, green: 0.09, blue: 0.16).opacity(0.12)
+        static let sectionFoco = focusAccent
+        static let sectionReunion = Color(uiColor: .systemIndigo)
+        static let sectionPersonal = Color(uiColor: .systemTeal)
+        static let sectionEstudio = Color(uiColor: .systemIndigo)
+        static let sectionDescanso = Color(uiColor: .systemTeal)
+        static let sectionEntrenamiento = Color(uiColor: .systemGreen)
+        static let sectionReminder = warning
+        static let priorityHigh = danger
+        static let priorityMedium = textSecondary
+        static let priorityLow = textTertiary
+        static let cardShadow = Color.clear
+        static let cardShadowStrong = Color.clear
+        static let modalShadow = Color.clear
 
-        // MARK: Texto (4 niveles, sin cambios mayores)
+        // Source-compatible aliases for components being retired.
+        static let focusDeepGradient = flat(focusAccent)
+        static let novaPrismGradient = flat(focusAccent)
+        static let novaGradient = flat(focusAccent)
+        static let heroSunsetGradient = flat(surface)
+        static let dangerMeltGradient = flat(danger)
+        static let ambientCalmRadial = RadialGradient(colors: [.clear, .clear], center: .center, startRadius: 0, endRadius: 1)
+        static let novaChatBackground = flat(background)
+        static let novaChatHalo = ambientCalmRadial
+        static let novaGlassFill = surface
+        static let novaGlassUserFill = focusAccentSoft
+        static let novaGlassStroke = border
+        static let novaGlassStrokeEmphasis = focusAccent
+        static let novaTextOnDark = textPrimary
+        static let novaTextOnDarkSecondary = textSecondary
+        static let novaTextOnDarkTertiary = textTertiary
+        static let novaLabelOnDark = focusAccent
+        static let novaGlow = Color.clear
+        static let novaSendGradient = flat(focusAccent)
 
-        /// Texto principal (#0F172A - slate-900).
-        static let textPrimary = Color(red: 0.059, green: 0.090, blue: 0.165)
-        /// Texto secundario (#475569 - slate-600).
-        static let textSecondary = Color(red: 0.278, green: 0.333, blue: 0.412)
-        /// Texto terciario (#94A3B8 - slate-400).
-        static let textTertiary = Color(red: 0.580, green: 0.639, blue: 0.722)
-        /// Texto muy apagado (#CBD5E1 - slate-300).
-        static let textQuaternary = Color(red: 0.796, green: 0.835, blue: 0.882)
-
-        // MARK: Marca Focus (cobalto)
-
-        /// Acento Focus base — #2563EB blue-600. Botones, selección, taps.
-        static let focusAccent = Color(red: 0.145, green: 0.388, blue: 0.922)
-        /// Soft Focus #EFF6FF — fondo sutil para focusAccent (botones secundarios,
-        /// chips selected, etc). 2026-05-21: cambiado de opacity 0.10 a hex sólido
-        /// para consistencia con la paleta de Gemini.
-        static let focusAccentSoft = Color(red: 0.937, green: 0.965, blue: 1.000)
-        /// Hover/pressed — antes #3B82F6 brighter, ahora #1D4ED8 deeper para
-        /// dar sensación de "presionar hacia abajo" (depth táctil).
-        static let focusAccentHover = Color(red: 0.114, green: 0.306, blue: 0.847)
-
-        // MARK: Marca Nova (violeta electric)
-
-        /// Nova base — #5B4DFF electric purple-indigo. Identidad propia,
-        /// se distingue claramente del cobalto Focus.
-        static let novaAccent = Color(red: 0.357, green: 0.302, blue: 1.000)
-        /// Soft Nova #EEF2FF — fondo sutil para novaAccent.
-        static let novaAccentSoft = Color(red: 0.933, green: 0.949, blue: 1.000)
-        /// Violet profundo #4F46FF para acentos secundarios.
-        static let novaAccentDeep = Color(red: 0.310, green: 0.275, blue: 1.000)
-        /// Electric blue muy saturado #3884FF — highlight en glow, borders activos.
-        static let novaElectric = Color(red: 0.220, green: 0.518, blue: 1.000)
-        /// Halo ambient — usado de fondo en Nova tab / Nova Live para crear
-        /// atmósfera sutil sin pintar pared violeta.
-        static let novaHalo = Color(red: 0.357, green: 0.302, blue: 1.000).opacity(0.06)
-
-        // MARK: Estados semánticos
-
-        /// Success — emerald profundo. Antes #10B981 brighter.
-        static let success = Color(red: 0.024, green: 0.588, blue: 0.412)        // #059669
-        /// Success soft background.
-        static let successSoft = Color(red: 0.941, green: 0.992, blue: 0.957)    // #F0FDF4
-        /// Warning amber.
-        static let warning = Color(red: 0.851, green: 0.467, blue: 0.024)        // #D97706
-        /// Warning soft.
-        static let warningSoft = Color(red: 0.996, green: 0.949, blue: 0.780)    // #FEF3C7
-        /// Danger red más profundo. Antes #EF4444 brighter.
-        static let danger = Color(red: 0.863, green: 0.149, blue: 0.149)         // #DC2626
-        /// Danger soft.
-        static let dangerSoft = Color(red: 0.996, green: 0.949, blue: 0.949)     // #FEF2F2
-        /// Info cian — nuevo en 2.0 para mensajes informativos (Mente Clara).
-        static let info = Color(red: 0.035, green: 0.569, blue: 0.698)           // #0891B2
-        /// Info soft.
-        static let infoSoft = Color(red: 0.925, green: 0.996, blue: 1.000)       // #ECFEFF
-
-        // MARK: Colores de sección (timeline)
-
-        /// Foco — azul cobalto, identidad principal.
-        static let sectionFoco = Color(red: 0.145, green: 0.388, blue: 0.922)    // #2563EB
-        /// Reunión — indigo.
-        static let sectionReunion = Color(red: 0.388, green: 0.400, blue: 0.945) // #6366F1
-        /// Personal — cyan.
-        static let sectionPersonal = Color(red: 0.024, green: 0.714, blue: 0.831) // #06B6D4
-        /// Estudio — violet.
-        static let sectionEstudio = Color(red: 0.545, green: 0.361, blue: 0.965)  // #8B5CF6
-        /// Descanso — teal PROFUNDO. Antes #14B8A6 brighter.
-        static let sectionDescanso = Color(red: 0.051, green: 0.580, blue: 0.533) // #0D9488
-        /// Entrenamiento — verde vivo (salud/energía), distinto del teal de descanso.
-        static let sectionEntrenamiento = Color(red: 0.086, green: 0.639, blue: 0.290) // #16A34A
-        /// Reminder — amber OSCURO. Antes #F59E0B brighter.
-        static let sectionReminder = Color(red: 0.851, green: 0.467, blue: 0.024) // #D97706
-
-        // MARK: Prioridades (sin cambios mayores)
-
-        static let priorityHigh = Color(red: 0.863, green: 0.149, blue: 0.149)   // #DC2626
-        static let priorityMedium = Color(red: 0.851, green: 0.467, blue: 0.024) // #D97706
-        static let priorityLow = Color(red: 0.580, green: 0.639, blue: 0.722)    // slate
-
-        // MARK: Sombras táctiles (más sutiles en 2.0)
-
-        /// Sombra de card estándar — Theme 2.0 v3: subo opacity de 0.04 a
-        /// 0.10 ahora que el canvas es más profundo (#D8E0EC). Necesita
-        /// sombra más visible para que las cards blancas tengan despegue
-        /// real. Antes con canvas casi-blanco 0.04 alcanzaba; ahora no.
-        static let cardShadow = Color(red: 0.06, green: 0.07, blue: 0.10).opacity(0.10)
-        /// Sombra fuerte para elementos elevados (Z-2).
-        static let cardShadowStrong = Color(red: 0.06, green: 0.07, blue: 0.10).opacity(0.16)
-        /// Sombra para modals / sheets (Z-3).
-        static let modalShadow = Color(red: 0.06, green: 0.07, blue: 0.10).opacity(0.22)
-
-        // MARK: Gradients catálogo (Theme 2.0)
-
-        /// FocusDeep — gradient principal de la marca. Cobalto → cobalto pressed.
-        /// Usar en botones primary, indicadores activos.
-        static let focusDeepGradient = LinearGradient(
-            gradient: Gradient(stops: [
-                .init(color: Color(red: 0.145, green: 0.388, blue: 0.922), location: 0.0),   // #2563EB
-                .init(color: Color(red: 0.114, green: 0.306, blue: 0.847), location: 1.0),   // #1D4ED8
-            ]),
-            startPoint: UnitPoint(x: 0.0, y: 0.0),
-            endPoint: UnitPoint(x: 0.71, y: 0.71)  // ~135°
-        )
-
-        /// NovaPrism — gradient multitonal de IA. Violet → electric blue → deep violet.
-        /// Usar en diamante Nova, botones AI, cards de IA.
-        static let novaPrismGradient = LinearGradient(
-            gradient: Gradient(stops: [
-                .init(color: Color(red: 0.357, green: 0.302, blue: 1.000), location: 0.00), // #5B4DFF
-                .init(color: Color(red: 0.220, green: 0.518, blue: 1.000), location: 0.45), // #3884FF
-                .init(color: Color(red: 0.486, green: 0.227, blue: 0.929), location: 1.00), // #7C3AED
-            ]),
-            startPoint: UnitPoint(x: 0.0, y: 0.0),
-            endPoint: UnitPoint(x: 0.71, y: 0.71)
-        )
-
-        /// AmbientCalm — radial para hero zones (Mi Día, Nova). Theme 2.0:
-        /// SUBE intensidad. Antes era casi imperceptible (8%/3%); ahora
-        /// 18%/8% para que el "halo cobalto desde el top" sea claramente
-        /// visible cuando se abre Mi Día. Radio 280 → 380 para que
-        /// cubra hasta el primer evento del timeline.
-        static let ambientCalmRadial = RadialGradient(
-            gradient: Gradient(stops: [
-                .init(color: Color(red: 0.145, green: 0.388, blue: 0.922).opacity(0.18), location: 0.0),
-                .init(color: Color(red: 0.357, green: 0.302, blue: 1.000).opacity(0.08), location: 0.50),
-                .init(color: Color(red: 0.913, green: 0.933, blue: 0.969).opacity(0.0),  location: 1.0),
-            ]),
-            center: .top,
-            startRadius: 0,
-            endRadius: 380
-        )
-
-        /// HeroSunset — gradient tenue para premium cards (focusSoft → novaSoft).
-        static let heroSunsetGradient = LinearGradient(
-            gradient: Gradient(colors: [
-                Color(red: 0.937, green: 0.965, blue: 1.000),  // #EFF6FF
-                Color(red: 0.933, green: 0.949, blue: 1.000),  // #EEF2FF
-            ]),
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-
-        /// DangerMelt — destrucción / alertas. Rojo → rojo profundo.
-        static let dangerMeltGradient = LinearGradient(
-            gradient: Gradient(colors: [
-                Color(red: 0.937, green: 0.267, blue: 0.267),  // #EF4444
-                Color(red: 0.725, green: 0.110, blue: 0.110),  // #B91C1C
-            ]),
-            startPoint: .top,
-            endPoint: .bottom
-        )
-
-        /// Nova gradient legacy — preservado para call sites existentes
-        /// (FocusBar diamond, Nova tab icon, ExampleBadge, etc.). Usar
-        /// `novaPrismGradient` para usos nuevos.
-        static let novaGradient = LinearGradient(
-            gradient: Gradient(stops: [
-                .init(color: Color(red: 0.145, green: 0.388, blue: 0.922), location: 0.0),  // focus blue
-                .init(color: Color(red: 0.220, green: 0.510, blue: 1.000), location: 0.45), // electric blue
-                .init(color: Color(red: 0.310, green: 0.275, blue: 1.000), location: 0.80), // electric indigo
-                .init(color: Color(red: 0.482, green: 0.290, blue: 0.965), location: 1.0)   // violet tail
-            ]),
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-
-        // MARK: - Nova chat (glassmorphic dark — solo segmento Chat)
-        //
-        // Tokens aditivos para el "modo IA premium" del chat. El resto de la
-        // app sigue light. Estos colores asumen fondo violet-black profundo,
-        // por eso el texto y los stroke están calibrados para alto contraste
-        // sobre dark sin perder elegancia.
-
-        /// Fondo principal del chat — gradient vertical violet-black profundo
-        /// con ligero tinte azulado. Independiente del canvas claro de la app.
-        static let novaChatBackground = LinearGradient(
-            gradient: Gradient(stops: [
-                .init(color: Color(red: 0.05, green: 0.03, blue: 0.13), location: 0.00),
-                .init(color: Color(red: 0.07, green: 0.05, blue: 0.18), location: 0.45),
-                .init(color: Color(red: 0.03, green: 0.02, blue: 0.08), location: 1.00),
-            ]),
-            startPoint: .top,
-            endPoint: .bottom
-        )
-
-        /// Halo radial superior — irradia desde el top con tinte violet/electric
-        /// para que el chat no sea un rectángulo plano negro.
-        static let novaChatHalo = RadialGradient(
-            gradient: Gradient(stops: [
-                .init(color: Color(red: 0.357, green: 0.302, blue: 1.000).opacity(0.28), location: 0.0),
-                .init(color: Color(red: 0.220, green: 0.518, blue: 1.000).opacity(0.10), location: 0.55),
-                .init(color: Color.clear, location: 1.0),
-            ]),
-            center: UnitPoint(x: 0.5, y: 0.0),
-            startRadius: 0,
-            endRadius: 480
-        )
-
-        /// Glass fill base — blanco translúcido muy ligero para bubbles Nova
-        /// y chips sobre fondo dark.
-        static let novaGlassFill = Color.white.opacity(0.045)
-        /// Glass fill con tinte cobalto (para user bubble — diferenciador).
-        static let novaGlassUserFill = Color(red: 0.220, green: 0.518, blue: 1.000).opacity(0.18)
-        /// Borde glass estándar — translúcido, simula cristal iluminado.
-        static let novaGlassStroke = Color.white.opacity(0.12)
-        /// Borde glass con énfasis (focused, hover) — tinte violet.
-        static let novaGlassStrokeEmphasis = Color(red: 0.486, green: 0.486, blue: 1.000).opacity(0.45)
-
-        /// Texto sobre fondo dark — blanco puro para títulos/headings.
-        static let novaTextOnDark = Color.white
-        /// Texto sobre dark — gris plata legible para body (~78% white).
-        static let novaTextOnDarkSecondary = Color(white: 0.82)
-        /// Texto sobre dark — terciario apagado para metadata.
-        static let novaTextOnDarkTertiary = Color(white: 0.58)
-        /// Label "NOVA" sobre dark — lila pastel legible.
-        static let novaLabelOnDark = Color(red: 0.74, green: 0.72, blue: 1.0)
-
-        /// Glow morado difuminado para botones / focus rings / shadows.
-        static let novaGlow = Color(red: 0.486, green: 0.380, blue: 1.000).opacity(0.55)
-
-        /// Gradient para botón enviar y CTAs energéticos en dark.
-        static let novaSendGradient = LinearGradient(
-            gradient: Gradient(stops: [
-                .init(color: Color(red: 0.486, green: 0.380, blue: 1.000), location: 0.0),
-                .init(color: Color(red: 0.310, green: 0.275, blue: 1.000), location: 1.0),
-            ]),
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        private static func flat(_ color: Color) -> LinearGradient {
+            LinearGradient(colors: [color, color], startPoint: .top, endPoint: .bottom)
+        }
     }
-
-    // MARK: - Typography
-    //
-    // Mantenemos SF Pro nativo (no embebemos Geist Sans para evitar bundle
-    // weight). El carácter "opinado" se logra con tracking agresivo aplicado
-    // vía `Theme.Tracking` en cada call site, y con la nueva escala que
-    // incluye una variante display (34pt) para hero headers.
-    //
-    // Reglas de uso:
-    // - displayHero → títulos de pantalla únicos (Mi Día, Calendario, etc).
-    // - title1     → headers de sección destacados (Hero de Empty State, Onboarding).
-    // - title2     → títulos de cards grandes / dialog titles.
-    // - title3     → títulos secundarios (settings sections).
-    // - headline   → headers de UI controls / labels destacados.
-    // - body       → texto de lectura (descripciones, párrafos).
-    // - callout    → buttons / badges / tags.
-    // - captionMono→ timestamps, metadata, durations.
 
     enum Typography {
-        /// Display hero — pantalla única (34pt SemiBold). Aplicar `.tracking(Theme.Tracking.displayHero)`.
-        static let displayHero = Font.system(size: 34, weight: .semibold)
-        /// Display extra grande — preservado para call sites legacy. Prefer displayHero.
-        static let display = Font.system(size: 36, weight: .bold)
-        /// Title legacy 30pt — preservado. Para uso nuevo prefer title1 (24pt).
-        static let title = Font.system(size: 30, weight: .bold)
-        /// Title 1 — 24pt SemiBold tracking -0.03em.
-        static let title1 = Font.system(size: 24, weight: .semibold)
-        /// Title 2 — 22pt SemiBold (preservado).
-        static let title2 = Font.system(size: 22, weight: .semibold)
-        /// Title 3 — 20pt Medium tracking -0.02em (nuevo en 2.0).
-        static let title3 = Font.system(size: 20, weight: .medium)
-        /// Headline — 17pt SemiBold tracking -0.015em.
-        static let headline = Font.system(size: 17, weight: .semibold)
-        /// Body — 15pt regular tracking -0.01em.
-        static let body = Font.system(size: 15, weight: .regular)
-        /// Body emphasized — medium weight.
-        static let bodyEmphasized = Font.system(size: 15, weight: .medium)
-        /// Body bold — semibold weight para CTAs inline.
-        static let bodyBold = Font.system(size: 15, weight: .semibold)
-        /// Subhead 13pt regular.
-        static let subhead = Font.system(size: 13, weight: .regular)
-        /// Subhead emphasized.
-        static let subheadEmphasized = Font.system(size: 13, weight: .medium)
-        /// Callout — 13pt Medium para botones / badges.
-        static let callout = Font.system(size: 13, weight: .medium)
-        /// Footnote 12pt medium.
-        static let footnote = Font.system(size: 12, weight: .medium)
-        /// Caption 11pt medium.
-        static let caption = Font.system(size: 11, weight: .medium)
-        /// Caption emphasized.
-        static let captionEmphasized = Font.system(size: 11, weight: .semibold)
-        /// Timestamp legacy (13pt monospaced digit semibold).
-        static let timestamp = Font.system(size: 13, weight: .semibold).monospacedDigit()
-        /// Large number legacy.
-        static let largeNumber = Font.system(size: 28, weight: .bold).monospacedDigit()
-
-        // MARK: Variantes monoespaciadas (Theme 2.0)
-
-        /// Caption mono — 11pt medium SF Mono. Para timestamps, metadata,
-        /// badges UPPERCASE. Aplicar `.tracking(Theme.Tracking.captionMono)`.
-        static let captionMono = Font.system(size: 11, weight: .medium, design: .monospaced)
-        /// Body mono — 13pt medium SF Mono. Para cuentas regresivas, IDs.
-        static let bodyMono = Font.system(size: 13, weight: .medium, design: .monospaced)
-        /// Display mono — 28pt bold SF Mono. Para countdowns hero / KPIs.
-        static let displayMono = Font.system(size: 28, weight: .bold, design: .monospaced)
+        static let displayHero = Font.largeTitle.bold()
+        static let display = Font.largeTitle.bold()
+        static let title = Font.title.bold()
+        static let title1 = Font.title2.weight(.semibold)
+        static let title2 = Font.title2.weight(.semibold)
+        static let title3 = Font.title3.weight(.semibold)
+        static let headline = Font.headline
+        static let body = Font.body
+        static let bodyEmphasized = Font.body.weight(.medium)
+        static let bodyBold = Font.body.weight(.semibold)
+        static let subhead = Font.subheadline
+        static let subheadEmphasized = Font.subheadline.weight(.medium)
+        static let callout = Font.callout.weight(.medium)
+        static let footnote = Font.footnote
+        static let caption = Font.caption
+        static let captionEmphasized = Font.caption.weight(.semibold)
+        static let timestamp = Font.subheadline.monospacedDigit()
+        static let largeNumber = Font.title.bold().monospacedDigit()
+        static let captionMono = Font.system(.caption, design: .monospaced)
+        static let bodyMono = Font.system(.subheadline, design: .monospaced)
+        static let displayMono = Font.system(.title, design: .monospaced).bold()
     }
-
-    // MARK: - Tracking
-    //
-    // Tracking en puntos (no em). SwiftUI `.tracking()` toma CGFloat.
-    // Valores derivados de -0.04em, -0.03em, etc. multiplicados por el font size.
-    // Aplicar siempre que se use la variante tipográfica correspondiente.
 
     enum Tracking {
-        /// -0.04em × 34pt = -1.36
-        static let displayHero: CGFloat = -1.36
-        /// -0.03em × 24pt = -0.72
-        static let title1: CGFloat = -0.72
-        /// -0.025em × 22pt = -0.55
-        static let title2: CGFloat = -0.55
-        /// -0.02em × 20pt = -0.40
-        static let title3: CGFloat = -0.40
-        /// -0.015em × 17pt = -0.255
-        static let headline: CGFloat = -0.255
-        /// -0.01em × 15pt = -0.15
-        static let body: CGFloat = -0.15
-        /// 0 — botones/callout neutral
+        static let displayHero: CGFloat = 0
+        static let title1: CGFloat = 0
+        static let title2: CGFloat = 0
+        static let title3: CGFloat = 0
+        static let headline: CGFloat = 0
+        static let body: CGFloat = 0
         static let callout: CGFloat = 0
-        /// +0.03em × 11pt = +0.33 para UPPERCASE captions
-        static let captionMono: CGFloat = 0.33
+        static let captionMono: CGFloat = 0
     }
-
-    // MARK: - Spacing (sin cambios)
 
     enum Spacing {
         static let xs: CGFloat = 4
@@ -407,21 +122,17 @@ enum Theme {
         static let xxl: CGFloat = 24
         static let xxxl: CGFloat = 32
         static let huge: CGFloat = 48
-        static let bottomBarSafety: CGFloat = 110
+        static let bottomBarSafety: CGFloat = 24
     }
-
-    // MARK: - Radius (sin cambios)
 
     enum Radius {
-        static let sm: CGFloat = 10
-        static let md: CGFloat = 14
-        static let lg: CGFloat = 18
-        static let xl: CGFloat = 22
-        static let xxl: CGFloat = 28
+        static let sm: CGFloat = 8
+        static let md: CGFloat = 12
+        static let lg: CGFloat = 16
+        static let xl: CGFloat = 20
+        static let xxl: CGFloat = 24
         static let pill: CGFloat = 999
     }
-
-    // MARK: - Stroke
 
     enum Stroke {
         static let hairline: CGFloat = 0.5
@@ -429,154 +140,47 @@ enum Theme {
         static let medium: CGFloat = 1.5
     }
 
-    // MARK: - Motion (Theme 2.0)
-    //
-    // Tokens centralizados de animación. Antes cada vista definía durations
-    // y curves a mano — esto los unifica. Reglas:
-    //
-    // - snap     (0.12s) — taps de botón, escala 0.97 al presionar.
-    // - quick    (0.24s) easeOut — toggles, cambios de texto rápidos.
-    // - standard (0.38s) easeInOut — expansiones, transiciones de tab.
-    // - slow     (0.58s) cubicBezier(0.16, 1, 0.3, 1) — chat Nova, cargas.
-
     enum Motion {
-        // Durations en seconds (SwiftUI usa seconds).
         static let snap: Double = 0.12
-        static let quick: Double = 0.24
-        static let standard: Double = 0.38
-        static let slow: Double = 0.58
-
-        // Animations pre-built para uso directo.
-        static let easeOutQuick: Animation = .easeOut(duration: quick)
-        static let easeInOutStandard: Animation = .easeInOut(duration: standard)
-        /// Apple-style overshoot/settle — usar para entrada de elementos hero.
-        static let appleSpring: Animation = .timingCurve(0.16, 1, 0.3, 1, duration: slow)
-        /// Snap interno — escala/opacity rápida de tap feedback.
-        static let snapTap: Animation = .easeInOut(duration: snap)
+        static let quick: Double = 0.18
+        static let standard: Double = 0.24
+        static let slow: Double = 0.3
+        static let easeOutQuick = Animation.easeOut(duration: quick)
+        static let easeInOutStandard = Animation.easeInOut(duration: standard)
+        static let appleSpring = Animation.easeOut(duration: standard)
+        static let snapTap = Animation.easeOut(duration: snap)
     }
 
-    // MARK: - Spring (Theme 2.0)
-    //
-    // Curvas físicas balanceadas. Springs son fundamentales en SwiftUI para
-    // sensación táctil. Usar siempre que el cambio implique movimiento
-    // (no solo opacidad/color).
-
     enum Spring {
-        /// Entrada de UI (cards apareciendo, sheets, inline responses).
-        /// Rebote imperceptible al final para sensación de "asentamiento".
-        static let entrance: Animation = .spring(response: 0.38, dampingFraction: 0.68, blendDuration: 0)
-        /// Salida de UI (dismiss, swipe-out, cierre de modals).
-        /// Extremadamente rápido y amortiguado para "limpiar" pantalla.
-        static let dismiss: Animation = .spring(response: 0.28, dampingFraction: 0.88)
-        /// Gestos continuos (drag, swipe-to-delete).
-        /// Adherido al dedo, retraso cero.
-        static let interactive: Animation = .interactiveSpring(response: 0.18, dampingFraction: 0.85)
-        /// Settle suave — para cuando algo regresa a su lugar tras una interacción.
-        static let settle: Animation = .spring(response: 0.32, dampingFraction: 0.85)
-        /// Pop — para badges/notifications que aparecen con micro-overshoot.
-        static let pop: Animation = .spring(response: 0.30, dampingFraction: 0.55)
+        static let entrance = Animation.easeOut(duration: 0.2)
+        static let dismiss = Animation.easeOut(duration: 0.18)
+        static let interactive = Animation.interactiveSpring(response: 0.2, dampingFraction: 1)
+        static let settle = Animation.easeOut(duration: 0.2)
+        static let pop = Animation.easeOut(duration: 0.18)
     }
 }
 
-// MARK: - View helpers
-
 extension View {
-
-    // MARK: Sección label
-
-    /// Estilo de label seccional en mayúsculas con tracking opinado.
-    /// Usa caption emphasized + textTertiary + UPPERCASE + tracking 0.9.
     func sectionLabelStyle() -> some View {
-        self
-            .font(Theme.Typography.captionEmphasized)
-            .foregroundStyle(Theme.Colors.textTertiary)
-            .textCase(.uppercase)
-            .tracking(0.9)
+        self.font(.caption.weight(.semibold)).foregroundStyle(Theme.Colors.textSecondary)
     }
 
-    // MARK: Cards (sistema 2.0)
-
-    /// Card estándar (Z-1) — blanco puro + hairline + sombra fina.
-    /// Reemplaza la versión 1.0 que usaba sombra 0.06; ahora 0.04 para
-    /// dejar que la profundidad venga del canvas L0 / surface contrast.
-    func focusCard(
-        radius: CGFloat = Theme.Radius.lg,
-        padding: CGFloat = Theme.Spacing.lg,
-        shadow: Bool = true
-    ) -> some View {
-        self
-            .padding(padding)
-            .background(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(Theme.Colors.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: radius, style: .continuous)
-                            .strokeBorder(Theme.Colors.borderHairline, lineWidth: Theme.Stroke.hairline)
-                    )
-                    .shadow(
-                        color: shadow ? Theme.Colors.cardShadow : .clear,
-                        radius: 6,
-                        x: 0,
-                        y: 3
-                    )
-            )
+    func focusCard(radius: CGFloat = Theme.Radius.lg, padding: CGFloat = Theme.Spacing.lg, shadow: Bool = true) -> some View {
+        self.padding(padding)
+            .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: radius))
     }
 
-    /// Card elevada (Z-2) — usa material .ultraThinMaterial + sombra media.
-    /// Para componentes flotantes (tab bar, FocusBar inline, dropdowns).
-    func focusCardElevated(
-        radius: CGFloat = Theme.Radius.xl,
-        padding: CGFloat = Theme.Spacing.lg,
-        tint: Color? = nil
-    ) -> some View {
-        self
-            .padding(padding)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                    if let tint {
-                        RoundedRectangle(cornerRadius: radius, style: .continuous)
-                            .fill(tint.opacity(0.05))
-                    }
-                }
-                .overlay(
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .strokeBorder(Theme.Colors.borderHairline, lineWidth: Theme.Stroke.hairline)
-                )
-                .shadow(color: Theme.Colors.cardShadowStrong, radius: 16, x: 0, y: 8)
-            )
+    func focusCardElevated(radius: CGFloat = Theme.Radius.xl, padding: CGFloat = Theme.Spacing.lg, tint: Color? = nil) -> some View {
+        self.padding(padding)
+            .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: radius))
+            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.Colors.border, lineWidth: 0.5))
     }
 
-    /// Card destacada (Z-1 con énfasis IA) — tinte Nova soft + borde gradient.
-    /// Para NovaSuggestionCard, AI result cards, premium account card.
-    func novaResultCard(
-        radius: CGFloat = Theme.Radius.xl,
-        padding: CGFloat = Theme.Spacing.xl
-    ) -> some View {
-        self
-            .padding(padding)
-            .background(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(Theme.Colors.novaAccentSoft)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: radius, style: .continuous)
-                            .strokeBorder(Theme.Colors.novaPrismGradient, lineWidth: 1.5)
-                    )
-                    .shadow(color: Theme.Colors.cardShadow, radius: 8, x: 0, y: 4)
-            )
+    func novaResultCard(radius: CGFloat = Theme.Radius.xl, padding: CGFloat = Theme.Spacing.xl) -> some View {
+        self.padding(padding)
+            .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: radius))
+            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.Colors.border, lineWidth: 0.5))
     }
 
-    // MARK: Shadow shorthand
-
-    /// Sombra de card estándar (sin borde, sin padding). Versión 2.0:
-    /// más sutil — depth real viene del sistema de capas, no del shadow.
-    func focusCardShadow(strong: Bool = false) -> some View {
-        self.shadow(
-            color: strong ? Theme.Colors.cardShadowStrong : Theme.Colors.cardShadow,
-            radius: strong ? 16 : 6,
-            x: 0,
-            y: strong ? 8 : 3
-        )
-    }
+    func focusCardShadow(strong: Bool = false) -> some View { self }
 }

@@ -2,7 +2,7 @@ import Foundation
 import Speech
 import AVFoundation
 
-/// Voz a texto para Nova Live V1. Usa `SFSpeechRecognizer` + `AVAudioEngine`
+/// Dictado local con `SFSpeechRecognizer` + `AVAudioEngine`
 /// para capturar audio del micrófono y transcribirlo en tiempo real.
 ///
 /// Scope V1:
@@ -16,10 +16,9 @@ import AVFoundation
 /// Permisos: el caller llama `requestAuthorization()` antes de `start()`.
 /// Si rechaza, `start()` no hace nada y `state` queda en `.denied`.
 ///
-/// Privacidad: el audio se procesa preferentemente on-device cuando el
-/// modelo del idioma lo soporta. Si no, iOS envía a Apple para
-/// reconocimiento — el usuario ya acepta esto al dar permiso de Speech.
-/// Nunca enviamos audio al backend Focus.
+/// Privacidad: exige el modelo de reconocimiento en el dispositivo.
+/// Si falta, muestra un error recuperable y permite continuar escribiendo.
+/// No envía audio al backend de Focus ni habilita reconocimiento remoto.
 @MainActor
 final class NovaLiveService: ObservableObject {
 
@@ -49,7 +48,32 @@ final class NovaLiveService: ObservableObject {
 
     // MARK: - Internals
 
+    /// Permission operations are injectable so cancellation can be verified without audio hardware.
+    struct Permissions {
+        var currentStatus: () async -> AuthorizationCombined
+        var requestSpeech: () async -> Bool
+        var requestMicrophone: () async -> Bool
+
+        static var system: Permissions {
+            Permissions(
+                currentStatus: {
+                    let speech = SFSpeechRecognizer.authorizationStatus()
+                    let mic = AVAudioApplication.shared.recordPermission
+                    if speech == .authorized && mic == .granted { return .authorized }
+                    if speech == .denied || speech == .restricted || mic == .denied { return .denied }
+                    return .notDetermined
+                },
+                requestSpeech: { await NovaLiveService.requestSpeechRecognitionAuthorization() == .authorized },
+                requestMicrophone: { await NovaLiveService.requestMicrophonePermission() }
+            )
+        }
+    }
+
+    private let permissions: Permissions
     private let recognizer: SFSpeechRecognizer?
+    /// Every teardown invalidates suspended permission requests and queued audio callbacks.
+    private(set) var sessionGeneration = UUID()
+    private var audioSessionIsActive = false
     private var audioEngine: AVAudioEngine?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -92,11 +116,10 @@ final class NovaLiveService: ObservableObject {
     /// callback da ~14fps que es suficiente para animación fluida.
     private var bufferTickCounter: Int = 0
 
-    init() {
-        // Preferir es-CL para entonación natural; si no está disponible,
-        // caer a es-ES (España) que SÍ está garantizado en iOS. Si tampoco,
-        // recognizer default del sistema (probablemente en_US, pero al menos
-        // no es nil).
+    init(permissions: Permissions = .system) {
+        self.permissions = permissions
+        // Preferir español de Chile, después español de España y el locale
+        // del dispositivo. La disponibilidad del modelo local se verifica al iniciar.
         let preferred = SFSpeechRecognizer(locale: Locale(identifier: "es_CL"))
         let fallbackES = SFSpeechRecognizer(locale: Locale(identifier: "es_ES"))
         let any = SFSpeechRecognizer()
@@ -110,15 +133,22 @@ final class NovaLiveService: ObservableObject {
     /// Pide los DOS permisos necesarios en orden: Speech Recognition + Micrófono.
     /// Devuelve `true` solo si ambos quedan autorizados.
     func requestAuthorization() async -> Bool {
+        guard !Task.isCancelled else { return false }
+        tearDown()
+        return await requestAuthorization(for: sessionGeneration)
+    }
+
+    private func requestAuthorization(for generation: UUID) async -> Bool {
+        guard continueSession(generation) else { return false }
         state = .requestingPermissions
-        // Speech recognition primero — si el usuario lo deniega, no
-        // tiene sentido pedir mic.
-        let speechStatus = await Self.requestSpeechRecognitionAuthorization()
-        guard speechStatus == .authorized else {
+        let speechGranted = await permissions.requestSpeech()
+        guard continueSession(generation) else { return false }
+        guard speechGranted else {
             state = .denied
             return false
         }
-        let micGranted = await Self.requestMicrophonePermission()
+        let micGranted = await permissions.requestMicrophone()
+        guard continueSession(generation) else { return false }
         guard micGranted else {
             state = .denied
             return false
@@ -127,19 +157,27 @@ final class NovaLiveService: ObservableObject {
         return true
     }
 
-    /// Estado combinado: si CUALQUIERA de los dos no está autorizado, lo
-    /// tratamos como denied/notDetermined. La UI lo usa para mostrar el
-    /// botón correcto ("Activar" vs "Abrir Ajustes").
     func currentAuthorizationStatus() async -> AuthorizationCombined {
-        let speech = SFSpeechRecognizer.authorizationStatus()
-        let mic = AVAudioApplication.shared.recordPermission
-        if speech == .authorized && mic == .granted {
-            return .authorized
+        await permissions.currentStatus()
+    }
+
+    /// One lifecycle spans permission lookup, permission dialogs and recording.
+    /// The sheet must not restart a fresh session after a suspended lookup is cancelled.
+    func beginDictation() async {
+        guard !Task.isCancelled else { return }
+        tearDown()
+        let generation = sessionGeneration
+        let status = await currentAuthorizationStatus()
+        guard continueSession(generation) else { return }
+        if status == .denied {
+            state = .denied
+            return
         }
-        if speech == .denied || speech == .restricted || mic == .denied {
-            return .denied
+        if status == .notDetermined {
+            guard await requestAuthorization(for: generation) else { return }
         }
-        return .notDetermined
+        guard continueSession(generation) else { return }
+        startCapture(for: generation)
     }
 
     enum AuthorizationCombined {
@@ -169,21 +207,35 @@ final class NovaLiveService: ObservableObject {
     /// Arranca la captura + transcripción. Asume permisos ya autorizados —
     /// si no lo están, devuelve error y deja `state = .denied`.
     func start() async {
-        // Si veníamos de un error previo, limpiar.
+        guard !Task.isCancelled else { return }
+        tearDown()
+        let generation = sessionGeneration
+        let auth = await currentAuthorizationStatus()
+        guard continueSession(generation) else { return }
+        guard auth == .authorized else {
+            state = .denied
+            return
+        }
+        startCapture(for: generation)
+    }
+
+    private func startCapture(for generation: UUID) {
+        guard continueSession(generation) else { return }
         transcript = ""
         audioLevel = 0
         isSpeaking = false
         lastHighEnergyAt = nil
         bufferTickCounter = 0
 
-        let auth = await currentAuthorizationStatus()
-        guard auth == .authorized else {
-            state = .denied
+        guard let recognizer, recognizer.isAvailable else {
+            state = .error("Reconocimiento de voz no disponible en este momento.")
             return
         }
 
-        guard let recognizer, recognizer.isAvailable else {
-            state = .error("Reconocimiento de voz no disponible en este momento.")
+        // El consentimiento promete dictado local. No habilitar una subida
+        // automática de audio cuando falta el modelo de reconocimiento.
+        guard recognizer.supportsOnDeviceRecognition else {
+            state = .error("El dictado sin conexión no está disponible en este iPhone. Puedes escribir tu petición.")
             return
         }
 
@@ -194,6 +246,7 @@ final class NovaLiveService: ObservableObject {
         do {
             try audioSession.setCategory(.record, mode: .measurement, options: [.duckOthers])
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            audioSessionIsActive = true
         } catch {
             state = .error("No pude activar el micrófono. Intenta otra vez.")
             return
@@ -203,33 +256,28 @@ final class NovaLiveService: ObservableObject {
         let engine = AVAudioEngine()
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
-        // Preferir on-device cuando esté disponible — más privado, más
-        // rápido, no requiere internet. Si el modelo del locale no lo
-        // soporta, iOS cae a server-side automáticamente.
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
-        }
+        request.requiresOnDeviceRecognition = true
 
         let inputNode = engine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         inputNode.removeTap(onBus: 0)  // por las dudas, evitar dobles taps
-        // Tap hace 2 cosas: (1) appendear audio al recognizer, (2)
-        // calcular nivel RMS del buffer para audioLevel/VAD. La captura
-        // débil de self sigue el lifecycle del service — si tearDown
-        // nullea recognitionRequest, los buffers dejan de appenderse
-        // limpiamente.
+        // Each tap owns its request: a queued buffer from an old engine must
+        // never be appended to a newer recording's recognition request.
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            guard let self else { return }
-            self.recognitionRequest?.append(buffer)
+            request.append(buffer)
             // Audio level + VAD. Esta closure NO viene en MainActor —
             // calculamos el level acá y hopeamos al main solo para
             // publish + check del watchdog.
             let level = Self.bufferLevel(buffer)
             Task { @MainActor [weak self] in
-                self?.updateAudioLevel(level)
+                guard let self, self.sessionGeneration == generation,
+                      self.state == .listening else { return }
+                self.updateAudioLevel(level)
             }
         }
 
+        self.audioEngine = engine
+        self.recognitionRequest = request
         engine.prepare()
         do {
             try engine.start()
@@ -239,39 +287,20 @@ final class NovaLiveService: ObservableObject {
             return
         }
 
-        self.audioEngine = engine
-        self.recognitionRequest = request
         self.lastSpeechAt = Date()
 
         self.recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            // Este closure NO viene en MainActor — hopeamos al main para
-            // mutar @Published.
-            Task { @MainActor in
-                guard let self else { return }
-                if let result {
-                    self.transcript = result.bestTranscription.formattedString
-                    self.lastSpeechAt = Date()
-                    if result.isFinal {
-                        // El reconocedor dio resultado final — cerrar todo.
-                        self.finalizeListening()
-                    }
-                }
-                if let error {
-                    // Errores comunes: cancellation cuando hacemos stop().
-                    // No tratamos cancelaciones como errores visibles.
-                    let nsErr = error as NSError
-                    let isCancelled = (nsErr.domain == "kAFAssistantErrorDomain" && nsErr.code == 209)
-                        || (nsErr.domain == "kAFAssistantErrorDomain" && nsErr.code == 216)
-                    if !isCancelled {
-                        self.state = .error("No pude entender el audio. Intenta otra vez.")
-                    }
-                    self.tearDown()
-                }
+            let text = result?.bestTranscription.formattedString
+            let isFinal = result?.isFinal ?? false
+            let recognitionError = error as NSError?
+            Task { @MainActor [weak self] in
+                self?.receiveRecognitionUpdate(text: text, isFinal: isFinal,
+                    error: recognitionError, generation: generation)
             }
         }
 
         state = .listening
-        startSilenceWatchdog()
+        startSilenceWatchdog(generation: generation)
     }
 
     /// Termina la grabación. Si hay transcripción acumulada, queda visible
@@ -283,14 +312,16 @@ final class NovaLiveService: ObservableObject {
         state = .processing
         // Pedirle al request que termine de procesar el audio acumulado.
         recognitionRequest?.endAudio()
+        audioEngine?.inputNode.removeTap(onBus: 0)
+        audioEngine?.stop()
         // No tearDown inmediato — esperamos al `isFinal` del recognizer.
         // Si el recognizer no llega a final (raro), forzamos teardown a los
         // 2 segundos.
-        let pendingTask = recognitionTask
+        let generation = sessionGeneration
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 2_000_000_000)
-            guard let self else { return }
-            if pendingTask === self.recognitionTask, self.state == .processing {
+            guard !Task.isCancelled, let self, self.sessionGeneration == generation else { return }
+            if self.state == .processing {
                 self.finalizeListening()
             }
         }
@@ -300,7 +331,6 @@ final class NovaLiveService: ObservableObject {
     /// llama esto cuando el usuario toca "Cancelar" o cuando el contexto
     /// requiere parar todo (cambio de tab, app va a background, logout).
     func cancel() {
-        recognitionTask?.cancel()
         tearDown()
         transcript = ""
         state = .idle
@@ -316,9 +346,9 @@ final class NovaLiveService: ObservableObject {
         recognitionTask?.cancel()
         audioEngine?.inputNode.removeTap(onBus: 0)
         audioEngine?.stop()
-        try? AVAudioSession.sharedInstance().setActive(
-            false, options: .notifyOthersOnDeactivation
-        )
+        if audioSessionIsActive {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 
     // MARK: - Internals
@@ -329,6 +359,7 @@ final class NovaLiveService: ObservableObject {
     }
 
     private func tearDown() {
+        sessionGeneration = UUID()
         silenceCheckTask?.cancel()
         silenceCheckTask = nil
         audioEngine?.inputNode.removeTap(onBus: 0)
@@ -336,6 +367,7 @@ final class NovaLiveService: ObservableObject {
         audioEngine = nil
         recognitionRequest?.endAudio()
         recognitionRequest = nil
+        recognitionTask?.cancel()
         recognitionTask = nil
         lastSpeechAt = nil
         lastHighEnergyAt = nil
@@ -344,7 +376,40 @@ final class NovaLiveService: ObservableObject {
         bufferTickCounter = 0
         // Liberar la sesión para que no se quede activa bloqueando otros
         // sonidos. Ignoramos el error — si falla, no es crítico.
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if audioSessionIsActive {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            audioSessionIsActive = false
+        }
+    }
+
+    private func continueSession(_ generation: UUID) -> Bool {
+        guard sessionGeneration == generation else { return false }
+        guard !Task.isCancelled else {
+            tearDown()
+            state = .idle
+            return false
+        }
+        return true
+    }
+
+    /// Kept separate from Speech's callback to test stale results without a microphone.
+    func receiveRecognitionUpdate(text: String?, isFinal: Bool, error: NSError?, generation: UUID) {
+        guard sessionGeneration == generation,
+              state == .listening || state == .processing else { return }
+        if let text {
+            transcript = text
+            lastSpeechAt = Date()
+            if isFinal {
+                finalizeListening()
+                return
+            }
+        }
+        if let error {
+            let isCancelled = error.domain == "kAFAssistantErrorDomain"
+                && (error.code == 209 || error.code == 216)
+            tearDown()
+            state = isCancelled ? .idle : .error("No pude entender el audio. Intenta otra vez.")
+        }
     }
 
     /// VAD inteligente: distingue **pausa para pensar** vs **fin de habla**
@@ -363,14 +428,14 @@ final class NovaLiveService: ObservableObject {
     ///   significa que el usuario sigue hablando (o murmurando) aunque el
     ///   recognizer aún no haya emitido texto. Solo cortamos cuando
     ///   `lastHighEnergyAt` también pasó `lowEnergyHoldSeconds` (0.6s).
-    private func startSilenceWatchdog() {
+    private func startSilenceWatchdog(generation: UUID) {
         silenceCheckTask?.cancel()
         silenceCheckTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 // Check cada 200ms — más responsive para VAD que 1s.
                 try? await Task.sleep(nanoseconds: 200_000_000)
-                guard let self else { return }
-                guard self.state == .listening else { return }
+                guard !Task.isCancelled, let self, self.sessionGeneration == generation,
+                      self.state == .listening else { return }
 
                 let now = Date()
                 let hasContent = !self.transcript.isEmpty

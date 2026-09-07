@@ -28,11 +28,13 @@ struct FocusApp: App {
     @UIApplicationDelegateAdaptor(FocusAppDelegate.self) private var appDelegate
     @StateObject private var dataStore = FocusDataStore()
     @StateObject private var authStore = AuthStore()
-    @StateObject private var coachMarks = CoachMarksStore()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         #if DEBUG
+        if CommandLine.arguments.contains("--ui-testing") {
+            UserDefaults.standard.set(!CommandLine.arguments.contains("--onboarding"), forKey: "focus.v1.hasSeenOnboarding")
+        }
         // Test runner gate: `FOCUS_RUN_TESTS=1` env var (preferido —
         // `SIMCTL_CHILD_FOCUS_RUN_TESTS=1` desde el host) o argumento
         // `--run-nova-tests` en argv. Algunas combinaciones de simulador/
@@ -101,26 +103,14 @@ struct FocusApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // Background cobalto cuya color matchea EXACTAMENTE el asset
-            // LaunchBackground (#1E2D6B = rgb 0.118/0.176/0.420). Sin esto,
-            // entre el iOS launch screen y el primer paint del BootView
-            // SwiftUI mostraba 1-2 frames de Color.white default → flash
-            // blanco. Ahora cualquier vista hija que NO pinte su propio
-            // fondo deja ver cobalto, no blanco.
-            ZStack {
-                Color(red: 0.118, green: 0.176, blue: 0.420)
-                    .ignoresSafeArea()
-                ContentView()
-                // Overlay global de coach marks — se monta acá para que
-                // ningún sheet/tab interfiera con el zIndex. La card aparece
-                // cuando `coachMarks.presenting != nil`.
-                CoachMarkOverlay(store: coachMarks)
-            }
+            ContentView()
             .environmentObject(dataStore)
             .environmentObject(authStore)
-            .environmentObject(coachMarks)
-            .preferredColorScheme(.light)
+            .preferredColorScheme(preferredColorScheme)
             .tint(Theme.Colors.focusAccent)
+            .onChange(of: dataStore.settings.remindersEnabled) { _, enabled in
+                PushRegistrationService.shared.setEnabled(enabled)
+            }
             // Conexión Auth → DataStore para sync Supabase. Cuando
             // cambia el estado de auth (login, refresh, logout, demo),
             // empujamos credenciales al store. Si hay sesión, dispara
@@ -135,6 +125,9 @@ struct FocusApp: App {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     authStore.refreshIfNeeded()
+                    Task { await dataStore.fetchRemoteAndMerge() }
+                    dataStore.refreshSystemEvents()
+                    dataStore.bootstrapLocalNotifications()
                     // Push remotas: si el permiso de notificaciones ya está
                     // concedido, pedir/renovar el device token de APNs.
                     // Idempotente y barato — iOS re-entrega el token cacheado.
@@ -149,6 +142,14 @@ struct FocusApp: App {
             .task {
                 dataStore.bootstrapLocalNotifications()
             }
+        }
+    }
+
+    private var preferredColorScheme: ColorScheme? {
+        switch dataStore.settings.appearance {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
         }
     }
 
@@ -176,6 +177,7 @@ struct FocusApp: App {
                 accessToken: session.accessToken,
                 userId: userId
             )
+            PushRegistrationService.shared.setEnabled(dataStore.settings.remindersEnabled)
             // Con sesión activa: subir el device token de APNs al backend
             // (si ya llegó) y pedirlo si el permiso de notifs existe.
             PushRegistrationService.shared.updateCredentials(
@@ -185,6 +187,7 @@ struct FocusApp: App {
             Task { await PushRegistrationService.shared.registerIfAuthorized() }
         } else {
             dataStore.applyAuthChange(accessToken: nil, userId: nil)
+            PushRegistrationService.shared.setEnabled(dataStore.settings.remindersEnabled)
             PushRegistrationService.shared.updateCredentials(accessToken: nil, userId: nil)
         }
     }

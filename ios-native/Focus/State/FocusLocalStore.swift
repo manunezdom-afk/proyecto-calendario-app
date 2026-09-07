@@ -1,130 +1,166 @@
 import Foundation
 
-/// Capa de persistencia local en `UserDefaults`.
-///
-/// Reglas:
-/// - **Solo datos no-sensibles.** Tokens, secrets y material auth van a Keychain (no acá).
-/// - **Keys versionadas** con prefix `focus.v1.` para permitir migración futura (v2, v3…)
-///   sin colisiones.
-/// - **Encoding JSON ISO-8601** para fechas — compatible con backend si más adelante
-///   sincronizamos contra Supabase.
-/// - **Errores silenciosos**: load devuelve `nil`, save imprime a consola. La app sigue
-///   funcionando con fallback a demo data. Un decode roto no rompe el boot.
+/// Versioned, account-scoped local files. Every write replaces one complete JSON
+/// document atomically; reads, writes and deletion share the same serial queue.
+/// Legacy unscoped UserDefaults remain untouched for explicit recovery: their
+/// owner cannot be inferred safely when several accounts have used this phone.
 enum FocusLocalStore {
-
-    /// Claves persistidas. Cualquier dato nuevo a persistir agregar acá con prefix versionado.
     enum Key: String, CaseIterable {
-        case tasks                  = "focus.v1.tasks"
-        case events                 = "focus.v1.events"
-        case suggestions            = "focus.v1.suggestions"
-        case novaMessages           = "focus.v1.novaMessages"
-        case settings               = "focus.v1.settings"
-        /// Títulos de eventos/tareas demo que el usuario descartó. Sobreviven
-        /// al cerrar la app — los ejemplos descartados NO vuelven a aparecer.
-        case dismissedDemoEvents    = "focus.v1.dismissedDemoEvents"
-        case dismissedDemoTasks     = "focus.v1.dismissedDemoTasks"
-        /// IDs de items que el usuario borró localmente pero cuya
-        /// confirmación remota (soft delete en Supabase) puede haber
-        /// fallado por red. Sobreviven a cierres y se reintentan en cada
-        /// `fetchRemoteAndMerge`. Sin esto, un evento borrado offline
-        /// podía "revivir" al volver a tener internet.
-        case pendingDeleteEvents    = "focus.v1.pendingDeleteEvents"
-        case pendingDeleteTasks     = "focus.v1.pendingDeleteTasks"
+        case tasks = "focus.v1.tasks"
+        case events = "focus.v1.events"
+        case suggestions = "focus.v1.suggestions"
+        case novaMessages = "focus.v1.novaMessages"
+        case settings = "focus.v1.settings"
+        case dismissedDemoEvents = "focus.v1.dismissedDemoEvents"
+        case dismissedDemoTasks = "focus.v1.dismissedDemoTasks"
+        case pendingDeleteEvents = "focus.v1.pendingDeleteEvents"
+        case pendingDeleteTasks = "focus.v1.pendingDeleteTasks"
+        case syncSnapshot = "focus.v2.syncSnapshot"
     }
 
-    // MARK: - Encoders cacheados (mismo motivo que DateFormatters)
+    private static let queue = DispatchQueue(label: "me.usefocus.app.localstore.persist", qos: .utility)
+    private static var namespace = "guest"
+    private static var storageRoot: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Focus/v2", isDirectory: true)
 
-    private static let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
-        return e
-    }()
+    static func activateAccount(_ userId: UUID?) {
+        queue.sync { namespace = userId.map { "account-" + $0.uuidString.lowercased() } ?? "guest" }
+    }
 
-    private static let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        return d
-    }()
+    /// Shared by auxiliary stores such as Nova memory. The owner is captured
+    /// before enqueuing work so delayed writes cannot enter a different account.
+    static func scopedStorageKey(for key: String) -> String {
+        queue.sync { "focus.v2.\(namespace).\(key)" }
+    }
 
-    private static var defaults: UserDefaults { .standard }
+    static var hasUnassignedLegacyData: Bool {
+        Key.allCases.contains { UserDefaults.standard.data(forKey: $0.rawValue) != nil }
+            || UserDefaults.standard.data(forKey: "focus.v1.nova.memories") != nil
+    }
 
-    /// Queue serial de baja prioridad para persistencia. JSONEncoder.encode
-    /// + UserDefaults.set toma 20-80ms cada uno (depende del tamaño del
-    /// array). Antes corrían en main thread → cada mutación bloqueaba la
-    /// UI por ~30-100ms. Con 5 acciones rápidas (swipes consecutivos),
-    /// el main thread se enquebraba 200-500ms y los touches subsequentes
-    /// se sentían "pegados".
-    ///
-    /// `.utility` qos es la priority correcta para esto — más baja que
-    /// userInitiated (no necesitamos respuesta inmediata) pero más alta
-    /// que background (queremos que termine pronto para no perder data
-    /// si la app se suspende).
-    ///
-    /// Serial → garantiza orden FIFO de los writes, evita race conditions
-    /// donde un save de tasks viejo aterrizaría después de uno nuevo.
-    private static let persistQueue = DispatchQueue(
-        label: "me.usefocus.app.localstore.persist",
-        qos: .utility
-    )
+    private static func fileURL(_ key: Key) -> URL {
+        storageRoot.appendingPathComponent(namespace, isDirectory: true)
+            .appendingPathComponent(key.rawValue + ".json")
+    }
 
-    // MARK: - API
+    private static func write<T: Encodable>(_ value: T, to url: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(value)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    }
 
-    /// Codifica y guarda un valor bajo la key indicada.
-    /// **Async en background queue** — la mutación que disparó este save
-    /// no bloquea el main thread. Si falla, imprime el error a consola y
-    /// la key queda con su valor previo.
-    ///
-    /// **Persistencia eventual**: el write puede tardar 20-100ms en
-    /// completarse. Si la app se cierra inmediatamente después de un
-    /// save (raro), iOS coalesce los writes pending de UserDefaults en
-    /// el background; en la práctica no se pierde data.
     static func save<T: Encodable>(_ value: T, forKey key: Key) {
-        persistQueue.async {
+        let destination = queue.sync { fileURL(key) }
+        queue.async {
+            do { try write(value, to: destination) }
+            catch { debugLog("[FocusLocalStore] save failed: \(error)") }
+        }
+    }
+
+    /// Returns only after the atomic replacement completes. Used for the
+    /// event/task/outbox transaction, so a successful local edit is recoverable.
+    @discardableResult
+    static func saveSync<T: Encodable>(_ value: T, forKey key: Key) -> Bool {
+        queue.sync {
+            do { try write(value, to: fileURL(key)); return true }
+            catch { debugLog("[FocusLocalStore] save failed: \(error)"); return false }
+        }
+    }
+
+    static func load<T: Decodable>(_ type: T.Type, forKey key: Key) -> T? {
+        queue.sync {
+            let url = fileURL(key)
+            guard FileManager.default.fileExists(atPath: url.path) else { return nil }
             do {
-                let data = try encoder.encode(value)
-                defaults.set(data, forKey: key.rawValue)
+                let data = try Data(contentsOf: url)
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                return try decoder.decode(type, from: data)
             } catch {
-                debugLog("[FocusLocalStore] save '\(key.rawValue)' failed: \(error)")
+                // Preserve an unreadable document before a subsequent user
+                // edit could replace it. Recovery is possible without guessing.
+                let recovery = url.appendingPathExtension("recovery-" + UUID().uuidString)
+                try? FileManager.default.copyItem(at: url, to: recovery)
+                debugLog("[FocusLocalStore] load failed; recovery copy preserved: \(error)")
+                return nil
             }
         }
     }
 
-    /// Versión SÍNCRONA del save. Solo usar cuando es crítico que el
-    /// write llegue al disco antes de continuar (e.g., `applicationWillTerminate`
-    /// hooks). En 99% de mutaciones normales usar `save` (async).
-    static func saveSync<T: Encodable>(_ value: T, forKey key: Key) {
-        do {
-            let data = try encoder.encode(value)
-            defaults.set(data, forKey: key.rawValue)
-        } catch {
-            debugLog("[FocusLocalStore] saveSync '\(key.rawValue)' failed: \(error)")
-        }
-    }
-
-    /// Carga y decodifica un valor de la key indicada.
-    /// Devuelve `nil` si la key no existe, está corrupta, o el tipo no matchea.
-    static func load<T: Decodable>(_ type: T.Type, forKey key: Key) -> T? {
-        guard let data = defaults.data(forKey: key.rawValue) else { return nil }
-        do {
-            return try decoder.decode(type, from: data)
-        } catch {
-            debugLog("[FocusLocalStore] load '\(key.rawValue)' failed: \(error)")
-            return nil
-        }
-    }
-
-    /// Elimina una key específica.
     static func clear(_ key: Key) {
-        defaults.removeObject(forKey: key.rawValue)
+        queue.sync { try? FileManager.default.removeItem(at: fileURL(key)) }
     }
 
-    /// Elimina TODAS las keys gestionadas por este store.
-    /// Útil para "Borrar datos locales" o futuro logout.
-    /// NOTA: no toca Keychain (este store no lo usa) ni otras keys de UserDefaults
-    /// que la app/SDKs externos pudieran tener.
     static func clearAll() {
-        for key in Key.allCases {
-            defaults.removeObject(forKey: key.rawValue)
+        queue.sync {
+            for key in Key.allCases { try? FileManager.default.removeItem(at: fileURL(key)) }
         }
     }
+
+    static func legacyRecoverySnapshot() -> FocusSyncSnapshot {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let events = UserDefaults.standard.data(forKey: Key.events.rawValue)
+            .flatMap { try? decoder.decode([FocusEvent].self, from: $0) } ?? []
+        let tasks = UserDefaults.standard.data(forKey: Key.tasks.rawValue)
+            .flatMap { try? decoder.decode([FocusTask].self, from: $0) } ?? []
+        return FocusSyncSnapshot(events: events, tasks: tasks, outbox: FocusSyncOutbox())
+    }
+
+    static func guestRecoverySnapshot() -> FocusSyncSnapshot? {
+        queue.sync {
+            let url = storageRoot.appendingPathComponent("guest", isDirectory: true)
+                .appendingPathComponent(Key.syncSnapshot.rawValue + ".json")
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try? decoder.decode(FocusSyncSnapshot.self, from: data)
+        }
+    }
+
+    static func flush() { queue.sync {} }
+
+    #if DEBUG
+    /// An isolated directory makes persistence tests independent of real data.
+    static func useTestingDirectory(_ url: URL) {
+        queue.sync { storageRoot = url; namespace = "guest" }
+    }
+    #endif
+}
+
+/// Persistent FIFO with one current operation per entity. A response may only
+/// acknowledge the exact revision it uploaded; edits made during an await remain.
+struct FocusSyncOutbox: Codable, Equatable {
+    enum Entity: String, Codable { case event, task }
+    enum Operation: String, Codable { case upsert, delete }
+    struct Mutation: Codable, Equatable, Identifiable {
+        let id: UUID
+        let entity: Entity
+        let operation: Operation
+        let revision: UUID
+    }
+    private(set) var mutations: [Mutation] = []
+
+    mutating func enqueue(_ entity: Entity, id: UUID, operation: Operation) {
+        mutations.removeAll { $0.entity == entity && $0.id == id }
+        mutations.append(Mutation(id: id, entity: entity, operation: operation, revision: UUID()))
+    }
+
+    mutating func acknowledge(_ mutation: Mutation) {
+        mutations.removeAll { $0 == mutation }
+    }
+
+    func contains(_ entity: Entity, id: UUID) -> Bool {
+        mutations.contains { $0.entity == entity && $0.id == id }
+    }
+}
+
+struct FocusSyncSnapshot: Codable {
+    var events: [FocusEvent]
+    var tasks: [FocusTask]
+    var outbox: FocusSyncOutbox
+    var recoveryEventIDs: [UUID: UUID]? = nil
+    var recoveryTaskIDs: [UUID: UUID]? = nil
 }

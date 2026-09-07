@@ -1,21 +1,9 @@
 import SwiftUI
 
 private enum TaskFilter: String, CaseIterable, Identifiable {
-    case all
-    case pending
-    case done
-    case high
-
+    case pending, done
     var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .all: return "Todas"
-        case .pending: return "Pendientes"
-        case .done: return "Completadas"
-        case .high: return "Alta prioridad"
-        }
-    }
+    var label: String { self == .pending ? "Pendientes" : "Completadas" }
 }
 
 struct TareasView: View {
@@ -23,529 +11,309 @@ struct TareasView: View {
     @EnvironmentObject private var toast: ToastManager
     @State private var filter: TaskFilter = .pending
     @State private var showCreate = false
+    @State private var editingTask: FocusTask?
     @State private var expandedTaskIds: Set<UUID> = []
-    /// Tarea en edición. nil = sheet cerrado.
-    @State private var editingTask: FocusTask? = nil
 
-    /// Tareas reales si hay; ejemplos solo en modo demo (no logueado).
-    /// Cuenta real con 0 tareas → vacío real.
-    private var displayTasks: [FocusTask] {
-        if store.hasUserTasks { return store.tasks }
-        return store.isInDemoMode ? DemoDataProvider.shared.exampleAllTasks() : []
-    }
-
-    private var showingExamples: Bool {
-        !store.hasUserTasks && store.isInDemoMode
+    private var filteredTasks: [FocusTask] {
+        store.tasks.filter { $0.done == (filter == .done) }.sorted { lhs, rhs in
+            if filter == .done { return (lhs.doneAt ?? .distantPast) > (rhs.doneAt ?? .distantPast) }
+            let left = deadline(lhs) ?? .distantFuture
+            let right = deadline(rhs) ?? .distantFuture
+            if left != right { return left < right }
+            if lhs.priority != rhs.priority { return lhs.priority == .alta || rhs.priority == .baja }
+            return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+        }
     }
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Theme.Colors.background.ignoresSafeArea()
-
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                        header
-                            .padding(.horizontal, Theme.Spacing.xl)
-                            .padding(.top, Theme.Spacing.md)
-
-                        filtersRow
-                            .padding(.horizontal, Theme.Spacing.xl)
-
-                        if hasAnyResult {
-                            sectionsList
-                                .padding(.horizontal, Theme.Spacing.xl)
-                        } else {
-                            EmptyStateView(
-                                symbol: "checkmark.circle",
-                                title: emptyTitle,
-                                message: emptyMessage,
-                                actionLabel: "Nueva tarea",
-                                action: { showCreate = true }
-                            )
-                            .frame(minHeight: 320)
-                        }
-
-                        Spacer(minLength: Theme.Spacing.bottomBarSafety)
+            List {
+                if let error = store.localSaveError {
+                    Section {
+                        Label(error, systemImage: "exclamationmark.circle")
+                            .foregroundStyle(Theme.Colors.danger)
+                            .accessibilityIdentifier("tasks.saveError")
                     }
+                }
+                Section {
+                    Picker("Mostrar tareas", selection: $filter) {
+                        ForEach(TaskFilter.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("tasks.filter")
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    .listRowBackground(Color.clear)
+                }
+
+                if filteredTasks.isEmpty {
+                    ContentUnavailableView {
+                        Label(filter == .done ? "Aún no hay tareas completadas" : "Todo en orden", systemImage: "checkmark.circle")
+                    } description: {
+                        Text(filter == .done ? "Lo que termines queda aquí para que puedas revisarlo." : "Guarda lo que tienes en mente. Una cosa a la vez.")
+                    } actions: {
+                        if filter == .pending {
+                            Button("Nueva tarea") { showCreate = true }
+                                .buttonStyle(.borderedProminent)
+                                .frame(minHeight: 44)
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                } else if filter == .done {
+                    taskSection("Completadas", items: filteredTasks)
+                } else {
+                    taskSection("Atrasadas", items: filteredTasks.filter { group($0) == 0 })
+                    taskSection("Hoy", items: filteredTasks.filter { group($0) == 1 })
+                    taskSection("Próximamente", items: filteredTasks.filter { group($0) == 2 })
+                    taskSection("Sin fecha", items: filteredTasks.filter { group($0) == 3 })
+                }
+            }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Theme.Colors.background)
+            .navigationTitle("Pendientes")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showCreate = true } label: {
+                        Image(systemName: "plus").frame(minWidth: 44, minHeight: 44)
+                    }
+                    .accessibilityLabel("Nueva tarea")
+                    .accessibilityIdentifier("task.new")
                 }
             }
             .sheet(isPresented: $showCreate) {
-                NuevaTareaSheet { newTask in
-                    store.addTask(newTask)
-                    toast.success("Tarea creada")
+                NuevaTareaSheet { task in
+                    let saved = store.addTask(task)
+                    if saved { toast.success("Tarea guardada") }
+                    return saved
                 }
-                .presentationDetents([.medium])
-                .presentationBackground(Theme.Colors.background)
             }
             .sheet(item: $editingTask) { task in
                 NuevaTareaSheet(editing: task) { updated in
-                    store.updateTask(updated)
-                    toast.success("Tarea actualizada")
-                }
-                .presentationDetents([.medium])
-                .presentationBackground(Theme.Colors.background)
-            }
-        }
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.md) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Tareas")
-                    .font(Theme.Typography.displayHero)
-                    .tracking(Theme.Tracking.displayHero)
-                    .foregroundStyle(Theme.Colors.textPrimary)
-                Text(headerSubtitle)
-                    .font(Theme.Typography.body)
-                    .tracking(Theme.Tracking.body)
-                    .foregroundStyle(Theme.Colors.textSecondary)
-                    .lineLimit(2)
-            }
-            Spacer()
-            addButton
-                .padding(.top, 6)
-        }
-    }
-
-    private var addButton: some View {
-        Button {
-            HapticManager.shared.tap()
-            showCreate = true
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 38, height: 38)
-                .background(
-                    Circle()
-                        .fill(Theme.Colors.focusAccent)
-                        .shadow(color: Theme.Colors.focusAccent.opacity(0.30), radius: 10, x: 0, y: 4)
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Nueva tarea")
-    }
-
-    private var headerSubtitle: String {
-        if showingExamples {
-            return "Lo que tienes pendiente, en un solo lugar."
-        }
-        let pending = store.tasks.filter { !$0.done }.count
-        if pending == 0 { return "No tienes pendientes. Disfruta el momento." }
-        if pending == 1 { return "1 tarea pendiente. Vamos por ella." }
-        return "\(pending) tareas pendientes. Una por una."
-    }
-
-    // MARK: - Filters
-
-    private var filtersRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Theme.Spacing.sm) {
-                ForEach(TaskFilter.allCases) { f in
-                    FilterChip(label: f.label, isSelected: filter == f) {
-                        filter = f
-                    }
+                    let saved = store.updateTask(updated)
+                    if saved { toast.success("Tarea actualizada") }
+                    return saved
                 }
             }
         }
     }
-
-    // MARK: - Sections
 
     @ViewBuilder
-    private var sectionsList: some View {
-        VStack(spacing: Theme.Spacing.xl) {
-            ForEach(TaskCategory.allCases) { cat in
-                let cats = filteredTasks(in: cat)
-                if !cats.isEmpty {
-                    section(category: cat, tasks: cats)
-                }
-            }
-        }
-    }
-
-    private func section(category: TaskCategory, tasks: [FocusTask]) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            SectionHeader(title: category.displayName, trailing: "\(tasks.count)")
-
-            VStack(spacing: Theme.Spacing.sm) {
-                ForEach(tasks) { task in
-                    SwipeToDelete(enabled: store.hasUserTasks) {
-                        store.deleteTask(task.id)
-                        toast.success("Tarea eliminada", symbol: "trash.fill")
-                    } content: {
-                        TaskRowFull(
-                            task: task,
-                            isExpanded: expandedTaskIds.contains(task.id),
-                            onToggle: { store.toggleTask(task.id) },
-                            onToggleSubtask: { subId in
-                                store.toggleSubtask(taskId: task.id, subtaskId: subId)
-                            },
-                            onExpand: { toggleExpand(task.id) }
-                        )
-                    }
-                    .contextMenu {
-                        if store.hasUserTasks {
+    private func taskSection(_ title: String, items: [FocusTask]) -> some View {
+        if !items.isEmpty {
+            Section(title) {
+                ForEach(items) { task in
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(alignment: .center, spacing: Theme.Spacing.sm) {
                             Button {
-                                editingTask = task
+                                if store.toggleTask(task.id), !task.done { toast.success("Completada") }
                             } label: {
-                                Label("Editar", systemImage: "pencil")
+                                Image(systemName: task.done ? "checkmark.circle.fill" : "circle")
+                                    .font(.title2)
+                                    .foregroundStyle(task.done ? Theme.Colors.success : Theme.Colors.textSecondary)
+                                    .frame(width: 44, height: 44)
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel(task.done ? "Marcar como pendiente: \(task.title)" : "Completar: \(task.title)")
+                            .accessibilityValue(task.done ? "Completada" : "Pendiente")
+                            .accessibilityIdentifier("task.complete.\(task.id.uuidString)")
+
+                            Button { editingTask = task } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(task.title)
+                                        .font(.body)
+                                        .foregroundStyle(Theme.Colors.textPrimary)
+                                        .strikethrough(task.done)
+                                    if let due = task.dueLabel {
+                                        Text(due)
+                                            .font(.subheadline)
+                                            .foregroundStyle(group(task) == 0 && !task.done ? Theme.Colors.danger : Theme.Colors.textSecondary)
+                                    }
+                                    if task.priority == .alta && !task.done {
+                                        Label("Alta prioridad", systemImage: "flag.fill")
+                                            .font(.caption)
+                                            .foregroundStyle(Theme.Colors.danger)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityHint("Editar tarea")
+                            .accessibilityIdentifier("task.edit.\(task.id.uuidString)")
+
+                            if task.hasSubtasks {
+                                Button {
+                                    if expandedTaskIds.contains(task.id) { expandedTaskIds.remove(task.id) }
+                                    else { expandedTaskIds.insert(task.id) }
+                                } label: {
+                                    Image(systemName: expandedTaskIds.contains(task.id) ? "chevron.up" : "chevron.down")
+                                        .frame(width: 44, height: 44)
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Subtareas: \(task.completedSubtaskCount) de \(task.subtasks.count) completadas")
                             }
                         }
+                        if expandedTaskIds.contains(task.id) {
+                            ForEach(task.subtasks) { subtask in
+                                Button {
+                                    store.toggleSubtask(taskId: task.id, subtaskId: subtask.id)
+                                } label: {
+                                    Label(subtask.title, systemImage: subtask.isCompleted ? "checkmark.circle.fill" : "circle")
+                                        .font(.subheadline)
+                                        .foregroundStyle(Theme.Colors.textSecondary)
+                                        .strikethrough(subtask.isCompleted)
+                                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                }
+                                .buttonStyle(.borderless)
+                                .padding(.leading, 52)
+                                .accessibilityValue(subtask.isCompleted ? "Completada" : "Pendiente")
+                            }
+                        }
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
-                            store.deleteTask(task.id)
-                            toast.success("Tarea eliminada", symbol: "trash.fill")
-                        } label: {
-                            Label("Eliminar", systemImage: "trash")
-                        }
+                            if store.deleteTask(task.id) { toast.success("Tarea eliminada") }
+                        } label: { Label("Eliminar", systemImage: "trash") }
+                        Button { editingTask = task } label: { Label("Editar", systemImage: "pencil") }
                     }
+                    .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
                 }
             }
         }
     }
 
-    private func toggleExpand(_ id: UUID) {
-        HapticManager.shared.tick()
-        if expandedTaskIds.contains(id) {
-            expandedTaskIds.remove(id)
-        } else {
-            expandedTaskIds.insert(id)
-        }
+    private func deadline(_ task: FocusTask) -> Date? {
+        guard let date = task.dueDate else { return nil }
+        guard let time = task.dueTime else { return Calendar.current.startOfDay(for: date) }
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
+        return Calendar.current.date(bySettingHour: parts.hour ?? 0, minute: parts.minute ?? 0, second: 0, of: date)
     }
 
-    // MARK: - Filtering
-
-    private func filteredTasks(in category: TaskCategory) -> [FocusTask] {
-        let base = displayTasks.filter { $0.category == category }
-        switch filter {
-        case .all: return base
-        case .pending: return base.filter { !$0.done }
-        case .done: return base.filter { $0.done }
-        case .high: return base.filter { $0.priority == .alta }
+    private func group(_ task: FocusTask) -> Int {
+        guard let due = task.dueDate else {
+            if task.category == .hoy { return 1 }
+            if task.category == .semana { return 2 }
+            return 3
         }
-    }
-
-    private var hasAnyResult: Bool {
-        TaskCategory.allCases.contains { !filteredTasks(in: $0).isEmpty }
-    }
-
-    private var emptyTitle: String {
-        switch filter {
-        case .all: return "Sin tareas todavía"
-        case .pending: return "Sin pendientes"
-        case .done: return "Aún no completaste tareas"
-        case .high: return "Sin tareas de alta prioridad"
-        }
-    }
-
-    private var emptyMessage: String {
-        switch filter {
-        case .all: return "Crea tu primera tarea y la verás aquí."
-        case .pending: return "Estás al día. Disfruta el momento o agrega una nueva."
-        case .done: return "Cuando completes algo, va a aparecer aquí."
-        case .high: return "Nada urgente por ahora."
-        }
-    }
-
-}
-
-// MARK: - Task row con subtareas
-
-private struct TaskRowFull: View {
-    let task: FocusTask
-    let isExpanded: Bool
-    let onToggle: () -> Void
-    let onToggleSubtask: (UUID) -> Void
-    let onExpand: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            mainRow
-            if isExpanded && task.hasSubtasks {
-                Divider()
-                    .overlay(Theme.Colors.border)
-                    .padding(.leading, Theme.Spacing.xxl + Theme.Spacing.md)
-                subtasksList
-                    .padding(.leading, Theme.Spacing.xxl + Theme.Spacing.md)
-                    .padding(.trailing, Theme.Spacing.lg)
-                    .padding(.vertical, Theme.Spacing.sm)
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                .fill(Theme.Colors.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                        .strokeBorder(Theme.Colors.border, lineWidth: Theme.Stroke.hairline)
-                )
-                .focusCardShadow()
-        )
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
-    }
-
-    private var mainRow: some View {
-        HStack(spacing: Theme.Spacing.md - 2) {
-            Button(action: {
-                HapticManager.shared.tap()
-                onToggle()
-            }) {
-                Image(systemName: task.done ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20, weight: .regular))
-                    .foregroundStyle(task.done ? Theme.Colors.success : Theme.Colors.textTertiary)
-                    .animation(.easeInOut(duration: 0.18), value: task.done)
-            }
-            .buttonStyle(.plain)
-
-            // Priority como punto (no chip) — Things 3 style.
-            Circle()
-                .fill(task.priority.color)
-                .frame(width: 7, height: 7)
-                .opacity(task.done ? 0.4 : 1)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(task.title)
-                    .font(Theme.Typography.bodyEmphasized)
-                    .foregroundStyle(task.done ? Theme.Colors.textTertiary : Theme.Colors.textPrimary)
-                    .strikethrough(task.done, color: Theme.Colors.textTertiary)
-                    .multilineTextAlignment(.leading)
-
-                // Metadata solo si aplica — no ocupa altura cuando no hay nada.
-                if task.dueLabel != nil || task.hasSubtasks {
-                    HStack(spacing: 6) {
-                        if let due = task.dueLabel {
-                            Text(due)
-                                .font(Theme.Typography.caption)
-                                .foregroundStyle(Theme.Colors.textTertiary)
-                        }
-                        if task.dueLabel != nil && task.hasSubtasks {
-                            Text("·").foregroundStyle(Theme.Colors.textQuaternary)
-                        }
-                        if task.hasSubtasks {
-                            Text("\(task.completedSubtaskCount)/\(task.subtasks.count)")
-                                .font(Theme.Typography.caption)
-                                .foregroundStyle(Theme.Colors.textTertiary)
-                        }
-                    }
-                }
-            }
-
-            Spacer()
-
-            if task.hasSubtasks {
-                Button(action: onExpand) {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.Colors.textTertiary)
-                        .padding(8)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, Theme.Spacing.lg)
-        .padding(.vertical, Theme.Spacing.sm + 2)
-    }
-
-    private var subtasksList: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            ForEach(task.subtasks) { sub in
-                Button(action: { onToggleSubtask(sub.id) }) {
-                    HStack(spacing: Theme.Spacing.sm) {
-                        Image(systemName: sub.isCompleted ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 16))
-                            .foregroundStyle(sub.isCompleted ? Theme.Colors.success : Theme.Colors.textTertiary)
-                        Text(sub.title)
-                            .font(Theme.Typography.subhead)
-                            .foregroundStyle(sub.isCompleted ? Theme.Colors.textTertiary : Theme.Colors.textSecondary)
-                            .strikethrough(sub.isCompleted, color: Theme.Colors.textTertiary)
-                            .multilineTextAlignment(.leading)
-                        Spacer()
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-        }
+        let calendar = Calendar.current
+        if calendar.startOfDay(for: due) < calendar.startOfDay(for: Date()) { return 0 }
+        if task.dueTime != nil, let dueAt = deadline(task), dueAt < Date() { return 0 }
+        if calendar.isDateInToday(due) { return 1 }
+        return 2
     }
 }
-
-// MARK: - Sheet de nueva tarea (reusable desde Nova/Mi Día)
 
 struct NuevaTareaSheet: View {
     @Environment(\.dismiss) private var dismiss
-    /// Si está editando, conservamos id + done + subtasks para que el update
-    /// no pierda esos campos.
-    private let editingId: UUID?
-    private let editingDone: Bool
-    private let editingDoneAt: Date?
-    private let editingSubtasks: [FocusSubtask]
-    private let editingDueDate: Date?
-    private let editingDueTime: Date?
-    let onSave: (FocusTask) -> Void
+    private let original: FocusTask?
+    let onSave: (FocusTask) -> Bool
+    @State private var title: String
+    @State private var notes: String
+    @State private var priority: TaskPriority
+    @State private var hasDueDate: Bool
+    @State private var hasDueTime: Bool
+    @State private var dueDate: Date
+    @State private var dueTime: Date
+    @State private var saveError: String?
 
-    @State private var title: String = ""
-    @State private var notes: String = ""
-    @State private var category: TaskCategory = .hoy
-    @State private var priority: TaskPriority = .media
-
-    init(onSave: @escaping (FocusTask) -> Void) {
-        self.editingId = nil
-        self.editingDone = false
-        self.editingDoneAt = nil
-        self.editingSubtasks = []
-        self.editingDueDate = nil
-        self.editingDueTime = nil
-        self.onSave = onSave
+    init(onSave: @escaping (FocusTask) -> Bool) {
+        self.init(original: nil, onSave: onSave)
     }
 
-    init(editing task: FocusTask, onSave: @escaping (FocusTask) -> Void) {
-        self.editingId = task.id
-        self.editingDone = task.done
-        self.editingDoneAt = task.doneAt
-        self.editingSubtasks = task.subtasks
-        self.editingDueDate = task.dueDate
-        self.editingDueTime = task.dueTime
+    init(editing task: FocusTask, onSave: @escaping (FocusTask) -> Bool) {
+        self.init(original: task, onSave: onSave)
+    }
+
+    private init(original: FocusTask?, onSave: @escaping (FocusTask) -> Bool) {
+        self.original = original
         self.onSave = onSave
-        _title = State(initialValue: task.title)
-        _notes = State(initialValue: task.notes ?? "")
-        _category = State(initialValue: task.category)
-        _priority = State(initialValue: task.priority)
+        _title = State(initialValue: original?.title ?? "")
+        _notes = State(initialValue: original?.notes ?? "")
+        _priority = State(initialValue: original?.priority ?? .media)
+        _hasDueDate = State(initialValue: original?.dueDate != nil)
+        _hasDueTime = State(initialValue: original?.dueTime != nil)
+        _dueDate = State(initialValue: original?.dueDate ?? Date())
+        _dueTime = State(initialValue: original?.dueTime ?? Date())
     }
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Theme.Colors.background.ignoresSafeArea()
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: Theme.Spacing.xl) {
-                        sheetField(label: "TÍTULO") {
-                            TextField("¿Qué quieres hacer?", text: $title, axis: .vertical)
-                                .font(Theme.Typography.headline)
-                                .foregroundStyle(Theme.Colors.textPrimary)
-                                .tint(Theme.Colors.focusAccent)
-                                .lineLimit(1...3)
-                        }
-
-                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                            Text("CATEGORÍA").sectionLabelStyle()
-                            HStack(spacing: Theme.Spacing.sm) {
-                                ForEach(TaskCategory.allCases) { cat in
-                                    FilterChip(label: cat.displayName, isSelected: category == cat) {
-                                        category = cat
-                                    }
-                                }
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                            Text("PRIORIDAD").sectionLabelStyle()
-                            HStack(spacing: Theme.Spacing.sm) {
-                                ForEach(TaskPriority.allCases) { p in
-                                    priorityChip(p)
-                                }
-                            }
-                        }
-
-                        sheetField(label: "NOTAS") {
-                            TextField("Detalles, contexto…", text: $notes, axis: .vertical)
-                                .font(Theme.Typography.body)
-                                .foregroundStyle(Theme.Colors.textPrimary)
-                                .tint(Theme.Colors.focusAccent)
-                                .lineLimit(2...5)
-                                .frame(minHeight: 70, alignment: .topLeading)
-                        }
-
-                        Spacer(minLength: Theme.Spacing.lg)
+            Form {
+                if let saveError {
+                    Section {
+                        Label(saveError, systemImage: "exclamationmark.circle")
+                            .foregroundStyle(Theme.Colors.danger)
+                            .accessibilityIdentifier("task.saveError")
                     }
-                    .padding(.horizontal, Theme.Spacing.xl)
-                    .padding(.top, Theme.Spacing.md)
+                }
+                Section("Qué necesitas hacer") {
+                    TextField("Título de la tarea", text: $title, axis: .vertical)
+                        .lineLimit(1...5)
+                        .accessibilityIdentifier("task.title")
+                }
+                Section {
+                    Toggle("Fecha límite", isOn: $hasDueDate)
+                        .accessibilityIdentifier("task.hasDueDate")
+                    if hasDueDate {
+                        DatePicker("Día", selection: $dueDate, displayedComponents: .date)
+                            .accessibilityIdentifier("task.dueDate")
+                        Toggle("Añadir hora", isOn: $hasDueTime)
+                            .accessibilityIdentifier("task.hasDueTime")
+                        if hasDueTime {
+                            DatePicker("Hora límite", selection: $dueTime, displayedComponents: .hourAndMinute)
+                                .accessibilityIdentifier("task.dueTime")
+                        }
+                    }
+                } footer: {
+                    Text("La fecha te ayuda a ver qué necesita atención. Puedes dejarla sin fecha.")
+                }
+                Section("Detalles") {
+                    Picker("Prioridad", selection: $priority) {
+                        ForEach(TaskPriority.allCases) { Text($0.label).tag($0) }
+                    }
+                    .accessibilityIdentifier("task.priority")
+                    TextField("Notas (opcional)", text: $notes, axis: .vertical)
+                        .lineLimit(2...6)
+                        .accessibilityIdentifier("task.notes")
                 }
             }
-            .navigationTitle("Nueva tarea")
+            .navigationTitle(original == nil ? "Nueva tarea" : "Editar tarea")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Theme.Colors.background, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") { dismiss() }
-                        .foregroundStyle(Theme.Colors.textSecondary)
+                        .accessibilityIdentifier("task.cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") {
-                        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !trimmed.isEmpty else { return }
-                        let task = FocusTask(
-                            id: editingId ?? UUID(),
-                            title: trimmed,
-                            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes,
-                            done: editingDone,
-                            doneAt: editingDoneAt,
-                            priority: priority,
-                            category: category,
-                            dueDate: editingDueDate,
-                            dueTime: editingDueTime,
-                            subtasks: editingSubtasks
-                        )
-                        onSave(task)
-                        dismiss()
-                    }
-                    .foregroundStyle(canSave ? Theme.Colors.focusAccent : Theme.Colors.textTertiary)
-                    .disabled(!canSave)
+                    Button("Guardar", action: save)
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .accessibilityIdentifier("task.save")
                 }
             }
         }
     }
 
-    private func priorityChip(_ p: TaskPriority) -> some View {
-        Button {
-            HapticManager.shared.tick()
-            priority = p
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: p.symbol)
-                    .font(.system(size: 11, weight: .semibold))
-                Text(p.label)
-                    .font(Theme.Typography.subheadEmphasized)
-            }
-            .foregroundStyle(priority == p ? .white : Theme.Colors.textSecondary)
-            .padding(.horizontal, Theme.Spacing.md + 2)
-            .padding(.vertical, Theme.Spacing.sm)
-            .background(
-                Capsule()
-                    .fill(priority == p ? p.color : Theme.Colors.surface)
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(priority == p ? Color.clear : Theme.Colors.border, lineWidth: Theme.Stroke.hairline)
-                    )
-            )
+    private func save() {
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return }
+        var task = original ?? FocusTask(title: cleaned, category: .algunDia)
+        task.title = cleaned
+        let cleanNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        task.notes = cleanNotes.isEmpty ? nil : cleanNotes
+        task.priority = priority
+        task.dueDate = hasDueDate ? Calendar.current.startOfDay(for: dueDate) : nil
+        if hasDueDate && hasDueTime {
+            let parts = Calendar.current.dateComponents([.hour, .minute], from: dueTime)
+            task.dueTime = Calendar.current.date(bySettingHour: parts.hour ?? 9, minute: parts.minute ?? 0, second: 0, of: dueDate)
+        } else {
+            task.dueTime = nil
         }
-        .buttonStyle(.plain)
-    }
-
-    private func sheetField<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            Text(label).sectionLabelStyle()
-            content()
-                .padding(Theme.Spacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                        .fill(Theme.Colors.surface)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                                .strokeBorder(Theme.Colors.border, lineWidth: Theme.Stroke.hairline)
-                        )
-                )
+        if hasDueDate { task.category = Calendar.current.isDateInToday(dueDate) ? .hoy : .semana }
+        else if original == nil || original?.dueDate != nil { task.category = .algunDia }
+        if onSave(task) {
+            dismiss()
+        } else {
+            saveError = "No pudimos guardar la tarea. Revisa el espacio disponible e inténtalo de nuevo."
         }
     }
-
-    private var canSave: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-}
-
-#Preview {
-    TareasView()
-        .environmentObject(FocusDataStore())
 }

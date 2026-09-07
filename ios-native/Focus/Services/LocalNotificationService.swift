@@ -29,9 +29,13 @@ extension Notification.Name {
 /// evento + ubicación si la tiene. No incluye `id`, no incluye tokens,
 /// no incluye datos sensibles. El cuerpo cumple con la regla del usuario
 /// de mensajes cortos y útiles.
+@MainActor
 final class LocalNotificationService: NSObject, UNUserNotificationCenterDelegate {
 
     static let shared = LocalNotificationService()
+    private var revisions: [UUID: UUID] = [:]
+    private var generation = UUID()
+    private var desiredEvents: [FocusEvent] = []
 
     private override init() {
         super.init()
@@ -109,7 +113,7 @@ final class LocalNotificationService: NSObject, UNUserNotificationCenterDelegate
     ///
     /// Idempotente: usar la misma id reemplaza la pendiente anterior, así
     /// que es seguro llamarla varias veces (por ejemplo en `mergeRemoteEvents`).
-    func scheduleReminder(for event: FocusEvent) async {
+    private func scheduleReminder(for event: FocusEvent, allowedFireDates: Set<Date>) async {
         let isReminderEvent = event.isReminder == true
         let hasOffsets = !(event.reminderOffsets?.isEmpty ?? true)
         guard isReminderEvent || hasOffsets else {
@@ -126,13 +130,21 @@ final class LocalNotificationService: NSObject, UNUserNotificationCenterDelegate
 
         // Antes de programar la nueva, cancelamos cualquier pendiente de
         // este evento (puede haber múltiples si tiene varios offsets).
-        cancelReminder(eventId: event.id)
+        let revision = UUID()
+        revisions[event.id] = revision
+        let scheduledGeneration = generation
+        let pending = await UNUserNotificationCenter.current().pendingNotificationRequests()
+        guard revisions[event.id] == revision, generation == scheduledGeneration else { return }
+        let prefix = Self.identifier(for: event.id)
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: pending.map(\.identifier).filter { $0 == prefix || $0.hasPrefix(prefix + "-") }
+        )
 
         // Calculamos las fechas en que dispararán las notificaciones.
         // - Si hay `reminderOffsets`, programamos uno por cada offset
         //   (startTime - offset). Filtramos los que ya pasaron.
         // - Si no hay offsets, programamos una sola al startTime.
-        let fireDates = computeFireDates(for: event)
+        let fireDates = Self.plannedFireDates(for: event, now: Date()).filter { allowedFireDates.contains($0) }
         guard !fireDates.isEmpty else { return }
 
         let center = UNUserNotificationCenter.current()
@@ -178,16 +190,16 @@ final class LocalNotificationService: NSObject, UNUserNotificationCenterDelegate
             content.userInfo = ["eventId": event.id.uuidString]
 
             let components = Calendar.current.dateComponents(
-                [.year, .month, .day, .hour, .minute],
+                [.year, .month, .day, .hour, .minute, .second, .timeZone],
                 from: fireDate
             )
             let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
 
             // Identifier por offset para poder cancelar individualmente.
             // El primer fire usa el id base (compatibilidad con cancelReminder).
-            let identifier = fireDates.count == 1
-                ? Self.identifier(for: event.id)
-                : "\(Self.identifier(for: event.id))-\(index)"
+            // Each scheduling revision has its own identifier. A late completion
+            // can remove its own request without cancelling a newer edit's alert.
+            let identifier = "\(Self.identifier(for: event.id))-\(revision.uuidString)-\(index)"
 
             let request = UNNotificationRequest(
                 identifier: identifier,
@@ -197,9 +209,54 @@ final class LocalNotificationService: NSObject, UNUserNotificationCenterDelegate
 
             do {
                 try await center.add(request)
+                guard revisions[event.id] == revision, generation == scheduledGeneration else {
+                    center.removePendingNotificationRequests(withIdentifiers: [identifier])
+                    return
+                }
             } catch {
                 debugLog("[LocalNotificationService] schedule failed: \(error.localizedDescription)")
             }
+        }
+    }
+
+    struct PlannedReminder: Equatable {
+        let eventID: UUID
+        let fireDate: Date
+    }
+
+    /// iOS keeps a finite pending queue. Select the nearest reminders globally,
+    /// rather than allowing a distant recurrence to occupy all available slots.
+    static func plannedWindow(events: [FocusEvent], now: Date, capacity: Int = 64) -> [PlannedReminder] {
+        let candidates = events.filter { $0.status != .done && $0.status != .cancelled }
+            .flatMap { event in
+                plannedFireDates(for: event, now: now).map { PlannedReminder(eventID: event.id, fireDate: $0) }
+            }
+            .sorted {
+                if $0.fireDate != $1.fireDate { return $0.fireDate < $1.fireDate }
+                return $0.eventID.uuidString < $1.eventID.uuidString
+            }
+        return Array(candidates.prefix(max(0, min(64, capacity))))
+    }
+
+    /// Reconcile the whole queue whenever data changes or the app becomes active.
+    /// Existing non-Focus requests also consume the app's 64 available slots.
+    func synchronizeReminders(for events: [FocusEvent]) async {
+        desiredEvents = events
+        generation = UUID()
+        let currentGeneration = generation
+        revisions.removeAll()
+        let center = UNUserNotificationCenter.current()
+        let pending = await center.pendingNotificationRequests()
+        guard generation == currentGeneration else { return }
+        let own = pending.filter { $0.identifier.hasPrefix(Self.eventReminderPrefix) }
+        let available = max(0, 64 - (pending.count - own.count))
+        let window = Self.plannedWindow(events: events, now: Date(), capacity: available)
+        center.removePendingNotificationRequests(withIdentifiers: own.map(\.identifier))
+        let datesByEvent = Dictionary(grouping: window, by: \.eventID)
+        for event in events where datesByEvent[event.id] != nil {
+            guard generation == currentGeneration else { return }
+            let dates = Set((datesByEvent[event.id] ?? []).map(\.fireDate))
+            await scheduleReminder(for: event, allowedFireDates: dates)
         }
     }
 
@@ -208,16 +265,14 @@ final class LocalNotificationService: NSObject, UNUserNotificationCenterDelegate
     /// Filtra las que quedaron en el pasado (ej. usuario crea evento para
     /// dentro de 3 min con offset de 10 min → la notif ya pasó, no la
     /// programamos pero sí seguimos con el resto).
-    private func computeFireDates(for event: FocusEvent) -> [Date] {
-        let now = Date()
+    /// Pure planning boundary: tests can verify delivery dates without asking
+    /// for permission or enqueuing a system notification.
+    static func plannedFireDates(for event: FocusEvent, now: Date) -> [Date] {
+        guard event.startTime > now else { return [] }
         let offsets = event.reminderOffsets ?? []
-        if offsets.isEmpty {
-            return event.startTime > now ? [event.startTime] : []
-        }
-        return offsets
-            .compactMap { offset in
-                event.startTime.addingTimeInterval(-Double(offset) * 60)
-            }
+        if offsets.isEmpty { return event.isReminder == true ? [event.startTime] : [] }
+        return Set(offsets.filter { $0 >= 0 })
+            .map { event.startTime.addingTimeInterval(-Double($0) * 60) }
             .filter { $0 > now }
             .sorted()
     }
@@ -268,21 +323,29 @@ final class LocalNotificationService: NSObject, UNUserNotificationCenterDelegate
     /// `-0`, `-1`, etc. cuando hay múltiples offsets. Silencioso si no
     /// había nada pendiente.
     func cancelReminder(eventId: UUID) {
-        let center = UNUserNotificationCenter.current()
+        let revision = UUID()
+        revisions[eventId] = revision
         let base = Self.identifier(for: eventId)
-        // Variantes posibles. 6 es defensivo: hoy soportamos máximo 1 offset
-        // pero dejamos espacio si en el futuro queremos múltiples avisos.
-        var candidates: [String] = [base]
-        for i in 0..<6 { candidates.append("\(base)-\(i)") }
-        center.removePendingNotificationRequests(withIdentifiers: candidates)
+        Task { [weak self] in
+            let center = UNUserNotificationCenter.current()
+            let pending = await center.pendingNotificationRequests()
+            guard self?.revisions[eventId] == revision else { return }
+            let ids = pending.map(\.identifier).filter { $0 == base || $0.hasPrefix(base + "-") }
+            center.removePendingNotificationRequests(withIdentifiers: ids)
+        }
     }
 
     /// Limpia TODAS las notificaciones de recordatorio (las que comienzan
     /// con `focus-reminder-event-`). Útil para "Reset local" en Ajustes y
     /// para signOut. NO toca otras notificaciones del sistema.
     func cancelAllReminders() async {
+        desiredEvents = []
+        generation = UUID()
+        let cancellationGeneration = generation
+        revisions.removeAll()
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests()
+        guard generation == cancellationGeneration else { return }
         let ourIds = pending
             .map(\.identifier)
             .filter { $0.hasPrefix(Self.eventReminderPrefix) }
@@ -308,12 +371,18 @@ final class LocalNotificationService: NSObject, UNUserNotificationCenterDelegate
     /// (default) y agregamos a la `list` del Notification Center. No
     /// usamos `badge` para no llenar el icon de la app con un número
     /// que el usuario no podría limpiar fácilmente.
-    func userNotificationCenter(
+    nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound, .list])
+        // While the app is running, replenish the next reminder after delivery.
+        // A background/suspended app replenishes when it becomes active again.
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.synchronizeReminders(for: self.desiredEvents)
+        }
     }
 
     /// Llamado por iOS cuando el usuario interactúa con la notificación
@@ -323,7 +392,7 @@ final class LocalNotificationService: NSObject, UNUserNotificationCenterDelegate
     ///
     /// Privacy: solo pasamos el `eventId` por userInfo, sin contenido
     /// del recordatorio. El listener decide qué hacer.
-    func userNotificationCenter(
+    nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
@@ -335,12 +404,11 @@ final class LocalNotificationService: NSObject, UNUserNotificationCenterDelegate
             return
         }
         let eventIdString = response.notification.request.content.userInfo["eventId"] as? String
-        var payload: [AnyHashable: Any] = [:]
-        if let eventIdString {
-            payload["eventId"] = eventIdString
-        }
-        // Async hop al main para que el listener (UI) lo reciba en main thread.
+        // Transfer only a Sendable identifier; construct the Foundation payload
+        // on the main queue where the UI consumes it.
         DispatchQueue.main.async {
+            var payload: [AnyHashable: Any] = [:]
+            if let eventIdString { payload["eventId"] = eventIdString }
             NotificationCenter.default.post(
                 name: .focusReminderTapped,
                 object: nil,

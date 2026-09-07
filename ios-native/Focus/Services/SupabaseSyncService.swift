@@ -133,30 +133,35 @@ enum SupabaseSyncService {
 
     // MARK: - Focus events
 
-    /// GET focus_events del usuario actual (excluyendo soft-deleted).
+    /// Include tombstones: otherwise deletions made on a second device can
+    /// never remove the first device's local row. Page through the full result.
     static func fetchEvents(accessToken: String, userId: String) async throws -> [RemoteFocusEvent] {
-        let url = try url(
-            table: "focus_events",
-            query: [
-                URLQueryItem(name: "user_id", value: "eq.\(userId)"),
-                URLQueryItem(name: "deleted_at", value: "is.null"),
-                URLQueryItem(name: "order", value: "start_time.asc")
-            ]
-        )
-        var req = URLRequest(url: url)
-        req.httpMethod = "GET"
-        for (k, v) in authHeaders(accessToken: accessToken) {
-            req.setValue(v, forHTTPHeaderField: k)
-        }
+        try await fetchRows(table: "focus_events", accessToken: accessToken, userId: userId)
+    }
 
-        let (data, http) = try await performRequest(req)
-        guard (200..<300).contains(http.statusCode) else {
-            try interpretError(http, body: data)
-        }
-        do {
-            return try decoder.decode([RemoteFocusEvent].self, from: data)
-        } catch {
-            throw SupabaseSyncError.decoding("\(error)")
+    private static func fetchRows<Row: Decodable>(table: String, accessToken: String, userId: String) async throws -> [Row] {
+        var result: [Row] = []
+        let pageSize = 500
+        while true {
+            try Task.checkCancellation()
+            let endpoint = try url(table: table, query: [
+                URLQueryItem(name: "user_id", value: "eq.\(userId)"),
+                URLQueryItem(name: "order", value: "id.asc"),
+                URLQueryItem(name: "limit", value: String(pageSize)),
+                URLQueryItem(name: "offset", value: String(result.count))
+            ])
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "GET"
+            for (key, value) in authHeaders(accessToken: accessToken) {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
+            let (data, response) = try await performRequest(request)
+            guard (200..<300).contains(response.statusCode) else { try interpretError(response, body: data) }
+            let page: [Row]
+            do { page = try decoder.decode([Row].self, from: data) }
+            catch { throw SupabaseSyncError.decoding("\(error)") }
+            result.append(contentsOf: page)
+            if page.count < pageSize { return result }
         }
     }
 
@@ -208,29 +213,7 @@ enum SupabaseSyncService {
     // MARK: - Focus tasks
 
     static func fetchTasks(accessToken: String, userId: String) async throws -> [RemoteFocusTask] {
-        let url = try url(
-            table: "focus_tasks",
-            query: [
-                URLQueryItem(name: "user_id", value: "eq.\(userId)"),
-                URLQueryItem(name: "deleted_at", value: "is.null"),
-                URLQueryItem(name: "order", value: "created_at.desc")
-            ]
-        )
-        var req = URLRequest(url: url)
-        req.httpMethod = "GET"
-        for (k, v) in authHeaders(accessToken: accessToken) {
-            req.setValue(v, forHTTPHeaderField: k)
-        }
-
-        let (data, http) = try await performRequest(req)
-        guard (200..<300).contains(http.statusCode) else {
-            try interpretError(http, body: data)
-        }
-        do {
-            return try decoder.decode([RemoteFocusTask].self, from: data)
-        } catch {
-            throw SupabaseSyncError.decoding("\(error)")
-        }
+        try await fetchRows(table: "focus_tasks", accessToken: accessToken, userId: userId)
     }
 
     static func upsertTask(_ task: RemoteFocusTask, accessToken: String) async throws {
@@ -282,6 +265,8 @@ enum SupabaseSyncService {
 /// Convención: campos opcionales son nullable; los obligatorios coinciden con
 /// `NOT NULL` en la migración 018.
 struct RemoteFocusEvent: Codable, Hashable {
+    enum CodingKeys: String, CodingKey { case id, userId, title, notes, startTime, endTime, isReminder, inferredDuration, section, location, source, externalCalendarId, externalEventId, url, lastSyncedAt, createdAt, updatedAt, deletedAt, subtitle, reminderOffsets, reminderNotes }
+
     let id: UUID
     let userId: UUID
     var title: String
@@ -362,6 +347,8 @@ struct RemoteFocusEvent: Codable, Hashable {
 }
 
 struct RemoteFocusTask: Codable, Hashable {
+    enum CodingKeys: String, CodingKey { case id, userId, title, notes, category, priority, isCompleted, doneAt, dueDate, dueTime, linkedEventId, subtasks, createdAt, updatedAt, deletedAt }
+
     let id: UUID
     let userId: UUID
     var title: String
@@ -395,16 +382,19 @@ struct RemoteFocusTask: Codable, Hashable {
         self.doneAt = task.doneAt
         if let date = task.dueDate {
             let fmt = DateFormatter()
+            fmt.locale = Locale(identifier: "en_US_POSIX")
+            fmt.calendar = Calendar(identifier: .gregorian)
             fmt.dateFormat = "yyyy-MM-dd"
-            fmt.timeZone = TimeZone(identifier: "UTC")
+            fmt.timeZone = .current
             self.dueDate = fmt.string(from: date)
         } else {
             self.dueDate = nil
         }
         if let time = task.dueTime {
             let fmt = DateFormatter()
+            fmt.locale = Locale(identifier: "en_US_POSIX")
             fmt.dateFormat = "HH:mm:ss"
-            fmt.timeZone = TimeZone(identifier: "UTC")
+            fmt.timeZone = .current
             self.dueTime = fmt.string(from: time)
         } else {
             self.dueTime = nil
@@ -441,16 +431,91 @@ struct RemoteFocusTask: Codable, Hashable {
     private func parseDueDate() -> Date? {
         guard let dueDate else { return nil }
         let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.calendar = Calendar(identifier: .gregorian)
         fmt.dateFormat = "yyyy-MM-dd"
-        fmt.timeZone = TimeZone(identifier: "UTC")
+        fmt.timeZone = .current
         return fmt.date(from: dueDate)
     }
 
     private func parseDueTime() -> Date? {
         guard let dueTime else { return nil }
-        let fmt = DateFormatter()
-        fmt.dateFormat = "HH:mm:ss"
-        fmt.timeZone = TimeZone(identifier: "UTC")
-        return fmt.date(from: dueTime)
+        let parts = dueTime.split(separator: ":")
+        guard parts.count >= 2, let hour = Int(parts[0]), let minute = Int(parts[1]),
+              (0...23).contains(hour), (0...59).contains(minute) else { return nil }
+        let second = parts.count > 2 ? Int(Double(parts[2]) ?? 0) : 0
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        return calendar.date(bySettingHour: hour, minute: minute, second: second,
+                             of: parseDueDate() ?? Date())
+    }
+}
+
+
+/// Injectable boundary for deterministic sync tests. Production uses the REST
+/// service; tests provide suspended or failing closures without any real token.
+struct FocusSyncTransport {
+    var fetchEvents: (String, String) async throws -> [RemoteFocusEvent]
+    var fetchTasks: (String, String) async throws -> [RemoteFocusTask]
+    var upsertEvent: (RemoteFocusEvent, String) async throws -> Void
+    var upsertTask: (RemoteFocusTask, String) async throws -> Void
+    var deleteEvent: (UUID, String) async throws -> Void
+    var deleteTask: (UUID, String) async throws -> Void
+
+    static let live = FocusSyncTransport(
+        fetchEvents: SupabaseSyncService.fetchEvents,
+        fetchTasks: SupabaseSyncService.fetchTasks,
+        upsertEvent: SupabaseSyncService.upsertEvent,
+        upsertTask: SupabaseSyncService.upsertTask,
+        deleteEvent: SupabaseSyncService.softDeleteEvent,
+        deleteTask: SupabaseSyncService.softDeleteTask
+    )
+}
+
+extension RemoteFocusEvent {
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(title, forKey: .title)
+        try container.encode(notes, forKey: .notes)
+        try container.encode(startTime, forKey: .startTime)
+        try container.encode(endTime, forKey: .endTime)
+        try container.encode(isReminder, forKey: .isReminder)
+        try container.encode(inferredDuration, forKey: .inferredDuration)
+        try container.encode(section, forKey: .section)
+        try container.encode(location, forKey: .location)
+        try container.encode(source, forKey: .source)
+        try container.encode(externalCalendarId, forKey: .externalCalendarId)
+        try container.encode(externalEventId, forKey: .externalEventId)
+        try container.encode(url, forKey: .url)
+        try container.encode(lastSyncedAt, forKey: .lastSyncedAt)
+        try container.encodeIfPresent(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
+        try container.encode(deletedAt, forKey: .deletedAt)
+        try container.encode(subtitle, forKey: .subtitle)
+        try container.encode(reminderOffsets, forKey: .reminderOffsets)
+        try container.encode(reminderNotes, forKey: .reminderNotes)
+    }
+}
+
+extension RemoteFocusTask {
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(title, forKey: .title)
+        try container.encode(notes, forKey: .notes)
+        try container.encode(category, forKey: .category)
+        try container.encode(priority, forKey: .priority)
+        try container.encode(isCompleted, forKey: .isCompleted)
+        try container.encode(doneAt, forKey: .doneAt)
+        try container.encode(dueDate, forKey: .dueDate)
+        try container.encode(dueTime, forKey: .dueTime)
+        try container.encode(linkedEventId, forKey: .linkedEventId)
+        try container.encode(subtasks, forKey: .subtasks)
+        try container.encodeIfPresent(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
+        try container.encode(deletedAt, forKey: .deletedAt)
     }
 }

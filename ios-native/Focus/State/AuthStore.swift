@@ -20,9 +20,11 @@ final class AuthStore: ObservableObject {
     @Published var isWorking: Bool = false
 
     private let expiresAtKey = "focus.v1.auth.expiresAt"
+    private let localModeKey = "focus.v2.auth.localMode"
     /// Guard de reentrancia para que múltiples gatillos de refresh (init +
     /// scenePhase) no disparen llamadas concurrentes al endpoint de token.
     private var isRefreshing = false
+    private var authGeneration = UUID()
     /// Timer proactivo de refresh. `refreshIfNeeded()` solo corría en init +
     /// scenePhase `.active`; una app mucho rato en primer plano (sin
     /// transición de escena) dejaba expirar el access token → Nova caía al
@@ -30,6 +32,12 @@ final class AuthStore: ObservableObject {
     private var refreshTimer: Timer?
 
     init() {
+        #if DEBUG
+        if CommandLine.arguments.contains("--ui-testing") {
+            state = CommandLine.arguments.contains("--onboarding") ? .loggedOut : .demo
+            return
+        }
+        #endif
         if let session = loadPersistedSession() {
             if !session.isExpired {
                 // Sesión válida — entrar directo.
@@ -38,7 +46,8 @@ final class AuthStore: ObservableObject {
                 // Access token expirado pero hay refresh token: arrancar en
                 // loading y disparar refresh asíncrono. Si funciona, la sesión
                 // se renueva sin que el usuario vea Login.
-                state = .loading
+                // Keep account-owned local data usable without connectivity.
+                state = .loggedIn(session)
                 Task { [weak self] in
                     await self?.attemptRefresh(using: session)
                 }
@@ -48,10 +57,12 @@ final class AuthStore: ObservableObject {
                 state = .loggedOut
             }
         } else {
-            state = .loggedOut
+            state = UserDefaults.standard.bool(forKey: localModeKey) ? .demo : .loggedOut
         }
         startRefreshTimer()
     }
+
+    deinit { refreshTimer?.invalidate() }
 
     // MARK: - Refresh
 
@@ -86,39 +97,63 @@ final class AuthStore: ObservableObject {
         let secondsToExpiry = session.expiresAt.timeIntervalSinceNow
         guard secondsToExpiry < 120 else { return }   // todavía fresco
         guard !isRefreshing else { return }
-        // Si ya expiró, un refresh fallido SÍ desloguea (token muerto). Si
-        // solo está por expirar, un fallo transitorio NO debe desloguear —
-        // reintentamos en la próxima reactivación.
-        let alreadyExpired = secondsToExpiry <= 0
+        // Network failures keep the persisted refresh token and local account
+        // accessible. Only a definitive token rejection returns to login.
         Task { [weak self] in
-            await self?.attemptRefresh(using: session, hardLogoutOnFail: alreadyExpired)
+            await self?.attemptRefresh(using: session)
         }
     }
 
-    private func attemptRefresh(using expired: SupabaseSession, hardLogoutOnFail: Bool = true) async {
-        if isRefreshing { return }
+    private func attemptRefresh(using expired: SupabaseSession) async {
+        guard !isRefreshing else { return }
         isRefreshing = true
-        defer { isRefreshing = false }
+        let generation = authGeneration
+        defer { if authGeneration == generation { isRefreshing = false } }
         do {
             let renewed = try await AuthService.refreshSession(refreshToken: expired.refreshToken)
-            // Si Supabase no devolvió user (algunas configs no incluyen),
-            // reutilizamos el userId/email del persistido.
+            guard authGeneration == generation,
+                  case .loggedIn(let current) = state,
+                  current.userId == expired.userId else { return }
             let merged = SupabaseSession(
                 accessToken: renewed.accessToken,
                 refreshToken: renewed.refreshToken,
                 expiresAt: renewed.expiresAt,
                 userId: renewed.userId.isEmpty ? expired.userId : renewed.userId,
-                email: renewed.email.isEmpty ? expired.email : renewed.email
+                email: renewed.email.isEmpty ? expired.email : renewed.email,
+                fullName: renewed.fullName.isEmpty ? expired.fullName : renewed.fullName
             )
             persistSession(merged)
+            lastError = nil
             state = .loggedIn(merged)
         } catch {
-            // Refresh falló — limpiamos auth pero NO datos locales.
-            KeychainStore.clearAllAuth()
-            UserDefaults.standard.removeObject(forKey: expiresAtKey)
-            lastError = "Tu sesión expiró. Vuelve a iniciar sesión."
-            state = .loggedOut
+            guard authGeneration == generation else { return }
+            // A network/server failure says nothing about whether the refresh
+            // token is valid. Keep it for the next retry, including an offline boot.
+            if Self.requiresLogin(after: error) {
+                invalidatePendingAuthentication()
+                KeychainStore.clearAllAuth()
+                KeychainStore.delete(.fullName)
+                UserDefaults.standard.removeObject(forKey: expiresAtKey)
+                lastError = "Tu sesión expiró. Vuelve a iniciar sesión."
+                state = .loggedOut
+            } else {
+                lastError = "No pudimos renovar la conexión. Tus datos siguen disponibles en este iPhone."
+            }
         }
+    }
+
+    static func requiresLogin(after error: Error) -> Bool {
+        guard let authError = error as? AuthError else { return false }
+        switch authError {
+        case .otpExpired, .invalidCode: return true
+        default: return false
+        }
+    }
+
+    private func invalidatePendingAuthentication() {
+        authGeneration = UUID()
+        isRefreshing = false
+        isWorking = false
     }
 
     // MARK: - Computed
@@ -177,18 +212,23 @@ final class AuthStore: ObservableObject {
 
     /// Pide código OTP al servidor.
     func sendOTP(email: String) async {
+        guard !isWorking else { return }
+        let generation = authGeneration
         lastError = nil
         isWorking = true
-        defer { isWorking = false }
+        defer { if authGeneration == generation { isWorking = false } }
         do {
             try await AuthService.sendOTP(email: email)
+            guard authGeneration == generation else { return }
             let clean = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             state = .codeSent(email: clean)
             HapticManager.shared.success()
         } catch let err as AuthError {
+            guard authGeneration == generation else { return }
             lastError = err.errorDescription
             HapticManager.shared.warning()
         } catch {
+            guard authGeneration == generation else { return }
             lastError = error.localizedDescription
             HapticManager.shared.warning()
         }
@@ -197,18 +237,23 @@ final class AuthStore: ObservableObject {
     /// Verifica el código y crea sesión.
     func verifyOTP(token: String) async {
         guard case .codeSent(let email) = state else { return }
+        guard !isWorking else { return }
+        let generation = authGeneration
         lastError = nil
         isWorking = true
-        defer { isWorking = false }
+        defer { if authGeneration == generation { isWorking = false } }
         do {
             let session = try await AuthService.verifyOTP(email: email, token: token)
+            guard authGeneration == generation else { return }
             persistSession(session)
             state = .loggedIn(session)
             HapticManager.shared.success()
         } catch let err as AuthError {
+            guard authGeneration == generation else { return }
             lastError = err.errorDescription
             HapticManager.shared.warning()
         } catch {
+            guard authGeneration == generation else { return }
             lastError = error.localizedDescription
             HapticManager.shared.warning()
         }
@@ -216,6 +261,7 @@ final class AuthStore: ObservableObject {
 
     /// Vuelve al paso "ingresar email".
     func changeEmail() {
+        invalidatePendingAuthentication()
         lastError = nil
         state = .loggedOut
     }
@@ -240,13 +286,16 @@ final class AuthStore: ObservableObject {
     /// `anchor` lo provee la vista (LoginView) — sin anchor válido la
     /// presentación falla en iOS 13+.
     func signInWithGoogle(presentationAnchor: ASPresentationAnchor) async {
+        guard !isWorking else { return }
+        let generation = authGeneration
         lastError = nil
         isWorking = true
-        defer { isWorking = false }
+        defer { if authGeneration == generation { isWorking = false } }
         do {
             let session = try await AuthService.signInWithGoogle(
                 presentationAnchor: presentationAnchor
             )
+            guard authGeneration == generation else { return }
             persistSession(session)
             state = .loggedIn(session)
             HapticManager.shared.success()
@@ -254,9 +303,11 @@ final class AuthStore: ObservableObject {
             // El usuario cerró el Safari sheet — silencioso, no mostramos
             // banner agresivo. El estado se mantiene como está (.loggedOut).
         } catch let err as AuthError {
+            guard authGeneration == generation else { return }
             lastError = err.errorDescription
             HapticManager.shared.warning()
         } catch {
+            guard authGeneration == generation else { return }
             lastError = error.localizedDescription
             HapticManager.shared.warning()
         }
@@ -274,22 +325,27 @@ final class AuthStore: ObservableObject {
     /// con `resolveTopViewController()` igual que como hace el OAuth web.
     @MainActor
     func signInWithGoogleNative(presenter: UIViewController) async {
+        guard !isWorking else { return }
+        let generation = authGeneration
         lastError = nil
         isWorking = true
-        defer { isWorking = false }
+        defer { if authGeneration == generation { isWorking = false } }
         do {
             let session = try await AuthService.signInWithGoogleNative(
                 presenter: presenter
             )
+            guard authGeneration == generation else { return }
             persistSession(session)
             state = .loggedIn(session)
             HapticManager.shared.success()
         } catch AuthError.oauthCanceled {
             // Usuario tocó cancelar en la UI de Google — silencioso.
         } catch let err as AuthError {
+            guard authGeneration == generation else { return }
             lastError = err.errorDescription
             HapticManager.shared.warning()
         } catch {
+            guard authGeneration == generation else { return }
             lastError = error.localizedDescription
             HapticManager.shared.warning()
         }
@@ -297,6 +353,8 @@ final class AuthStore: ObservableObject {
 
     /// Entra en modo demo (sin login).
     func enterDemo() {
+        invalidatePendingAuthentication()
+        UserDefaults.standard.set(true, forKey: localModeKey)
         lastError = nil
         state = .demo
         HapticManager.shared.tap()
@@ -306,6 +364,8 @@ final class AuthStore: ObservableObject {
     /// NO borra datos locales (FocusDataStore) — eso queda en Ajustes
     /// como acción manual del usuario.
     func signOut() {
+        invalidatePendingAuthentication()
+        UserDefaults.standard.removeObject(forKey: localModeKey)
         AuthService.signOut()
         // También limpia la sesión local de Google SDK (si el package
         // está instalado). Sin esto, GIDSignIn.sharedInstance.currentUser
@@ -320,6 +380,8 @@ final class AuthStore: ObservableObject {
 
     /// Sale de modo demo y vuelve a LoginView.
     func exitDemo() {
+        invalidatePendingAuthentication()
+        UserDefaults.standard.removeObject(forKey: localModeKey)
         lastError = nil
         state = .loggedOut
         HapticManager.shared.tick()
@@ -334,7 +396,10 @@ final class AuthStore: ObservableObject {
         guard case .loggedIn(let session) = state else {
             throw AuthError.unknown("Necesitas una sesión activa para eliminar la cuenta.")
         }
+        let generation = authGeneration
         try await AuthService.deleteAccount(accessToken: session.accessToken)
+        guard generation == authGeneration else { throw CancellationError() }
+        invalidatePendingAuthentication()
         // La cuenta ya no existe en el backend: limpiar todo rastro local
         // de auth (Keychain + Google SDK + expiración persistida).
         AuthService.signOut()
@@ -369,6 +434,7 @@ final class AuthStore: ObservableObject {
     }
 
     private func persistSession(_ s: SupabaseSession) {
+        UserDefaults.standard.removeObject(forKey: localModeKey)
         KeychainStore.set(s.accessToken, forKey: .accessToken)
         KeychainStore.set(s.refreshToken, forKey: .refreshToken)
         KeychainStore.set(s.userId, forKey: .userId)

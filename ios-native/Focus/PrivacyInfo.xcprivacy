@@ -18,6 +18,7 @@
 	     tracking. Espejo de la política de privacidad:
 	     - email (login OTP)
 	     - user ID (Supabase)
+	     - token de dispositivo APNs e interacción con el servicio de IA
 	     - contenido del usuario (eventos, tareas, memorias y mensajes a
 	       Nova — estos últimos se procesan, no se almacenan en DB) -->
 	<key>NSPrivacyCollectedDataTypes</key>
@@ -58,11 +59,34 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
 	</array>
 
-	<!-- Required-reason APIs que el binario usa:
-	     UserDefaults (@AppStorage + FocusLocalStore) → CA92.1: acceso solo
-	     a información escrita por la propia app. -->
+	<!-- UserDefaults privados de Focus: CA92.1.
+	     Snapshot compartido con el widget del mismo App Group: 1C8F.1. -->
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
 		<dict>
@@ -71,6 +95,7 @@
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>CA92.1</string>
+				<string>1C8F.1</string>
 			</array>
 		</dict>
 	</array>

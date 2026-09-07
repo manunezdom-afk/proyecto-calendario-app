@@ -87,6 +87,7 @@ enum NovaService {
         /// X-Request-Id del cliente) para correlacionar logs entre Nova,
         /// el endpoint y la app. Sin PII — UUID o hash corto.
         let requestId: String?
+        var followUpQuestion: String? = nil
     }
 
     /// Llama al backend. Lanza `NovaServiceError` para que el caller
@@ -115,6 +116,7 @@ enum NovaService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Request-Id")
         // FASE 3 QA — bypass Vercel SSO para Preview. nil en prod.
         if let bypass = FocusConfig.vercelBypassToken {
             request.setValue(bypass, forHTTPHeaderField: "x-vercel-protection-bypass")
@@ -181,7 +183,8 @@ enum NovaService {
                     shouldAskUser: shouldAsk,
                     mode: resolvedMode,
                     proposedActions: decoded.proposedActions,
-                    requestId: decoded.requestId
+                    requestId: decoded.requestId,
+                    followUpQuestion: decoded.followUpQuestion
                 )
             } catch {
                 throw NovaServiceError.decoding(error)
@@ -324,10 +327,10 @@ enum NovaServiceError: Error, LocalizedError {
         case .serviceUnavailable:  return "serviceUnavailable(503/504)"
         case .offline:             return "offline"
         case .timeout:             return "timeout"
-        case .network(let e):      return "network(\(e))"
+        case .network:             return "network"
         case .invalidResponse:     return "invalidResponse"
-        case .encoding(let e):     return "encoding(\(e))"
-        case .decoding(let e):     return "decoding(\(e))"
+        case .encoding:            return "encoding"
+        case .decoding:            return "decoding"
         case .server(let s):       return "server(status=\(s))"
         }
     }
@@ -383,14 +386,18 @@ private struct BackendEventDTO: Encodable {
     let title: String
     let subtitle: String?
     let time: String
+    let endTime: String?
     let date: String?
     let section: String
+    let reminderOffsets: [Int]?
 
     init(local event: FocusEvent) {
         self.id = event.id.uuidString
         self.title = event.title
         self.subtitle = event.subtitle
         self.time = NovaTimeFormatter.formatHourMinute(from: event.startTime)
+        self.endTime = event.displayAsPointInTime ? nil : event.endTime.map(NovaTimeFormatter.formatHourMinute)
+        self.reminderOffsets = event.reminderOffsets
         self.date = NovaTimeFormatter.formatISODate(from: event.startTime)
         let hour = Calendar.current.component(.hour, from: event.startTime)
         self.section = hour >= 14 ? "evening" : "focus"
@@ -404,6 +411,8 @@ private struct BackendTaskDTO: Encodable {
     let priority: String
     let category: String
     let done: Bool
+    let date: String?
+    let time: String?
 
     init(local task: FocusTask) {
         self.id = task.id.uuidString
@@ -411,6 +420,8 @@ private struct BackendTaskDTO: Encodable {
         self.priority = task.priority.backendLabel
         self.category = task.category.backendLabel
         self.done = task.done
+        self.date = task.dueDate.map(NovaTimeFormatter.formatISODate)
+        self.time = task.dueTime.map(NovaTimeFormatter.formatHourMinute)
     }
 }
 
@@ -426,6 +437,7 @@ private struct BackendResponsePayload: Decodable {
     let shouldAskUser: Bool?
     let mode: String?
     let requestId: String?
+    let followUpQuestion: String?
 
     enum CodingKeys: String, CodingKey {
         case reply
@@ -437,6 +449,7 @@ private struct BackendResponsePayload: Decodable {
         case shouldAskUser
         case mode
         case requestId
+        case followUpQuestion = "follow_up_question"
     }
 
     init(from decoder: Decoder) throws {
@@ -448,6 +461,7 @@ private struct BackendResponsePayload: Decodable {
         self.shouldAskUser = try c.decodeIfPresent(Bool.self, forKey: .shouldAskUser)
         self.mode = try c.decodeIfPresent(String.self, forKey: .mode)
         self.requestId = try c.decodeIfPresent(String.self, forKey: .requestId)
+        self.followUpQuestion = try c.decodeIfPresent(String.self, forKey: .followUpQuestion)
         // Decodificar actions de forma resiliente: si un item falla por type
         // desconocido o shape inesperado, lo saltamos en vez de tumbar todo.
         if let raw = try? c.decode([RawAction].self, forKey: .actions) {
@@ -548,6 +562,7 @@ struct BackendTaskCreate {
     let category: String?        // "hoy" | "semana" | "algún día"
     let linkedEventId: String?
     let parentTaskId: String?
+    var dateString: String? = nil
 }
 
 // MARK: - Action decoding
@@ -569,7 +584,10 @@ private struct RawAction: Decodable {
     }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: DispatchKeys.self)
+        guard let c = try? decoder.container(keyedBy: DispatchKeys.self) else {
+            self.decoded = .unsupported(typeName: "invalid")
+            return
+        }
         let rawType = (try? c.decode(String.self, forKey: .type)) ?? ""
 
         switch rawType {
@@ -743,6 +761,7 @@ private struct RawAction: Decodable {
         let category: String?
         let linkedEventId: String?
         let parentTaskId: String?
+        let date: String?
 
         func toModel() -> BackendTaskCreate {
             BackendTaskCreate(
@@ -750,7 +769,8 @@ private struct RawAction: Decodable {
                 priority: priority,
                 category: category,
                 linkedEventId: linkedEventId,
-                parentTaskId: parentTaskId
+                parentTaskId: parentTaskId,
+                dateString: date
             )
         }
     }
@@ -823,6 +843,7 @@ enum NovaTimeFormatter {
             if let match = regex.firstMatch(in: lower, range: NSRange(location: 0, length: ns.length)),
                match.numberOfRanges >= 4 {
                 let h = Int(ns.substring(with: match.range(at: 1))) ?? 0
+                guard h >= 1 && h <= 12 else { return nil }
                 let mn: Int = {
                     let r = match.range(at: 2)
                     if r.location == NSNotFound { return 0 }
@@ -851,7 +872,7 @@ enum NovaTimeFormatter {
     /// "YYYY-MM-DD" → Date (medianoche local).
     static func parseISODate(_ raw: String?) -> Date? {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !raw.isEmpty else { return nil }
+              raw.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else { return nil }
         let parts = raw.split(separator: "-")
         guard parts.count == 3,
               let y = Int(parts[0]),
@@ -861,7 +882,11 @@ enum NovaTimeFormatter {
         comps.year = y
         comps.month = m
         comps.day = d
-        return Calendar.current.date(from: comps)
+        let calendar = Calendar.current
+        guard let date = calendar.date(from: comps) else { return nil }
+        let roundTrip = calendar.dateComponents([.year, .month, .day], from: date)
+        guard roundTrip.year == y, roundTrip.month == m, roundTrip.day == d else { return nil }
+        return date
     }
 
     /// Date → "h:mm AM/PM" en es-CL (formato que devuelve Anthropic en sus

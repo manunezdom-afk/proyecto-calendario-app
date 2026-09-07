@@ -62,7 +62,7 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 
-	<!-- Launch screen cobalto (matchea el asset LaunchBackground). -->
+	<!-- Launch screen adaptado a la apariencia del sistema. -->
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

@@ -780,143 +780,49 @@ struct EmptyStateView: View {
     let message: String
     var actionLabel: String? = nil
     var action: (() -> Void)? = nil
-    /// Cuando `true` el botón de acción usa look "AI": gradient violeta→azul
-    /// (estilo Gemini), sparkle leading, glow más fuerte. Solo se prende
-    /// para acciones que abren Nova/chat — no para acciones neutras como
-    /// "Crear evento". Default false mantiene el look sólido cobalto.
+    /// Keeps an optional Nova symbol while using the same native button style.
     var aiStyledAction: Bool = false
-
-    // Theme 2.0: staggered fade-in. Cada elemento entra con 60ms de delay
-    // sobre el anterior para crear secuencia visual ordenada en empty states
-    // (típicamente la primera impresión de una pantalla vacía).
-    @State private var glyphAppear: Bool = false
-    @State private var textAppear: Bool = false
-    @State private var actionAppear: Bool = false
 
     var body: some View {
         VStack(spacing: Theme.Spacing.lg) {
-            // Theme 2.0 v3: glifo con identidad Focus/Nova — halo radial
-            // novaAccent detrás + glifo 44pt regular weight (no light, que
-            // se ve frágil) en color cobalto. Antes el glifo gris lineal
-            // 64pt parecía un placeholder; ahora se siente "AI-native".
-            ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            gradient: Gradient(stops: [
-                                .init(color: Theme.Colors.novaAccent.opacity(0.18), location: 0.0),
-                                .init(color: Theme.Colors.focusAccent.opacity(0.08), location: 0.55),
-                                .init(color: Theme.Colors.novaAccent.opacity(0.0),  location: 1.0),
-                            ]),
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 80
-                        )
-                    )
-                    .frame(width: 140, height: 140)
-                Image(systemName: symbol)
-                    .font(.system(size: 44, weight: .regular))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Theme.Colors.focusAccent, Theme.Colors.novaAccent],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            .opacity(glyphAppear ? 1 : 0)
-            .scaleEffect(glyphAppear ? 1.0 : 0.92)
+            Image(systemName: symbol)
+                .font(.largeTitle)
+                .foregroundStyle(Theme.Colors.textSecondary)
+                .accessibilityHidden(true)
 
-            VStack(spacing: Theme.Spacing.xs) {
+            VStack(spacing: Theme.Spacing.sm) {
                 Text(title)
-                    // Title1 24pt SemiBold + tracking -0.72 — más display
-                    // que title2 anterior, con weight propio que distingue
-                    // un empty hero de un title2 de card.
-                    .font(Theme.Typography.title1)
-                    .tracking(Theme.Tracking.title1)
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(Theme.Colors.textPrimary)
-                    .multilineTextAlignment(.center)
                 Text(message)
-                    .font(Theme.Typography.body)
-                    .tracking(Theme.Tracking.body)
+                    .font(.body)
                     .foregroundStyle(Theme.Colors.textSecondary)
-                    .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: 320)
-            .opacity(textAppear ? 1 : 0)
-            .offset(y: textAppear ? 0 : 8)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: 360)
 
             if let actionLabel, let action {
-                Button(action: {
+                Button {
                     HapticManager.shared.tap()
                     action()
-                }) {
-                    if aiStyledAction {
-                        // Botón "AI" estilo Gemini: gradient violeta→azul
-                        // + sparkles icon leading. Para "Hablar con Nova"
-                        // u otras acciones que abren la IA — el degrade
-                        // comunica "esto va al asistente inteligente".
-                        HStack(spacing: 8) {
+                } label: {
+                    HStack(spacing: Theme.Spacing.sm) {
+                        if aiStyledAction {
                             Image(systemName: "sparkles")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                            Text(actionLabel)
-                                .font(Theme.Typography.bodyBold)
-                                .foregroundStyle(.white)
+                                .accessibilityHidden(true)
                         }
-                        .padding(.horizontal, Theme.Spacing.xl)
-                        .padding(.vertical, Theme.Spacing.md)
-                        .background(
-                            Capsule().fill(
-                                LinearGradient(
-                                    gradient: Gradient(stops: [
-                                        // Multi-stop violeta → púrpura
-                                        // intermedio → cobalto. El final
-                                        // azul es lo que el usuario pidió:
-                                        // "degrade hacia azul, estilo
-                                        // Gemini, más IA". 3 stops dan
-                                        // profundidad sin gritar.
-                                        .init(color: Theme.Colors.novaAccent, location: 0.00),
-                                        .init(color: Color(red: 0.42, green: 0.42, blue: 0.97), location: 0.55),
-                                        .init(color: Theme.Colors.focusAccent, location: 1.00),
-                                    ]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        )
-                        .shadow(color: Theme.Colors.novaAccent.opacity(0.32), radius: 16, y: 6)
-                    } else {
                         Text(actionLabel)
-                            .font(Theme.Typography.bodyBold)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, Theme.Spacing.xl)
-                            .padding(.vertical, Theme.Spacing.md)
-                            .background(
-                                Capsule().fill(Theme.Colors.focusAccent)
-                            )
-                            .focusCardShadow()
                     }
+                    .font(.headline)
+                    .frame(minWidth: 44, minHeight: 44)
                 }
-                .buttonStyle(.plain)
-                .padding(.top, Theme.Spacing.xs)
-                .opacity(actionAppear ? 1 : 0)
-                .offset(y: actionAppear ? 0 : 8)
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.Colors.focusAccent)
             }
         }
         .padding(Theme.Spacing.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Theme 2.0: staggered entrance — glifo → texto (60ms) → action (120ms).
-        // Total 240ms para sensación intencional, no súbita.
-        .onAppear {
-            withAnimation(Theme.Spring.entrance) { glyphAppear = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-                withAnimation(Theme.Spring.entrance) { textAppear = true }
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                withAnimation(Theme.Spring.entrance) { actionAppear = true }
-            }
-        }
+        .frame(maxWidth: .infinity)
     }
 }
 

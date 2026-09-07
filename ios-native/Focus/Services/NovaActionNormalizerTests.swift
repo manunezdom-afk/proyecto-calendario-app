@@ -2,10 +2,9 @@ import Foundation
 
 #if DEBUG
 
-/// Tests internos del `NovaActionNormalizer`. Como el proyecto no tiene
-/// target de XCTest separado todavía, estos tests son funciones puras que
-/// se pueden llamar desde un debugger o desde un breakpoint para validar
-/// que los casos críticos del usuario siguen funcionando.
+/// Baterías históricas del normalizador disponibles solo en Debug.
+/// La validación de ejecución y regresiones vive en el target FocusTests.
+/// Estas funciones conservan escenarios anteriores para diagnóstico manual.
 ///
 /// **Cómo correr manualmente desde LLDB en Xcode**:
 ///   `po NovaActionNormalizerTests.runAll()`

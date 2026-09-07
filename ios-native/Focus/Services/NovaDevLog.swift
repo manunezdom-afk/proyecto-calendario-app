@@ -167,7 +167,7 @@ final class NovaDevLog: ObservableObject {
         update(id: id) { e in
             e.matchedEventId = eventId
         }
-        log("   matched event id=\(eventId.uuidString.prefix(8))… title=\"\(redactedText(eventTitle))\"")
+        log("   matched event id=\(eventId.uuidString.prefix(8))…")
     }
 
     /// Cierra el turno con el outcome final.
@@ -186,13 +186,7 @@ final class NovaDevLog: ObservableObject {
 
     // MARK: - Helpers privados
 
-    private var debugIncludeText: Bool {
-        #if DEBUG
-        return true
-        #else
-        return false
-        #endif
-    }
+    private var debugIncludeText: Bool { false }
 
     /// Trunca/sanitiza texto para los logs. Si el texto contiene tokens
     /// que parecen sensibles (email, números largos, "@", "key"), los

@@ -2110,8 +2110,8 @@ enum NovaResponder {
             if let partial = when {
                 let hasExactTime = hasExactTimeMarker(lower)
                 if !hasExactTime {
-                    if isActiveTrigger {
-                        // Activo + día sin hora → preguntar hora explícita.
+                    if needsExactTime {
+                        // Appointment or explicit scheduling without a time → preguntar hora explícita.
                         // Caller persiste PendingClarification para que el
                         // siguiente turno "a las 8" complete el evento.
                         // Solo activos ("agenda reunión mañana") activan
@@ -4092,14 +4092,11 @@ enum NovaResponder {
         }
 
         var dayBase: Date? = nil
-        var dayWasExplicit = false
 
         if lower.range(of: #"\bpasado ma(ñ|n)ana\b"#, options: .regularExpression) != nil {
             dayBase = cal.date(byAdding: .day, value: 2, to: now)
-            dayWasExplicit = true
         } else if lower.range(of: #"\bma(ñ|n)ana\b"#, options: .regularExpression) != nil {
             dayBase = cal.date(byAdding: .day, value: 1, to: now)
-            dayWasExplicit = true
         } else if lower.contains("hoy")
             || lower.contains("esta tarde") || lower.contains("esta noche")
             || lower.contains("esta mañana") || lower.contains("esta manana")
@@ -4110,10 +4107,8 @@ enum NovaResponder {
             || lower.contains("después del trabajo") || lower.contains("despues del trabajo")
             || lower.contains("al final del día") || lower.contains("al final del dia") {
             dayBase = now
-            dayWasExplicit = true
         } else if let target = nextWeekday(in: lower, calendar: cal, from: now) {
             dayBase = target
-            dayWasExplicit = true
         }
 
         // Hora explícita
@@ -5035,6 +5030,23 @@ final class FocusDataStore: ObservableObject {
         let userId: UUID
     }
     @Published var syncCredentials: SyncCredentials? = nil
+    /// Changes when the data owner changes, including signing out. Async Nova,
+    /// sync and notification work must check this before applying results.
+    private(set) var accountGeneration = UUID()
+    private var activeAccountID: UUID?
+    private var outbox = FocusSyncOutbox()
+    private var recoveryEventIDs: [UUID: UUID] = [:]
+    private var recoveryTaskIDs: [UUID: UUID] = [:]
+    private var syncTask: Task<Void, Never>?
+    private var retryTask: Task<Void, Never>?
+    private var retryAttempt = 0
+    private let syncTransport: FocusSyncTransport
+    private let schedulesNotifications: Bool
+    @Published private(set) var pendingSyncCount = 0
+    @Published private(set) var localSaveError: String?
+    @Published private(set) var notificationPermissionDenied = false
+    var localPersistenceError: String? { localSaveError }
+    @Published private(set) var hasUnassignedLegacyData = FocusLocalStore.hasUnassignedLegacyData
 
     /// Estado visible para Ajustes → "Sincronización".
     enum SyncState: Equatable {
@@ -5060,9 +5072,27 @@ final class FocusDataStore: ObservableObject {
     @Published private(set) var pendingDeleteEventIds: Set<UUID>
     @Published private(set) var pendingDeleteTaskIds: Set<UUID>
 
-    init() {
-        self.events = FocusLocalStore.load([FocusEvent].self, forKey: .events) ?? []
-        self.tasks = FocusLocalStore.load([FocusTask].self, forKey: .tasks) ?? []
+    init(syncTransport: FocusSyncTransport = .live, restoreAccount: Bool = true, schedulesNotifications: Bool = true) {
+        self.syncTransport = syncTransport
+        self.schedulesNotifications = schedulesNotifications
+        var shouldRestore = restoreAccount
+        #if DEBUG
+        if CommandLine.arguments.contains("--ui-testing") {
+            shouldRestore = false
+            FocusLocalStore.activateAccount(nil)
+            if CommandLine.arguments.contains("--reset-fixture") { FocusLocalStore.clearAll() }
+        }
+        #endif
+        let accountID = shouldRestore ? KeychainStore.get(.userId).flatMap(UUID.init(uuidString:)) : nil
+        self.activeAccountID = accountID
+        FocusLocalStore.activateAccount(accountID)
+        let snapshot = FocusLocalStore.load(FocusSyncSnapshot.self, forKey: .syncSnapshot)
+        self.events = snapshot?.events ?? FocusLocalStore.load([FocusEvent].self, forKey: .events) ?? []
+        self.tasks = snapshot?.tasks ?? FocusLocalStore.load([FocusTask].self, forKey: .tasks) ?? []
+        self.outbox = snapshot?.outbox ?? FocusSyncOutbox()
+        self.recoveryEventIDs = snapshot?.recoveryEventIDs ?? [:]
+        self.recoveryTaskIDs = snapshot?.recoveryTaskIDs ?? [:]
+        self.pendingSyncCount = self.outbox.mutations.count
 
         // Sugerencias: NO pre-seedeamos demo en el store. Las demos viven
         // solo como fallback dinámico en `displaySuggestions` cuando no hay
@@ -5100,8 +5130,8 @@ final class FocusDataStore: ObservableObject {
         // fetch+merge.
         let pendingEvtIds = FocusLocalStore.load([UUID].self, forKey: .pendingDeleteEvents) ?? []
         let pendingTaskIds = FocusLocalStore.load([UUID].self, forKey: .pendingDeleteTasks) ?? []
-        self.pendingDeleteEventIds = Set(pendingEvtIds)
-        self.pendingDeleteTaskIds = Set(pendingTaskIds)
+        self.pendingDeleteEventIds = Set(snapshot?.outbox.mutations.filter { $0.entity == .event && $0.operation == .delete }.map(\.id) ?? pendingEvtIds)
+        self.pendingDeleteTaskIds = Set(snapshot?.outbox.mutations.filter { $0.entity == .task && $0.operation == .delete }.map(\.id) ?? pendingTaskIds)
 
         // Calendario del iPhone: fetch inicial (no-op si el toggle está off
         // o falta permiso) + re-fetch cuando el calendario del sistema
@@ -5109,6 +5139,7 @@ final class FocusDataStore: ObservableObject {
         SystemCalendarService.shared.onStoreChanged = { [weak self] in
             self?.refreshSystemEvents()
         }
+        NovaMemoryStore.shared.reloadForCurrentAccount()
         refreshSystemEvents()
     }
 
@@ -5120,6 +5151,7 @@ final class FocusDataStore: ObservableObject {
     func refreshSystemEvents() {
         guard settings.systemCalendarOn, SystemCalendarService.shared.isAuthorized else {
             if !systemEvents.isEmpty { systemEvents = [] }
+            syncWidgetSnapshot()
             return
         }
         let cal = Calendar.current
@@ -5151,6 +5183,109 @@ final class FocusDataStore: ObservableObject {
     func dismissDemoTask(title: String) {
         dismissedDemoTaskTitles.insert(title)
         persistDismissedDemoTasks()
+    }
+
+    // MARK: - Explicit recovery
+
+    private var legacyImportKey: String { FocusLocalStore.scopedStorageKey(for: "legacyImported") }
+    private var guestImportKey: String { FocusLocalStore.scopedStorageKey(for: "guestImported") }
+
+    var legacyRecoveryCount: Int {
+        guard !UserDefaults.standard.bool(forKey: legacyImportKey) else { return 0 }
+        let source = FocusLocalStore.legacyRecoverySnapshot()
+        return recoverableEvents(source.events).count + recoverableTasks(source.tasks).count
+    }
+
+    var guestRecoveryCount: Int {
+        guard activeAccountID != nil, !UserDefaults.standard.bool(forKey: guestImportKey),
+              let source = FocusLocalStore.guestRecoverySnapshot() else { return 0 }
+        return recoverableEvents(source.events).count + recoverableTasks(source.tasks).count
+    }
+
+    @discardableResult
+    func importLegacyDataIntoCurrentAccount() -> Bool {
+        guard !UserDefaults.standard.bool(forKey: legacyImportKey) else { return true }
+        return importRecoveredData(FocusLocalStore.legacyRecoverySnapshot(), marker: legacyImportKey)
+    }
+
+    @discardableResult
+    func importGuestDataIntoCurrentAccount() -> Bool {
+        guard activeAccountID != nil else { return false }
+        guard !UserDefaults.standard.bool(forKey: guestImportKey) else { return true }
+        guard let source = FocusLocalStore.guestRecoverySnapshot() else { return false }
+        return importRecoveredData(source, marker: guestImportKey)
+    }
+
+    private func recoverableEvents(_ source: [FocusEvent]) -> [FocusEvent] {
+        var seen = Set(events.map(\.id))
+        return source.filter { event in
+            let destination = recoveryEventIDs[event.id] ?? event.id
+            guard !event.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !seen.contains(event.id) else { return false }
+            return seen.insert(destination).inserted
+        }
+    }
+
+    private func recoverableTasks(_ source: [FocusTask]) -> [FocusTask] {
+        var seen = Set(tasks.map(\.id))
+        return source.filter { task in
+            let destination = recoveryTaskIDs[task.id] ?? task.id
+            guard !task.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !seen.contains(task.id) else { return false }
+            return seen.insert(destination).inserted
+        }
+    }
+
+    private func importRecoveredData(_ source: FocusSyncSnapshot, marker: String) -> Bool {
+        let incomingEvents = recoverableEvents(source.events)
+        let incomingTasks = recoverableTasks(source.tasks)
+        guard commitLocalMutation({
+            // Cloud primary keys are global across owners. Recovered records get
+            // destination-owned IDs, persisted in the same transaction as data.
+            // Repeating an import or recovering another source reuses the mapping.
+            let currentEvents = Set(events.map(\.id))
+            let currentTasks = Set(tasks.map(\.id))
+            for event in source.events where recoveryEventIDs[event.id] == nil {
+                recoveryEventIDs[event.id] = currentEvents.contains(event.id) || activeAccountID == nil ? event.id : UUID()
+            }
+            for task in source.tasks where recoveryTaskIDs[task.id] == nil {
+                recoveryTaskIDs[task.id] = currentTasks.contains(task.id) || activeAccountID == nil ? task.id : UUID()
+            }
+            for original in incomingEvents {
+                let copy = FocusEvent(
+                    id: recoveryEventIDs[original.id] ?? original.id,
+                    title: original.title, notes: original.notes, startTime: original.startTime,
+                    endTime: original.endTime, section: original.section, status: original.status,
+                    location: original.location, featured: original.featured,
+                    linkedTaskIds: original.linkedTaskIds.map { recoveryTaskIDs[$0] ?? $0 },
+                    source: original.source, externalCalendarId: original.externalCalendarId,
+                    externalEventId: original.externalEventId, url: original.url,
+                    lastSyncedAt: original.lastSyncedAt, isReminder: original.isReminder,
+                    inferredDuration: original.inferredDuration, reminderOffsets: original.reminderOffsets,
+                    reminderNotes: original.reminderNotes, subtitle: original.subtitle
+                )
+                events.append(copy)
+                enqueueSync(.event, id: copy.id, operation: .upsert)
+            }
+            for original in incomingTasks {
+                let copy = FocusTask(
+                    id: recoveryTaskIDs[original.id] ?? original.id, title: original.title,
+                    notes: original.notes, done: original.done, doneAt: original.doneAt,
+                    priority: original.priority, category: original.category,
+                    dueDate: original.dueDate, dueTime: original.dueTime, subtasks: original.subtasks,
+                    linkedEventId: original.linkedEventId.map { recoveryEventIDs[$0] ?? $0 },
+                    parentTaskId: original.parentTaskId.map { recoveryTaskIDs[$0] ?? $0 }
+                )
+                tasks.append(copy)
+                enqueueSync(.task, id: copy.id, operation: .upsert)
+            }
+            events.sort { $0.startTime < $1.startTime }
+        }) else { return false }
+        UserDefaults.standard.set(true, forKey: marker)
+        objectWillChange.send()
+        requestSync()
+        resyncAllLocalNotifications()
+        return true
     }
 
     // MARK: - Nova context (memoria de sesión)
@@ -5270,197 +5405,219 @@ final class FocusDataStore: ObservableObject {
 
     // MARK: - Sync coordination (called by FocusApp on auth changes)
 
-    /// Llamar desde `FocusApp` cuando cambia `AuthStore.state`. Solo si hay
-    /// `accessToken` + `userId` válidos, se sincroniza. Cualquier otra cosa
-    /// (demo, loggedOut) deja `syncCredentials = nil` → no hay sync.
+    /// An account switch loads a separate local partition. Guest/legacy data is
+    /// never uploaded implicitly to whichever account signs in next.
     func applyAuthChange(accessToken: String?, userId: UUID?) {
+        let nextAccount = (accessToken != nil) ? userId : nil
+        if nextAccount != activeAccountID {
+            accountGeneration = UUID()
+            syncTask?.cancel()
+            syncTask = nil
+            retryTask?.cancel()
+            retryTask = nil
+            retryAttempt = 0
+            cancelNovaRequest()
+            activeAccountID = nextAccount
+            FocusLocalStore.activateAccount(nextAccount)
+            loadCurrentAccount()
+            NovaMemoryStore.shared.reloadForCurrentAccount()
+            let generation = accountGeneration
+            Task { [weak self] in
+                guard let self, self.accountGeneration == generation else { return }
+                await LocalNotificationService.shared.cancelAllReminders()
+                guard self.accountGeneration == generation else { return }
+                self.resyncAllLocalNotifications()
+            }
+        }
         guard let accessToken, let userId else {
             syncCredentials = nil
             syncState = .demo
             return
         }
-        let creds = SyncCredentials(accessToken: accessToken, userId: userId)
-        let changed = syncCredentials != creds
-        syncCredentials = creds
-        if syncState == .demo || syncState == .loggedOut {
-            syncState = .idle
-        }
-        // Si cambiaron credenciales (login nuevo o refresh), traemos remoto.
+        let credentials = SyncCredentials(accessToken: accessToken, userId: userId)
+        let changed = syncCredentials != credentials
+        syncCredentials = credentials
         if changed {
-            Task { [weak self] in await self?.fetchRemoteAndMerge() }
+            retryTask?.cancel()
+            retryTask = nil
+            syncState = .idle
+            requestSync()
         }
     }
 
-    /// Fetch remoto + merge con local. Estrategia V1: server wins por
-    /// `updated_at` cuando hay conflicto. Items locales sin contraparte
-    /// remota se suben (defensa contra primer-login con datos preexistentes).
+    private func loadCurrentAccount() {
+        let snapshot = FocusLocalStore.load(FocusSyncSnapshot.self, forKey: .syncSnapshot)
+        events = snapshot?.events ?? []
+        tasks = snapshot?.tasks ?? []
+        outbox = snapshot?.outbox ?? FocusSyncOutbox()
+        recoveryEventIDs = snapshot?.recoveryEventIDs ?? [:]
+        recoveryTaskIDs = snapshot?.recoveryTaskIDs ?? [:]
+        pendingSyncCount = outbox.mutations.count
+        pendingDeleteEventIds = Set(outbox.mutations.filter { $0.entity == .event && $0.operation == .delete }.map(\.id))
+        pendingDeleteTaskIds = Set(outbox.mutations.filter { $0.entity == .task && $0.operation == .delete }.map(\.id))
+        suggestions = FocusLocalStore.load([NovaSuggestion].self, forKey: .suggestions) ?? []
+        novaMessages = FocusLocalStore.load([NovaMessage].self, forKey: .novaMessages) ?? []
+        settings = FocusLocalStore.load(AppSettings.self, forKey: .settings) ?? .defaults
+        dismissedDemoEventTitles = Set(FocusLocalStore.load([String].self, forKey: .dismissedDemoEvents) ?? [])
+        dismissedDemoTaskTitles = Set(FocusLocalStore.load([String].self, forKey: .dismissedDemoTasks) ?? [])
+        novaContext = NovaContext()
+        lastSyncAt = nil
+        localSaveError = nil
+        notificationPermissionDenied = false
+        systemEvents = []
+        refreshSystemEvents()
+        syncWidgetSnapshot()
+    }
+
+    private func requestSync() {
+        guard syncCredentials != nil else { return }
+        Task { [weak self] in await self?.fetchRemoteAndMerge() }
+    }
+
+    /// A single worker uploads queued changes in order before reading remote
+    /// rows. New edits during a request keep their revision and are drained next.
     func fetchRemoteAndMerge() async {
-        guard let creds = syncCredentials else { return }
+        guard syncCredentials != nil else { return }
+        if let current = syncTask {
+            await current.value
+            return
+        }
+        retryTask?.cancel()
+        retryTask = nil
+        let generation = accountGeneration
+        let worker = Task { [weak self] in
+            guard let self else { return }
+            await self.runSync(generation: generation)
+        }
+        syncTask = worker
+        await worker.value
+        guard accountGeneration == generation else { return }
+        syncTask = nil
+    }
+
+    private func runSync(generation: UUID) async {
+        guard let credentials = syncCredentials else { return }
         syncState = .syncing
         do {
-            async let remoteEvents = SupabaseSyncService.fetchEvents(
-                accessToken: creds.accessToken, userId: creds.userId.uuidString
-            )
-            async let remoteTasks = SupabaseSyncService.fetchTasks(
-                accessToken: creds.accessToken, userId: creds.userId.uuidString
-            )
-            let (events, tasks) = try await (remoteEvents, remoteTasks)
-            await MainActor.run {
-                mergeRemoteEvents(events)
-                mergeRemoteTasks(tasks)
-                lastSyncAt = Date()
-                syncState = .idle
-            }
-        } catch let err as SupabaseSyncError {
-            await MainActor.run {
-                syncState = .error(err.errorDescription ?? "Sync error")
-            }
+            repeat {
+                while let mutation = outbox.mutations.first {
+                    try Task.checkCancellation()
+                    guard accountGeneration == generation else { return }
+                    // Capture current data with its queued revision before await.
+                    switch (mutation.entity, mutation.operation) {
+                    case (.event, .upsert):
+                        if let event = events.first(where: { $0.id == mutation.id }) {
+                            try await syncTransport.upsertEvent(RemoteFocusEvent(local: event, userId: credentials.userId), credentials.accessToken)
+                        }
+                    case (.task, .upsert):
+                        if let task = tasks.first(where: { $0.id == mutation.id }) {
+                            try await syncTransport.upsertTask(RemoteFocusTask(local: task, userId: credentials.userId), credentials.accessToken)
+                        }
+                    case (.event, .delete):
+                        try await syncTransport.deleteEvent(mutation.id, credentials.accessToken)
+                    case (.task, .delete):
+                        try await syncTransport.deleteTask(mutation.id, credentials.accessToken)
+                    }
+                    try Task.checkCancellation()
+                    guard accountGeneration == generation else { return }
+                    outbox.acknowledge(mutation)
+                    refreshPendingDeletes()
+                    persistSyncSnapshot()
+                }
+                async let remoteEvents = syncTransport.fetchEvents(credentials.accessToken, credentials.userId.uuidString)
+                async let remoteTasks = syncTransport.fetchTasks(credentials.accessToken, credentials.userId.uuidString)
+                let (incomingEvents, incomingTasks) = try await (remoteEvents, remoteTasks)
+                try Task.checkCancellation()
+                guard accountGeneration == generation else { return }
+                mergeRemoteEvents(incomingEvents.filter { $0.userId == credentials.userId })
+                mergeRemoteTasks(incomingTasks.filter { $0.userId == credentials.userId })
+                // A mutation made while fetching is protected by the outbox and
+                // will be uploaded before a subsequent remote reconciliation.
+            } while !outbox.mutations.isEmpty
+            guard accountGeneration == generation else { return }
+            lastSyncAt = Date()
+            retryAttempt = 0
+            syncState = .idle
+        } catch is CancellationError {
+            // Ownership changed or the user cleared local data.
         } catch {
-            await MainActor.run {
-                syncState = .error(error.localizedDescription)
-            }
+            guard accountGeneration == generation else { return }
+            syncState = .error("Tus cambios están guardados en este iPhone. Reintentaremos la sincronización cuando haya conexión.")
+            scheduleRetry(generation: generation)
         }
     }
 
-    /// Merge in-place: server gana por id; locales sin contraparte se
-    /// preservan (luego pasamos a uploadPendingLocals para subirlos).
-    /// Excluye items que estén en `pendingDeleteEventIds` — el usuario los
-    /// borró pero el remoto puede no haberse confirmado todavía. Si el
-    /// remoto aún los devuelve, reintentamos la soft-delete asíncronamente.
-    private func mergeRemoteEvents(_ remote: [RemoteFocusEvent]) {
-        var byId = Dictionary(uniqueKeysWithValues: events.map { ($0.id, $0) })
-        // Quitar primero los que el usuario ya borró localmente — defensa
-        // contra "revivir" eventos cuando el delete remoto falló por red.
-        for id in pendingDeleteEventIds { byId.removeValue(forKey: id) }
+    private func scheduleRetry(generation: UUID) {
+        retryAttempt = min(retryAttempt + 1, 6)
+        let seconds = min(60, 1 << retryAttempt)
+        retryTask?.cancel()
+        retryTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000) }
+            catch { return }
+            guard let self, self.accountGeneration == generation else { return }
+            self.retryTask = nil
+            await self.fetchRemoteAndMerge()
+        }
+    }
 
-        var idsToRetryDelete: [UUID] = []
-        for r in remote {
-            guard let local = r.toLocal() else { continue }
-            if pendingDeleteEventIds.contains(local.id) {
-                idsToRetryDelete.append(local.id)
-                continue
+    private func mergeRemoteEvents(_ remote: [RemoteFocusEvent]) {
+        var byId = Dictionary(events.map { ($0.id, $0) }, uniquingKeysWith: { _, newest in newest })
+        for row in remote {
+            guard !outbox.contains(.event, id: row.id) else { continue }
+            if row.deletedAt != nil {
+                byId.removeValue(forKey: row.id)
+                LocalNotificationService.shared.cancelReminder(eventId: row.id)
+            } else if var event = row.toLocal() {
+                // These fields are not represented in the current server schema.
+                // Keep them locally until a versioned server migration supports them.
+                if let prior = byId[row.id] {
+                    event.status = prior.status
+                    event.featured = prior.featured
+                    event.linkedTaskIds = prior.linkedTaskIds
+                }
+                byId[row.id] = event
             }
-            byId[local.id] = local
         }
         events = byId.values.sorted { $0.startTime < $1.startTime }
         persistEvents()
-        // Re-sync notificaciones locales: si algún evento remoto trajo un
-        // recordatorio futuro nuevo, lo programamos. Identifiers estables
-        // por id → no duplica para los que ya estaban programados.
         resyncAllLocalNotifications()
-        // Reintentar soft-deletes pendientes que el servidor todavía
-        // muestra (probablemente el primer intento falló por red).
-        for id in idsToRetryDelete { softDeleteEventRemote(id) }
     }
 
     private func mergeRemoteTasks(_ remote: [RemoteFocusTask]) {
-        var byId = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
-        for id in pendingDeleteTaskIds { byId.removeValue(forKey: id) }
-
-        var idsToRetryDelete: [UUID] = []
-        for r in remote {
-            if pendingDeleteTaskIds.contains(r.id) {
-                idsToRetryDelete.append(r.id)
-                continue
+        var byId = Dictionary(tasks.map { ($0.id, $0) }, uniquingKeysWith: { _, newest in newest })
+        for row in remote {
+            guard !outbox.contains(.task, id: row.id) else { continue }
+            if row.deletedAt != nil {
+                byId.removeValue(forKey: row.id)
+            } else {
+                var task = row.toLocal()
+                task.parentTaskId = byId[row.id]?.parentTaskId
+                byId[row.id] = task
             }
-            byId[r.id] = r.toLocal()
         }
-        tasks = Array(byId.values)
+        tasks = byId.values.sorted { $0.id.uuidString < $1.id.uuidString }
         persistTasks()
-        for id in idsToRetryDelete { softDeleteTaskRemote(id) }
     }
 
-    /// Background upsert. Si falla, deja `syncState = .error` pero NO
-    /// reverte el cambio local — la consistencia se restaura en la próxima
-    /// sync exitosa.
-    private func uploadEvent(_ event: FocusEvent) {
-        guard let creds = syncCredentials else { return }
-        Task { [weak self] in
-            do {
-                let remote = RemoteFocusEvent(local: event, userId: creds.userId)
-                try await SupabaseSyncService.upsertEvent(remote, accessToken: creds.accessToken)
-                await MainActor.run {
-                    // Si veníamos arrastrando un .error transitorio, lo
-                    // normalizamos en cuanto vuelve un upload exitoso.
-                    if case .error = self?.syncState { self?.syncState = .idle }
-                }
-            } catch let err as SupabaseSyncError {
-                await MainActor.run {
-                    self?.syncState = .error(err.errorDescription ?? "Sync error")
-                }
-            } catch {
-                await MainActor.run {
-                    self?.syncState = .error(error.localizedDescription)
-                }
-            }
-        }
+    private func enqueueSync(_ entity: FocusSyncOutbox.Entity, id: UUID, operation: FocusSyncOutbox.Operation) {
+        // Account-owned edits remain queued even while a token is being refreshed.
+        // Guest edits live in their own partition and never enter a user's cloud.
+        if activeAccountID != nil { outbox.enqueue(entity, id: id, operation: operation) }
+        refreshPendingDeletes()
     }
 
-    private func uploadTask(_ task: FocusTask) {
-        guard let creds = syncCredentials else { return }
-        Task { [weak self] in
-            do {
-                let remote = RemoteFocusTask(local: task, userId: creds.userId)
-                try await SupabaseSyncService.upsertTask(remote, accessToken: creds.accessToken)
-                await MainActor.run {
-                    if case .error = self?.syncState { self?.syncState = .idle }
-                }
-            } catch let err as SupabaseSyncError {
-                await MainActor.run {
-                    self?.syncState = .error(err.errorDescription ?? "Sync error")
-                }
-            } catch {
-                await MainActor.run {
-                    self?.syncState = .error(error.localizedDescription)
-                }
-            }
-        }
+    private func refreshPendingDeletes() {
+        pendingSyncCount = outbox.mutations.count
+        pendingDeleteEventIds = Set(outbox.mutations.filter { $0.entity == .event && $0.operation == .delete }.map(\.id))
+        pendingDeleteTaskIds = Set(outbox.mutations.filter { $0.entity == .task && $0.operation == .delete }.map(\.id))
     }
 
-    private func softDeleteEventRemote(_ id: UUID) {
-        guard let creds = syncCredentials else { return }
-        Task { [weak self] in
-            do {
-                try await SupabaseSyncService.softDeleteEvent(id: id, accessToken: creds.accessToken)
-                await MainActor.run {
-                    // Confirmado en remoto: lo sacamos de la cola pendiente
-                    // y, si era el último error, normalizamos el estado.
-                    self?.pendingDeleteEventIds.remove(id)
-                    self?.persistPendingDeleteEvents()
-                    if case .error = self?.syncState { self?.syncState = .idle }
-                }
-            } catch let err as SupabaseSyncError {
-                await MainActor.run {
-                    self?.syncState = .error(err.errorDescription ?? "Sync error")
-                }
-            } catch {
-                await MainActor.run {
-                    self?.syncState = .error(error.localizedDescription)
-                }
-            }
-        }
-    }
-
-    private func softDeleteTaskRemote(_ id: UUID) {
-        guard let creds = syncCredentials else { return }
-        Task { [weak self] in
-            do {
-                try await SupabaseSyncService.softDeleteTask(id: id, accessToken: creds.accessToken)
-                await MainActor.run {
-                    self?.pendingDeleteTaskIds.remove(id)
-                    self?.persistPendingDeleteTasks()
-                    if case .error = self?.syncState { self?.syncState = .idle }
-                }
-            } catch let err as SupabaseSyncError {
-                await MainActor.run {
-                    self?.syncState = .error(err.errorDescription ?? "Sync error")
-                }
-            } catch {
-                await MainActor.run {
-                    self?.syncState = .error(error.localizedDescription)
-                }
-            }
-        }
+    @discardableResult
+    private func persistSyncSnapshot() -> Bool {
+        let saved = FocusLocalStore.saveSync(FocusSyncSnapshot(events: events, tasks: tasks, outbox: outbox, recoveryEventIDs: recoveryEventIDs, recoveryTaskIDs: recoveryTaskIDs), forKey: .syncSnapshot)
+        localSaveError = saved ? nil : "No pudimos guardar el cambio. Revisa el espacio disponible en tu iPhone e inténtalo de nuevo."
+        if let localSaveError { syncState = .error(localSaveError) }
+        return saved
     }
 
     // MARK: - Historial conversacional (compartido chat ↔ Mi Día)
@@ -5486,7 +5643,12 @@ final class FocusDataStore: ObservableObject {
 
     // MARK: - Persistencia (privado)
 
-    private func persistEvents()       { FocusLocalStore.save(events, forKey: .events); syncWidgetSnapshot() }
+    @discardableResult
+    private func persistEvents() -> Bool {
+        let saved = persistSyncSnapshot()
+        syncWidgetSnapshot()
+        return saved
+    }
 
     // MARK: - Widget snapshot (App Group)
 
@@ -5523,10 +5685,12 @@ final class FocusDataStore: ObservableObject {
         }
         WidgetCenter.shared.reloadAllTimelines()
     }
-    private func persistTasks()        { FocusLocalStore.save(tasks, forKey: .tasks) }
+    @discardableResult
+    private func persistTasks() -> Bool { persistSyncSnapshot() }
     private func persistSuggestions()  { FocusLocalStore.save(suggestions, forKey: .suggestions) }
     private func persistNovaMessages() { FocusLocalStore.save(novaMessages, forKey: .novaMessages) }
-    private func persistSettings()     { FocusLocalStore.save(settings, forKey: .settings) }
+    @discardableResult
+    private func persistSettings() -> Bool { FocusLocalStore.saveSync(settings, forKey: .settings) }
 
     // MARK: - Estado: usuario ya creó algo?
 
@@ -5603,50 +5767,70 @@ final class FocusDataStore: ObservableObject {
         }
     }
 
-    func addEvent(_ event: FocusEvent) {
-        events.append(event)
-        events.sort { $0.startTime < $1.startTime }
-        persistEvents()
-        uploadEvent(event)
+    /// Mutations become visible as successful only after their data and outbox
+    /// are atomically on disk. A failed write restores the previous UI state.
+    private func commitLocalMutation(_ mutation: () -> Void) -> Bool {
+        let previous = FocusSyncSnapshot(events: events, tasks: tasks, outbox: outbox, recoveryEventIDs: recoveryEventIDs, recoveryTaskIDs: recoveryTaskIDs)
+        mutation()
+        guard persistSyncSnapshot() else {
+            events = previous.events
+            tasks = previous.tasks
+            outbox = previous.outbox
+            recoveryEventIDs = previous.recoveryEventIDs ?? [:]
+            recoveryTaskIDs = previous.recoveryTaskIDs ?? [:]
+            refreshPendingDeletes()
+            HapticManager.shared.warning()
+            return false
+        }
+        syncWidgetSnapshot()
+        return true
+    }
+
+    @discardableResult
+    func addEvent(_ event: FocusEvent) -> Bool {
+        guard !events.contains(where: { $0.id == event.id }) else { return false }
+        guard commitLocalMutation({
+            events.append(event)
+            events.sort { $0.startTime < $1.startTime }
+            enqueueSync(.event, id: event.id, operation: .upsert)
+        }) else { return false }
+        FocusTelemetry.recordFirstItem()
+        if event.isReminder == true || !(event.reminderOffsets?.isEmpty ?? true) {
+            FocusTelemetry.record(.reminderCreated)
+        }
+        requestSync()
         syncLocalNotification(for: event)
         HapticManager.shared.success()
-        // [NovaMemory Phase 3] Aprendizaje pasivo desde eventos creados:
-        // si el título menciona personas ("Cumpleaños de Urrutia",
-        // "Reunión con Juan Pablo"), guardamos low-confidence personAlias.
-        // Próxima vez que el user mencione esa persona, Nova ya la conoce.
-        NovaMemoryStore.shared.passivelyLearnFromEvent(title: event.title)
+        if settings.novaMemoryEnabled { NovaMemoryStore.shared.passivelyLearnFromEvent(title: event.title) }
+        return true
     }
 
-    func deleteEvent(_ id: UUID) {
-        // ORDEN CRÍTICO: persistir la intención de borrar ANTES de
-        // persistir el array de eventos. Si la app se mata entre
-        // `persistEvents` y `persistPendingDeleteEvents`, al relanzarse
-        // tendríamos events.json sin el ítem PERO pendingDelete sin la
-        // id, y el próximo `fetchRemoteAndMerge` lo resucitaría desde
-        // Supabase. Persistiendo pendingDelete primero, el merge SIEMPRE
-        // lo excluye aunque crashee al medio.
-        if syncCredentials != nil {
-            pendingDeleteEventIds.insert(id)
-            persistPendingDeleteEvents()
-        }
-        events.removeAll { $0.id == id }
-        persistEvents()
+    @discardableResult
+    func deleteEvent(_ id: UUID) -> Bool {
+        guard events.contains(where: { $0.id == id }) else { return false }
+        guard commitLocalMutation({
+            events.removeAll { $0.id == id }
+            enqueueSync(.event, id: id, operation: .delete)
+        }) else { return false }
         cleanupStaleSuggestions()
-        softDeleteEventRemote(id)
-        // Cancelar notificación local SIEMPRE — si no existía, no-op.
+        requestSync()
         LocalNotificationService.shared.cancelReminder(eventId: id)
+        resyncAllLocalNotifications()
+        return true
     }
 
-    /// Actualiza un evento existente. No falla silenciosamente si el id no
-    /// existe — solo no hace nada.
-    func updateEvent(_ event: FocusEvent) {
-        guard let idx = events.firstIndex(where: { $0.id == event.id }) else { return }
-        events[idx] = event
-        events.sort { $0.startTime < $1.startTime }
-        persistEvents()
-        uploadEvent(event)
+    @discardableResult
+    func updateEvent(_ event: FocusEvent) -> Bool {
+        guard let index = events.firstIndex(where: { $0.id == event.id }) else { return false }
+        guard commitLocalMutation({
+            events[index] = event
+            events.sort { $0.startTime < $1.startTime }
+            enqueueSync(.event, id: event.id, operation: .upsert)
+        }) else { return false }
+        requestSync()
         syncLocalNotification(for: event)
         HapticManager.shared.tick()
+        return true
     }
 
     /// Re-sincroniza la notificación local para `event`. Tres ramas:
@@ -5665,60 +5849,40 @@ final class FocusDataStore: ObservableObject {
     /// pendiente sobrante — así el usuario que apaga el switch deja de ver
     /// alertas inmediatamente.
     private func syncLocalNotification(for event: FocusEvent) {
-        let isReminderEvent = event.isReminder == true
-        let hasOffsets = !(event.reminderOffsets?.isEmpty ?? true)
-        guard (isReminderEvent || hasOffsets), event.startTime > Date() else {
-            LocalNotificationService.shared.cancelReminder(eventId: event.id)
-            return
-        }
-        // Toggle global apagado → cancel todo lo nuestro y no schedule más.
-        guard settings.remindersEnabled else {
-            LocalNotificationService.shared.cancelReminder(eventId: event.id)
-            return
-        }
-        Task { [event] in
-            let status = await LocalNotificationService.shared.currentStatus()
-            switch status {
-            case .authorized, .provisional, .ephemeral:
-                await LocalNotificationService.shared.scheduleReminder(for: event)
-            case .notDetermined:
-                // Pedimos permiso una sola vez. Si el usuario acepta,
-                // programamos. Si rechaza, queda el evento sin alerta —
-                // Ajustes mostrará el estado y dará botón para activar.
-                let resolved = await LocalNotificationService.shared.requestAuthorization()
-                if resolved == .authorized || resolved == .provisional {
-                    await LocalNotificationService.shared.scheduleReminder(for: event)
-                }
-            case .denied:
-                // El usuario rechazó antes. No hacemos nada — Ajustes
-                // mostrará "denegadas" + botón para abrir Settings del iPhone.
-                break
-            @unknown default:
-                break
-            }
-        }
+        resyncAllLocalNotifications()
     }
 
-    /// Re-sincroniza notificaciones para TODOS los eventos vigentes. Se
-    /// llama al final de `mergeRemoteEvents` y al boot. Programa para:
-    ///  - recordatorios puntuales (`isReminder == true`), Y
-    ///  - eventos regulares con `reminderOffsets` (ej. fútbol 15:00 con
-    ///    aviso 30 min antes — el evento en sí no es reminder pero
-    ///    el offset sí lo es).
-    ///
-    /// Bug fix beta: antes este método filtraba solo `isReminder == true`,
-    /// lo que dejaba sin re-schedular avisos de eventos regulares al
-    /// reabrir la app después de cerrarla.
-    ///
-    /// Los identifiers son estables por id, así que es seguro re-llamar
-    /// (no duplica).
+    /// One global window protects the nearest 64 alerts across all events and
+    /// offsets. Reconciliation replaces stale requests and refills freed slots.
     private func resyncAllLocalNotifications() {
-        let now = Date()
-        for event in events where event.startTime > now {
-            let isReminderEvent = event.isReminder == true
-            let hasOffsets = !(event.reminderOffsets?.isEmpty ?? true)
-            guard isReminderEvent || hasOffsets else { continue }
-            syncLocalNotification(for: event)
+        guard schedulesNotifications else {
+            notificationPermissionDenied = false
+            return
+        }
+        if !settings.remindersEnabled { notificationPermissionDenied = false }
+        let generation = accountGeneration
+        let snapshot = settings.remindersEnabled ? events : []
+        Task { [weak self] in
+            guard let self, self.accountGeneration == generation,
+                  (self.settings.remindersEnabled ? self.events : []) == snapshot else { return }
+            if LocalNotificationService.plannedWindow(events: snapshot, now: Date()).isEmpty {
+                self.notificationPermissionDenied = false
+                await LocalNotificationService.shared.synchronizeReminders(for: [])
+                return
+            }
+            let status = await LocalNotificationService.shared.currentStatus()
+            guard self.accountGeneration == generation,
+                  self.settings.remindersEnabled, self.events == snapshot else { return }
+            let resolved = status == .notDetermined
+                ? await LocalNotificationService.shared.requestAuthorization() : status
+            guard self.accountGeneration == generation,
+                  self.settings.remindersEnabled, self.events == snapshot else { return }
+            self.notificationPermissionDenied = resolved == .denied
+            if resolved == .authorized || resolved == .provisional || resolved == .ephemeral {
+                await LocalNotificationService.shared.synchronizeReminders(for: snapshot)
+            } else {
+                await LocalNotificationService.shared.synchronizeReminders(for: [])
+            }
         }
     }
 
@@ -5732,7 +5896,6 @@ final class FocusDataStore: ObservableObject {
     /// editar/borrar uno sin que afecte al resto. Trade-off consciente:
     /// editar la "serie" entera requiere editar uno por uno.
     func expandLocalRecurrenceDates(start: Date, recurrence: RecurrenceHint) -> [Date] {
-        let cal = Calendar.current
         // Counts ampliados 2026-05-26 — el usuario espera que "todos los
         // lunes" cubra el semestre o más, no solo 2 meses. Estos valores
         // generan datos razonables sin saturar el storage local.
@@ -5805,7 +5968,6 @@ final class FocusDataStore: ObservableObject {
     /// persistir notificaciones locales tras reinstalar la app, así que
     /// esto cubre el caso. Idempotente: identifiers estables por id.
     func bootstrapLocalNotifications() {
-        guard settings.remindersEnabled else { return }
         resyncAllLocalNotifications()
     }
 
@@ -5819,61 +5981,71 @@ final class FocusDataStore: ObservableObject {
         tasks.filter { $0.category == .hoy && !$0.done }
     }
 
-    func toggleTask(_ id: UUID) {
-        guard let idx = tasks.firstIndex(where: { $0.id == id }) else { return }
-        tasks[idx].done.toggle()
-        tasks[idx].doneAt = tasks[idx].done ? Date() : nil
-        persistTasks()
-        uploadTask(tasks[idx])
-        if tasks[idx].done {
+    @discardableResult
+    func toggleTask(_ id: UUID) -> Bool {
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return false }
+        guard commitLocalMutation({
+            tasks[index].done.toggle()
+            tasks[index].doneAt = tasks[index].done ? Date() : nil
+            enqueueSync(.task, id: id, operation: .upsert)
+        }) else { return false }
+        requestSync()
+        if tasks[index].done {
+            FocusTelemetry.record(.taskCompleted)
             HapticManager.shared.success()
-        } else {
-            HapticManager.shared.tick()
-        }
+        } else { HapticManager.shared.tick() }
+        return true
     }
 
-    func toggleSubtask(taskId: UUID, subtaskId: UUID) {
-        guard let tIdx = tasks.firstIndex(where: { $0.id == taskId }) else { return }
-        guard let sIdx = tasks[tIdx].subtasks.firstIndex(where: { $0.id == subtaskId }) else { return }
-        tasks[tIdx].subtasks[sIdx].isCompleted.toggle()
-        persistTasks()
-        uploadTask(tasks[tIdx])
+    @discardableResult
+    func toggleSubtask(taskId: UUID, subtaskId: UUID) -> Bool {
+        guard let taskIndex = tasks.firstIndex(where: { $0.id == taskId }),
+              let subtaskIndex = tasks[taskIndex].subtasks.firstIndex(where: { $0.id == subtaskId }) else { return false }
+        guard commitLocalMutation({
+            tasks[taskIndex].subtasks[subtaskIndex].isCompleted.toggle()
+            enqueueSync(.task, id: taskId, operation: .upsert)
+        }) else { return false }
+        requestSync()
         HapticManager.shared.tick()
+        return true
     }
 
-    func addTask(_ task: FocusTask) {
-        // SOLO-EVENTOS (temporal 2026-06-13): tareas deshabilitadas. No-op —
-        // ningún path (Nova chat, Mi Día, backend, TareasView) puede crear
-        // tareas. Reactivar con FocusConfig.tasksEnabled = true.
-        guard FocusConfig.tasksEnabled else { return }
-        tasks.insert(task, at: 0)
-        persistTasks()
-        uploadTask(task)
+    @discardableResult
+    func addTask(_ task: FocusTask) -> Bool {
+        guard FocusConfig.tasksEnabled, !tasks.contains(where: { $0.id == task.id }) else { return false }
+        guard commitLocalMutation({
+            tasks.insert(task, at: 0)
+            enqueueSync(.task, id: task.id, operation: .upsert)
+        }) else { return false }
+        FocusTelemetry.recordFirstItem()
+        requestSync()
         HapticManager.shared.success()
+        return true
     }
 
-    func deleteTask(_ id: UUID) {
-        // Mismo orden defensivo que deleteEvent: pendingDelete persist
-        // ANTES que tasks persist, para que un crash entre los dos no
-        // resucite la tarea al relanzar.
-        if syncCredentials != nil {
-            pendingDeleteTaskIds.insert(id)
-            persistPendingDeleteTasks()
-        }
-        tasks.removeAll { $0.id == id }
-        persistTasks()
+    @discardableResult
+    func deleteTask(_ id: UUID) -> Bool {
+        guard tasks.contains(where: { $0.id == id }) else { return false }
+        guard commitLocalMutation({
+            tasks.removeAll { $0.id == id }
+            enqueueSync(.task, id: id, operation: .delete)
+        }) else { return false }
         cleanupStaleSuggestions()
-        softDeleteTaskRemote(id)
+        requestSync()
         HapticManager.shared.tick()
+        return true
     }
 
-    /// Actualiza una tarea existente. Si el id no existe, no hace nada.
-    func updateTask(_ task: FocusTask) {
-        guard let idx = tasks.firstIndex(where: { $0.id == task.id }) else { return }
-        tasks[idx] = task
-        persistTasks()
-        uploadTask(task)
+    @discardableResult
+    func updateTask(_ task: FocusTask) -> Bool {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return false }
+        guard commitLocalMutation({
+            tasks[index] = task
+            enqueueSync(.task, id: task.id, operation: .upsert)
+        }) else { return false }
+        requestSync()
         HapticManager.shared.tick()
+        return true
     }
 
     // MARK: - Sugerencias
@@ -6062,6 +6234,28 @@ final class FocusDataStore: ObservableObject {
         userText: String
     ) -> NovaApplyOutcome {
         var outcome = NovaApplyOutcome()
+        let validation = NovaActionValidator.validate(actions: actions, userText: userText)
+        guard !validation.shouldAsk else {
+            outcome.ignored = ["invalid_batch"]
+            return outcome
+        }
+        // Validate all references before the first mutation, so a stale proposal
+        // cannot leave half an edit/delete batch applied.
+        for action in actions {
+            switch action {
+            case .editEvent(let raw, _), .deleteEvent(let raw):
+                guard let id = parseEventId(raw), events.contains(where: { $0.id == id }) else {
+                    outcome.ignored = ["event_not_found"]
+                    return outcome
+                }
+            case .toggleTask(let raw), .deleteTask(let raw):
+                guard let id = parseEventId(raw), tasks.contains(where: { $0.id == id }) else {
+                    outcome.ignored = ["task_not_found"]
+                    return outcome
+                }
+            default: break
+            }
+        }
 
         // Cuántas CREACIONES trae el batch. Con 2+ eventos en un mismo
         // mensaje, el detalle trailing extraído del userText completo
@@ -6076,7 +6270,7 @@ final class FocusDataStore: ObservableObject {
         }
         let isMultiEventBatch = creationCount > 1
 
-        for action in actions {
+        actionLoop: for action in actions {
             switch action {
             case .addEvent(let payload):
                 // Gate: si el usuario NO mencionó hora alguna en su texto
@@ -6085,7 +6279,7 @@ final class FocusDataStore: ObservableObject {
                 // El modelo IA suele inventar una hora (típicamente 9 AM
                 // o el horario "razonable" del verbo). En el spec del
                 // producto, sin hora explícita = tarea/pendiente.
-                if !NovaActionNormalizer.userMentionedAnyTimeOfDay(in: userText) {
+                if payload.timeString == nil || payload.timeString?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
                     if !FocusConfig.tasksEnabled {
                         // SOLO-EVENTOS (fix 2026-08-10): degradar a tarea acá
                         // era mentira — `addTask` es no-op con el flag off y
@@ -6110,7 +6304,10 @@ final class FocusDataStore: ObservableObject {
                         }
                         outcome.ignored.append("add_event(no_time_tasks_disabled)")
                     } else if let task = makeTaskFromTimelessEventPayload(payload) {
-                        addTask(task)
+                        guard addTask(task) else {
+                            outcome.ignored.append("persistence_failed")
+                            break actionLoop
+                        }
                         outcome.didMutate = true
                         outcome.summary = "Tarea «\(task.title)» agregada."
                         outcome.primaryTaskId = task.id
@@ -6125,7 +6322,7 @@ final class FocusDataStore: ObservableObject {
                     } else {
                         outcome.ignored.append("add_event(no_time_to_task_invalid)")
                     }
-                } else if let localRecurrence = NovaResponder.detectRecurrence(userText.lowercased()),
+                } else if !isMultiEventBatch, let localRecurrence = NovaResponder.detectRecurrence(userText.lowercased()),
                           let backendRecur = makeBackendRecurrence(
                               from: localRecurrence,
                               firstDateString: payload.dateString,
@@ -6173,11 +6370,13 @@ final class FocusDataStore: ObservableObject {
                         startTime: event.startTime,
                         existingEvents: events
                     ) {
-                        outcome.didMutate = false
                         outcome.summary = "Ya tenías «\(event.title)» a esa hora — no lo dupliqué."
                         outcome.ignored.append("add_event(duplicate)")
                     } else {
-                        addEvent(event)
+                        guard addEvent(event) else {
+                            outcome.ignored.append("persistence_failed")
+                            break actionLoop
+                        }
                         outcome.didMutate = true
                         outcome.summary = summaryForCreatedEvent(event)
                         outcome.primaryEventId = event.id
@@ -6203,6 +6402,7 @@ final class FocusDataStore: ObservableObject {
                     outcome.didMutate = true
                     outcome.summary = "Agendé \(created.count) instancia\(created.count == 1 ? "" : "s") de «\(payload.title)»."
                     outcome.primaryEventId = created.first?.id
+                    outcome.createdEvents.append(contentsOf: created)
                     updateNovaContext(
                         from: userText,
                         title: payload.title,
@@ -6222,7 +6422,10 @@ final class FocusDataStore: ObservableObject {
                     continue
                 }
                 applyUpdates(updates, to: &event)
-                updateEvent(event)
+                guard updateEvent(event) else {
+                    outcome.ignored.append("persistence_failed")
+                    break actionLoop
+                }
                 outcome.didMutate = true
                 outcome.summary = "Actualicé «\(event.title)»."
                 outcome.primaryEventId = event.id
@@ -6243,7 +6446,10 @@ final class FocusDataStore: ObservableObject {
                     continue
                 }
                 let title = event.title
-                deleteEvent(id)
+                guard deleteEvent(id) else {
+                    outcome.ignored.append("persistence_failed")
+                    break actionLoop
+                }
                 outcome.didMutate = true
                 outcome.summary = "Eliminé «\(title)»."
                 clearNovaContext()
@@ -6257,7 +6463,15 @@ final class FocusDataStore: ObservableObject {
                     continue
                 }
                 if let task = makeTask(from: payload) {
-                    addTask(task)
+                    if tasks.contains(where: { !$0.done && NovaResponder.normalizeForFuzzy($0.title) == NovaResponder.normalizeForFuzzy(task.title) && $0.dueDate == task.dueDate }) {
+                        outcome.summary = "Ya tenías «\(task.title)» en tus pendientes."
+                        outcome.ignored.append("add_task(duplicate)")
+                        continue
+                    }
+                    guard addTask(task) else {
+                        outcome.ignored.append("persistence_failed")
+                        break actionLoop
+                    }
                     outcome.didMutate = true
                     outcome.summary = "Tarea «\(task.title)» agregada."
                     outcome.primaryTaskId = task.id
@@ -6279,7 +6493,10 @@ final class FocusDataStore: ObservableObject {
                     outcome.ignored.append("toggle_task(id_not_found)")
                     continue
                 }
-                toggleTask(id)
+                guard toggleTask(id) else {
+                    outcome.ignored.append("persistence_failed")
+                    break actionLoop
+                }
                 outcome.didMutate = true
                 outcome.summary = "Tarea actualizada."
                 outcome.primaryTaskId = id
@@ -6291,7 +6508,10 @@ final class FocusDataStore: ObservableObject {
                     continue
                 }
                 let title = task.title
-                deleteTask(id)
+                guard deleteTask(id) else {
+                    outcome.ignored.append("persistence_failed")
+                    break actionLoop
+                }
                 outcome.didMutate = true
                 outcome.summary = "Tarea «\(title)» eliminada."
                 clearNovaContext()
@@ -6302,6 +6522,10 @@ final class FocusDataStore: ObservableObject {
                 outcome.ignored.append("remember(skipped_v1)")
 
             case .saveMemory(let key, let value, let categoryStr):
+                guard settings.novaMemoryEnabled else {
+                    outcome.ignored.append("save_memory(disabled)")
+                    continue
+                }
                 // V2 (2026-05-27): el LLM (OpenAI w/ reasoning) detectó
                 // memoria personal. Persistimos en NovaMemoryStore.
                 let category = NovaMemoryCategory(rawValue: categoryStr) ?? .preference
@@ -6319,7 +6543,7 @@ final class FocusDataStore: ObservableObject {
                     outcome.summary = "Listo, guardé eso."
                 }
                 HapticManager.shared.success()
-                debugLog("[NovaMemory:llm] saved \(saved.category.rawValue) key=\(saved.key)")
+                _ = saved
 
             case .forgetMemory(let key):
                 // V2: el user pidió olvidar algo. "__all__" = clear total.
@@ -6333,7 +6557,7 @@ final class FocusDataStore: ObservableObject {
                     let matches = NovaMemoryStore.shared.allActiveMemoriesHuman(maxEntries: 100)
                         .filter { $0.text.lowercased().contains(key.lowercased()) }
                     for m in matches { NovaMemoryStore.shared.deactivate(id: m.id) }
-                    outcome.didMutate = !matches.isEmpty
+                    outcome.didMutate = outcome.didMutate || !matches.isEmpty
                     if (outcome.summary ?? "").isEmpty {
                         outcome.summary = matches.isEmpty
                             ? "No tenía nada sobre «\(key)»."
@@ -6696,13 +6920,17 @@ final class FocusDataStore: ObservableObject {
         let cleanedTitle = NovaActionNormalizer.cleanTitle(rawLabel)
         guard !cleanedTitle.isEmpty else { return nil }
         let priority = TaskPriority.fromBackendLabel(payload.priority)
-        let category = TaskCategory.fromBackendLabel(payload.category)
+        let dueDate = payload.dateString.flatMap(NovaTimeFormatter.parseISODate).map { Calendar.current.startOfDay(for: $0) }
+        let category: TaskCategory = dueDate.map { Calendar.current.isDateInToday($0) ? .hoy : .semana }
+            ?? TaskCategory.fromBackendLabel(payload.category)
         let linkedEventId = payload.linkedEventId.flatMap(parseEventId(_:))
         let parentTaskId = payload.parentTaskId.flatMap(parseEventId(_:))
         return FocusTask(
             title: cleanedTitle,
             priority: priority,
             category: category,
+            dueDate: dueDate,
+            dueTime: nil,
             linkedEventId: linkedEventId,
             parentTaskId: parentTaskId
         )
@@ -6907,7 +7135,12 @@ final class FocusDataStore: ObservableObject {
                     // siguiente cuando la primera ya pasó.
                     allowPastRollForward: false
                 ) {
-                    addEvent(event)
+                    if NovaActionNormalizer.isLikelyDuplicate(title: event.title, startTime: event.startTime, existingEvents: events) {
+                        added += 1
+                        current = cal.date(byAdding: .day, value: stride, to: current) ?? current
+                        continue
+                    }
+                    guard addEvent(event) else { break }
                     created.append(event)
                     added += 1
                 }
@@ -6964,304 +7197,337 @@ final class FocusDataStore: ObservableObject {
 
     // MARK: - Nova
 
-    func sendNovaMessage(_ text: String) {
-        // [NovaLatency] timestamps temporales para debug — quitar tras
-        // estabilizar tiempos. Cubren los 4 segmentos críticos:
-        // userSend → fastPath → ai → save → uiVisible.
-        let userSendTs = CFAbsoluteTimeGetCurrent()
-        debugLog("[NovaLatency] userSend")
+    struct NovaPendingProposal: Identifiable {
+        let id = UUID()
+        let summary: String
+        let actionLabels: [String]
+        fileprivate let actions: [BackendAction]
+        fileprivate let localIntents: [NovaIntent]
+        fileprivate let userText: String
+        fileprivate let generation: UUID
+    }
 
+    @Published private(set) var novaPendingProposal: NovaPendingProposal?
+    @Published private(set) var novaErrorMessage: String?
+    @Published private(set) var novaLastFailedInput: String?
+    private var novaRequestTask: Task<Void, Never>?
+    private var novaRequestID: UUID?
+
+    func cancelNovaRequest() {
+        novaRequestTask?.cancel()
+        novaRequestTask = nil
+        novaRequestID = nil
+        novaPendingProposal = nil
+        novaErrorMessage = nil
+        novaLastFailedInput = nil
+        isNovaTyping = false
+    }
+
+    func retryNovaMessage() {
+        guard let text = novaLastFailedInput else { return }
+        sendNovaMessage(text)
+    }
+
+    func cancelNovaProposal() {
+        guard novaPendingProposal != nil else { return }
+        novaPendingProposal = nil
+        appendNovaReply("De acuerdo. No apliqué la propuesta.")
+    }
+
+    func confirmNovaProposal() {
+        guard !isNovaTyping, let proposal = novaPendingProposal else { return }
+        novaPendingProposal = nil
+        guard proposal.generation == accountGeneration else { return }
+        if proposal.localIntents.isEmpty {
+            executeNovaActions(proposal.actions, userText: proposal.userText)
+        } else {
+            executeLocalNovaIntents(proposal.localIntents, userText: proposal.userText, confirmed: true)
+        }
+    }
+
+    private func appendNovaReply(_ reply: String, actionLabels: [String] = []) {
+        novaMessages.append(NovaMessage(role: .nova, content: reply, actionLabels: actionLabels))
+        persistNovaMessages()
+    }
+
+    private func failNova(_ message: String, input: String) {
+        FocusTelemetry.record(.novaActionFailure)
+        novaErrorMessage = message
+        novaLastFailedInput = input
+        appendNovaReply(message)
+    }
+
+    /// Both capture surfaces use this single execution boundary. A reply is
+    /// a plan until its mode, arguments and account snapshot have been checked.
+    func sendNovaMessage(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, !isNovaTyping else { return }
+        guard trimmed.count <= 4000 else {
+            novaErrorMessage = "El mensaje es demasiado largo. Acórtalo un poco."
+            return
+        }
+        if novaPendingProposal != nil {
+            let answer = trimmed.lowercased().trimmingCharacters(in: .punctuationCharacters)
+            if ["sí", "si", "confirmar", "confirmo", "aplicar", "hazlo"].contains(answer) {
+                confirmNovaProposal()
+                return
+            }
+            if ["no", "cancelar", "cancela", "descartar"].contains(answer) {
+                cancelNovaProposal()
+                return
+            }
+            novaPendingProposal = nil
+        }
+        novaErrorMessage = nil
+        novaLastFailedInput = nil
+        FocusTelemetry.record(.novaRequest)
+        let history = novaMessages.suffix(12).map {
+            NovaService.HistoryEntry(role: $0.role == .user ? .user : .assistant, content: $0.content)
+        }
         novaMessages.append(NovaMessage(role: .user, content: trimmed))
         persistNovaMessages()
         HapticManager.shared.tap()
-        isNovaTyping = true
 
-        // [NovaMemory V3 — 2026-05-28] Comandos meta de memoria SIEMPRE
-        // local ("qué sabes de mí", "olvida X") — operaciones sobre
-        // UserDefaults que el LLM no puede ejecutar.
+        if NovaActionValidator.requiresLocationTrigger(trimmed) {
+            let base = trimmed.replacingOccurrences(of: #"(?i)\s+(?:cuando|al)\s+(?:lleg|sal|volv).*$"#, with: "", options: .regularExpression)
+            let title = NovaActionNormalizer.cleanTitle(base)
+            setPendingClarification(PendingClarification(
+                originalInput: base, kind: .reminder, proposedTitle: title, wantsReminder: true,
+                missingFields: [.time], questionAsked: "¿A qué hora quieres que te avise?", source: .novaChat
+            ))
+            appendNovaReply("Los avisos por ubicación todavía no están disponibles. ¿A qué hora quieres que te avise?")
+            return
+        }
         if let memoryReply = handleMemoryCommand(trimmed: trimmed) {
-            isNovaTyping = false
-            novaMessages.append(NovaMessage(role: .nova, content: memoryReply))
-            persistNovaMessages()
+            appendNovaReply(memoryReply)
             return
         }
-
-        // [NovaMemory V3] APRENDIZAJE local como PRIMERA línea (funciona en
-        // demo/offline/logueado). "X es mi Y", "la agustina es mi polola",
-        // "mi mamá se llama Susana". Detección robusta (lista ampliada).
-        // Guarda al tiro + responde, sin esperar backend. Si el LLM además
-        // lo ve, hace upsert idempotente. Arregla caso demo 2026-05-28
-        // donde memoria no se guardaba al haber quitado este short-circuit.
-        if let learned = NovaMemoryStore.shared.tryLearnFromUserText(trimmed) {
-            isNovaTyping = false
-            let reply = replyForLearnedMemory(learned)
-            novaMessages.append(NovaMessage(role: .nova, content: reply))
-            persistNovaMessages()
-            HapticManager.shared.success()
+        let expanded = settings.novaMemoryEnabled
+            ? NovaMemoryStore.shared.expandAliases(in: trimmed) : trimmed
+        let intents = NovaResponder.parseAll(expanded, context: novaContext)
+        // Learning a personal fact must not swallow another instruction.
+        if settings.novaMemoryEnabled, intents.count == 1,
+           !NovaActionNormalizer.userMentionedAnyTimeOfDay(in: trimmed),
+           !trimmed.lowercased().contains(" y "),
+           let learned = NovaMemoryStore.shared.tryLearnFromUserText(trimmed) {
+            appendNovaReply(replyForLearnedMemory(learned))
             return
         }
-
-        // [NovaMemory] Expansión de aliases: aplicar courseAlias antes de
-        // parsear. "tengo prueba de teorías" → "tengo prueba de Teorías de
-        // la Comunicación" si existe esa memoria. Solo afecta a la copia
-        // que va al parser; el novaMessages mantiene el texto original
-        // del usuario para no contaminar el historial visible.
-        let expandedTrimmed = NovaMemoryStore.shared.expandAliases(in: trimmed)
-
-        // Pre-parse local: si el parser ya resuelve la intención sin
-        // ambigüedad (correcciones, follow-ups, comandos meta, **y ahora
-        // también createEvent/createTask con título+fecha extraídos
-        // localmente**), short-circuit el backend — backend no tiene
-        // `lastEventId` ni el pending local, y para comandos simples
-        // viajar 600ms+ al modelo es perder UX. Si el parser sugiere
-        // clarify con título, guardamos pending para que el siguiente
-        // turno corto pueda completarlo localmente.
-        debugLog("[NovaLatency] fastPathStart")
-        let fastPathStartTs = CFAbsoluteTimeGetCurrent()
-        let preIntent = NovaResponder.parse(expandedTrimmed, context: novaContext)
-        if shouldShortCircuitLocally(preIntent),
-           let localReply = applyLocalNovaIntent(preIntent, userText: trimmed) {
-            let fastPathEndTs = CFAbsoluteTimeGetCurrent()
-            let fastPathMs = (fastPathEndTs - fastPathStartTs) * 1000
-            debugLog(String(format: "[NovaLatency] fastPathEnd ms=%.1f", fastPathMs))
-
-            // Typing indicator floor reducido: 80ms en fast path (vs 350ms
-            // antes). El item ya está en Mi Día (mutación síncrona del
-            // store en applyLocalNovaIntent) — solo evitamos el parpadeo
-            // del indicador "escribiendo" en chat. 80ms es suficiente
-            // para que el indicador se vea sin frenar la respuesta.
-            Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 80_000_000)
-                await MainActor.run {
-                    guard let self else { return }
-                    self.novaMessages.append(NovaMessage(role: .nova, content: localReply))
-                    self.persistNovaMessages()
-                    self.isNovaTyping = false
-                    let uiTs = CFAbsoluteTimeGetCurrent()
-                    let totalMs = (uiTs - userSendTs) * 1000
-                    debugLog(String(format: "[NovaLatency] uiVisible(fastPath) totalMs=%.1f", totalMs))
-                }
-            }
+        if syncCredentials == nil || (!intents.isEmpty && intents.allSatisfy(shouldShortCircuitLocally)) {
+            executeLocalNovaIntents(intents, userText: trimmed)
             return
         }
-        let fastPathEndTs = CFAbsoluteTimeGetCurrent()
-        let fastPathMissedMs = (fastPathEndTs - fastPathStartTs) * 1000
-        debugLog(String(format: "[NovaLatency] fastPathMiss ms=%.1f intent=%@", fastPathMissedMs, String(describing: preIntent)))
-        if case .clarify(let reason) = preIntent,
+        if let first = intents.first, case .clarify(let reason) = first,
            let pending = buildChatPendingClarification(from: reason, userText: trimmed) {
             setPendingClarification(pending)
         }
-
-        // History snapshot ANTES de meter el mensaje del usuario en el
-        // history — el server espera turnos anteriores, no el actual.
-        let chatHistory: [NovaService.HistoryEntry] = novaMessages
-            .dropLast()  // sacar el del usuario que acabamos de pushear
-            .suffix(12)
-            .map { msg in
-                NovaService.HistoryEntry(
-                    role: msg.role == .user ? .user : .assistant,
-                    content: msg.content
-                )
-            }
-        // [NovaMemory Phase 1] Inyectamos memorias relevantes como un
-        // turno PREVIO del assistant — el LLM ve "Recuerdo de turnos
-        // anteriores: ..." y puede usar esa info para interpretar el
-        // mensaje actual. Aditivo: si no hay memorias, history queda igual.
-        //
-        // Esto NO contamina `novaMessages` (la UI sigue mostrando solo
-        // los turnos reales del chat) — solo viaja al backend.
-        let memoryContext = NovaMemoryStore.shared.memoryContextLine(for: trimmed)
-        let priorHistory: [NovaService.HistoryEntry]
-        if let memoryContext {
-            let memoryEntry = NovaService.HistoryEntry(
-                role: .assistant,
-                content: memoryContext
-            )
-            priorHistory = [memoryEntry] + chatHistory
-        } else {
-            priorHistory = chatHistory
-        }
-
-        // Snapshot de eventos/tareas para mandar al backend (mismas
-        // ventanas que Mi Día inline).
-        let cal = Calendar.current
-        let now = Date()
-        let horizon = cal.date(byAdding: .day, value: 7, to: now) ?? now
-        let visibleEvents = events
-            .filter { $0.startTime >= cal.startOfDay(for: now) && $0.startTime <= horizon }
-            .sorted { $0.startTime < $1.startTime }
-        let visibleTasks = tasks.filter { !$0.done }
-        // Topic focus → backend (fix QA-closure 2026-06-10): sin esto el
-        // backend recibía discussedEventIds: [] SIEMPRE (el parámetro tiene
-        // default vacío y nunca se pasaba) y Nova no podía resolver
-        // "cámbialo", "acuérdame de eso", "lo de fútbol" contra el evento
-        // recién creado/mencionado — el bug de memoria conversacional.
-        // Igual que el path inline de Mi Día: primero promover eventos
-        // mencionados por título en ESTE mensaje, luego snapshotear.
         detectAndPromoteMentions(in: trimmed)
-        let discussedIds = novaContext.freshDiscussedEvents.map { $0.eventId }
-
-        Task { [weak self] in
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let horizon = calendar.date(byAdding: .day, value: 45, to: today) ?? today
+        let discussedIDs = Set(novaContext.freshDiscussedEvents.map(\.eventId))
+        let contextEvents = events.filter {
+            $0.status != .done && $0.status != .cancelled &&
+            (($0.startTime >= today && $0.startTime <= horizon) || discussedIDs.contains($0.id))
+        }.sorted { $0.startTime < $1.startTime }
+        let discussedIds = novaContext.freshDiscussedEvents.map(\.eventId)
+        let generation = accountGeneration
+        let requestID = UUID()
+        guard let credentials = syncCredentials else { return }
+        isNovaTyping = true
+        novaRequestID = requestID
+        novaRequestTask = Task { [weak self] in
             guard let self else { return }
-            // Mínimo de delay para que el indicador "escribiendo" no parpadee
-            // cuando el backend responde muy rápido o el fallback es instantáneo.
-            let minDelay: UInt64 = 350_000_000
-
-            let replyText: String
-            let actions: [BackendAction]
-            let smartActionsBlocked: Bool
-            let smartActionsMessage: String?
-            let usedFallback: Bool
-
-            if let creds = self.syncCredentialsSnapshot() {
-                do {
-                    debugLog("[NovaLatency] aiStart")
-                    let aiStartTs = CFAbsoluteTimeGetCurrent()
-                    let result = try await NovaService.send(
-                        message: trimmed,
-                        events: visibleEvents,
-                        tasks: visibleTasks,
-                        history: priorHistory,
-                        accessToken: creds.accessToken,
-                        surface: .novaChat,
-                        discussedEventIds: discussedIds,
-                        userMemories: NovaMemoryStore.shared
-                            .allActiveMemoriesHuman(maxEntries: 30)
-                            .map { $0.text }
-                    )
-                    let aiMs = (CFAbsoluteTimeGetCurrent() - aiStartTs) * 1000
-                    debugLog(String(format: "[NovaLatency] aiEnd ms=%.1f", aiMs))
-                    replyText = result.reply
-                    actions = result.actions
-                    smartActionsBlocked = result.smartActionsBlocked
-                    smartActionsMessage = result.smartActionsMessage
-                    usedFallback = false
-                } catch let err as NovaServiceError where err.canFallbackToLocal {
-                    // LOG CLARO del error REAL (user spec 2026-06-13): estando
-                    // logueado, si el backend falla, queremos verlo en consola,
-                    // no que pase desapercibido. La nota humana visible se arma
-                    // abajo con fallbackNoteForChat.
-                    debugLog("[Nova] ⚠️ FALLBACK LOGUEADO (chat): backend falló → \(err.debugLabel). Usando parser local de respaldo.")
-                    // Fallback local CON ejecución: parsea + aplica intents.
-                    // Antes solo generaba texto y no creaba eventos — por eso
-                    // un 500 + "acuérdame X mañana" no creaba nada.
-                    let (replyJoined, executed) = await MainActor.run {
-                        () -> (String, Bool) in
-                        let expanded = NovaMemoryStore.shared.expandAliases(in: trimmed)
-                        let intents = NovaResponder.parseAll(expanded, context: self.novaContext)
-                        var parts: [String] = []
-                        var anyExecuted = false
-                        for intent in intents {
-                            if let r = self.applyLocalNovaIntent(intent, userText: trimmed, isMultiIntent: intents.count > 1) {
-                                parts.append(r)
-                                anyExecuted = true
-                            }
-                        }
-                        if parts.isEmpty {
-                            return (NovaResponder.reply(to: trimmed, context: self.novaContext), false)
-                        }
-                        return (parts.joined(separator: " · "), anyExecuted)
-                    }
-                    replyText = replyJoined
-                    actions = []
-                    smartActionsBlocked = false
-                    smartActionsMessage = await MainActor.run {
-                        self.fallbackNoteForChat(error: err)
-                    }
-                    usedFallback = true
-                    _ = executed
-                } catch {
-                    // Error inesperado (no NovaServiceError). También se loguea
-                    // y se muestra nota honesta — el fallback NO es silencioso.
-                    debugLog("[Nova] ⚠️ FALLBACK LOGUEADO (chat): error inesperado → \(error). Usando parser local de respaldo.")
-                    let replyJoined = await MainActor.run {
-                        () -> String in
-                        let expanded = NovaMemoryStore.shared.expandAliases(in: trimmed)
-                        let intents = NovaResponder.parseAll(expanded, context: self.novaContext)
-                        var parts: [String] = []
-                        for intent in intents {
-                            if let r = self.applyLocalNovaIntent(intent, userText: trimmed, isMultiIntent: intents.count > 1) {
-                                parts.append(r)
-                            }
-                        }
-                        return parts.isEmpty
-                            ? NovaResponder.reply(to: trimmed, context: self.novaContext)
-                            : parts.joined(separator: " · ")
-                    }
-                    replyText = replyJoined
-                    actions = []
-                    smartActionsBlocked = false
-                    smartActionsMessage = "(No pude contactar a Nova (IA) — usé el modo local de respaldo. Vuelve a intentarlo en un momento.)"
-                    usedFallback = true
+            defer {
+                if self.novaRequestID == requestID {
+                    self.isNovaTyping = false
+                    self.novaRequestTask = nil
+                    self.novaRequestID = nil
                 }
-            } else {
-                // Demo / sin sesión → parser local CON ejecución multi-intent.
-                let replyJoined = await MainActor.run {
-                    () -> String in
-                    let intents = NovaResponder.parseAll(trimmed, context: self.novaContext)
-                    var parts: [String] = []
-                    for intent in intents {
-                        if let r = self.applyLocalNovaIntent(intent, userText: trimmed, isMultiIntent: intents.count > 1) {
-                            parts.append(r)
-                        }
-                    }
-                    return parts.isEmpty
-                        ? NovaResponder.reply(to: trimmed, context: self.novaContext)
-                        : parts.joined(separator: " · ")
-                }
-                replyText = replyJoined
-                actions = []
-                smartActionsBlocked = false
-                smartActionsMessage = nil
-                usedFallback = false
             }
-
-            try? await Task.sleep(nanoseconds: minDelay)
-
-            await MainActor.run {
-                // Aplicar las actions en el main actor (mutaciones del store).
-                debugLog("[NovaLatency] saveStart")
-                let saveStartTs = CFAbsoluteTimeGetCurrent()
-                let outcome = self.applyBackendActions(actions, userText: trimmed)
-                let saveMs = (CFAbsoluteTimeGetCurrent() - saveStartTs) * 1000
-                debugLog(String(format: "[NovaLatency] saveEnd ms=%.1f", saveMs))
-                // Componer texto final del mensaje de Nova:
-                // 1. reply del backend (si vino)
-                // 2. resumen de la mutación (si hubo)
-                // 3. nota de fallback / cuota (si aplica)
-                var pieces: [String] = []
-                let cleanReply = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !cleanReply.isEmpty {
-                    pieces.append(cleanReply)
+            do {
+                let result = try await NovaService.send(
+                    message: trimmed, events: Array(contextEvents.prefix(80)),
+                    tasks: Array(self.tasks.filter { !$0.done }.prefix(50)), history: history,
+                    accessToken: credentials.accessToken, surface: .novaChat,
+                    discussedEventIds: discussedIds,
+                    userMemories: self.settings.novaMemoryEnabled
+                        ? NovaMemoryStore.shared.allActiveMemoriesHuman(maxEntries: 20).map { $0.text } : []
+                )
+                guard !Task.isCancelled, self.accountGeneration == generation,
+                      self.novaRequestID == requestID else { return }
+                self.receiveNovaResult(result, userText: trimmed)
+            } catch {
+                guard !Task.isCancelled, self.accountGeneration == generation,
+                      self.novaRequestID == requestID else { return }
+                if let error = error as? NovaServiceError, case .offline = error {
+                    self.executeLocalNovaIntents(intents, userText: trimmed)
+                    self.appendNovaReply("Sin conexión. Los cambios guardados en este iPhone se sincronizarán cuando vuelvas a conectarte.")
+                } else {
+                    let message = (error as? NovaServiceError)?.errorDescription
+                        ?? "No pude terminar la solicitud. Vuelve a intentarlo."
+                    self.failNova(message, input: trimmed)
                 }
-                if outcome.didMutate, let s = outcome.summary, !s.isEmpty {
-                    // Solo agregar si no es duplicado del reply.
-                    if cleanReply.range(of: s) == nil {
-                        pieces.append(s)
-                    }
-                }
-                if smartActionsBlocked, let msg = smartActionsMessage {
-                    pieces.append(msg)
-                }
-                if usedFallback, let msg = smartActionsMessage {
-                    // En el flujo fallback, smartActionsMessage trae la nota
-                    // humana ("Usé el modo local…").
-                    if !pieces.contains(where: { $0 == msg }) {
-                        pieces.append(msg)
-                    }
-                }
-                let finalText = pieces.isEmpty
-                    ? "Listo."
-                    : pieces.joined(separator: "\n\n")
-
-                self.novaMessages.append(NovaMessage(role: .nova, content: finalText))
-                self.persistNovaMessages()
-                self.isNovaTyping = false
-                let totalMs = (CFAbsoluteTimeGetCurrent() - userSendTs) * 1000
-                debugLog(String(format: "[NovaLatency] uiVisible(backend) totalMs=%.1f fallback=%@", totalMs, usedFallback ? "yes" : "no"))
             }
+        }
+    }
+
+    func receiveNovaResult(_ result: NovaService.Result, userText: String) {
+        if result.smartActionsBlocked {
+            failNova(result.smartActionsMessage ?? "Llegaste al límite de Nova. Puedes crear tus pendientes manualmente.", input: userText)
+            return
+        }
+        if result.shouldAskUser || !result.confidence.isFinite || result.confidence < 0.55 || result.mode == .clarification {
+            appendNovaReply(!result.actions.isEmpty || result.reply.isEmpty
+                ? "Necesito confirmar los detalles antes de guardar. Dime qué quieres crear o cambiar y para cuándo."
+                : result.reply)
+            return
+        }
+        if result.mode == .chatOnly {
+            guard result.actions.isEmpty else {
+                failNova("La respuesta no fue clara. No apliqué cambios; vuelve a intentarlo.", input: userText)
+                return
+            }
+            appendNovaReply(result.reply)
+            return
+        }
+        let candidates = result.mode == .proposal ? result.proposedActions : result.actions
+        let validation = NovaActionValidator.validate(actions: candidates, userText: userText)
+        guard !validation.shouldAsk else {
+            failNova(validation.suggestedQuestion ?? "No pude preparar esos cambios con seguridad.", input: userText)
+            return
+        }
+        let actions = validation.safeActions
+        guard !actions.isEmpty else {
+            failNova("No pude preparar una acción para esa solicitud. Inténtalo de nuevo con el nombre y la fecha.", input: userText)
+            return
+        }
+        let requiresReview = result.mode == .proposal
+            || actions.contains(where: NovaActionValidator.isDestructive)
+            || NovaActionValidator.isEmotionalOrContextual(userText)
+        if requiresReview {
+            novaPendingProposal = NovaPendingProposal(
+                summary: "Revisa estos cambios antes de aplicarlos.",
+                actionLabels: actions.map(novaActionLabel), actions: actions,
+                localIntents: [], userText: userText, generation: accountGeneration
+            )
+            appendNovaReply("Preparé una propuesta. Revisa los cambios y pulsa Aplicar para confirmarlos.")
+            return
+        }
+        executeNovaActions(actions, userText: userText)
+        if novaErrorMessage == nil, let question = result.followUpQuestion, !question.isEmpty {
+            appendNovaReply(question)
+        }
+    }
+
+    private func novaActionLabel(_ action: BackendAction) -> String {
+        switch action {
+        case .addEvent(let event), .addRecurringEvent(let event, _):
+            return "Crear: \(event.title)\(event.dateString.map { " · \($0)" } ?? "")\(event.timeString.map { " · \($0)" } ?? "")"
+        case .addTask(let task): return "Añadir tarea: \(task.label)"
+        case .editEvent(let id, let updates):
+            let name = events.first { $0.id.uuidString.lowercased() == id.lowercased() }?.title ?? "evento"
+            let changes = [updates.title, updates.dateString, updates.timeString, updates.subtitle, updates.location].compactMap { $0 }.joined(separator: " · ")
+            return "Editar \(name): \(changes)"
+        case .deleteEvent(let id):
+            guard let event = events.first(where: { $0.id.uuidString.lowercased() == id.lowercased() }) else { return "Eliminar evento" }
+            return "Eliminar: \(event.title) · \(DateFormatters.shortDayMonth.string(from: event.startTime)) · \(DateFormatters.hourMinute.string(from: event.startTime))"
+        case .deleteTask(let id): return "Eliminar: \(tasks.first { $0.id.uuidString.lowercased() == id.lowercased() }?.title ?? "tarea")"
+        case .toggleTask: return "Actualizar tarea"
+        case .saveMemory: return "Guardar una preferencia"
+        case .forgetMemory: return "Olvidar información guardada"
+        case .remember, .unsupported: return "Acción no disponible"
+        }
+    }
+
+    private func executeNovaActions(_ actions: [BackendAction], userText: String) {
+        let validation = NovaActionValidator.validate(actions: actions, userText: userText)
+        guard !validation.shouldAsk else {
+            failNova("No pude validar todos los cambios. No apliqué la propuesta.", input: userText)
+            return
+        }
+        let outcome = applyBackendActions(validation.safeActions, userText: userText)
+        if outcome.didMutate {
+            FocusTelemetry.record(.novaActionSuccess)
+            appendNovaReply([outcome.summary, outcome.details,
+                outcome.ignored.isEmpty ? nil : "Algunos cambios no se pudieron aplicar. Revisa tus pendientes antes de repetirlos."]
+                .compactMap { $0 }.joined(separator: "\n"), actionLabels: outcome.createdTasks.map(\.title) + outcome.createdEvents.map(\.title))
+        } else if let summary = outcome.summary {
+            appendNovaReply(summary)
+        } else {
+            failNova("No pude aplicar los cambios. Revisa los datos e inténtalo de nuevo.", input: userText)
+        }
+    }
+
+    private func executeLocalNovaIntents(_ intents: [NovaIntent], userText: String, confirmed: Bool = false) {
+        guard !intents.isEmpty else {
+            failNova("No pude interpretar la solicitud. Prueba con una tarea o un evento con fecha y hora.", input: userText)
+            return
+        }
+        if intents.count == 1, case .clarify(let reason) = intents[0] {
+            if let pending = buildChatPendingClarification(from: reason, userText: userText) {
+                setPendingClarification(pending)
+            }
+            appendNovaReply(NovaResponder.reply(to: userText, context: novaContext))
+            return
+        }
+        if !confirmed, NovaActionValidator.isEmotionalOrContextual(userText), intents.contains(where: {
+            if case .createEvent = $0 { return true }
+            if case .createTask = $0 { return true }
+            return false
+        }) {
+            appendNovaReply("Podemos pensarlo antes de agendar. Si decides hacerlo, dime qué quieres añadir y para cuándo.")
+            return
+        }
+        if intents.count == 1, case .proposeActionPlan(let plan) = intents[0] {
+            novaContext.pendingActionPlan = plan
+            novaContext.updatedAt = Date()
+            novaPendingProposal = NovaPendingProposal(summary: "Revisa estas tareas.",
+                actionLabels: plan.map { $0.title }, actions: [], localIntents: [.confirmActionPlan],
+                userText: userText, generation: accountGeneration)
+            appendNovaReply("Preparé tus tareas. Revisa la propuesta antes de añadirlas.")
+            return
+        }
+        let deletions = intents.flatMap { intent -> [BackendAction] in
+            switch intent {
+            case .deleteLastItem:
+                if let id = novaContext.lastEventId { return [.deleteEvent(id: id.uuidString)] }
+                if let id = novaContext.lastTaskId { return [.deleteTask(id: id.uuidString)] }
+                return []
+            case .deleteEventByActivity(let activity):
+                return NovaResponder.findEventByApproxTitle(activity, in: events).map { [.deleteEvent(id: $0.id.uuidString)] } ?? []
+            default: return []
+            }
+        }
+        if !confirmed, !deletions.isEmpty {
+            novaPendingProposal = NovaPendingProposal(
+                summary: "Confirma qué quieres eliminar.", actionLabels: deletions.map(novaActionLabel),
+                actions: [], localIntents: intents, userText: userText, generation: accountGeneration
+            )
+            appendNovaReply("Revisa los elementos que voy a eliminar y confirma la propuesta.")
+            return
+        }
+        if intents.count > 1, intents.contains(where: { if case .clarify = $0 { return true }; return false }) {
+            appendNovaReply("Una parte necesita más información. Dime el día y la hora de cada evento; todavía no guardé los cambios.")
+            return
+        }
+        let eventsBefore = events
+        let tasksBefore = tasks
+        var replies: [String] = []
+        for intent in intents {
+            if let reply = applyLocalNovaIntent(intent, userText: userText, isMultiIntent: intents.count > 1) {
+                if reply.hasPrefix("No pude guardar") {
+                    failNova(reply, input: userText)
+                    return
+                }
+                replies.append(reply)
+            }
+        }
+        if events != eventsBefore || tasks != tasksBefore { FocusTelemetry.record(.novaActionSuccess) }
+        if replies.isEmpty {
+            failNova("No pude resolver esa solicitud en este iPhone. Puedes crear el pendiente manualmente o volver a intentarlo con conexión.", input: userText)
+        } else {
+            appendNovaReply(replies.joined(separator: "\n"))
         }
     }
 
@@ -7604,8 +7870,8 @@ final class FocusDataStore: ObservableObject {
                 occurrences = [date]
             }
 
-            let firstEventId: UUID = {
-                var lastId: UUID = UUID()
+            let firstEventId: UUID? = {
+                var lastId: UUID?
                 for (idx, startDate) in occurrences.enumerated() {
                     // Duración: si endTime original es relativo al inicio,
                     // mantenemos esa duración para todas las ocurrencias.
@@ -7623,12 +7889,15 @@ final class FocusDataStore: ObservableObject {
                         reminderNotes: extractedNotes,
                         subtitle: eventSubtitle
                     )
-                    addEvent(event)
+                    guard addEvent(event) else { return nil }
                     if idx == 0 { lastId = event.id }
                 }
                 return lastId
             }()
 
+            guard let firstEventId else {
+                return "No pude guardar todos los eventos. Revisa tu agenda antes de repetir la solicitud."
+            }
             updateNovaContext(
                 from: userText,
                 title: title,
@@ -7697,8 +7966,12 @@ final class FocusDataStore: ObservableObject {
                    diff >= 1 && diff <= 7 { return .semana }
                 return .algunDia
             }()
-            let task = FocusTask(title: title, priority: .media, category: category, dueDate: dueDate)
-            addTask(task)
+            let dateOnly = dueDate.map { Calendar.current.startOfDay(for: $0) }
+            if tasks.contains(where: { !$0.done && NovaResponder.normalizeForFuzzy($0.title) == NovaResponder.normalizeForFuzzy(title) && $0.dueDate == dateOnly }) {
+                return "Ya tenías «\(title)» en tus pendientes."
+            }
+            let task = FocusTask(title: title, priority: .media, category: category, dueDate: dateOnly)
+            guard addTask(task) else { return "No pude guardar este cambio. Inténtalo de nuevo." }
             updateNovaContext(from: userText, title: title, date: dueDate, kind: .task, taskId: task.id)
             let dueBit: String = {
                 guard let dueDate else { return "" }
@@ -7707,7 +7980,7 @@ final class FocusDataStore: ObservableObject {
                 if cal.isDateInTomorrow(dueDate) { return " para mañana" }
                 return " para el " + DateFormatters.weekdayDay.string(from: dueDate).lowercased()
             }()
-            let remBit = wantsReminder ? " (con recordatorio)" : ""
+            let remBit = wantsReminder ? " Dime una hora si quieres recibir un aviso." : ""
             return "Anoto «\(title)»\(dueBit) como tarea.\(remBit)"
 
         case .correctLastEvent(let modifier):
@@ -7748,7 +8021,7 @@ final class FocusDataStore: ObservableObject {
             case .setTitle(let newTitle):
                 event.title = newTitle
             }
-            updateEvent(event)
+            guard updateEvent(event) else { return "No pude guardar este cambio. Inténtalo de nuevo." }
             updateNovaContext(
                 from: userText,
                 title: event.title,
@@ -7765,9 +8038,9 @@ final class FocusDataStore: ObservableObject {
         case .convertLastToTask:
             let title = novaContext.lastTitle ?? "Nueva tarea"
             let task = FocusTask(title: title, priority: .media, category: .hoy)
-            addTask(task)
+            guard addTask(task) else { return "No pude guardar este cambio. Inténtalo de nuevo." }
             if let eventId = novaContext.lastEventId {
-                deleteEvent(eventId)
+                guard deleteEvent(eventId) else { return "No pude guardar este cambio. Inténtalo de nuevo." }
             }
             updateNovaContext(from: userText, title: title, kind: .task, taskId: task.id)
             return "Lo paso a tareas. «\(title)» quedó en tus pendientes de hoy."
@@ -7776,14 +8049,14 @@ final class FocusDataStore: ObservableObject {
             if let eventId = novaContext.lastEventId,
                let event = events.first(where: { $0.id == eventId }) {
                 let title = event.title
-                deleteEvent(eventId)
+                guard deleteEvent(eventId) else { return "No pude guardar este cambio. Inténtalo de nuevo." }
                 clearNovaContext()
                 return "Eliminado. «\(title)» se borró del calendario."
             }
             if let taskId = novaContext.lastTaskId,
                let task = tasks.first(where: { $0.id == taskId }) {
                 let title = task.title
-                deleteTask(taskId)
+                guard deleteTask(taskId) else { return "No pude guardar este cambio. Inténtalo de nuevo." }
                 clearNovaContext()
                 return "Eliminada. «\(title)» se borró de pendientes."
             }
@@ -7794,7 +8067,7 @@ final class FocusDataStore: ObservableObject {
             // mensaje honesto en vez de crear basura.
             if let event = NovaResponder.findEventByApproxTitle(activity, in: events) {
                 let title = event.title
-                deleteEvent(event.id)
+                guard deleteEvent(event.id) else { return "No pude guardar este cambio. Inténtalo de nuevo." }
                 clearNovaContext()
                 return "Eliminado. «\(title)» se borró del calendario."
             }
@@ -7819,7 +8092,7 @@ final class FocusDataStore: ObservableObject {
             } else {
                 updated.reminderNotes = nil
             }
-            updateEvent(updated)
+            guard updateEvent(updated) else { return "No pude guardar este cambio. Inténtalo de nuevo." }
             updateNovaContext(
                 from: userText,
                 title: event.title,
@@ -7866,7 +8139,7 @@ final class FocusDataStore: ObservableObject {
             if let newEnd = newEnd {
                 updated.endTime = newEnd
             }
-            updateEvent(updated)
+            guard updateEvent(updated) else { return "No pude guardar este cambio. Inténtalo de nuevo." }
             updateNovaContext(
                 from: userText,
                 title: event.title,
@@ -7987,7 +8260,7 @@ final class FocusDataStore: ObservableObject {
             task.notes = existing.isEmpty
                 ? correctionNote
                 : "\(existing)\n\(correctionNote)"
-            updateTask(task)
+            guard updateTask(task) else { return "No pude guardar este cambio. Inténtalo de nuevo." }
             return "Listo, anoté la corrección en «\(task.title)»: \(correctionNote)"
 
         case .annotateDependency(let prerequisite, let dependent):
@@ -8011,7 +8284,7 @@ final class FocusDataStore: ObservableObject {
                 let prereqNote = "Primero: \(prerequisite)."
                 let existing = task.notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 task.notes = existing.isEmpty ? prereqNote : "\(existing)\n\(prereqNote)"
-                updateTask(task)
+                guard updateTask(task) else { return "No pude guardar este cambio. Inténtalo de nuevo." }
                 let prereqFound = prereqMatches.first != nil
                 if prereqFound {
                     return "Anotado. Antes de «\(dep.title)» va «\(prerequisite)»."
@@ -8082,7 +8355,7 @@ final class FocusDataStore: ObservableObject {
                     dueDate: dueDate,
                     subtasks: subtasksModels
                 )
-                addTask(task)
+                guard addTask(task) else { return "No pude guardar este cambio. Inténtalo de nuevo." }
                 if goesTomorrow {
                     tomorrowTitles.append(action.title)
                 } else {
@@ -8258,6 +8531,7 @@ final class FocusDataStore: ObservableObject {
             "qué tienes en memoria", "que tienes en memoria"
         ]
         if readPatterns.contains(where: { lower.contains($0) }) {
+            guard settings.novaMemoryEnabled else { return "La memoria está desactivada. Puedes activarla en Ajustes." }
             let memories = NovaMemoryStore.shared.allActiveMemoriesHuman(maxEntries: 20)
             guard !memories.isEmpty else {
                 return "Todavía no tengo nada guardado. Cuéntame cosas sobre ti — quiénes son las personas importantes, qué ramos llevas, qué prefieres — y voy memorizando."
@@ -8305,26 +8579,36 @@ final class FocusDataStore: ObservableObject {
 
     // MARK: - Ajustes
 
-    func updateSettings(_ mutator: (inout AppSettings) -> Void) {
+    @discardableResult
+    func updateSettings(_ mutator: (inout AppSettings) -> Void) -> Bool {
         let before = settings.remindersEnabled
         var copy = settings
         mutator(&copy)
+        // One canonical reminder preference; the legacy mirror remains encoded
+        // for compatibility with previous versions and imported settings.
+        copy.notificationsEnabled = copy.remindersEnabled
+        guard FocusLocalStore.saveSync(copy, forKey: .settings) else {
+            localSaveError = "No pudimos guardar el ajuste. Revisa el espacio disponible en tu iPhone e inténtalo de nuevo."
+            HapticManager.shared.warning()
+            return false
+        }
+        localSaveError = nil
         settings = copy
-        persistSettings()
+        if !settings.remindersEnabled { notificationPermissionDenied = false }
         HapticManager.shared.tick()
-
-        // Si el toggle "Recordatorios" cambió, re-sync notifs:
-        // OFF → cancela todas las pendientes.
-        // ON → reprograma futuras (con permiso si toca).
         if before != settings.remindersEnabled {
             if settings.remindersEnabled {
                 resyncAllLocalNotifications()
             } else {
-                Task {
+                let generation = accountGeneration
+                Task { [weak self] in
+                    guard let self, self.accountGeneration == generation,
+                          !self.settings.remindersEnabled else { return }
                     await LocalNotificationService.shared.cancelAllReminders()
                 }
             }
         }
+        return true
     }
 
     // MARK: - Reset / borrar datos locales
@@ -8336,35 +8620,41 @@ final class FocusDataStore: ObservableObject {
     /// También se limpian los descartes de demo — al restablecer, los
     /// ejemplos vuelven a estar visibles.
     func resetToDemoState() {
+        clearAllLocalData()
+    }
+
+    /// Clears the active partition only, including memory, widget state and
+    /// pending writes. Other accounts and unassigned recovery data stay isolated.
+    func clearAllLocalData() {
+        accountGeneration = UUID()
+        syncTask?.cancel()
+        syncTask = nil
+        retryTask?.cancel()
+        retryTask = nil
+        cancelNovaRequest()
         FocusLocalStore.clearAll()
+        NovaMemoryStore.shared.clearAll()
         events = []
         tasks = []
+        outbox = FocusSyncOutbox()
+        recoveryEventIDs = [:]
+        recoveryTaskIDs = [:]
+        refreshPendingDeletes()
         suggestions = []
         novaMessages = []
         settings = .defaults
         novaContext = NovaContext()
+        systemEvents = []
         dismissedDemoEventTitles = []
         dismissedDemoTaskTitles = []
+        lastSyncAt = nil
+        notificationPermissionDenied = false
+        syncState = syncCredentials == nil ? .demo : .idle
+        syncWidgetSnapshot()
         Task { await LocalNotificationService.shared.cancelAllReminders() }
         HapticManager.shared.success()
     }
 
-    /// Borra TODOS los datos locales (in-memory + disk). Más agresivo que reset:
-    /// no re-seedea sugerencias ni mensaje de bienvenida.
-    /// Pensado para futuro flujo "cerrar sesión / privacidad".
-    func clearAllLocalData() {
-        FocusLocalStore.clearAll()
-        events = []
-        tasks = []
-        suggestions = []
-        novaMessages = []
-        settings = .defaults
-        novaContext = NovaContext()
-        dismissedDemoEventTitles = []
-        dismissedDemoTaskTitles = []
-        Task { await LocalNotificationService.shared.cancelAllReminders() }
-        HapticManager.shared.success()
-    }
 }
 
 /// Memoria persistente de Nova — versión local (UserDefaults) que se
@@ -8445,11 +8735,16 @@ struct NovaMemory: Codable, Equatable, Identifiable {
 final class NovaMemoryStore {
     static let shared = NovaMemoryStore()
 
-    private let userDefaultsKey = "focus.v1.nova.memories"
+    private var userDefaultsKey: String { FocusLocalStore.scopedStorageKey(for: "focus.v1.nova.memories") }
     private let maxEntries = 200
     private var cache: [NovaMemory] = []
 
     private init() {
+        loadFromDisk()
+    }
+
+    func reloadForCurrentAccount() {
+        cache = []
         loadFromDisk()
     }
 
@@ -8538,10 +8833,8 @@ final class NovaMemoryStore {
     func touchLastUsed(id: UUID) {
         guard let idx = cache.firstIndex(where: { $0.id == id }) else { return }
         cache[idx].lastUsedAt = Date()
-        // saveToDisk async para evitar I/O en cada touch
-        DispatchQueue.global(qos: .background).async { [weak self] in
-            self?.saveToDisk()
-        }
+        // Capture and persist under the same account before a transition.
+        saveToDisk()
     }
 
     // MARK: - Persistencia
