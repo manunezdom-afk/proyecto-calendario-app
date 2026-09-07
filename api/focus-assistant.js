@@ -1,3 +1,4 @@
+import { sanitizeNovaRequest, novaRequestId, providerFallbackEnabled, runNovaAttempt } from './_lib/novaSafety.js'
 import Anthropic from '@anthropic-ai/sdk'
 import crypto from 'node:crypto'
 import { rateLimited, clientIp } from './_lib/rateLimit.js'
@@ -318,8 +319,7 @@ export default async function handler(req, res) {
   // Declarado ANTES del corte de presupuesto: ese branch lo loguea, y con
   // la declaración más abajo tiraba ReferenceError (TDZ) → 500 crudo en
   // lugar del 503 ai_budget_reached que degrada al parser local.
-  const reqId = (typeof req.headers['x-request-id'] === 'string' && req.headers['x-request-id'].trim())
-    || crypto.randomUUID()
+  const reqId = novaRequestId(req.headers['x-request-id'])
 
   // Modo alterno "today-context": cliente pide el JSON del Resumen ejecutivo
   // (ambient level + summary + weather tip + flags). Vive aquí y no como
@@ -329,12 +329,20 @@ export default async function handler(req, res) {
     return handleTodayContext(req, res, userId)
   }
 
+  const validatedRequest = sanitizeNovaRequest(req.body)
+  if (validatedRequest.error) return res.status(400).json({ error: validatedRequest.error })
+  const safeBody = validatedRequest.body
+
   // Cuota por plan: chequeamos nova_message ANTES de gastar tokens. La
   // verificación es read-only; el contador se incrementa después de que
   // Anthropic respondió OK, así un timeout o caída no quema cuota.
   const admin = getSupabaseAdmin()
   const plan = await getUserPlan(admin, userId)
   const messageCheck = await checkLimit(admin, userId, plan, ACTION_TYPES.NOVA_MESSAGE)
+  if (['db_error', 'table_missing'].includes(messageCheck.reason)) {
+    return res.status(503).json({ error: 'usage_unavailable', requestId: reqId,
+      message: 'Nova no está disponible por un momento. Puedes crear tus pendientes manualmente.' })
+  }
   if (!messageCheck.ok) {
     return res.status(429).json({
       error: 'quota_exceeded',
@@ -361,9 +369,9 @@ export default async function handler(req, res) {
   // dura es el límite de gasto en el dashboard de OpenAI/Anthropic.
   const budget = await checkGlobalBudget(admin)
   if (!budget.ok) {
-    console.warn(`[focus-assistant][${reqId}] presupuesto IA agotado (${budget.period}: $${budget.spent}/$${budget.budget})`)
+    console.warn(`[focus-assistant][${reqId}] budget=${budget.unavailable ? 'unavailable' : 'exhausted'}`)
     return res.status(503).json({
-      error: 'ai_budget_reached',
+      error: budget.unavailable ? 'ai_budget_unavailable' : 'ai_budget_reached',
       requestId: reqId,
       reply: budget.message,
       actions: [],
@@ -379,7 +387,7 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: 'no_api_key' })
   }
 
-  const body = req.body || {}
+  const body = safeBody
   const { message, location = null, contacts = [], profile = null, behavior = null } = body
 
   // novaPersonality entra por el body — si el cliente es viejo o manda un
@@ -442,8 +450,8 @@ export default async function handler(req, res) {
   // Memorias del usuario — el cliente las manda en `userMemories` (array
   // de strings humanas). Se inyectan al system prompt para que el LLM
   // pueda resolver referencias y NO repreguntar lo que ya sabe.
-  const userMemories = Array.isArray(req?.body?.userMemories)
-    ? req.body.userMemories.filter(s => typeof s === 'string' && s.trim().length > 0).slice(0, 30)
+  const userMemories = Array.isArray(body.userMemories)
+    ? body.userMemories.filter(s => typeof s === 'string' && s.trim().length > 0).slice(0, 30)
     : []
   // Prompt compartido por los paths DeepSeek y OpenAI (mismo contrato JSON).
   const openaiPrompt = buildOpenAISystemPrompt({
@@ -485,9 +493,8 @@ export default async function handler(req, res) {
 
     // Un intento con `route`: llama, parsea, normaliza, convierte, filtra
     // ediciones y registra SU PROPIO evento de costo (cache-aware).
-    const runDeepSeek = async (route) => {
-      const start = Date.now()
-      const data = await callDeepSeekNova({
+    const runDeepSeek = async (route) => runNovaAttempt({
+      call: () => callDeepSeekNova({
         message,
         systemPrompt: deepseekPrompt,
         model: route.model,
@@ -495,7 +502,8 @@ export default async function handler(req, res) {
         reqId,
         history,
         maxOutputTokens: route.maxOutputTokens,
-      })
+      }),
+      transform: (data) => {
       let parsed
       try {
         parsed = JSON.parse(extractDeepSeekText(data))
@@ -506,8 +514,8 @@ export default async function handler(req, res) {
       }
       const mapped = convertOpenAIToBackendResponse({
         openaiPayload: normalizeDeepSeekPayload(parsed),
-        dateContext,
-        message,
+        userMessage: message,
+        history,
         reqId,
         events,
       })
@@ -524,7 +532,9 @@ export default async function handler(req, res) {
         const note = strippedEditMessage(editFilter.stripped)
         mapped.reply = `${mapped.reply || ''}${mapped.reply ? '\n\n' : ''}${note}`
       }
-      trackAIUsageEvent({
+      return mapped
+      },
+      record: ({ data, result, error, durationMs }) => trackAIUsageEvent({
         admin,
         userId,
         action_type: ACTION_TYPES.NOVA_MESSAGE,
@@ -533,16 +543,17 @@ export default async function handler(req, res) {
         usage: {
           input_tokens: data?.usage?.prompt_tokens ?? 0,
           output_tokens: data?.usage?.completion_tokens ?? 0,
+          source: data?.usage ? 'deepseek' : 'unavailable',
         },
         // Costo cache-aware (hit $0.0028/1M vs miss $0.14/1M): más preciso
         // que la tarifa plana de aiPricing. null → cae al pricing genérico.
         cost_override_usd: estimateDeepSeekCostUSD(data?.model || route.model, data?.usage),
-        success: true,
-        duration_ms: Date.now() - start,
-        metadata: { plan, provider: 'deepseek', tier: route.tier, request_id: reqId, dropped: mapped._dropped?.length || 0 },
-      }).catch(() => {})
-      return mapped
-    }
+        success: !error,
+        error_type: error ? (error.retriable ? 'invalid_output' : 'upstream_error') : null,
+        duration_ms: durationMs,
+        metadata: { plan, provider: 'deepseek', tier: route.tier, request_id: reqId, action_count: result?.actions?.length || 0, action_types: result?.actions?.map(a => a.type).join(',') },
+      }),
+    })
 
     const isWeakDeepSeekResult = (mapped) =>
       (typeof mapped?.confidence === 'number' && mapped.confidence < 0.55) ||
@@ -577,7 +588,7 @@ export default async function handler(req, res) {
         mapped.smart_actions_blocked = true
         mapped.smart_actions_message = smartCheck.message
       }
-      Promise.resolve()
+      await Promise.resolve()
         .then(() => recordUsage(admin, userId, ACTION_TYPES.NOVA_MESSAGE))
         .then(() => mapped.actions.length > 0
           ? recordUsage(admin, userId, ACTION_TYPES.NOVA_SMART_ACTION)
@@ -585,26 +596,15 @@ export default async function handler(req, res) {
         .catch(() => {})
 
       if (mapped._dropped && mapped._dropped.length > 0) {
-        console.warn(`[focus-assistant][${reqId}] DeepSeek dropped ${mapped._dropped.length}:`, mapped._dropped.join(' | '))
+        console.warn(`[focus-assistant][${reqId}] DeepSeek dropped ${mapped._dropped.length}:`)
       }
       delete mapped._dropped
       return res.status(200).json(mapped)
     } catch (err) {
       const status = err?.status || 500
-      const fallbackEnabled = String(process.env.AI_ENABLE_PROVIDER_FALLBACK || '').trim().toLowerCase() === 'true'
+      const fallbackEnabled = providerFallbackEnabled()
       const canFallThrough = fallbackEnabled && (openaiKeyAvailable || !!apiKey)
-      console.error(`[focus-assistant][${reqId}] DeepSeek call failed (${status}): ${err?.message?.slice(0, 200)}${canFallThrough ? ' — fallback a OpenAI/Claude' : ' — sin fallback pago (AI_ENABLE_PROVIDER_FALLBACK off)'}`)
-      trackAIUsageEvent({
-        admin,
-        userId,
-        action_type: ACTION_TYPES.NOVA_MESSAGE,
-        endpoint: 'focus-assistant',
-        model: 'deepseek',
-        usage: { input_tokens: 0, output_tokens: 0 },
-        success: false,
-        error_type: `http_${status}`,
-        metadata: { plan, provider: 'deepseek', request_id: reqId },
-      }).catch(() => {})
+      console.error(`[focus-assistant][${reqId}] DeepSeek call failed (${status}): ${err?.name || 'Error'}${canFallThrough ? ' — fallback a OpenAI/Claude' : ' — sin fallback pago (AI_ENABLE_PROVIDER_FALLBACK off)'}`)
       if (!canFallThrough) {
         if (status === 401 || status === 403) {
           return res.status(503).json({ error: 'invalid_deepseek_key', requestId: reqId, message: 'Provider DeepSeek no autorizado.' })
@@ -634,9 +634,8 @@ export default async function handler(req, res) {
     // convierte y filtra ediciones. Registra su PROPIO evento de costo (cada
     // intento cuenta con su tier/modelo). Lanza si el intento falla (JSON
     // malo/truncado, HTTP error) para que el caller decida escalar o caer a Claude.
-    const runOpenAI = async (route) => {
-      const start = Date.now()
-      const data = await callOpenAINova({
+    const runOpenAI = async (route) => runNovaAttempt({
+      call: () => callOpenAINova({
         message,
         systemPrompt: openaiPrompt,
         model: route.model,
@@ -645,7 +644,8 @@ export default async function handler(req, res) {
         history,  // turnos previos del chat (ya viene parseado arriba)
         reasoningEffort: route.effort,
         maxOutputTokens: route.maxOutputTokens,
-      })
+      }),
+      transform: (data) => {
       let parsed
       try {
         parsed = JSON.parse(extractResponsesText(data))
@@ -677,7 +677,9 @@ export default async function handler(req, res) {
         mapped.reply = `${mapped.reply || ''}${mapped.reply ? '\n\n' : ''}${note}`
       }
       // Costo por intento (cada tier registra su propia fila con su modelo).
-      trackAIUsageEvent({
+      return mapped
+      },
+      record: ({ data, result, error, durationMs }) => trackAIUsageEvent({
         admin,
         userId,
         action_type: ACTION_TYPES.NOVA_MESSAGE,
@@ -686,14 +688,14 @@ export default async function handler(req, res) {
         usage: {
           input_tokens: data?.usage?.input_tokens ?? data?.usage?.prompt_tokens ?? 0,
           output_tokens: data?.usage?.output_tokens ?? data?.usage?.completion_tokens ?? 0,
-          source: 'openai',
+          source: data?.usage ? 'openai' : 'unavailable',
         },
-        success: true,
-        duration_ms: Date.now() - start,
-        metadata: { plan, provider: 'openai', tier: route.tier, request_id: reqId, dropped: mapped._dropped?.length || 0 },
-      }).catch(() => {})
-      return mapped
-    }
+        success: !error,
+        error_type: error ? (error.retriable ? 'invalid_output' : 'upstream_error') : null,
+        duration_ms: durationMs,
+        metadata: { plan, provider: 'openai', tier: route.tier, request_id: reqId, action_count: result?.actions?.length || 0, action_types: result?.actions?.map(a => a.type).join(',') },
+      }),
+    })
 
     // ¿Resultado "débil"? (confianza baja, o schema-válido pero todo cayó como
     // basura). Solo decide un reintento barato nano→mini.
@@ -750,7 +752,7 @@ export default async function handler(req, res) {
         mapped.smart_actions_blocked = true
         mapped.smart_actions_message = smartCheck.message
       }
-      Promise.resolve()
+      await Promise.resolve()
         .then(() => recordUsage(admin, userId, ACTION_TYPES.NOVA_MESSAGE))
         .then(() => mapped.actions.length > 0
           ? recordUsage(admin, userId, ACTION_TYPES.NOVA_SMART_ACTION)
@@ -764,15 +766,15 @@ export default async function handler(req, res) {
         .catch(() => {})
 
       if (mapped._dropped && mapped._dropped.length > 0) {
-        console.warn(`[focus-assistant][${reqId}] OpenAI dropped ${mapped._dropped.length}:`, mapped._dropped.join(' | '))
+        console.warn(`[focus-assistant][${reqId}] OpenAI dropped ${mapped._dropped.length}:`)
       }
       // No exponer `_dropped` al cliente (es solo para telemetría server-side).
       delete mapped._dropped
       return res.status(200).json(mapped)
     } catch (err) {
       const status = err?.status || 500
-      const canFallbackToClaude = !!apiKey
-      console.error(`[focus-assistant][${reqId}] OpenAI call failed (${status}): ${err?.message?.slice(0, 200)}${canFallbackToClaude ? ' — fallback a Claude' : ''}`)
+      const canFallbackToClaude = !!apiKey && providerFallbackEnabled()
+      console.error(`[focus-assistant][${reqId}] OpenAI call failed (${status}): ${err?.name || 'Error'}${canFallbackToClaude ? ' — fallback a Claude' : ''}`)
       // RED DE SEGURIDAD (2026-05-28): si OpenAI falla (key inválida tras
       // rotarla, modelo inaccesible, schema rechazado, timeout…) y hay
       // ANTHROPIC_API_KEY, NO devolvemos error — caemos al path Claude de

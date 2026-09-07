@@ -1,3 +1,4 @@
+import { novaOutputTokenLimit } from './novaSafety.js'
 // Cliente DeepSeek para Nova — proveedor principal BARATO (2026-07-13).
 //
 // DeepSeek expone una API compatible con OpenAI chat completions en
@@ -20,7 +21,7 @@ const DEEPSEEK_CHAT_URL = 'https://api.deepseek.com/chat/completions'
 // OJO: 'deepseek-chat' y 'deepseek-reasoner' se deprecan el 2026-07-24.
 const DEFAULT_MODEL = 'deepseek-v4-flash'
 const DEFAULT_MAX_OUTPUT_TOKENS = 900
-const DEFAULT_TIMEOUT_MS = 45_000
+const DEFAULT_TIMEOUT_MS = 18_000
 // Tope de input por request (system prompt + historial + mensaje). Sobre el
 // tope se recorta historial (lo más viejo primero) — nunca el prompt ni el
 // mensaje actual. ~3.5 chars/token es conservador para español.
@@ -186,9 +187,7 @@ export async function callDeepSeekNova({
     thinking: { type: process.env.DEEPSEEK_THINKING === 'enabled' ? 'enabled' : 'disabled' },
     // max_tokens evita el JSON truncado a mitad (recomendación oficial) y es
     // el tope duro de costo de salida por request.
-    max_tokens: maxOutputTokens
-      || Number(process.env.AI_MAX_OUTPUT_TOKENS)
-      || DEFAULT_MAX_OUTPUT_TOKENS,
+    max_tokens: novaOutputTokenLimit(maxOutputTokens || process.env.AI_MAX_OUTPUT_TOKENS, DEFAULT_MAX_OUTPUT_TOKENS),
     // Extracción estructurada, no creatividad: temperatura baja = JSON más
     // estable entre reintentos.
     temperature: Number(process.env.DEEPSEEK_TEMPERATURE) || 0.2,
@@ -213,8 +212,7 @@ export async function callDeepSeekNova({
     })
 
     if (!response.ok) {
-      const errText = await response.text().catch(() => '')
-      const err = new Error(`DeepSeek HTTP ${response.status}: ${errText.slice(0, 200)}`)
+      const err = new Error(`DeepSeek HTTP ${response.status}`)
       err.status = response.status
       throw err
     }

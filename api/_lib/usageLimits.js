@@ -427,36 +427,44 @@ export async function checkLimit(admin, userId, plan, actionType) {
  * pensada para llamarse DESPUÉS de que la acción IA se ejecutó con éxito;
  * así un bug en el modelo o un timeout no consumen cuota del usuario.
  */
-export async function recordUsage(admin, userId, actionType) {
-  if (!admin || !userId) return { ok: true, soft: true }
-  if (!VALID_ACTION_TYPES.has(actionType)) {
-    console.warn('[usageLimits] recordUsage action_type desconocido:', actionType)
-    return { ok: true, soft: true }
-  }
+function missingUsageRPC(error) {
+  return error?.code === 'PGRST202' || error?.code === '42883'
+}
 
+export async function recordUsage(admin, userId, actionType) {
+  if (!admin || !userId || !VALID_ACTION_TYPES.has(actionType)) return { ok: false, reason: 'invalid_usage_request' }
   const day = todayUtcISO()
   try {
-    const { data: row, error: selErr } = await admin
-      .from('ai_usage')
-      .select('count')
-      .eq('user_id', userId)
-      .eq('day', day)
-      .eq('endpoint', actionType)
-      .maybeSingle()
-
-    if (selErr) return { ok: true, soft: true, reason: 'select_error' }
-
-    const current = Number(row?.count || 0)
-    const { error: upErr } = await admin
-      .from('ai_usage')
-      .upsert(
-        { user_id: userId, day, endpoint: actionType, count: current + 1, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id,day,endpoint' },
-      )
-    if (upErr) return { ok: true, soft: true, reason: 'upsert_error' }
-    return { ok: true, count: current + 1 }
+    if (typeof admin.rpc === 'function') {
+      const { data, error } = await admin.rpc('focus_increment_ai_usage', {
+        p_user_id: userId, p_day: day, p_endpoint: actionType,
+      })
+      if (!error) return { ok: true, count: Number(data) }
+      // Only a definitely missing function may use the compatibility path.
+      // A timeout may have committed the increment; never increment twice.
+      if (!missingUsageRPC(error)) return { ok: false, reason: 'increment_error' }
+    }
+    // Old schema compatibility: conditional update is a compare-and-swap.
+    // Concurrent writes cannot replace each other's increments. Missing rows
+    // use INSERT ON CONFLICT DO NOTHING, followed by a bounded retry.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data: row, error: selectError } = await admin.from('ai_usage')
+        .select('count').eq('user_id', userId).eq('day', day).eq('endpoint', actionType).maybeSingle()
+      if (selectError) return { ok: false, reason: 'select_error' }
+      const current = Number(row?.count || 0)
+      const next = { count: current + 1, updated_at: new Date().toISOString() }
+      const mutation = row
+        ? admin.from('ai_usage').update(next).eq('user_id', userId).eq('day', day)
+            .eq('endpoint', actionType).eq('count', current)
+        : admin.from('ai_usage').upsert({ user_id: userId, day, endpoint: actionType, ...next },
+            { onConflict: 'user_id,day,endpoint', ignoreDuplicates: true })
+      const { data: changed, error } = await mutation.select('count')
+      if (error) return { ok: false, reason: 'increment_error' }
+      if (changed?.length) return { ok: true, count: Number(changed[0].count) }
+    }
+    return { ok: false, reason: 'concurrent_usage' }
   } catch {
-    return { ok: true, soft: true, reason: 'unexpected' }
+    return { ok: false, reason: 'unexpected' }
   }
 }
 
@@ -537,67 +545,73 @@ function budgetLimitsFromEnv() {
  *   { ok: true, dailySpent, monthlySpent }        — dentro del presupuesto
  *   { ok: false, period, spent, budget, message } — presupuesto agotado → degradar a local
  */
+const unavailableBudget = () => ({
+  ok: false, unavailable: true, reason: 'budget_unavailable', period: 'unavailable',
+  message: 'Nova no está disponible por un momento. Puedes crear tus pendientes manualmente y volver a intentarlo.',
+})
+
 export async function checkGlobalBudget(admin) {
   const { daily, monthly } = budgetLimitsFromEnv()
-  if (daily == null && monthly == null) {
-    return { ok: true, soft: true, reason: 'no_budget' }
-  }
-
+  if (daily == null && monthly == null) return { ok: true, soft: true, reason: 'no_budget' }
+  if (!admin) return unavailableBudget()
   const now = Date.now()
-  if (_budgetCache.result && (now - _budgetCache.at) < BUDGET_CACHE_TTL_MS) {
-    return _budgetCache.result
-  }
-  if (!admin) return { ok: true, soft: true, reason: 'no_admin' }
-
-  const startOfTodayUtc = new Date()
-  startOfTodayUtc.setUTCHours(0, 0, 0, 0)
-  const todayStartMs = startOfTodayUtc.getTime()
-  const windowStart = monthly != null
-    ? new Date(now - 30 * 24 * 60 * 60 * 1000)
-    : startOfTodayUtc
-
+  const today = new Date(now)
+  today.setUTCHours(0, 0, 0, 0)
+  const windowStart = monthly != null ? new Date(now - 30 * 86400000) : today
+  const cacheKey = `${daily}:${monthly}:${today.toISOString()}`
+  // Successful reads are never cached: new charges must be visible to the
+  // next request. A confirmed exhausted budget can be cached briefly.
+  if (_budgetCache.result?.ok === false && !_budgetCache.result.unavailable
+      && _budgetCache.key === cacheKey && now - _budgetCache.at < BUDGET_CACHE_TTL_MS) return _budgetCache.result
   try {
-    const { data, error } = await admin
-      .from('ai_usage_events')
-      .select('estimated_cost_usd, created_at')
-      .gte('created_at', windowStart.toISOString())
-
-    if (error) {
-      // Tabla ausente / error → NO bloqueamos (el tope duro del proveedor
-      // sigue protegiendo). Cacheamos para no reintentar en loop.
-      const soft = { ok: true, soft: true, reason: 'db_error' }
-      _budgetCache = { at: now, result: soft }
-      return soft
-    }
-
-    let dailySpent = 0
-    let monthlySpent = 0
-    for (const rowu of data || []) {
-      const cost = Number(rowu.estimated_cost_usd || 0)
-      monthlySpent += cost
-      if (new Date(rowu.created_at).getTime() >= todayStartMs) dailySpent += cost
-    }
-
-    let result
-    if (daily != null && dailySpent >= daily) {
-      result = {
-        ok: false, period: 'daily', spent: round6(dailySpent), budget: daily,
-        message: 'Nova está descansando por hoy. Puedes seguir creando eventos y recordatorios; vuelve mañana.',
+    let dailySpent = 0, monthlySpent = 0, aggregated = false
+    if (typeof admin.rpc === 'function') {
+      const { data, error } = await admin.rpc('focus_ai_budget_totals', {
+        p_since: windowStart.toISOString(), p_today: today.toISOString(),
+      })
+      if (error && !missingUsageRPC(error)) return unavailableBudget()
+      if (!error && data?.[0]) {
+        dailySpent = Number(data[0].daily_spent)
+        monthlySpent = Number(data[0].monthly_spent)
+        aggregated = true
       }
-    } else if (monthly != null && monthlySpent >= monthly) {
-      result = {
-        ok: false, period: 'monthly', spent: round6(monthlySpent), budget: monthly,
-        message: 'Nova está descansando este mes. Puedes seguir creando eventos y recordatorios.',
-      }
-    } else {
-      result = { ok: true, dailySpent: round6(dailySpent), monthlySpent: round6(monthlySpent) }
     }
-    _budgetCache = { at: now, result }
+    if (!aggregated) {
+      let completed = false
+      // Stable ordering and an upper timestamp keep concurrent inserts from
+      // shifting later pages. Never silently accept the PostgREST 1000-row cap.
+      let offset = 0
+      for (let page = 0; page < 100; page++) {
+        const { data, error, count } = await admin.from('ai_usage_events')
+          .select('estimated_cost_usd, created_at', { count: 'exact' }).gte('created_at', windowStart.toISOString())
+          .lte('created_at', new Date(now).toISOString())
+          .order('created_at', { ascending: true }).order('id', { ascending: true })
+          .range(offset, offset + 999)
+        if (error || !Array.isArray(data) || !Number.isInteger(count) || count < 0) return unavailableBudget()
+        for (const row of data) {
+          const cost = Number(row.estimated_cost_usd)
+          if (!Number.isFinite(cost) || cost < 0) return unavailableBudget()
+          monthlySpent += cost
+          if (new Date(row.created_at).getTime() >= today.getTime()) dailySpent += cost
+        }
+        offset += data.length
+        if (offset >= count) { completed = true; break }
+        if (data.length === 0) return unavailableBudget()
+      }
+      if (!completed) return unavailableBudget()
+    }
+    if (![dailySpent, monthlySpent].every(n => Number.isFinite(n) && n >= 0)) return unavailableBudget()
+    const result = daily != null && dailySpent >= daily
+      ? { ok: false, period: 'daily', spent: round6(dailySpent), budget: daily,
+          message: 'Llegaste al límite de Nova por hoy. Puedes seguir creando tus pendientes manualmente.' }
+      : monthly != null && monthlySpent >= monthly
+        ? { ok: false, period: 'monthly', spent: round6(monthlySpent), budget: monthly,
+            message: 'Llegaste al límite de Nova de este periodo. Puedes seguir creando tus pendientes manualmente.' }
+        : { ok: true, dailySpent: round6(dailySpent), monthlySpent: round6(monthlySpent) }
+    _budgetCache = { at: now, key: cacheKey, result }
     return result
   } catch {
-    const soft = { ok: true, soft: true, reason: 'unexpected' }
-    _budgetCache = { at: now, result: soft }
-    return soft
+    return unavailableBudget()
   }
 }
 

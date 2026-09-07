@@ -124,7 +124,10 @@ test('calculateAICost usa precios configurados para gpt-5.x (no fallback)', () =
 function fakeAdmin(rows) {
   const q = {
     select() { return this },
-    gte() { return Promise.resolve({ data: rows, error: null }) },
+    gte() { return this },
+    lte() { return this },
+    order() { return this },
+    range(from, to) { return Promise.resolve({ data: rows.slice(from, to + 1), count: rows.length, error: null }) },
   }
   return { from() { return q } }
 }
@@ -168,12 +171,72 @@ test('presupuesto: gasto sobre el tope diario → corta (ok:false)', async () =>
   delete process.env.AI_DAILY_BUDGET_USD
 })
 
-test('presupuesto: error de DB → no corta (soft, malla dura del proveedor protege)', async () => {
+test('presupuesto: error de DB bloquea nuevas llamadas pagadas', async () => {
   process.env.AI_DAILY_BUDGET_USD = '1.00'
   __resetBudgetCache()
-  const admin = { from() { return { select() { return this }, gte() { return Promise.resolve({ data: null, error: { message: 'boom' } }) } } } }
+  const admin = { from() { throw new Error('database unavailable') } }
   const r = await checkGlobalBudget(admin)
-  assert.equal(r.ok, true)
-  assert.equal(r.soft, true)
+  assert.equal(r.ok, false)
+  assert.equal(r.unavailable, true)
+  delete process.env.AI_DAILY_BUDGET_USD
+})
+
+test('presupuesto: lee más de 1000 cargos antes de decidir', async () => {
+  process.env.AI_DAILY_BUDGET_USD = '1.00'
+  __resetBudgetCache()
+  const rows = Array.from({ length: 1501 }, () => ({ estimated_cost_usd: 0.0008, created_at: new Date().toISOString() }))
+  const result = await checkGlobalBudget(fakeAdmin(rows))
+  assert.equal(result.ok, false)
+  assert.equal(result.spent, 1.2008)
+  delete process.env.AI_DAILY_BUDGET_USD
+})
+
+test('presupuesto: un fallo en páginas siguientes no usa un subtotal incompleto', async () => {
+  process.env.AI_DAILY_BUDGET_USD = '10'
+  __resetBudgetCache()
+  const rows = Array.from({ length: 1000 }, () => ({ estimated_cost_usd: 0.001, created_at: new Date().toISOString() }))
+  const admin = { from() { return { select() { return this }, gte() { return this }, lte() { return this },
+    order() { return this }, range(from) { return Promise.resolve(from === 0
+      ? { data: rows, count: 1001, error: null } : { data: null, error: { code: 'XX001' } }) } } } }
+  const result = await checkGlobalBudget(admin)
+  assert.equal(result.ok, false)
+  assert.equal(result.unavailable, true)
+  delete process.env.AI_DAILY_BUDGET_USD
+})
+
+test('presupuesto: agrega en SQL cuando la migración está disponible', async () => {
+  process.env.AI_DAILY_BUDGET_USD = '1'
+  __resetBudgetCache()
+  const result = await checkGlobalBudget({ rpc: async (name) => {
+    assert.equal(name, 'focus_ai_budget_totals')
+    return { data: [{ daily_spent: '1.5', monthly_spent: '25.00' }], error: null }
+  }, from() { assert.fail('must use aggregate') } })
+  assert.equal(result.ok, false)
+  assert.equal(result.spent, 1.5)
+  delete process.env.AI_DAILY_BUDGET_USD
+})
+
+test('presupuesto: nuevas solicitudes observan cargos posteriores a un resultado aprobado', async () => {
+  process.env.AI_DAILY_BUDGET_USD = '1'
+  __resetBudgetCache()
+  assert.equal((await checkGlobalBudget(fakeAdmin([]))).ok, true)
+  const rows = [{ estimated_cost_usd: 2, created_at: new Date().toISOString() }]
+  assert.equal((await checkGlobalBudget(fakeAdmin(rows))).ok, false)
+  delete process.env.AI_DAILY_BUDGET_USD
+})
+
+
+test('presupuesto: respeta un límite PostgREST personalizado menor a 1000', async () => {
+  process.env.AI_DAILY_BUDGET_USD = '1'
+  __resetBudgetCache()
+  const rows = Array.from({ length: 1501 }, () => ({ estimated_cost_usd: 0.0008, created_at: new Date().toISOString() }))
+  let pages = 0
+  const admin = { from() { return { select() { return this }, gte() { return this }, lte() { return this },
+    order() { return this }, range(from) { pages++; return Promise.resolve({ data: rows.slice(from, from + 500), count: rows.length, error: null }) },
+  } } }
+  const result = await checkGlobalBudget(admin)
+  assert.equal(result.ok, false)
+  assert.equal(result.spent, 1.2008)
+  assert.equal(pages, 4)
   delete process.env.AI_DAILY_BUDGET_USD
 })

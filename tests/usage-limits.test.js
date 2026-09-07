@@ -87,6 +87,13 @@ function makeFakeAdmin({ planRow = null, usage = [] } = {}) {
   }
 
   return {
+    async rpc(name, args) {
+      assert.equal(name, 'focus_increment_ai_usage')
+      const match = usageRows.find(r => r.user_id === args.p_user_id && r.day === args.p_day && r.endpoint === args.p_endpoint)
+      if (match) match.count += 1
+      else usageRows.push({ user_id: args.p_user_id, day: args.p_day, endpoint: args.p_endpoint, count: 1 })
+      return { data: match?.count ?? 1, error: null }
+    },
     from(table) {
       if (table === 'user_plans') return userPlansChain()
       if (table === 'ai_usage')   return aiUsageChain()
@@ -220,7 +227,7 @@ test('recordUsage incrementa el contador del día actual', async () => {
   assert.equal(r.remaining, 18)
 })
 
-test('enforceLimit verifica e incrementa atómicamente', async () => {
+test('enforceLimit verifica y registra uso', async () => {
   const admin = makeFakeAdmin()
   // Llamar 5 veces con free + nova_smart_action (límite 10) debe quedar ok
   for (let i = 0; i < 5; i++) {
@@ -256,4 +263,42 @@ test('checkLimit con action_type desconocido no bloquea (soft)', async () => {
   const r = await checkLimit(admin, USER, PLANS.FREE, 'inexistente_xxx')
   assert.equal(r.ok, true)
   assert.equal(r.soft, true)
+})
+
+
+test('atomic RPC retains every concurrent increment', async () => {
+  const admin = makeFakeAdmin()
+  const results = await Promise.all(Array.from({ length: 30 }, () => recordUsage(admin, USER, ACTION_TYPES.NOVA_MESSAGE)))
+  assert.ok(results.every(r => r.ok))
+  assert.equal(admin._state().usageRows[0].count, 30)
+})
+
+test('uncertain RPC failure never falls back and risks a second increment', async () => {
+  const result = await recordUsage({ rpc: async () => ({ data: null, error: { code: 'ETIMEDOUT' } }),
+    from() { assert.fail('must not increment again') },
+  }, USER, ACTION_TYPES.NOVA_MESSAGE)
+  assert.equal(result.ok, false)
+})
+
+test('old schema compare-and-swap retries a collision without losing an increment', async () => {
+  let count = 4
+  let collide = true
+  const admin = { rpc: async () => ({ data: null, error: { code: 'PGRST202' } }), from() {
+    let expected, update
+    return {
+      eq(key, value) { if (key === 'count') expected = value; return this },
+      update(value) { update = value; return this },
+      select() {
+        if (!update) return this
+        if (collide) { count += 1; collide = false; return Promise.resolve({ data: [], error: null }) }
+        if (count !== expected) return Promise.resolve({ data: [], error: null })
+        count = update.count
+        return Promise.resolve({ data: [{ count }], error: null })
+      },
+      maybeSingle: async () => ({ data: { count }, error: null }),
+    }
+  } }
+  const result = await recordUsage(admin, USER, ACTION_TYPES.NOVA_MESSAGE)
+  assert.equal(result.ok, true)
+  assert.equal(count, 6)
 })

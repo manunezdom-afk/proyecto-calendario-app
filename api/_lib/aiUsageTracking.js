@@ -93,6 +93,8 @@ const ALLOWED_METADATA_KEYS = new Set([
   'cache_read_tokens',
   'cache_creation_tokens',
   'had_actions',
+  'action_count',
+  'action_types',
   'limit_status',
   'retry_attempt',
   // Router de OpenAI: tier elegido ('nano'|'mini'|'hard'|'forced') y proveedor
