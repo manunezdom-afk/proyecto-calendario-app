@@ -1,0 +1,86 @@
+[
+  {
+    "term": "Hilante",
+    "country": "cl",
+    "url": "https://itunes.apple.com/search?term=Hilante&country=cl&entity=software&limit=200",
+    "resultCount": 1,
+    "results": [
+      {
+        "name": "HILANET חילנט",
+        "url": "https://apps.apple.com/cl/app/hilanet-%D7%97%D7%99%D7%9C%D7%A0%D7%98/id1038057534?uo=4"
+      }
+    ]
+  },
+  {
+    "term": "Hilante",
+    "country": "es",
+    "url": "https://itunes.apple.com/search?term=Hilante&country=es&entity=software&limit=200",
+    "resultCount": 1,
+    "results": [
+      {
+        "name": "HILANET חילנט",
+        "url": "https://apps.apple.com/es/app/hilanet-%D7%97%D7%99%D7%9C%D7%A0%D7%98/id1038057534?uo=4"
+      }
+    ]
+  },
+  {
+    "term": "Hilante",
+    "country": "us",
+    "url": "https://itunes.apple.com/search?term=Hilante&country=us&entity=software&limit=200",
+    "resultCount": 4,
+    "results": [
+      {
+        "name": "HILANET חילנט",
+        "url": "https://apps.apple.com/us/app/hilanet-%D7%97%D7%99%D7%9C%D7%A0%D7%98/id1038057534?uo=4"
+      },
+      {
+        "name": "חילן Time",
+        "url": "https://apps.apple.com/us/app/%D7%97%D7%99%D7%9C%D7%9F-time/id1440411630?uo=4"
+      },
+      {
+        "name": "Hinos",
+        "url": "https://apps.apple.com/us/app/hinos/id1187879029?uo=4"
+      },
+      {
+        "name": "Hyuria",
+        "url": "https://apps.apple.com/us/app/hyuria/id6755130514?uo=4"
+      }
+    ]
+  },
+  {
+    "term": "Ilante",
+    "country": "us",
+    "url": "https://itunes.apple.com/search?term=Ilante&country=us&entity=software&limit=200",
+    "resultCount": 7,
+    "results": [
+      {
+        "name": "Ilant Health",
+        "url": "https://apps.apple.com/us/app/ilant-health/id6737350651?uo=4"
+      },
+      {
+        "name": "Arcobaleno",
+        "url": "https://apps.apple.com/us/app/arcobaleno/id1440273653?uo=4"
+      },
+      {
+        "name": "Trytalko",
+        "url": "https://apps.apple.com/us/app/trytalko/id1631562035?uo=4"
+      },
+      {
+        "name": "חיים דלאל",
+        "url": "https://apps.apple.com/us/app/%D7%97%D7%99%D7%99%D7%9D-%D7%93%D7%9C%D7%90%D7%9C/id6478496181?uo=4"
+      },
+      {
+        "name": "קשר",
+        "url": "https://apps.apple.com/us/app/%D7%A7%D7%A9%D7%A8/id6793129429?uo=4"
+      },
+      {
+        "name": "XIKMK-296",
+        "url": "https://apps.apple.com/us/app/xikmk-296/id6756295861?uo=4"
+      },
+      {
+        "name": "Morning Whisper",
+        "url": "https://apps.apple.com/us/app/morning-whisper/id6757148116?uo=4"
+      }
+    ]
+  }
+]

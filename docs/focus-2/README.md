@@ -10,13 +10,15 @@ Focus convierte intenciones en pendientes, eventos y recordatorios, y ayuda a de
 |---|---|---|
 | Conservar | SwiftUI nativo, modelos, Keychain, EventKit de lectura, APIs y RLS existentes | Base útil; no se necesita migrar de framework ni base de datos. |
 | Mejorar | Sync, autenticación, recordatorios, DTO de fechas, coste y telemetría | Se detectaron pérdida de ediciones offline, contaminación entre cuentas, refresco destructivo y observabilidad incompleta. |
-| Reconstruir | Navegación, Hoy, Nova/captura, formularios y onboarding | Las tareas estaban apagadas. Hoy y chat tenían ejecutores distintos. Editar un evento borraba metadatos. |
+| Reconstruir | Navegación, Hoy, Hilante/captura, formularios y onboarding | Las tareas estaban apagadas. Hoy y chat tenían ejecutores distintos. Editar un evento borraba metadatos. |
 | Retirar del recorrido | Pager horizontal, segmentos Bandeja/Acciones/Chat, datos de ejemplo en listas reales, halos animados permanentes, tutoriales superpuestos, controles futuros | Aumentaban complejidad sin fortalecer el bucle. Los ejemplos solo ilustran el onboarding y nunca se guardan automáticamente. |
 | Posponer | Kairos, Spark, expansión de ecosistema | Primero fiabilidad y utilidad individual. |
 
-Navegación: **Hoy · Pendientes · Agenda · Nova**. Ajustes se abre desde el encabezado. Nova es una acción disponible en Hoy y una conversación de seguimiento; ambas comparten el mismo ejecutor. Una tarea no necesita hora. Un evento tiene un momento. Un aviso geográfico no se inventa si la app no puede ejecutarlo.
+Navegación: **Hoy · Pendientes · Agenda · Hilante**. Ajustes se abre desde el encabezado. Hilante es una acción disponible en Hoy y una conversación de seguimiento; ambas comparten el mismo ejecutor. Una tarea no necesita hora. Un evento tiene un momento. Un aviso geográfico no se inventa si la app no puede ejecutarlo.
 
-El rediseño visual de septiembre usa tipografía del sistema con Dynamic Type, fondos perla/tinta, luz azul e índigo estática y controles nativos. Bienvenida, Hoy y Nova tienen una jerarquía más expresiva; tareas y agenda conservan superficies tranquilas. El correo aparece después de elegir el acceso a la cuenta. La apariencia sigue el sistema o la preferencia del usuario. Ningún retraso de splash ni animación permanente forma parte del flujo principal.
+El rediseño visual de septiembre usa tipografía del sistema con Dynamic Type, fondos perla/tinta, luz azul e índigo estática y controles nativos. Bienvenida, Hoy y Hilante tienen una jerarquía más expresiva; tareas y agenda conservan superficies tranquilas. El correo aparece después de elegir el acceso a la cuenta. La apariencia sigue el sistema o la preferencia del usuario. Ningún retraso de splash ni animación permanente forma parte del flujo principal.
+
+Hilante reemplaza el nombre visible Nova. La [decisión y su investigación](ASSISTANT_NAME.md) documentan candidatos, coincidencias y límites de la comprobación. Los nombres técnicos `nova` se conservan para mantener compatibilidad con datos, APIs e historial existentes.
 
 ## Arquitectura
 
