@@ -34,10 +34,66 @@ final class NovaExecutionTests: XCTestCase {
 
     private func response(_ actions: [BackendAction], mode: NovaService.Mode = .chatWithAction,
                           confidence: Double = 0.95, ask: Bool = false,
-                          proposed: [BackendAction] = []) -> NovaService.Result {
-        NovaService.Result(reply: "Listo, agendé todo.", actions: actions,
-            smartActionsBlocked: false, smartActionsMessage: nil, confidence: confidence,
+                          proposed: [BackendAction] = [], reply: String = "Listo, agendé todo.",
+                          blocked: Bool = false, blockedMessage: String? = nil) -> NovaService.Result {
+        NovaService.Result(reply: reply, actions: actions,
+            smartActionsBlocked: blocked, smartActionsMessage: blockedMessage, confidence: confidence,
             shouldAskUser: ask, mode: mode, proposedActions: proposed, requestId: "test")
+    }
+
+    func testExistingConversationKeepsLegacyRoleAndOriginalWordsAfterRebranding() throws {
+        let fixture = """
+        [
+          {"id":"A2C19942-707C-4BD8-9754-6C61F18E9530","role":"user","content":"Mi proyecto se llama Nova","timestamp":"2026-09-07T10:00:00Z","actionLabels":[]},
+          {"id":"B2C19942-707C-4BD8-9754-6C61F18E9530","role":"nova","content":"Guardé tu proyecto Nova.","timestamp":"2026-09-07T10:01:00Z","actionLabels":["Proyecto Nova"]}
+        ]
+        """
+        let guest = directory.appendingPathComponent("guest", isDirectory: true)
+        try FileManager.default.createDirectory(at: guest, withIntermediateDirectories: true)
+        try Data(fixture.utf8).write(to: guest.appendingPathComponent("focus.v1.novaMessages.json"))
+        let restored = FocusDataStore(restoreAccount: false, schedulesNotifications: false)
+        XCTAssertEqual(restored.novaMessages.map(\.role), [.user, .nova])
+        XCTAssertEqual(restored.novaMessages.map(\.content), ["Mi proyecto se llama Nova", "Guardé tu proyecto Nova."])
+        XCTAssertEqual(restored.novaMessages.last?.actionLabels, ["Proyecto Nova"])
+    }
+
+    func testAssistantBrandDoesNotRewriteUserEntitiesInRepliesOrSavedActions() {
+        let store = store()
+        let answer = response([], mode: .chatOnly, reply: "El proyecto Nova sigue pendiente.")
+        store.receiveNovaResult(answer, userText: "¿Cómo va mi proyecto Nova?")
+        XCTAssertEqual(store.novaMessages.last?.content, answer.reply)
+        store.receiveNovaResult(response([event("Revisar proyecto Nova")]), userText: "Revisar proyecto Nova mañana a las 11")
+        XCTAssertEqual(store.events.first?.title, "Revisar proyecto Nova")
+        XCTAssertTrue(store.novaMessages.last?.actionLabels.contains(where: { $0.contains("Nova") }) == true)
+    }
+
+    func testLegacyQuotaMessageDoesNotRestoreOldBrandOrExecuteActions() {
+        let store = store()
+        let limited = response([event()], blocked: true, blockedMessage: "Llegaste al límite de Nova.")
+        store.receiveNovaResult(limited, userText: "dentista mañana a las 11")
+        XCTAssertTrue(store.events.isEmpty)
+        XCTAssertTrue(store.novaErrorMessage?.contains(AssistantBrand.displayName) == true)
+        XCTAssertFalse(store.novaErrorMessage?.contains("Nova") == true)
+        XCTAssertEqual(store.novaLastFailedInput, "dentista mañana a las 11")
+        let error = NovaServiceError.quotaExceeded(message: "Llegaste al límite de Nova.")
+        XCTAssertFalse(error.localizedDescription.contains("Nova"))
+    }
+
+    func testHTTP429KeepsQuotaMetadataButDoesNotCallThrottlingAnExhaustedAllowance() {
+        let quota = Data(#"{"error":"quota_exceeded","message":"Límite de Nova","action_type":"nova_message","period":"monthly","used":40,"limit":40,"reset_at":"2027-10-01T00:00:00Z"}"#.utf8)
+        guard case .quotaExceeded(_, let details) = NovaService.rateLimitError(from: quota) else {
+            return XCTFail("Expected an explicit quota")
+        }
+        XCTAssertEqual(details?.period, "monthly")
+        XCTAssertEqual(details?.actionType, "nova_message")
+        XCTAssertEqual(details?.resetAt, "2027-10-01T00:00:00Z")
+        XCTAssertTrue(details?.displayMessage(now: .distantPast).contains("mensual") == true)
+        XCTAssertTrue(details?.displayMessage(now: .distantPast).contains("40 de 40") == true)
+        for body in [#"{"error":"rate_limit"}"#, #"{"error":"upstream_rate_limit"}"#, "unavailable"] {
+            guard case .rateLimited = NovaService.rateLimitError(from: Data(body.utf8)) else {
+                return XCTFail("Throttling must not report an exhausted allowance")
+            }
+        }
     }
 
     func testNonExecutableModesNeverMutateEvenIfProviderReturnsActions() {

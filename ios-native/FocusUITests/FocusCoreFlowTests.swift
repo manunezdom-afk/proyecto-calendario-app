@@ -127,7 +127,7 @@ final class FocusCoreFlowTests: XCTestCase {
         screenshot("Resultado de captura")
         tab("Pendientes")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "task.edit.")).firstMatch.waitForExistence(timeout: 5))
-        tab("Nova")
+        tab("Hilante")
         XCTAssertTrue(app.staticTexts["Tengo que estudiar economía mañana"].waitForExistence(timeout: 5))
         XCTAssertTrue(element("nova.input").exists)
     }
@@ -157,12 +157,12 @@ final class FocusCoreFlowTests: XCTestCase {
     }
 
     func testNovaKeyboardNavigationAndEmptySend() {
-        tab("Nova")
+        tab("Hilante")
         XCTAssertFalse(element("nova.send").isEnabled)
         element("nova.input").tap()
         element("nova.input").typeText("Tengo que comprar pan")
         XCTAssertTrue(element("nova.send").isHittable)
-        screenshot("Nova con teclado")
+        screenshot("Hilante con teclado")
         element("nova.send").tap()
         XCTAssertTrue(app.staticTexts["Tengo que comprar pan"].waitForExistence(timeout: 5))
         tab("Hoy")

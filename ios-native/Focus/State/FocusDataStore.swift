@@ -7374,7 +7374,7 @@ final class FocusDataStore: ObservableObject {
 
     func receiveNovaResult(_ result: NovaService.Result, userText: String) {
         if result.smartActionsBlocked {
-            failNova(result.smartActionsMessage ?? "Llegaste al límite de Nova. Puedes crear tus pendientes manualmente.", input: userText)
+            failNova("\(AssistantBrand.displayName) no pudo aplicar los cambios en este momento. No se guardó ninguna acción de esta respuesta. Puedes crear o editar tus pendientes manualmente.", input: userText)
             return
         }
         if result.shouldAskUser || !result.confidence.isFinite || result.confidence < 0.55 || result.mode == .clarification {

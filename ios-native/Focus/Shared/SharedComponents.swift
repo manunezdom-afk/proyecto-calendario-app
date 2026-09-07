@@ -844,7 +844,7 @@ struct EmptyStateView: View {
 /// solo cuando el campo está vacío para enfocar; no debe navegar.
 struct FocusBarInput: View {
     @Binding var text: String
-    var placeholder: String = "Pregúntale a Nova…"
+    var placeholder: String = "Pregúntale a \(AssistantBrand.displayName)…"
     var onSubmit: () -> Void
     var onMic: (() -> Void)? = nil
     /// Estado de dictado en vivo. Cuando es `true`, el icono mic se
@@ -2185,7 +2185,7 @@ struct NovaAIConsentSheet: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
                 HStack(alignment: .top, spacing: Theme.Spacing.md) {
                     IconBadge(symbol: "sparkles", tint: Theme.Colors.novaAccent, size: 40)
-                    Text("Nova usa IA externa")
+                    Text("\(AssistantBrand.displayName) usa IA externa")
                         .font(Theme.Typography.title2)
                         .foregroundStyle(Theme.Colors.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)

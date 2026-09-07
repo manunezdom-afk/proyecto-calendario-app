@@ -1,5 +1,9 @@
 import Foundation
 
+enum AssistantBrand {
+    static let displayName = "Hilante"
+}
+
 /// Configuración pública de Focus. NO contiene secretos.
 ///
 /// - `supabaseURL`: URL del proyecto Supabase.

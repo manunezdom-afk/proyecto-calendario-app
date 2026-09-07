@@ -209,12 +209,12 @@ struct AjustesView: View {
                 set: { value in store.updateSettings { $0.novaMemoryEnabled = value } }
             ))
             .accessibilityIdentifier("settings.memory")
-            NavigationLink("Lo que Nova recuerda") { NovaMemoryListView() }
+            NavigationLink("Lo que \(AssistantBrand.displayName) recuerda") { NovaMemoryListView() }
                 .accessibilityIdentifier("settings.memories")
         } header: {
-            Text("Nova")
+            Text(AssistantBrand.displayName)
         } footer: {
-            Text("Al desactivar la memoria, Nova deja de aprender y usar tus preferencias guardadas. Puedes revisarlas o borrarlas.")
+            Text("Al desactivar la memoria, \(AssistantBrand.displayName) deja de aprender y usar tus preferencias guardadas. Puedes revisarlas o borrarlas.")
         }
     }
 
@@ -327,7 +327,7 @@ struct AjustesView: View {
         } header: {
             Text("Privacidad")
         } footer: {
-            Text("Con tu permiso, Nova envía tu mensaje y el contexto necesario a proveedores de IA. Puedes retirar el permiso cuando quieras y seguir creando tareas y eventos a mano.")
+            Text("Con tu permiso, \(AssistantBrand.displayName) envía tu mensaje y el contexto necesario a proveedores de IA. Puedes retirar el permiso cuando quieras y seguir creando tareas y eventos a mano.")
         }
     }
 
@@ -504,7 +504,7 @@ struct NovaMemoryListView: View {
                 .padding(.bottom, Theme.Spacing.xxl)
             }
         }
-        .navigationTitle("Lo que Nova recuerda")
+        .navigationTitle("Lo que \(AssistantBrand.displayName) recuerda")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { reload() }
         .alert("¿Borrar todas las memorias?", isPresented: $showClearAll) {
@@ -515,7 +515,7 @@ struct NovaMemoryListView: View {
                 HapticManager.shared.warning()
             }
         } message: {
-            Text("Esto borra todos los nombres, preferencias y reglas que Nova aprendió de ti. Esta acción no se puede deshacer.")
+            Text("Esto borra todos los nombres, preferencias y reglas que \(AssistantBrand.displayName) aprendió de ti. Esta acción no se puede deshacer.")
         }
     }
 
@@ -523,10 +523,10 @@ struct NovaMemoryListView: View {
 
     private var headerText: String {
         if entries.isEmpty {
-            return "Cuando le cuentas cosas a Nova («Juan Pablo es mi coordinador», «teorías es Teorías de la Comunicación»), las guarda aquí para entenderte mejor después."
+            return "Cuando le cuentas cosas a \(AssistantBrand.displayName) («Juan Pablo es mi coordinador», «teorías es Teorías de la Comunicación»), las guarda aquí para entenderte mejor después."
         }
         let n = entries.count
-        return "Nova recuerda \(n) cosa\(n == 1 ? "" : "s") sobre ti. Desliza una para borrarla o dile en el chat «olvida X»."
+        return "\(AssistantBrand.displayName) recuerda \(n) cosa\(n == 1 ? "" : "s") sobre ti. Desliza una para borrarla o dile en el chat «olvida X»."
     }
 
     private var emptyState: some View {
@@ -537,7 +537,7 @@ struct NovaMemoryListView: View {
             Text("Sin memorias guardadas")
                 .font(Theme.Typography.bodyEmphasized)
                 .foregroundStyle(Theme.Colors.textPrimary)
-            Text("Ejemplo: dile a Nova «mi mamá se llama Susana» y se acordará la próxima vez.")
+            Text("Ejemplo: dile a \(AssistantBrand.displayName) «mi mamá se llama Susana» y se acordará la próxima vez.")
                 .font(Theme.Typography.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
                 .multilineTextAlignment(.center)

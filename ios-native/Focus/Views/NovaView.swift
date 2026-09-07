@@ -34,7 +34,7 @@ struct NovaView: View {
                 }
             }
             .background { FocusAmbientBackground() }
-            .navigationTitle("Nova")
+            .navigationTitle(AssistantBrand.displayName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
@@ -80,7 +80,7 @@ struct NovaView: View {
             }
 
             if store.syncCredentials == nil {
-                Label("Puedes guardar pendientes en este iPhone. Inicia sesión para conversar con Nova en la nube.", systemImage: "iphone")
+                Label("Puedes guardar pendientes en este iPhone. Inicia sesión para conversar con \(AssistantBrand.displayName) en la nube.", systemImage: "iphone")
                     .font(.caption).foregroundStyle(Theme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -136,7 +136,7 @@ private struct NovaConversationEntry: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 if message.role == .nova { FocusMark(size: 24) }
-                Text(message.role == .user ? "Tu petición" : "Nova")
+                Text(message.role == .user ? "Tu petición" : AssistantBrand.displayName)
                     .font(.caption.weight(.medium)).foregroundStyle(Theme.Colors.textSecondary)
             }
             Text(message.content)
@@ -197,7 +197,7 @@ struct NovaCaptureField: View {
                     .submitLabel(.send).onSubmit { submit() }
                     .frame(minHeight: 26)
                     .padding(.horizontal, 4)
-                    .accessibilityLabel("Escribe a Nova").accessibilityIdentifier("\(identifier).input")
+                    .accessibilityLabel("Escribe a \(AssistantBrand.displayName)").accessibilityIdentifier("\(identifier).input")
                 controls
             }
             .focusSurface(radius: 26, padding: 14)
@@ -248,7 +248,7 @@ struct NovaCaptureField: View {
                     .background(canSend ? Theme.Colors.actionFill : Theme.Colors.surfaceHigh, in: Circle())
             }
             .buttonStyle(.plain).disabled(!canSend)
-            .accessibilityLabel("Enviar a Nova").accessibilityIdentifier("\(identifier).send")
+            .accessibilityLabel("Enviar a \(AssistantBrand.displayName)").accessibilityIdentifier("\(identifier).send")
         }
     }
 
@@ -283,7 +283,7 @@ struct NovaFeedbackView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
                         FocusMark(size: 24)
-                        Text("Nova").font(.caption.weight(.medium)).foregroundStyle(Theme.Colors.textSecondary)
+                        Text(AssistantBrand.displayName).font(.caption.weight(.medium)).foregroundStyle(Theme.Colors.textSecondary)
                     }
                     Text(reply.content).font(.subheadline).foregroundStyle(Theme.Colors.textPrimary)
                         .lineSpacing(3).textSelection(.enabled).accessibilityIdentifier("capture.result")

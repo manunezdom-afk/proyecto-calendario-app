@@ -8,7 +8,7 @@ enum MainTab: Hashable, CaseIterable {
         case .miDia: return "Hoy"
         case .tareas: return "Pendientes"
         case .calendario: return "Agenda"
-        case .nova: return "Nova"
+        case .nova: return AssistantBrand.displayName
         case .ajustes: return "Ajustes"
         }
     }
@@ -85,7 +85,7 @@ struct MainTabView: View {
                     .tag(MainTab.calendario)
                     .accessibilityIdentifier("tab.agenda")
                 NovaView()
-                    .tabItem { Label("Nova", systemImage: "diamond") }
+                    .tabItem { Label(AssistantBrand.displayName, systemImage: "diamond") }
                     .tag(MainTab.nova)
                     .accessibilityIdentifier("tab.nova")
             }

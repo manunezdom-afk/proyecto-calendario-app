@@ -192,9 +192,7 @@ enum NovaService {
         case 401, 403:
             throw NovaServiceError.unauthorized
         case 429:
-            // Backend devuelve JSON con mensaje humano cuando es quota.
-            let msg = (try? jsonDecoder.decode(BackendErrorPayload.self, from: data))?.message
-            throw NovaServiceError.quotaExceeded(message: msg)
+            throw rateLimitError(from: data)
         case 502:
             throw NovaServiceError.badLLMOutput
         case 503, 504:
@@ -214,6 +212,14 @@ enum NovaService {
         let content: String
     }
 
+    /// A provider throttle is temporary; only an explicit quota code means the
+    /// user's allowance is exhausted. Do not show legacy server branding.
+    static func rateLimitError(from data: Data) -> NovaServiceError {
+        let payload = try? jsonDecoder.decode(BackendErrorPayload.self, from: data)
+        guard payload?.error == "quota_exceeded" else { return .rateLimited }
+        return .quotaExceeded(message: payload?.message, details: payload?.quotaDetails)
+    }
+
     // MARK: - Internal coders
 
     private static let jsonEncoder: JSONEncoder = {
@@ -230,11 +236,48 @@ enum NovaService {
 
 // MARK: - Errores tipados
 
+struct NovaQuotaDetails {
+    let actionType: String?
+    let period: String?
+    let used: Int?
+    let limit: Int?
+    let resetAt: String?
+
+    func displayMessage(now: Date = Date()) -> String {
+        let periodLabel = ["daily": "diario", "weekly": "semanal", "monthly": "mensual"][period ?? ""]
+        let scope: String
+        switch actionType {
+        case "nova_message": scope = "mensajes"
+        case "nova_smart_action": scope = "acciones automáticas"
+        case "nova_premium_message": scope = "respuestas avanzadas"
+        default: scope = "uso"
+        }
+        var lines = ["Has alcanzado el límite\(periodLabel.map { " \($0)" } ?? "") de \(scope) de \(AssistantBrand.displayName)."]
+        if let used, let limit, used >= 0, limit > 0 {
+            lines.append("Uso registrado: \(used) de \(limit).")
+        }
+        if let resetAt {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let fractional = formatter.date(from: resetAt)
+            formatter.formatOptions = [.withInternetDateTime]
+            if let reset = fractional ?? formatter.date(from: resetAt), reset > now {
+                lines.append("Se restablece el \(reset.formatted(.dateTime.day().month(.wide).hour().minute())).")
+            }
+        }
+        lines.append("Puedes seguir creando tareas y eventos manualmente.")
+        return lines.joined(separator: " ")
+    }
+
+    static let unspecified = NovaQuotaDetails(actionType: nil, period: nil, used: nil, limit: nil, resetAt: nil)
+}
+
 enum NovaServiceError: Error, LocalizedError {
     case emptyMessage
     case messageTooLong
     case unauthorized           // 401/403 → caller debe usar fallback
-    case quotaExceeded(message: String?)
+    case quotaExceeded(message: String?, details: NovaQuotaDetails? = nil)
+    case rateLimited
     case badLLMOutput           // 502 (parser falló en backend)
     case serviceUnavailable     // 503/504 (modelo / red upstream)
     case offline
@@ -276,11 +319,12 @@ enum NovaServiceError: Error, LocalizedError {
         case .emptyMessage:        return "El mensaje está vacío."
         case .messageTooLong:      return "El mensaje es demasiado largo. Acórtalo un poco."
         case .unauthorized:        return "Tu sesión expiró. Vuelve a iniciar sesión cuando puedas."
-        case .quotaExceeded(let m): return m ?? "Llegaste al límite diario de Nova."
-        case .badLLMOutput:        return "No pude entender bien lo que respondió Nova. Repite el mensaje, por favor."
-        case .serviceUnavailable:  return "Nova está saturada en este momento. Vuelve a intentarlo en un rato."
+        case .quotaExceeded(_, let details): return (details ?? .unspecified).displayMessage()
+        case .rateLimited:         return "Hay demasiadas solicitudes en este momento. Espera un poco y vuelve a intentarlo."
+        case .badLLMOutput:        return "No pude entender bien lo que respondió \(AssistantBrand.displayName). Repite el mensaje, por favor."
+        case .serviceUnavailable:  return "\(AssistantBrand.displayName) no está disponible en este momento. Vuelve a intentarlo en un rato."
         case .offline:             return "Sin conexión. Tus cambios quedan en este iPhone hasta que vuelvas a tener internet."
-        case .timeout:             return "Nova tardó más de lo esperado. Vuelve a intentarlo."
+        case .timeout:             return "\(AssistantBrand.displayName) tardó más de lo esperado. Vuelve a intentarlo."
         case .network:             return "Hubo un problema con la conexión. Vuelve a intentarlo."
         case .invalidResponse:     return "Algo no salió como esperaba. Vuelve a intentarlo."
         case .encoding:            return "No pude armar tu solicitud. Vuelve a intentarlo."
@@ -297,19 +341,21 @@ enum NovaServiceError: Error, LocalizedError {
     var loggedInFallbackNote: String {
         switch self {
         case .unauthorized:
-            return "Tu sesión expiró — esto quedó solo en este iPhone. Vuelve a iniciar sesión para sincronizarlo con Nova."
-        case .quotaExceeded(let m):
-            return m ?? "Llegaste al límite de Nova — usé el modo local de respaldo."
+            return "Tu sesión expiró — esto quedó solo en este iPhone. Vuelve a iniciar sesión para sincronizarlo con \(AssistantBrand.displayName)."
+        case .quotaExceeded(_, let details):
+            return (details ?? .unspecified).displayMessage() + " Esta petición se resolvió en este iPhone con el modo local."
+        case .rateLimited:
+            return "Hay demasiadas solicitudes en este momento. Esta petición se resolvió en este iPhone con el modo local."
         case .offline:
-            return "Sin conexión — lo resolví en este iPhone con el modo local. Se sincronizará con Nova cuando vuelvas a tener internet."
+            return "Sin conexión — lo resolví en este iPhone con el modo local. Se sincronizará con \(AssistantBrand.displayName) cuando vuelvas a tener internet."
         case .timeout:
-            return "Nova (IA) tardó demasiado — usé el modo local de respaldo. Vuelve a intentarlo en un momento."
+            return "\(AssistantBrand.displayName) (IA) tardó demasiado — usé el modo local de respaldo. Vuelve a intentarlo en un momento."
         case .serviceUnavailable:
-            return "Nova (IA) está caída o saturada — usé el modo local de respaldo. Vuelve a intentarlo en un rato."
+            return "\(AssistantBrand.displayName) (IA) no está disponible — usé el modo local de respaldo. Vuelve a intentarlo en un rato."
         case .network:
-            return "Falló la conexión con Nova — usé el modo local de respaldo. Revisa tu internet y vuelve a intentarlo."
+            return "Falló la conexión con \(AssistantBrand.displayName) — usé el modo local de respaldo. Revisa tu internet y vuelve a intentarlo."
         case .badLLMOutput, .server, .invalidResponse, .encoding, .decoding:
-            return "No pude contactar a Nova (IA) — usé el modo local de respaldo. Vuelve a intentarlo en un momento."
+            return "No pude contactar a \(AssistantBrand.displayName) (IA) — usé el modo local de respaldo. Vuelve a intentarlo en un momento."
         case .emptyMessage, .messageTooLong:
             return ""  // No aplica: estos no hacen fallback.
         }
@@ -323,6 +369,7 @@ enum NovaServiceError: Error, LocalizedError {
         case .messageTooLong:      return "messageTooLong"
         case .unauthorized:        return "unauthorized(401/403)"
         case .quotaExceeded:       return "quotaExceeded(429)"
+        case .rateLimited:         return "rateLimited(429)"
         case .badLLMOutput:        return "badLLMOutput(502)"
         case .serviceUnavailable:  return "serviceUnavailable(503/504)"
         case .offline:             return "offline"
@@ -481,6 +528,26 @@ private struct BackendResponsePayload: Decodable {
 private struct BackendErrorPayload: Decodable {
     let error: String?
     let message: String?
+    let quotaDetails: NovaQuotaDetails
+
+    enum CodingKeys: String, CodingKey {
+        case error, message, period, used, limit
+        case actionType = "action_type"
+        case resetAt = "reset_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        error = try? container.decode(String.self, forKey: .error)
+        message = try? container.decode(String.self, forKey: .message)
+        quotaDetails = NovaQuotaDetails(
+            actionType: try? container.decode(String.self, forKey: .actionType),
+            period: try? container.decode(String.self, forKey: .period),
+            used: try? container.decode(Int.self, forKey: .used),
+            limit: try? container.decode(Int.self, forKey: .limit),
+            resetAt: try? container.decode(String.self, forKey: .resetAt)
+        )
+    }
 }
 
 // MARK: - Actions (heterogéneas)

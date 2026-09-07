@@ -277,7 +277,7 @@ final class DemoDataProvider {
         [
             NovaMessage(
                 role: .nova,
-                content: "Soy Nova. Puedo ordenar tu día, crear tareas y proponerte cambios."
+                content: "Soy \(AssistantBrand.displayName). Puedo ordenar tu día, crear tareas y proponerte cambios."
             )
         ]
     }
