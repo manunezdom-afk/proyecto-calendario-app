@@ -78,36 +78,40 @@
     <span>Focus</span>
   </a>
   <h1>Política de privacidad</h1>
-  <div class="updated">Última actualización: 10 de agosto de 2026</div>
+  <div class="updated">Última actualización: 7 de septiembre de 2026</div>
 </header>
 
 <p>En Focus respetamos tu privacidad. Este documento explica qué datos recolectamos, por qué y cómo los usamos. Si tienes preguntas, escríbenos a <a href="mailto:manunezdom@gmail.com">manunezdom@gmail.com</a>.</p>
 
 <h2>1. Qué datos recolectamos</h2>
-<p>Para que Focus funcione necesitamos almacenar la siguiente información, asociada a tu cuenta:</p>
+<p>En iOS puedes usar Focus sin crear una cuenta. En ese modo tus pendientes, eventos, conversaciones y preferencias se guardan en el iPhone. Si inicias sesión, tus pendientes y eventos de Focus pueden sincronizarse con tu cuenta. Los datos guardados antes en el modo local solo se añaden a una cuenta cuando eliges recuperarlos y confirmas el destino.</p>
+<p>Estos son los datos que se usan según la función y la versión de Focus:</p>
 <ul>
-  <li><strong>Email</strong>: para iniciar sesión mediante código de un solo uso (OTP).</li>
-  <li><strong>Eventos, tareas y notas</strong> que creas dentro de la app.</li>
-  <li><strong>Memorias y preferencias</strong> que tu asistente Nova guarda para personalizar sugerencias.</li>
-  <li><strong>Conversaciones con Nova</strong>: tus mensajes al asistente <em>no se guardan en nuestra base de datos</em>. Viven en tu dispositivo y se envían al proveedor de inteligencia artificial únicamente para generar cada respuesta (ver sección 3).</li>
+  <li><strong>Email</strong>: si eliges iniciar sesión, para enviarte un código de un solo uso (OTP).</li>
+  <li><strong>Eventos, tareas y notas</strong> que creas dentro de la app. En iOS se guardan primero en el dispositivo; la sincronización requiere una cuenta.</li>
+  <li><strong>Memorias y preferencias</strong> que Nova usa para personalizar respuestas. Las memorias de la app iOS se guardan localmente. Puedes revisarlas, borrarlas o desactivar su uso desde Ajustes.</li>
+  <li><strong>Conversaciones con Nova</strong>: el historial de iOS se guarda en el dispositivo. Cuando usas IA externa, se envía tu mensaje y parte del historial reciente para generar una respuesta (ver sección 3).</li>
   <li><strong>Identificadores técnicos</strong>: ID de usuario, tokens de notificaciones push, navegador/dispositivo (user agent).</li>
-  <li><strong>Señales de uso</strong>: registros agregados de cuándo completas tareas o aceptas sugerencias, para mejorar las recomendaciones de Nova.</li>
-  <li><strong>Ubicación aproximada</strong> (opcional): solo cuando abres Nova y otorgas permiso, para dar contexto local a las sugerencias. Puedes denegar el permiso sin perder funcionalidad.</li>
-  <li><strong>Fotos y dictado por voz</strong> (opcional): cuando usas estas funciones, las imágenes y el audio se envían para análisis y se descartan tras procesarlos. No almacenamos audio ni imágenes. En la app de iOS el dictado se transcribe en tu propio dispositivo (no sale de él).</li>
+  <li><strong>Contadores locales de uso en iOS</strong>: se cuenta, por ejemplo, el paso por la bienvenida, la creación de elementos y los resultados de acciones de Nova. Estos contadores no incluyen el texto de tus mensajes ni identificadores de cuenta, y no se envían a nuestros servidores.</li>
+  <li><strong>Señales de uso en la versión web</strong>: se guardan señales de actividad y preferencias de uso asociadas a tu cuenta para personalizar las sugerencias.</li>
+  <li><strong>Uso del servicio de IA</strong>: cuando se hace una petición externa, el servicio registra datos asociados a la cuenta, como la función usada, el modelo, la cantidad de tokens, el costo estimado y el resultado, sin incluir el contenido de tus mensajes en ese registro.</li>
+  <li><strong>Ubicación aproximada en la versión web</strong> (opcional): cuando otorgas permiso, se usa para dar contexto local a las sugerencias. La app iOS actual no solicita tu ubicación.</li>
+  <li><strong>Fotos y dictado por voz en la versión web</strong> (opcional): estas funciones envían las imágenes o el audio para su análisis. En la app iOS actual el dictado exige reconocimiento en el dispositivo: el audio no se envía a un proveedor externo. Puedes revisar y editar el texto transcrito antes de usarlo. Si después lo envías a Nova con IA externa, ese texto se procesa como cualquier otro mensaje.</li>
 </ul>
 
 <h2>2. Cómo usamos tus datos</h2>
 <ul>
   <li>Para que Focus funcione: mostrar tu calendario, sincronizar entre dispositivos, enviar notificaciones que tú configuraste.</li>
-  <li>Para que Nova te ayude: el asistente recibe tus eventos, tareas, memorias y preferencias en cada conversación para darte respuestas relevantes.</li>
-  <li>Para mejorar la experiencia: las señales de uso ajustan las sugerencias de Nova a tus hábitos reales.</li>
+  <li>Para que Nova te ayude: algunas peticiones se resuelven en el iPhone. En iOS, las peticiones a IA externa requieren una cuenta y tu permiso; incluyen tu mensaje, parte del historial reciente, eventos de Focus relevantes, pendientes y las memorias cuyo uso esté activado.</li>
+  <li>Para operar el servicio: los registros de uso de IA permiten aplicar límites y controlar costos. Los contadores locales de iOS permanecen en el dispositivo.</li>
 </ul>
+<p><strong>Calendario del iPhone y widget.</strong> Si activas el acceso al calendario, Focus lee sus eventos para mostrarlos junto a los de Focus, sin modificarlos. La app comparte localmente con su widget un resumen de los eventos de hoy: título, hora de inicio, hora de fin cuando existe y color de categoría. Este resumen puede incluir eventos del calendario del iPhone. El widget lo lee dentro del grupo de aplicaciones de Focus y no hace peticiones de red. En la app iOS actual, los eventos leídos del calendario del iPhone no se sincronizan con la cuenta de Focus ni se incluyen en el contexto de eventos que se envía a Nova.</p>
 <p>No vendemos tus datos. No usamos tus datos para publicidad. No hacemos seguimiento entre apps ni sitios web de terceros.</p>
 
 <h2>3. Con quién compartimos datos</h2>
 <p>Compartimos solo lo estrictamente necesario con estos proveedores que procesan datos por nosotros:</p>
 
-<p><strong>Proveedores de inteligencia artificial.</strong> Cuando hablas con Nova, tu mensaje y el contexto necesario para responder (eventos visibles, tareas y las memorias que guardaste) se envían al proveedor de IA que genera la respuesta. Te pedimos tu consentimiento explícito antes de tu primer mensaje, y puedes dejar de usar Nova en cualquier momento sin perder el resto de la app.</p>
+<p><strong>Proveedores de inteligencia artificial.</strong> Cuando una petición usa IA externa, tu mensaje y el contexto necesario se envían al proveedor que genera la respuesta. En iOS te pedimos consentimiento antes de habilitar ese envío. Puedes retirarlo en Ajustes → Privacidad → Permitir IA externa y seguir creando pendientes y eventos manualmente. Retirar el permiso detiene futuros envíos; no retira una petición que ya haya llegado a un proveedor.</p>
 <div class="card">
   <ul>
     <li><strong>DeepSeek</strong>: proveedor principal del chat de Nova. Procesa tus conversaciones y el contexto de agenda conforme a sus términos de API. Sus servidores pueden estar fuera de tu país (ver sección 4).</li>
@@ -120,7 +124,7 @@
 <p><strong>Infraestructura y servicios.</strong></p>
 <div class="card">
   <ul>
-    <li><strong>Supabase</strong> (almacenamiento y autenticación): guarda tu cuenta, eventos, tareas, memorias y tokens de notificación.</li>
+    <li><strong>Supabase</strong> (almacenamiento y autenticación): guarda tu cuenta, eventos y tareas sincronizados, registros de uso de IA y tokens de notificación. Las memorias de iOS no se sincronizan en Supabase; la versión web también guarda memorias y señales de uso en el servicio.</li>
     <li><strong>Resend</strong> (correo): envía los códigos OTP a tu email.</li>
     <li><strong>Apple Push Notification service</strong> y <strong>Web Push</strong>: entregan las notificaciones a tu dispositivo.</li>
     <li><strong>OpenStreetMap / Nominatim</strong>: convierte tus coordenadas en el nombre de la ciudad cuando autorizas la ubicación.</li>
@@ -144,14 +148,14 @@
 <ul>
   <li>Acceder a tus datos directamente desde la app.</li>
   <li>Editar o borrar eventos, tareas y memorias en cualquier momento.</li>
-  <li><strong>Eliminar tu cuenta al instante desde la app</strong>: Ajustes → Cuenta → Eliminar cuenta. Borra tu cuenta y todos tus datos asociados de forma inmediata e irreversible. También puedes pedirlo por correo a <a href="mailto:manunezdom@gmail.com">manunezdom@gmail.com</a> y lo atendemos en un plazo máximo de 30 días.</li>
+  <li><strong>Eliminar tu cuenta desde la app</strong>: Ajustes → Privacidad → Eliminar cuenta. La app te pide confirmación y muestra si la solicitud falla para que puedas reintentar. También puedes pedirlo por correo a <a href="mailto:manunezdom@gmail.com">manunezdom@gmail.com</a> y lo atendemos en un plazo máximo de 30 días.</li>
   <li>Solicitar una copia de tus datos escribiendo al mismo correo (portabilidad).</li>
   <li>Revocar permisos del sistema (notificaciones, ubicación, micrófono, cámara, fotos) desde los ajustes de tu dispositivo.</li>
-  <li>Retirar tu consentimiento para el uso de proveedores de IA dejando de usar Nova; el resto de la app sigue funcionando.</li>
+  <li>Retirar tu consentimiento para proveedores de IA en iOS desde Ajustes → Privacidad → Permitir IA externa. El resto de la app sigue funcionando.</li>
 </ul>
 
 <h2>7. Retención</h2>
-<p>Conservamos tus datos mientras tu cuenta esté activa. Si eliminas tu cuenta, borramos tu cuenta y datos asociados de inmediato. Mantenemos metadatos de uso de la IA (contadores y costos, <em>sin el contenido de tus mensajes</em>) para controlar el gasto del servicio, y registros de notificaciones enviadas para evitar duplicados. Algunos registros agregados o anonimizados pueden mantenerse por motivos técnicos o legales.</p>
+<p>Conservamos los datos sincronizados mientras tu cuenta esté activa. Cuando el servicio confirma la eliminación de la cuenta, elimina sus datos asociados, incluidos los registros de uso de IA y de notificaciones vinculados a ella. La app iOS borra la copia local de esa cuenta; los datos de otros modos o cuentas guardados en el dispositivo se conservan separados. Los proveedores externos pueden mantener registros conforme a sus propias condiciones de retención; retirar el consentimiento o borrar Focus no elimina por sí solo datos que ya hayan recibido.</p>
 
 <h2>8. Menores</h2>
 <p>Focus no está dirigido a menores de 13 años. Si crees que un menor nos envió datos, contáctanos para eliminarlos.</p>
