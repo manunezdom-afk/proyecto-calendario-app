@@ -97,16 +97,7 @@ struct MainTabView: View {
             AjustesView()
                 .environmentObject(nav)
                 .environmentObject(toast)
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    HStack {
-                        Spacer()
-                        Button("Cerrar") { nav.showSettings = false }
-                            .frame(minHeight: 44)
-                            .accessibilityIdentifier("settings.close")
-                    }
-                    .padding(.horizontal, Theme.Spacing.xl)
-                    .background(Theme.Colors.background)
-                }
+
         }
         .onChange(of: nav.selectedTab) { oldValue, newValue in
             if newValue == .ajustes {

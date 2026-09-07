@@ -6,6 +6,7 @@ struct MiDiaView: View {
     @EnvironmentObject private var nav: NavigationCoordinator
     @EnvironmentObject private var toast: ToastManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.openURL) private var openURL
     @State private var draft = ""
     @State private var showNovaResult = false
@@ -53,16 +54,30 @@ struct MiDiaView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    Text(dateLabel)
-                        .font(.subheadline).foregroundStyle(.secondary)
-                        .accessibilityIdentifier("today.date")
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(dateLabel)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                            .accessibilityIdentifier("today.date")
+                        Text("Vamos con tu día.")
+                            .font(Theme.Typography.displayHero)
+                            .tracking(-0.8)
+                            .foregroundStyle(Theme.Colors.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                        Text("Lo que tienes en mente, empieza aquí.")
+                            .font(.body)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                    }
+                    .padding(.top, 16)
 
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("De tu cabeza a tu día.").font(.title2.weight(.semibold))
-                        NovaCaptureField(text: $draft, identifier: "capture", placeholder: "¿Qué necesitas hacer?") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        NovaCaptureField(text: $draft, identifier: "capture", placeholder: "¿Qué tienes en mente?") {
                             showNovaResult = true
                         }
-                        if showNovaResult { NovaFeedbackView(showLatestReply: true) }
+                        if showNovaResult || store.isNovaTyping || store.novaPendingProposal != nil || store.novaErrorMessage != nil {
+                            NovaFeedbackView(showLatestReply: true)
+                        }
                     }
 
                     syncNotice
@@ -89,7 +104,7 @@ struct MiDiaView: View {
                                         todayTaskRow(task)
                                         if index < min(todayTasks.count, 5) - 1 { Divider().padding(.leading, 52) }
                                     }
-                                }.background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 16))
+                                }.background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 22))
                                 if todayTasks.count > 5 {
                                     Button("Ver los \(todayTasks.count) pendientes") { nav.selectedTab = .tareas }
                                         .font(.subheadline.weight(.medium)).frame(minHeight: 44)
@@ -137,17 +152,25 @@ struct MiDiaView: View {
                                     }
                                     Spacer()
                                     Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                                }.padding(16).background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 16))
+                                }.padding(16).background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 22))
                             }.buttonStyle(.plain)
                         }
                     }
                 }
                 .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 24)
             }
-            .background(Theme.Colors.background)
+            .background { FocusAmbientBackground(intensity: 0.85) }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Hoy")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 8) {
+                        FocusMark(size: 28)
+                        Text("Focus").font(.headline.weight(.medium)).foregroundStyle(Theme.Colors.textPrimary)
+                    }.accessibilityElement(children: .combine)
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Button { nav.openSettings() } label: { Image(systemName: "gearshape") }
                         .accessibilityLabel("Ajustes").accessibilityIdentifier("today.settings")
@@ -192,32 +215,60 @@ struct MiDiaView: View {
 
     private var firstStep: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Image(systemName: "checklist").font(.system(size: 34, weight: .light))
-                .foregroundStyle(Theme.Colors.focusAccent).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Empieza por una cosa.").font(.title2.weight(.semibold))
-                Text("Escríbela arriba. Focus la convierte en una tarea o un evento y la guarda aquí.")
-                    .font(.body).foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "circle.dotted.circle")
+                    .font(.system(size: 26, weight: .light))
+                    .foregroundStyle(Theme.Colors.focusAccent)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.Colors.focusAccentSoft, in: RoundedRectangle(cornerRadius: 14))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Empieza por una cosa.")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Theme.Colors.textPrimary)
+                    Text("Una tarea, un plan o eso que no quieres olvidar.")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Button {
                 draft = "Tengo que estudiar economía mañana"
             } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("PRUEBA CON UN EJEMPLO").font(.caption2.weight(.semibold)).tracking(1)
-                        Text("«Tengo que estudiar economía mañana»").font(.subheadline)
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("PRUEBA A DECIR").font(.caption2.weight(.semibold)).tracking(1.2)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                        Text("Estudiar economía mañana")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Theme.Colors.textPrimary)
                     }
-                    Spacer(minLength: 8)
-                    Image(systemName: "arrow.up.left").font(.subheadline)
-                }.foregroundStyle(Theme.Colors.focusAccent)
+                    Spacer(minLength: 0)
+                    Image(systemName: "arrow.up.left")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Theme.Colors.focusAccent)
+                        .frame(width: 36, height: 36)
+                        .background(Theme.Colors.surface, in: Circle())
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .background(Theme.Colors.surfaceTinted, in: RoundedRectangle(cornerRadius: 18))
             }.buttonStyle(.plain).accessibilityIdentifier("today.example")
-            Divider()
-            Button("Crear una tarea manualmente") { showNewTask = true }
-                .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
-                .accessibilityIdentifier("today.manualTask")
+            Button {
+                showNewTask = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus")
+                    Text("Crear una tarea manualmente")
+                }
+                .font(.subheadline.weight(.medium))
+                .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Theme.Colors.focusAccent)
+            .accessibilityIdentifier("today.manualTask")
         }
-        .padding(24).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 20))
+        .focusSurface(radius: 26, padding: 20)
     }
 
     @ViewBuilder private var syncNotice: some View {
@@ -238,7 +289,11 @@ struct MiDiaView: View {
     private func sectionTitle(_ title: String, count: Int) -> some View {
         HStack(spacing: 8) {
             Text(title).font(.headline)
-            Text("\(count)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+            Text("\(count)")
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundStyle(Theme.Colors.focusAccent)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(Theme.Colors.focusAccentSoft, in: Capsule())
         }.accessibilityElement(children: .combine).accessibilityAddTraits(.isHeader)
     }
 
@@ -270,12 +325,19 @@ struct MiDiaView: View {
     }
 
     private func eventRow(_ event: FocusEvent, overdue: Bool = false) -> some View {
-        HStack(alignment: .top, spacing: 16) {
+        let accessible = dynamicTypeSize.isAccessibilitySize
+        let layout = accessible
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
+        return layout {
             VStack(alignment: .leading, spacing: 4) {
                 Text(event.startTime, format: .dateTime.hour().minute()).font(.subheadline.weight(.semibold).monospacedDigit())
                 if overdue { Text(event.startTime, format: .dateTime.day().month(.abbreviated)).font(.caption).foregroundStyle(Theme.Colors.danger) }
-            }.frame(width: 62, alignment: .leading)
-            RoundedRectangle(cornerRadius: 2).fill(event.section.color).frame(width: 3)
+            }.frame(width: accessible ? nil : 62, alignment: .leading)
+            if !accessible {
+                RoundedRectangle(cornerRadius: 2).fill(event.section.color).frame(width: 3)
+                    .accessibilityHidden(true)
+            }
             Button {
                 if event.effectiveSource == .local { editingEvent = event }
                 else if let url = URL(string: "calshow:\(event.startTime.timeIntervalSinceReferenceDate)") { openURL(url) }
@@ -303,6 +365,6 @@ struct MiDiaView: View {
                 } label: { Image(systemName: "checkmark.circle").font(.title2).frame(width: 44, height: 44) }
                 .accessibilityLabel("Completar recordatorio \(event.title)")
             }
-        }.fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("today.event.\(event.id.uuidString)")
+        }.fixedSize(horizontal: false, vertical: true).focusSurface(radius: 20, padding: 16).accessibilityIdentifier("today.event.\(event.id.uuidString)")
     }
 }

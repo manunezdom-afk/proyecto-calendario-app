@@ -73,6 +73,18 @@ final class FocusCoreFlowTests: XCTestCase {
         XCTAssertTrue(element("capture.input").waitForExistence(timeout: 5))
     }
 
+    func testSettingsSignInOpensEmailAndCanReturnToWelcome() {
+        element("today.settings").tap()
+        XCTAssertTrue(element("settings.signIn").waitForExistence(timeout: 5))
+        element("settings.signIn").tap()
+        XCTAssertTrue(element("login.email").waitForExistence(timeout: 10))
+        element("login.back").tap()
+        XCTAssertTrue(element("onboarding.start").waitForExistence(timeout: 5))
+        XCTAssertFalse(element("login.email").exists)
+        element("onboarding.start").tap()
+        XCTAssertTrue(element("capture.input").waitForExistence(timeout: 5))
+    }
+
     func testManualTaskPersistsCanBeEditedCompletedAndReopened() {
         createTask("Preparar presentación QA")
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "task.edit.")).firstMatch

@@ -786,8 +786,10 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: Theme.Spacing.lg) {
             Image(systemName: symbol)
-                .font(.largeTitle)
-                .foregroundStyle(Theme.Colors.textSecondary)
+                .font(.title2)
+                .foregroundStyle(Theme.Colors.focusAccent)
+                .frame(width: 64, height: 64)
+                .background(Theme.Colors.focusAccentSoft, in: RoundedRectangle(cornerRadius: 22))
                 .accessibilityHidden(true)
 
             VStack(spacing: Theme.Spacing.sm) {
@@ -815,9 +817,9 @@ struct EmptyStateView: View {
                         Text(actionLabel)
                     }
                     .font(.headline)
-                    .frame(minWidth: 44, minHeight: 44)
+                    .frame(minWidth: 44)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(FocusPrimaryButtonStyle())
                 .tint(Theme.Colors.focusAccent)
             }
         }
@@ -1190,6 +1192,44 @@ struct ExampleBanner: View {
 }
 
 // MARK: - Section header
+
+struct FocusPageIntro: View {
+    let title: String
+    let subtitle: String
+    let symbol: String
+    var compact = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var layout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 20))
+    }
+
+    var body: some View {
+        layout {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(compact ? .title2.weight(.semibold) : .largeTitle.weight(.semibold))
+                    .foregroundStyle(Theme.Colors.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(systemName: symbol)
+                .font(.title3.weight(.medium))
+                .foregroundStyle(Theme.Colors.focusAccent)
+                .frame(width: 48, height: 48)
+                .background(Theme.Colors.focusAccentSoft, in: RoundedRectangle(cornerRadius: 16))
+                .accessibilityHidden(true)
+        }
+        .padding(.vertical, compact ? 8 : 12)
+    }
+}
 
 struct SectionHeader: View {
     let title: String
@@ -2141,37 +2181,46 @@ struct NovaAIConsentSheet: View {
     let onDecline: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
-            HStack(spacing: Theme.Spacing.md) {
-                IconBadge(symbol: "sparkles", tint: Theme.Colors.novaAccent, size: 40)
-                Text("Nova usa IA externa")
-                    .font(Theme.Typography.title2)
-                    .foregroundStyle(Theme.Colors.textPrimary)
-            }
-            .padding(.top, Theme.Spacing.xl)
-
-            Text("Para responder, tu mensaje y el contexto de tu agenda (eventos visibles, tareas y las memorias que guardaste) se envían a proveedores externos de inteligencia artificial: **DeepSeek** como principal, con OpenAI o Anthropic como alternativa. No se usan para publicidad ni se venden.")
-                .font(Theme.Typography.body)
-                .foregroundStyle(Theme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("El dictado por voz se transcribe en tu iPhone y no sale de él. Si prefieres no usar IA externa, puedes seguir usando el resto de Focus con normalidad.")
-                .font(Theme.Typography.body)
-                .foregroundStyle(Theme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let url = URL(string: "https://www.usefocus.me/privacidad") {
-                Link("Más información en la Política de Privacidad", destination: url)
-                    .font(Theme.Typography.bodyBold)
-                    .foregroundStyle(Theme.Colors.novaAccent)
-            }
-
-            Spacer(minLength: 0)
-
-            VStack(spacing: Theme.Spacing.md) {
-                FocusPrimaryButton(label: "Aceptar y continuar", icon: "checkmark") {
-                    onAccept()
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+                HStack(alignment: .top, spacing: Theme.Spacing.md) {
+                    IconBadge(symbol: "sparkles", tint: Theme.Colors.novaAccent, size: 40)
+                    Text("Nova usa IA externa")
+                        .font(Theme.Typography.title2)
+                        .foregroundStyle(Theme.Colors.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
                 }
+                .padding(.top, Theme.Spacing.xl)
+
+                Text("Para responder, tu mensaje y el contexto de tu agenda (eventos visibles, tareas y las memorias que guardaste) se envían a proveedores externos de inteligencia artificial: **DeepSeek** como principal, con OpenAI o Anthropic como alternativa. No se usan para publicidad ni se venden.")
+                    .font(Theme.Typography.body)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("El dictado por voz se transcribe en tu iPhone y no sale de él. Si prefieres no usar IA externa, puedes seguir usando el resto de Focus con normalidad.")
+                    .font(Theme.Typography.body)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let url = URL(string: "https://www.usefocus.me/privacidad") {
+                    Link("Más información en la Política de Privacidad", destination: url)
+                        .font(Theme.Typography.bodyBold)
+                        .foregroundStyle(Theme.Colors.novaAccent)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+            }
+            .padding(.horizontal, Theme.Spacing.xl)
+            .padding(.bottom, Theme.Spacing.xl)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: Theme.Spacing.md) {
+                Button(action: onAccept) {
+                    Label("Aceptar y continuar", systemImage: "checkmark")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .buttonStyle(FocusPrimaryButtonStyle())
                 Button {
                     HapticManager.shared.tap()
                     onDecline()
@@ -2179,19 +2228,20 @@ struct NovaAIConsentSheet: View {
                     Text("Ahora no")
                         .font(Theme.Typography.bodyBold)
                         .foregroundStyle(Theme.Colors.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .padding(.vertical, 4)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.bottom, Theme.Spacing.lg)
+            .padding(.horizontal, Theme.Spacing.xl)
+            .padding(.vertical, Theme.Spacing.lg)
+            .background(Theme.Colors.background.opacity(0.96))
         }
-        .padding(.horizontal, Theme.Spacing.xl)
-        .presentationDetents([.medium, .large])
+        .background { FocusAmbientBackground(intensity: 0.25) }
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        // Cerrar con swipe = no aceptar. El caller trata el dismiss como
-        // "Ahora no" vía onDisappear en su propio wiring si hace falta.
+        // Cerrar con swipe = no aceptar; el caller conserva el borrador.
         .interactiveDismissDisabled(false)
     }
 }
-

@@ -34,7 +34,7 @@ struct CalendarioView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Theme.Colors.background.ignoresSafeArea()
+                FocusAmbientBackground(intensity: 0.5)
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
@@ -44,11 +44,8 @@ struct CalendarioView: View {
                                 .padding(.horizontal, Theme.Spacing.xl)
                                 .accessibilityIdentifier("agenda.saveError")
                         }
-                        Text(monthYearLabel)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        FocusPageIntro(title: "Agenda", subtitle: monthYearLabel, symbol: "calendar")
                             .padding(.horizontal, Theme.Spacing.xl)
-                            .padding(.top, Theme.Spacing.sm)
 
                         modePicker
                             .padding(.horizontal, Theme.Spacing.xl)
@@ -68,7 +65,8 @@ struct CalendarioView: View {
                     }
                 }
             }
-            .navigationTitle("Agenda")
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { showCreateEvent = true } label: {
@@ -188,7 +186,7 @@ struct CalendarioView: View {
     // MARK: - Day detail
 
     private var dateDetailHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(dayName)
                 .font(Theme.Typography.title1)
                 .tracking(Theme.Tracking.title1)
@@ -277,7 +275,8 @@ struct CalendarioView: View {
                         }
                     }
                     .padding(.trailing, 4)
-                    .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 16))
+                    .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 20))
+                    .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Theme.Colors.borderSoft, lineWidth: 0.5))
 
                 }
             }
@@ -343,8 +342,11 @@ private struct DayPill: View {
             }
             .foregroundStyle(isSelected ? .white : Theme.Colors.textPrimary)
             .frame(width: width, height: height)
-            .background(isSelected ? Theme.Colors.focusAccent : Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(
+            .background {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isSelected ? AnyShapeStyle(Theme.Colors.actionGradient) : AnyShapeStyle(Theme.Colors.surface))
+            }
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(
                 Calendar.current.isDateInToday(date) && !isSelected ? Theme.Colors.focusAccent : .clear, lineWidth: 1))
         }
         .buttonStyle(.plain)
@@ -369,11 +371,17 @@ private struct CalendarEventCard: View {
 
     var body: some View {
         layout {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.timeRangeLabel)
-                    .font(.subheadline.weight(.semibold).monospacedDigit())
-                if let duration = event.durationLabel {
-                    Text(duration).font(.caption).foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 10) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(event.section.color)
+                    .frame(width: 3, height: 34)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(event.timeRangeLabel)
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                    if let duration = event.durationLabel {
+                        Text(duration).font(.caption).foregroundStyle(Theme.Colors.textSecondary)
+                    }
                 }
             }
             .frame(minWidth: 72, alignment: .leading)
@@ -402,9 +410,8 @@ private struct CalendarEventCard: View {
         }
         .foregroundStyle(Theme.Colors.textPrimary)
         .multilineTextAlignment(.leading)
-        .padding(16)
+        .padding(20)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .combine)
         .accessibilityHint(event.effectiveSource == .apple ? "Abre Calendario del iPhone" : "Editar evento")
     }
@@ -520,6 +527,9 @@ struct NuevoEventoSheet: View {
                         .accessibilityIdentifier("event.notes")
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.Colors.background)
+            .tint(Theme.Colors.focusAccent)
             .navigationTitle(original == nil ? "Nuevo evento" : "Editar evento")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

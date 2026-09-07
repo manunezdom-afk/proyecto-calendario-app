@@ -1,40 +1,47 @@
 import SwiftUI
 import UIKit
 
-/// Semantic system colors and text styles follow appearance, contrast and Dynamic Type.
+/// Focus visual language: pearl / ink, a restrained blue–iris light, and native Dynamic Type.
 enum Theme {
     enum Colors {
-        static let background = Color(uiColor: .systemGroupedBackground)
+        static let background = adaptive(light: 0xF5F7FC, dark: 0x0D111C)
         static let canvasL0 = background
-        static let surface = Color(uiColor: .secondarySystemGroupedBackground)
+        static let surface = adaptive(light: 0xFFFFFF, dark: 0x191F2F)
         static let surfaceL1 = surface
         static let surfaceElevated = surface
-        static let surfaceHigh = Color(uiColor: .tertiarySystemGroupedBackground)
+        static let surfaceHigh = adaptive(light: 0xEAF0FA, dark: 0x252E43)
         static let surfaceL2 = surfaceHigh
-        static let surfaceTinted = Color(uiColor: .secondarySystemBackground)
-        static let border = Color(uiColor: .separator).opacity(0.5)
+        static let surfaceTinted = adaptive(light: 0xEAF0FF, dark: 0x202C48)
+        static let border = adaptive(light: 0xDAE1F0, dark: 0x36425C)
         static let borderEmphasis = Color(uiColor: .separator)
         static let borderHairline = border
         static let borderSoft = border
-        static let textPrimary = Color(uiColor: .label)
-        static let textSecondary = Color(uiColor: .secondaryLabel)
-        static let textTertiary = Color(uiColor: .secondaryLabel)
+        static let textPrimary = adaptive(light: 0x192238, dark: 0xF0F3FC)
+        static let textSecondary = adaptive(light: 0x56627A, dark: 0xAFBBD2)
+        static let textTertiary = textSecondary
         static let textQuaternary = Color(uiColor: .tertiaryLabel)
 
-        static let focusAccent = Color(uiColor: .systemBlue)
+        static let focusAccent = adaptive(light: 0x3554CC, dark: 0xA7BBFF)
+        static let accentGradient = LinearGradient(colors: [focusAccent, novaAccent], startPoint: .topLeading, endPoint: .bottomTrailing)
+        // Saturated fills keep white button labels legible in either appearance.
+        static let actionGradient = LinearGradient(colors: [Color(uiColor: rgb(0x3355CE)), Color(uiColor: rgb(0x6450C5))], startPoint: .leading, endPoint: .trailing)
+        static let actionFill = Color(uiColor: rgb(0x3C55CE))
+        static let textOnAccent = adaptive(light: 0xFFFFFF, dark: 0x111D40)
+        static let ambientBlue = adaptive(light: 0xC4D9FF, dark: 0x203D88)
+        static let ambientIris = adaptive(light: 0xE3D9FF, dark: 0x413078)
         static let focusAccentSoft = focusAccent.opacity(0.10)
         static let focusAccentHover = focusAccent
-        static let novaAccent = focusAccent
+        static let novaAccent = adaptive(light: 0x7050BA, dark: 0xC3B4FF)
         static let novaAccentSoft = focusAccentSoft
         static let novaAccentDeep = focusAccent
         static let novaElectric = focusAccent
         static let novaHalo = Color.clear
 
-        static let success = Color(uiColor: .systemGreen)
+        static let success = adaptive(light: 0x187344, dark: 0x7AD6AA)
         static let successSoft = success.opacity(0.10)
-        static let warning = Color(uiColor: .systemOrange)
+        static let warning = adaptive(light: 0x875607, dark: 0xF7C56E)
         static let warningSoft = warning.opacity(0.10)
-        static let danger = Color(uiColor: .systemRed)
+        static let danger = adaptive(light: 0xBB3344, dark: 0xFF97A6)
         static let dangerSoft = danger.opacity(0.10)
         static let info = focusAccent
         static let infoSoft = focusAccentSoft
@@ -49,12 +56,12 @@ enum Theme {
         static let priorityHigh = danger
         static let priorityMedium = textSecondary
         static let priorityLow = textTertiary
-        static let cardShadow = Color.clear
-        static let cardShadowStrong = Color.clear
+        static let cardShadow = adaptive(light: 0x283F78, dark: 0x000000).opacity(0.06)
+        static let cardShadowStrong = cardShadow.opacity(1.5)
         static let modalShadow = Color.clear
 
         // Source-compatible aliases for components being retired.
-        static let focusDeepGradient = flat(focusAccent)
+        static let focusDeepGradient = actionGradient
         static let novaPrismGradient = flat(focusAccent)
         static let novaGradient = flat(focusAccent)
         static let heroSunsetGradient = flat(surface)
@@ -73,14 +80,26 @@ enum Theme {
         static let novaGlow = Color.clear
         static let novaSendGradient = flat(focusAccent)
 
+        private static func rgb(_ value: UInt) -> UIColor {
+            UIColor(red: CGFloat((value >> 16) & 0xFF) / 255,
+                    green: CGFloat((value >> 8) & 0xFF) / 255,
+                    blue: CGFloat(value & 0xFF) / 255, alpha: 1)
+        }
+
+        private static func adaptive(light: UInt, dark: UInt) -> Color {
+            Color(uiColor: UIColor { traits in
+                rgb(traits.userInterfaceStyle == .dark ? dark : light)
+            })
+        }
+
         private static func flat(_ color: Color) -> LinearGradient {
             LinearGradient(colors: [color, color], startPoint: .top, endPoint: .bottom)
         }
     }
 
     enum Typography {
-        static let displayHero = Font.largeTitle.bold()
-        static let display = Font.largeTitle.bold()
+        static let displayHero = Font.system(.largeTitle, design: .default).weight(.medium)
+        static let display = Font.largeTitle.weight(.medium)
         static let title = Font.title.bold()
         static let title1 = Font.title2.weight(.semibold)
         static let title2 = Font.title2.weight(.semibold)
@@ -182,5 +201,90 @@ extension View {
             .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.Colors.border, lineWidth: 0.5))
     }
 
-    func focusCardShadow(strong: Bool = false) -> some View { self }
+    func focusCardShadow(strong: Bool = false) -> some View {
+        shadow(color: Theme.Colors.cardShadow, radius: strong ? 20 : 12, x: 0, y: 6)
+    }
+
+    func focusSurface(radius: CGFloat = 24, padding: CGFloat = 20) -> some View {
+        self.padding(padding)
+            .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(Theme.Colors.border.opacity(0.65), lineWidth: 0.5))
+            .shadow(color: Theme.Colors.cardShadow, radius: 18, x: 0, y: 7)
+    }
+}
+
+
+/// Static, inexpensive atmosphere. All decoration is excluded from accessibility
+/// and hit testing; increased contrast removes the color wash altogether.
+struct FocusAmbientBackground: View {
+    var intensity: Double = 1
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .top) {
+                Theme.Colors.background
+                if contrast != .increased {
+                    Ellipse()
+                        .fill(RadialGradient(colors: [Theme.Colors.ambientBlue.opacity(0.65 * intensity), .clear],
+                                             center: .center, startRadius: 0, endRadius: geometry.size.width * 0.68))
+                        .frame(width: geometry.size.width * 1.5, height: 500)
+                        .offset(x: -geometry.size.width * 0.28, y: -150)
+                    Ellipse()
+                        .fill(RadialGradient(colors: [Theme.Colors.ambientIris.opacity(0.48 * intensity), .clear],
+                                             center: .center, startRadius: 0, endRadius: geometry.size.width * 0.6))
+                        .frame(width: geometry.size.width * 1.3, height: 480)
+                        .offset(x: geometry.size.width * 0.4, y: -70)
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// A Focus-owned orbital mark: two rounded paths resolving around a clear center.
+/// Drawn in SwiftUI, with no bitmap downloads or perpetual animation.
+struct FocusMark: View {
+    var size: CGFloat = 44
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.31, style: .continuous)
+                .fill(Theme.Colors.surface.opacity(0.8))
+            RoundedRectangle(cornerRadius: size * 0.18, style: .continuous)
+                .stroke(Theme.Colors.accentGradient, style: StrokeStyle(lineWidth: size * 0.065, lineCap: .round))
+                .frame(width: size * 0.47, height: size * 0.61)
+                .rotationEffect(.degrees(38))
+            RoundedRectangle(cornerRadius: size * 0.18, style: .continuous)
+                .trim(from: 0.08, to: 0.78)
+                .stroke(Theme.Colors.accentGradient, style: StrokeStyle(lineWidth: size * 0.065, lineCap: .round))
+                .frame(width: size * 0.47, height: size * 0.61)
+                .rotationEffect(.degrees(-38))
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+struct FocusPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 15)
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(Theme.Colors.actionGradient, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .opacity(enabled ? (configuration.isPressed ? 0.82 : 1) : 0.5)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.985 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
+    }
 }

@@ -28,6 +28,16 @@ struct TareasView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    FocusPageIntro(
+                        title: "Pendientes",
+                        subtitle: "Una cosa a la vez.",
+                        symbol: "checklist"
+                    )
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
                 if let error = store.localSaveError {
                     Section {
                         Label(error, systemImage: "exclamationmark.circle")
@@ -53,7 +63,7 @@ struct TareasView: View {
                     } actions: {
                         if filter == .pending {
                             Button("Nueva tarea") { showCreate = true }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(FocusPrimaryButtonStyle())
                                 .frame(minHeight: 44)
                         }
                     }
@@ -68,9 +78,11 @@ struct TareasView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .listSectionSpacing(24)
             .scrollContentBackground(.hidden)
-            .background(Theme.Colors.background)
-            .navigationTitle("Pendientes")
+            .background { FocusAmbientBackground(intensity: 0.45) }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { showCreate = true } label: {
@@ -100,7 +112,7 @@ struct TareasView: View {
     @ViewBuilder
     private func taskSection(_ title: String, items: [FocusTask]) -> some View {
         if !items.isEmpty {
-            Section(title) {
+            Section {
                 ForEach(items) { task in
                     VStack(alignment: .leading, spacing: 0) {
                         HStack(alignment: .center, spacing: Theme.Spacing.sm) {
@@ -109,7 +121,7 @@ struct TareasView: View {
                             } label: {
                                 Image(systemName: task.done ? "checkmark.circle.fill" : "circle")
                                     .font(.title2)
-                                    .foregroundStyle(task.done ? Theme.Colors.success : Theme.Colors.textSecondary)
+                                    .foregroundStyle(task.done ? Theme.Colors.success : Theme.Colors.focusAccent)
                                     .frame(width: 44, height: 44)
                             }
                             .buttonStyle(.borderless)
@@ -120,7 +132,7 @@ struct TareasView: View {
                             Button { editingTask = task } label: {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(task.title)
-                                        .font(.body)
+                                        .font(.body.weight(.medium))
                                         .foregroundStyle(Theme.Colors.textPrimary)
                                         .strikethrough(task.done)
                                     if let due = task.dueLabel {
@@ -176,8 +188,20 @@ struct TareasView: View {
                         } label: { Label("Eliminar", systemImage: "trash") }
                         Button { editingTask = task } label: { Label("Editar", systemImage: "pencil") }
                     }
-                    .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
+                    .listRowInsets(EdgeInsets(top: 12, leading: 8, bottom: 12, trailing: 8))
+                    .listRowBackground(Theme.Colors.surface)
                 }
+            } header: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(Theme.Colors.textPrimary)
+                    Text("\(items.count)")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
+                .textCase(nil)
+                .accessibilityElement(children: .combine)
             }
         }
     }
@@ -277,6 +301,9 @@ struct NuevaTareaSheet: View {
                         .accessibilityIdentifier("task.notes")
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.Colors.background)
+            .tint(Theme.Colors.focusAccent)
             .navigationTitle(original == nil ? "Nueva tarea" : "Editar tarea")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

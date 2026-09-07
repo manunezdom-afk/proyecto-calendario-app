@@ -3,6 +3,7 @@ import UserNotifications
 import UIKit
 
 struct AjustesView: View {
+    @Environment(\.focusSignIn) private var focusSignIn
     @EnvironmentObject private var store: FocusDataStore
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var nav: NavigationCoordinator
@@ -31,6 +32,16 @@ struct AjustesView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    FocusPageIntro(
+                        title: "A tu manera.",
+                        subtitle: "Tu cuenta, tus preferencias y tu privacidad.",
+                        symbol: "slider.horizontal.3",
+                        compact: true
+                    )
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    .listRowBackground(Color.clear)
+                }
                 accountSection
                 recoverySection
                 novaSection
@@ -42,8 +53,17 @@ struct AjustesView: View {
                     LabeledContent("Versión", value: AppVersion.displayString)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background { FocusAmbientBackground(intensity: 0.3) }
+            .tint(Theme.Colors.focusAccent)
             .navigationTitle("Ajustes")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Cerrar") { nav.showSettings = false }
+                        .accessibilityIdentifier("settings.close")
+                }
+            }
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let error = store.localSaveError {
                     Label(error, systemImage: "exclamationmark.triangle")
@@ -164,7 +184,7 @@ struct AjustesView: View {
                     .foregroundStyle(Theme.Colors.textSecondary)
                 Button("Iniciar sesión") {
                     nav.showSettings = false
-                    auth.exitDemo()
+                    focusSignIn()
                 }
                 .accessibilityIdentifier("settings.signIn")
             }
