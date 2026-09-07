@@ -16,7 +16,7 @@ Fecha: 7 de septiembre de 2026. App nativa sobre `da588a9`, rama `focus-os-dev`.
 | Verificación | Resultado |
 |---|---|
 | Compilación Debug del simulador | Correcta. |
-| Build para iPhone | Compilación Debug y firma Apple Development correctas, bundle `me.usefocus.app`. El teléfono pasó a `unavailable` antes de instalar; la instalación de este rediseño queda pendiente de reconexión. |
+| Build para iPhone | Compilación Debug y firma Apple Development correctas, bundle `me.usefocus.app`. Tras reconectar el teléfono se instaló y abrió la versión 1.0 (26), que incluye este rediseño y el nuevo icono orbital. `devicectl` confirmó el build instalado. |
 | Siete recorridos existentes | 7/7 aprobados: captura/historial, bienvenida, correo inválido/local, eventos, tareas, teclado/Ajustes, eliminación persistente. |
 | Acceso desde Ajustes y regreso | Nuevo recorrido aprobado. El correo inválido volvió a pasar en la misma ejecución: 2/2, `focus-visual-ui-2.xcresult`. |
 | Regresión final de navegación | 2/2 aprobados tras integrar Cerrar en la barra nativa: teclado/Nova/Ajustes y acceso a cuenta/regreso. Resultado `focus-visual-ui-final.xcresult`. |
@@ -29,6 +29,6 @@ Capturas del simulador: [bienvenida clara](qa/visual/welcome-light.png), [bienve
 
 ## Alcance
 
-Este cambio modifica la app nativa y su presentación. No publica backend, políticas ni migraciones. Las limitaciones remotas documentadas en [QA.md](QA.md) y [RELEASE.md](RELEASE.md) siguen vigentes. Las verificaciones del SE de la reconstrucción anterior no se presentan como pruebas de este rediseño: esta revisión visual usa el iPhone 17 simulado. El binario físico está compilado y firmado, pero no se verificó el rediseño en el teléfono porque dejó de estar disponible.
+Este cambio modifica la app nativa y su presentación. No publica backend, políticas ni migraciones. Las limitaciones remotas documentadas en [QA.md](QA.md) y [RELEASE.md](RELEASE.md) siguen vigentes. Las verificaciones del SE de la reconstrucción anterior no se presentan como pruebas de este rediseño: esta revisión visual usa el iPhone 17 simulado. En el iPhone 16 físico se verificaron instalación y lanzamiento del build 26; no se capturó ni inspeccionó visualmente su pantalla. Detalles del nuevo icono: [APP_ICON.md](APP_ICON.md).
 
 Fuentes y decisiones de diseño: [asistentes](VISUAL_RESEARCH_ASSISTANTS.md) y [productividad](VISUAL_RESEARCH_PRODUCTIVITY.md). La inspección visual de referencias incluyó la interfaz web de Gemini y la composición de dispositivos publicada en la portada oficial de Things; para los demás referentes se consultaron documentación y galerías oficiales según las limitaciones indicadas en esos documentos.
