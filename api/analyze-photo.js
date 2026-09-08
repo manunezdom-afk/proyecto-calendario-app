@@ -5,7 +5,7 @@ import { getSupabaseAdmin, getUserIdFromAuth } from './_supabaseAdmin.js'
 import { ACTION_TYPES, getUserPlan, messageForLimit } from './_lib/usageLimits.js'
 import { extractAnthropicUsage, trackAIUsageEvent } from './_lib/aiUsageTracking.js'
 import { calculateAICost } from './_lib/aiPricing.js'
-import { admitNovaRequest, finishNovaRequest, reserveAttemptCost } from './_lib/novaAdmission.js'
+import { admitNovaRequest, finishNovaRequest, reserveAttemptCost, novaPaidControl } from './_lib/novaAdmission.js'
 import { novaRequestId, paidAICallsEnabled } from './_lib/novaSafety.js'
 import { addCivilDays, buildDateContext, validTimezone } from './_lib/dateContext.js'
 import { civilTimeOccurrences, validCivilDate } from './_lib/novaContract.js'
@@ -192,7 +192,10 @@ export async function executePhotoRequest({ admin, userId, requestId, plan, inpu
   if (admission.status !== 'admitted') return denied(admission, requestId, plan)
   const leaseId = admission.lease_id
   if (typeof leaseId !== 'string' || !leaseId) return unavailable(requestId)
-  if (!paidAICallsEnabled()) {
+  // A photo may have acquired its legacy reservation immediately before the
+  // operator closed the database switch. Recheck before starting paid work.
+  const control = paidAICallsEnabled() ? await novaPaidControl({ admin }) : null
+  if (!paidAICallsEnabled() || control?.status !== 'ok' || control.paid_enabled !== true) {
     const response = unavailable(requestId)
     response.body = { ...response.body, request_completed: true, request_retryable: true }
     const finalized = await finishNovaRequest({ admin, userId, requestId, leaseId, response, actualUSD: 0, outcome: 'failed' })

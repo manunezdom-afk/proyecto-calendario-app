@@ -15,12 +15,13 @@ const providerData = (events = [event()], overrides = {}) => ({ model: 'claude-h
   usage: { input_tokens: 1800, output_tokens: 110 }, ...overrides })
 const providerResponse = data => new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } })
 
-function database({ status = 'admitted', finish = 'completed', replay, leaseId = 'server-lease-only' } = {}) {
+function database({ status = 'admitted', finish = 'completed', replay, leaseId = 'server-lease-only', control = { status: 'ok', paid_enabled: true } } = {}) {
   const calls = []
   return { calls, async rpc(name, args) {
     calls.push({ name, args })
     if (name === 'focus_ai_admit') return { data: { status, lease_id: leaseId, response: replay } }
     if (name === 'focus_ai_finish') return { data: { status: finish } }
+    if (name === 'focus_ai_get_control') return { data: control }
     throw new Error('No independent quota counters or mutations may run')
   } }
 }
@@ -63,7 +64,7 @@ test('switch disabled during photo admission closes an unused lease at zero with
       track: async () => assert.fail('no provider attempt to track') })
     assert.equal(result.httpStatus, 503); assert.equal(result.body.request_completed, true)
     assert.deepEqual(admin.calls.map(call => call.name), ['focus_ai_admit', 'focus_ai_finish'])
-    assert.equal(admin.calls[1].args.p_actual_usd, 0)
+    assert.equal(admin.calls.find(call => call.name === 'focus_ai_finish').args.p_actual_usd, 0)
   } finally { if (old === undefined) delete process.env.AI_PAID_CALLS_ENABLED; else process.env.AI_PAID_CALLS_ENABLED = old }
 })
 
@@ -75,6 +76,18 @@ for (const status of ['unavailable', 'quota', 'rate', 'budget', 'concurrency', '
     assert.deepEqual(admin.calls.map(call => call.name), ['focus_ai_admit'])
   })
 }
+
+test('database switch closed or unavailable after photo admission prevents paid work', async () => {
+  for (const control of [{ status: 'ok', paid_enabled: false }, { status: 'unavailable' }, null]) {
+    const admin = database({ control })
+    const result = await invoke({ admin, fetchImpl: async () => assert.fail('closed control must not fetch'),
+      track: async () => assert.fail('no paid attempt to track') })
+    assert.equal(result.httpStatus, 503)
+    assert.equal(result.body.request_completed, true)
+    assert.deepEqual(admin.calls.map(call => call.name), ['focus_ai_admit', 'focus_ai_get_control', 'focus_ai_finish'])
+    assert.equal(admin.calls.at(-1).args.p_actual_usd, 0)
+  }
+})
 
 test('photo replay returns exactly the stored result without paying or counting again', async () => {
   const replay = { httpStatus: 200, body: { events: [event()], execution_pending: true, requestId: 'photo-request-1' } }
@@ -101,10 +114,10 @@ test('successful photo reserves, tracks its server lease and finalizes preview b
   }, track: async log => { order.push('track'); logs.push(log); return { ok: true } } })
   assert.equal(result.httpStatus, 200); assert.equal(paid, 1); assert.deepEqual(result.body.events, [event()])
   assert.equal(result.body.execution_pending, true); assert.match(result.body.message, /Todavía no se ha guardado/)
-  assert.deepEqual(order, ['focus_ai_admit', 'provider', 'track', 'focus_ai_finish'])
+  assert.deepEqual(order, ['focus_ai_admit', 'focus_ai_get_control', 'provider', 'track', 'focus_ai_finish'])
   assert.equal(admin.calls[0].args.p_action_type, 'photo_analysis')
   assert.ok(admin.calls[0].args.p_reserve_usd > 0 && admin.calls[0].args.p_reserve_usd <= 0.05)
-  const finish = admin.calls[1].args
+  const finish = admin.calls.find(call => call.name === 'focus_ai_finish').args
   assert.equal(finish.p_outcome, 'success'); assert.deepEqual(finish.p_response, result)
   assert.equal(finish.p_lease_id, 'server-lease-only')
   assert.ok(finish.p_actual_usd < admin.calls[0].args.p_reserve_usd)
@@ -133,8 +146,8 @@ test('all failed provider responses are charged conservatively and never echo ba
     const result = await invoke({ admin, fetchImpl: async () => { paid++; return new Response('secret provider details', { status }) },
       track: async log => { logs.push(log); return { ok: true } } })
     assert.equal(result.httpStatus, 503); assert.equal(paid, 1); assert.deepEqual(result.body.events, [])
-    assert.equal(admin.calls[1].args.p_actual_usd, admin.calls[0].args.p_reserve_usd)
-    assert.equal(admin.calls[1].args.p_outcome, 'failed'); assert.equal(logs[0].success, false)
+    assert.equal(admin.calls.find(call => call.name === 'focus_ai_finish').args.p_actual_usd, admin.calls[0].args.p_reserve_usd)
+    assert.equal(admin.calls.find(call => call.name === 'focus_ai_finish').args.p_outcome, 'failed'); assert.equal(logs[0].success, false)
     assert.doesNotMatch(JSON.stringify([result, logs]), /secret provider details/)
   }
 })
@@ -146,8 +159,8 @@ test('network timeout releases no unknown spend and writes a replayable failure'
   assert.equal(result.httpStatus, 503); assert.equal(logs[0].error_type, 'timeout')
   assert.equal(result.body.request_completed, true); assert.equal(result.body.request_retryable, true)
   assert.equal(result.body.requestId, 'photo-request-1')
-  assert.equal(admin.calls[1].args.p_actual_usd, admin.calls[0].args.p_reserve_usd)
-  assert.deepEqual(admin.calls[1].args.p_response, result)
+  assert.equal(admin.calls.find(call => call.name === 'focus_ai_finish').args.p_actual_usd, admin.calls[0].args.p_reserve_usd)
+  assert.deepEqual(admin.calls.find(call => call.name === 'focus_ai_finish').args.p_response, result)
 })
 
 test('missing, partial and invalid usage cannot register a zero or discounted cost', async () => {
@@ -157,7 +170,7 @@ test('missing, partial and invalid usage cannot register a zero or discounted co
     const admin = database()
     const result = await invoke({ admin, data: providerData([event()], { usage }) })
     assert.equal(result.httpStatus, 200)
-    assert.equal(admin.calls[1].args.p_actual_usd, admin.calls[0].args.p_reserve_usd)
+    assert.equal(admin.calls.find(call => call.name === 'focus_ai_finish').args.p_actual_usd, admin.calls[0].args.p_reserve_usd)
   }
 })
 
@@ -165,14 +178,14 @@ test('cache read and creation usage are included at registry rates', async () =>
   const admin = database(); const usage = { input_tokens: 1000, output_tokens: 200,
     cache_read_input_tokens: 500, cache_creation_input_tokens: 300 }
   await invoke({ admin, data: providerData([event()], { usage }) })
-  assert.equal(admin.calls[1].args.p_actual_usd, calculateAICost({ model: 'claude-haiku-4-5-20251001', ...usage }).cost_usd)
+  assert.equal(admin.calls.find(call => call.name === 'focus_ai_finish').args.p_actual_usd, calculateAICost({ model: 'claude-haiku-4-5-20251001', ...usage }).cost_usd)
 })
 
 test('ledger failure or throw keeps full reservation and withholds preview', async () => {
   for (const track of [async () => ({ ok: false }), async () => { throw new Error('database secret') }]) {
     const admin = database(); const result = await invoke({ admin, track })
     assert.equal(result.httpStatus, 503); assert.deepEqual(result.body.events, [])
-    assert.equal(admin.calls[1].args.p_actual_usd, admin.calls[0].args.p_reserve_usd)
+    assert.equal(admin.calls.find(call => call.name === 'focus_ai_finish').args.p_actual_usd, admin.calls[0].args.p_reserve_usd)
   }
 })
 
@@ -212,7 +225,7 @@ test('truncated, refused, invalid JSON and extra action fields never return part
     providerData([event({ type: 'delete_event' })]), providerData([event(), event({ date: '2026-02-30' })])]) {
     const admin = database(); const result = await invoke({ admin, data })
     assert.equal(result.httpStatus, 503); assert.deepEqual(result.body.events, [])
-    assert.ok(admin.calls[1].args.p_actual_usd > 0); assert.equal(admin.calls[1].args.p_outcome, 'failed')
+    assert.ok(admin.calls.find(call => call.name === 'focus_ai_finish').args.p_actual_usd > 0); assert.equal(admin.calls.find(call => call.name === 'focus_ai_finish').args.p_outcome, 'failed')
   }
 })
 
@@ -220,7 +233,7 @@ test('oversized upstream body is cancelled and keeps conservative cost', async (
   const admin = database()
   const result = await invoke({ admin, fetchImpl: async () => new Response('x'.repeat(PHOTO_LIMITS.responseBytes + 1)) })
   assert.equal(result.httpStatus, 503)
-  assert.equal(admin.calls[1].args.p_actual_usd, admin.calls[0].args.p_reserve_usd)
+  assert.equal(admin.calls.find(call => call.name === 'focus_ai_finish').args.p_actual_usd, admin.calls[0].args.p_reserve_usd)
 })
 
 test('empty photo is a valid completed analysis with no pending actions', async () => {

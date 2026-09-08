@@ -1,9 +1,8 @@
 // Duraciones de eventos — FUENTE ÚNICA DE VERDAD.
 //
-// Antes estas reglas vivían repartidas: una tabla narrativa en
-// systemPrompt.js (Anthropic) y NADA en el prompt OpenAI (provider de
-// producción), cuyo schema exige `durationMinutes` como entero — el
-// modelo, sin guía, devolvía 60 para todo ("todo dura 1 hora").
+// El contrato OpenAI usa estas reglas para distinguir una hora puntual
+// de un bloque solicitado por el usuario. El prompt compartido explica
+// la misma política; no hay reglas diferentes según proveedor.
 //
 // REGLA DE PRODUCTO (orden de cierre 2026-06-10): sin duración explícita
 // del usuario NO se inventa término — durationMinutes: 0 / endTime: null,
