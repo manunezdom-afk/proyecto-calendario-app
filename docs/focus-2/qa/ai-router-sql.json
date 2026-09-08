@@ -1,0 +1,22 @@
+{
+  "runAt": "2026-09-08T20:51:34.476Z",
+  "passed": 6,
+  "checks": [
+    "create plan settles its SQL attempt and replays with no second provider call",
+    "invalid JSON escalates once and accounts for both real SQL attempt rows",
+    "401 stops after one call and stores a safe terminal replay",
+    "tracking failure cannot return executable actions or release unknown cost",
+    "atomic quota denial never reaches provider",
+    "disabled Sol downgrades safely before any Sol call"
+  ],
+  "migrations": [
+    "010_ai_usage.sql",
+    "013_ai_usage_events.sql",
+    "020_atomic_ai_usage.sql",
+    "021_ai_admission.sql",
+    "022_openai_model_admission.sql"
+  ],
+  "provider": "synthetic only",
+  "database": "real PostgreSQL WASM",
+  "productionVerified": false
+}

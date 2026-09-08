@@ -1,0 +1,260 @@
+{
+  "status": "remote_read_verified",
+  "projectRef": "hvwqeemtfoyvfmongwzo",
+  "asOfUTC": "2026-09-08T22:03:16.473Z",
+  "readFinishedAtUTC": "2026-09-08T22:03:17.515Z",
+  "intermediate": true,
+  "benchmarkStatusAtRead": "211-case V3 benchmark running; this is not its final total",
+  "consistency": "Read-only requests use separate database statements; ledger/telemetry rows have a fixed client as-of cutoff. RPC computes its own clock during the read interval, so concurrent benchmark activity may cause small differences. No transactional snapshot claimed.",
+  "remoteOperations": {
+    "providerCalls": 0,
+    "readOnlyRPCs": [
+      "focus_ai_model_metrics",
+      "focus_ai_get_control"
+    ],
+    "mutatingRPCs": [],
+    "tablesReadWithoutIdentifiers": [
+      "focus_ai_requests",
+      "focus_ai_model_attempts",
+      "ai_usage_events",
+      "focus_ai_budget_alerts"
+    ],
+    "userContentRead": false,
+    "userIdentifiersRead": false
+  },
+  "policy": {
+    "source": "Saved approved Vercel Preview configuration, with admissionPolicy defaults for omitted keys; supplied as input to the read-only metrics RPC, not a live Vercel policy lookup",
+    "values": {
+      "requests_per_minute": 5,
+      "max_concurrent": 1,
+      "lease_seconds": 55,
+      "daily_budget_usd": 5,
+      "monthly_budget_usd": 20,
+      "user_daily_budget_usd": 0.25,
+      "user_monthly_budget_usd": 5,
+      "request_budget_usd": 0.25,
+      "sol_daily_budget_usd": 0.5,
+      "sol_monthly_budget_usd": 3,
+      "sol_user_daily_requests": 2,
+      "sol_user_monthly_requests": 10,
+      "sol_enabled": true,
+      "economy_percent": 90,
+      "alert_percentages": [
+        50,
+        75,
+        90
+      ],
+      "sol_share_alert_percent": 5,
+      "sol_share_min_requests": 20
+    }
+  },
+  "windows": {
+    "todayUTC": {
+      "start": "2026-09-08T00:00:00.000Z",
+      "through": "2026-09-08T22:03:16.473Z",
+      "basis": "UTC calendar day"
+    },
+    "rolling30Days": {
+      "start": "2026-08-09T22:03:16.473Z",
+      "through": "2026-09-08T22:03:16.473Z",
+      "basis": "Trailing 30 days from current timestamp; the SQL monthly_spent fields enforce this window"
+    },
+    "calendarMonthUTC": {
+      "start": "2026-09-01T00:00:00.000Z",
+      "through": "2026-09-08T22:03:16.473Z",
+      "basis": "UTC calendar month used for reporting and monthly alert deduplication only; not the monthly budget enforcement window"
+    }
+  },
+  "control": {
+    "status": "ok",
+    "paidEnabled": true,
+    "updatedAt": "2026-09-08T21:04:51.793961+00:00",
+    "writePerformed": false,
+    "matchesPreviouslyVerifiedUpdateTimestamp": true,
+    "previousEvidence": "ai-openai-supabase-remote.json appliedAt / migration 022 initialization"
+  },
+  "authoritativeRPCMetrics": {
+    "budgetLevel": "normal",
+    "global": {
+      "todayUTC": {
+        "accountedUSD": 0.21772324,
+        "capUSD": 5,
+        "remainingAccountedUSD": 4.78227676,
+        "usedPercent": 4.3545
+      },
+      "rolling30Days": {
+        "accountedUSD": 0.22205024,
+        "capUSD": 20,
+        "remainingAccountedUSD": 19.77794976,
+        "usedPercent": 1.1103
+      }
+    },
+    "sol": {
+      "todayUTC": {
+        "accountedUSD": 0.121,
+        "capUSD": 0.5,
+        "remainingAccountedUSD": 0.379,
+        "usedPercent": 24.2
+      },
+      "rolling30Days": {
+        "accountedUSD": 0.121,
+        "capUSD": 3,
+        "remainingAccountedUSD": 2.879,
+        "usedPercent": 4.0333
+      },
+      "requestRowsWithModelAttempts": 155,
+      "requestRowsWithSolAttempt": 1,
+      "share": 0.0064516129032258064
+    },
+    "tiers": [
+      {
+        "tier": "luna",
+        "model": "gpt-5.6-luna",
+        "attempts": 148,
+        "requests": 148,
+        "accountedUSD": 0.04757304,
+        "reservationFallbackAttempts": 0
+      },
+      {
+        "tier": "sol",
+        "model": "gpt-5.6-sol",
+        "attempts": 1,
+        "requests": 1,
+        "accountedUSD": 0.121,
+        "reservationFallbackAttempts": 0
+      },
+      {
+        "tier": "terra",
+        "model": "gpt-5.6-terra",
+        "attempts": 9,
+        "requests": 9,
+        "accountedUSD": 0.0491502,
+        "reservationFallbackAttempts": 0
+      }
+    ]
+  },
+  "reservationBreakdown": {
+    "basis": "actual_usd ?? reserved_usd. actual_usd is a settled accounting column and can still contain a conservative reservation when usage was unknown; never label it provider-observed cost.",
+    "requestLedger": {
+      "todayUTC": {
+        "rows": 158,
+        "accountedUSD": 0.21772324,
+        "actualColumnAccountedUSD": 0.21772324,
+        "reservationFallbackUSD": 0,
+        "reservationFallbackRows": 0,
+        "unsettledRows": 0,
+        "unknownAmounts": 0
+      },
+      "rolling30Days": {
+        "rows": 158,
+        "accountedUSD": 0.21772324,
+        "actualColumnAccountedUSD": 0.21772324,
+        "reservationFallbackUSD": 0,
+        "reservationFallbackRows": 0,
+        "unsettledRows": 0,
+        "unknownAmounts": 0
+      }
+    },
+    "modelAttemptLedger": {
+      "todayUTC": {
+        "rows": 158,
+        "accountedUSD": 0.21772324,
+        "actualColumnAccountedUSD": 0.21772324,
+        "reservationFallbackUSD": 0,
+        "reservationFallbackRows": 0,
+        "unsettledRows": 0,
+        "unknownAmounts": 0
+      },
+      "rolling30Days": {
+        "rows": 158,
+        "accountedUSD": 0.21772324,
+        "actualColumnAccountedUSD": 0.21772324,
+        "reservationFallbackUSD": 0,
+        "reservationFallbackRows": 0,
+        "unsettledRows": 0,
+        "unknownAmounts": 0
+      },
+      "solTodayUTC": {
+        "rows": 1,
+        "accountedUSD": 0.121,
+        "actualColumnAccountedUSD": 0.121,
+        "reservationFallbackUSD": 0,
+        "reservationFallbackRows": 0,
+        "unsettledRows": 0,
+        "unknownAmounts": 0
+      },
+      "solCalendarMonthUTC": {
+        "rows": 1,
+        "accountedUSD": 0.121,
+        "actualColumnAccountedUSD": 0.121,
+        "reservationFallbackUSD": 0,
+        "reservationFallbackRows": 0,
+        "unsettledRows": 0,
+        "unknownAmounts": 0
+      }
+    }
+  },
+  "observedTelemetry": {
+    "coverage": "Only surviving telemetry rows. Account deletion cascades ai_usage_events while anonymous admission/model ledgers retain costs; these observations are not a complete historical invoice and must not be added to budget ledgers.",
+    "todayUTC": {
+      "survivingRows": 39,
+      "recordedUSD": 0.019592,
+      "providerUsageObservedRows": 39,
+      "providerUsageObservedUSD": 0.019592,
+      "conservativeReservationRows": 0,
+      "conservativeReservationUSD": null,
+      "unclassifiedBasisRows": 0,
+      "unknownAmountRows": 0
+    },
+    "rolling30Days": {
+      "survivingRows": 42,
+      "recordedUSD": 0.023919,
+      "providerUsageObservedRows": 39,
+      "providerUsageObservedUSD": 0.019592,
+      "conservativeReservationRows": 0,
+      "conservativeReservationUSD": null,
+      "unclassifiedBasisRows": 3,
+      "unknownAmountRows": 0
+    },
+    "solTodayUTC": {
+      "survivingRows": 0,
+      "recordedUSD": 0,
+      "providerUsageObservedRows": 0,
+      "providerUsageObservedUSD": null,
+      "conservativeReservationRows": 0,
+      "conservativeReservationUSD": null,
+      "unclassifiedBasisRows": 0,
+      "unknownAmountRows": 0
+    },
+    "solCalendarMonthUTC": {
+      "survivingRows": 0,
+      "recordedUSD": 0,
+      "providerUsageObservedRows": 0,
+      "providerUsageObservedUSD": null,
+      "conservativeReservationRows": 0,
+      "conservativeReservationUSD": null,
+      "unclassifiedBasisRows": 0,
+      "unknownAmountRows": 0
+    }
+  },
+  "alerts": {
+    "fetchedWindow": "rolling30Days",
+    "rows": [],
+    "count": 0,
+    "deduplication": "Unique scope + period_start + threshold_percent. global_monthly and sol_share keys use UTC calendar month even though global_monthly spending and Sol share evaluate rolling30Days.",
+    "thresholdsPercent": [
+      50,
+      75,
+      90
+    ],
+    "economyThresholdPercent": 90,
+    "solShareThresholdPercent": 5,
+    "solShareMinimumRequests": 20
+  },
+  "limitations": [
+    "Global RPC budget accounting includes unmatched legacy usage telemetry; request/model ledger breakdowns are separate views and must never be summed with each other or telemetry.",
+    "Per-user remaining allowances were not inspected. The user-specific zero fields returned by an aggregate RPC with NULL user are omitted, rather than presented as unused allowances.",
+    "Sol counts refer to model-attempt ledger rows; actual provider invocation and usage require telemetry evidence.",
+    "A paidEnabled=true database control alone does not prove environment switches or every individual quota will allow a paid request."
+  ]
+}

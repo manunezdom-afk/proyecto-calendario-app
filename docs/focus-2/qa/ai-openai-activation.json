@@ -1,0 +1,224 @@
+{
+  "updatedAt": "2026-09-08T23:46:20.392019+00:00",
+  "baselineCommit": "ebbc41c",
+  "branch": "focus-os-dev",
+  "models": [
+    "gpt-5.6-luna",
+    "gpt-5.6-terra",
+    "gpt-5.6-sol"
+  ],
+  "runtimeImplementation": "deployed_preview",
+  "openai": {
+    "liveInferenceCallsThisMigration": null,
+    "credentialVariable": "OPENAI_API_KEY",
+    "localCredentialCheck": {
+      "method": "GET model metadata",
+      "httpStatus": 401,
+      "errorCode": "invalid_api_key",
+      "inference": false
+    },
+    "requiredEnvironments": [
+      "Vercel focus-app Production",
+      "Vercel focus-app Preview"
+    ],
+    "benchmark": {
+      "selectedObjectiveCases": 100,
+      "liveCases": 100,
+      "quality": 0.86,
+      "observedModelMix": {
+        "initial_request_model": {
+          "gpt-5.6-luna": {
+            "count": 97,
+            "percent": 97
+          },
+          "gpt-5.6-terra": {
+            "count": 3,
+            "percent": 3
+          },
+          "gpt-5.6-sol": {
+            "count": 0,
+            "percent": 0
+          }
+        },
+        "final_observed_request_model": {
+          "gpt-5.6-luna": {
+            "count": 94,
+            "percent": 94
+          },
+          "gpt-5.6-terra": {
+            "count": 6,
+            "percent": 6
+          },
+          "gpt-5.6-sol": {
+            "count": 0,
+            "percent": 0
+          }
+        },
+        "provider_attempt_model": {
+          "gpt-5.6-luna": {
+            "count": 97,
+            "percent": 94.1747572815534
+          },
+          "gpt-5.6-terra": {
+            "count": 6,
+            "percent": 5.825242718446602
+          },
+          "gpt-5.6-sol": {
+            "count": 0,
+            "percent": 0
+          }
+        },
+        "denominators": {
+          "initial_request_model": 100,
+          "final_observed_request_model": 100,
+          "provider_attempt_model": 103
+        },
+        "final_model_basis": "Last recorded attempt, ordered by attempt index then timestamp. This is not evidence of durable request completion."
+      },
+      "meanInteractionCostUSD": null,
+      "solActualCostUSD": null,
+      "p50Ms": 5817,
+      "p95Ms": 9486,
+      "humanConversationScore": null,
+      "status": "baseline_completed_final_runtime_retest_in_progress",
+      "latencyPopulation": "successful_http_200",
+      "latencyTransport": "Vercel CLI protected HTTP",
+      "recordedRunChargeUSD": 0.06211280000000001,
+      "baselineReport": "ai-openai-remote-100.json"
+    },
+    "serverCredentialCheck": {
+      "environment": "Vercel Preview",
+      "value": "Existing sensitive Production key shared with Preview",
+      "result": "Authenticated OpenAI request succeeded; one Luna attempt and durable replay verified",
+      "secretRead": false
+    },
+    "liveInferenceCallsNote": "Multiple documented runs, including interrupted V3 recovery. See individual reports; incomplete evidence is not an exact migration-wide count."
+  },
+  "supabase": {
+    "projectRef": "hvwqeemtfoyvfmongwzo",
+    "remoteSchemaInspected": true,
+    "appliedByThisMigration": [
+      "020",
+      "021",
+      "022"
+    ],
+    "credentials": "Authenticated existing dashboard; scoped remote checks passed",
+    "productionDataDeleted": false,
+    "verification": "Passed real SQL privileges, contention, replay, budget and scoped deletion checks"
+  },
+  "vercel": {
+    "projectId": "prj_v6oZp1tXD69I0IJmN0MBAMq64ZHx",
+    "projectName": "focus-app",
+    "deploymentId": null,
+    "envMutations": [
+      {
+        "key": "OPENAI_API_KEY",
+        "operation": "Added preview target while retaining sensitive production value",
+        "valueRead": false
+      },
+      {
+        "operation": "27 runtime config keys upserted for preview",
+        "monthlyBudgetUSD": 20
+      },
+      {
+        "operation": "Runtime budget configuration prepared for the next Production deployment; current production deployment unchanged",
+        "monthlyBudgetUSD": 20
+      },
+      {
+        "operation": "Removed obsolete chat provider defaults and DeepSeek key after real OpenAI verification",
+        "keys": [
+          "AI_PROVIDER_PRIMARY",
+          "AI_ENABLE_PROVIDER_FALLBACK",
+          "AI_ENABLE_PREMIUM_FALLBACK",
+          "OPENAI_NOVA_MODEL",
+          "API_DE_DEEPSEEK"
+        ],
+        "remainingObsoleteKeys": [],
+        "verifiedAt": "2026-09-08T21:45:42.370Z"
+      }
+    ],
+    "cliAccess": "authenticated",
+    "browserAccess": "authenticated",
+    "baselineHealthCheck": {
+      "url": "https://www.usefocus.me/api/focus-assistant",
+      "unauthenticatedHTTPStatus": 401,
+      "error": "auth_required",
+      "newDeployment": false
+    },
+    "previousProductionDeploymentId": "dpl_6skjCf93yCbt8xwmWa21pgD7jYbv",
+    "previewDeploymentId": "dpl_HgLfsJJgePu88qnpXY82JoUim183",
+    "previewURL": "https://focus-nyypuz3je-manunezdom-9658s-projects.vercel.app",
+    "previewStatus": "READY",
+    "previewHealth": {
+      "capabilitiesHTTP": 200,
+      "capabilitiesPOST": 405,
+      "unauthenticatedChatHTTP": 401,
+      "syntheticChatHTTP": 200,
+      "replayVerified": true
+    },
+    "failedPreview": {
+      "id": "dpl_83WEntUXD2SqVRmbBHp1qUT5tXM5",
+      "reason": "13 functions exceeded the existing 12-function plan; fixed by reusing the assistant function"
+    }
+  },
+  "ios": {
+    "lastInstalledBuild": 34,
+    "version": "1.0",
+    "bundleId": "me.usefocus.app",
+    "installationVerified": true,
+    "launchVerified": false,
+    "launchBlockedBy": "device_locked"
+  },
+  "safeguards": {
+    "billingPlanChanged": false,
+    "purchases": false,
+    "appStorePublished": false,
+    "realUserDataDeleted": false
+  },
+  "pendingUserAccess": [
+    "Physical iPhone remains locked; current build installed but physical speech and UI validation pending."
+  ],
+  "note": "This record separates implementation, local tests and actual remote activation; no production activation is claimed.",
+  "verification": {
+    "javascript": {
+      "passed": 560,
+      "failed": 0,
+      "sourceCommit": "6f23993",
+      "log": "/tmp/focus-final-node-v17.log"
+    },
+    "postgresqlWASM": {
+      "passed": 34,
+      "failed": 0
+    },
+    "routerSQLIntegration": {
+      "passed": 6,
+      "failed": 0
+    },
+    "xctest": {
+      "passed": 95,
+      "failed": 0
+    },
+    "webE2E": {
+      "passed": 14,
+      "failed": 0,
+      "provider": "synthetic",
+      "sourceCommit": "6f23993"
+    },
+    "signedIPhoneBuild": "1.0 (34)",
+    "deviceLaunch": false,
+    "nativeSwipeUI": {
+      "light": "passed",
+      "dark": "passed",
+      "scope": "partial swipe/delete/undo/full swipe/relaunch/Hoy+Agenda absence"
+    },
+    "webBuild": {
+      "status": "passed",
+      "log": "/tmp/focus-final-build-v9.log"
+    },
+    "nativeUI": {
+      "passedExecutions": 5,
+      "distinctTests": 3,
+      "report": "native-ux-build34.json"
+    }
+  }
+}

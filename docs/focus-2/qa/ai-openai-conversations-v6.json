@@ -1,0 +1,1095 @@
+{
+  "version": 1,
+  "mode": "remote-http-real-sql",
+  "status": "completed",
+  "runId": "f33509a7-a5a1-4686-b1d9-3659fe3b4ab7",
+  "reportPath": "/Users/martinnunezdominguez/Developer/focus/docs/focus-2/qa/ai-openai-conversations-v6.json",
+  "deployment": "https://focus-dnj0qcav4-manunezdom-9658s-projects.vercel.app",
+  "transport": "direct_https",
+  "httpIntervalMs": 2500,
+  "budgetUSD": 0.5,
+  "requestReservationBoundUSD": 0.25,
+  "boundEvidence": "Operator must verify this deployment enforces at most US$0.25 per logical request; no global budget or quota is changed by this runner.",
+  "fixedNow": "2026-09-08T15:00:00.000Z",
+  "sourceHashes": {
+    "api/_lib/novaRuntime.js": "4ce256ad641a0615a22e14b831adb20cc289f1a0d2c58751fd0ff58c66a074fc",
+    "api/_lib/novaRouter.js": "33a81eed4ad1771273d5ba7bf8e13679de83ccaad439e1ad10fd1328125b014e",
+    "api/_lib/openaiNova.js": "c7fad6becb841f2865e505a6cab235d84790ec2d7ca5436939329dc21e5e39d3",
+    "api/_lib/novaPrompt.js": "b97a68ea8dcec1484888de38bb3471ea549d3323282c992006ffbd64639ab4a1",
+    "api/_lib/novaPendingProposal.js": "3277422169a926f7cdf5b430d419e3f85fc09aede546e457cfffb815309e5277",
+    "api/_lib/novaContract.js": "5e81e51434c9eecbb5ee17791f9763f5068f9b82306a690c2083aaf49b4a4277",
+    "api/_lib/novaAdmission.js": "5d2bc5996b5b615fa17b953e8c484fef31a7cc162bee51cd0f6a29284e112470",
+    "api/_lib/novaSafety.js": "3f17b7a0a36cc19b9b6ed99775f70b646b5e7b04d79b0efdd12e9abe8712c5a6",
+    "api/_lib/aiPricing.js": "89110922bb1872b1ccdcd2ab6430aa61e360c1366a75843f1fcd9c7876047a73",
+    "api/_lib/aiUsageTracking.js": "a847767ddecb9cd14efc01cd4ed33fb0e23e55b0a58aa5c023f5d4e075aad4c1",
+    "api/_lib/dateContext.js": "dda6f4b027fd8a97c96a8f0c9a1bdddf94ff58a493477a910692a2936ee5bd53",
+    "api/_lib/usageLimits.js": "4f5ef8e2260a44bde6903ee2bad9a7549d6b5f9932db74fe5d34536e243b5cd2",
+    "api/_lib/assistantBrand.js": "b5218a8ad63bfb17179048b7003832d4e5b8cbf73be4eea9d52b0911c2322860",
+    "scripts/ai-router-benchmark.mjs": "08178036d182a68f57eb9eb163ee39bbaf841d6c31461a6e325904fb8a2ed95f",
+    "scripts/lib/ephemeral-ai-database.mjs": "85203cda7bcd938de48fe5280e735b3833eeb42d4ba095392d9bd186b1e3548a",
+    "scripts/ai-benchmark-grade.mjs": "a424e505d132801f5066aab7f4c3825a4714505becda2a15dad87e0768ff456a",
+    "scripts/ai-metrics.mjs": "70bbc80e2a313e54797e1fe8a4faa75de2cbbf5289ed61921ab79884b1f93b83",
+    "tests/nova-battery/cases.json": "ee5b1a9aa4462a2f0727fdc3d858515fefdf76be8e2734d4773de1044e494229"
+  },
+  "runnerSourceHashes": {
+    "scripts/ai-remote-benchmark.mjs": "dc67bc9dcfd6762c7dca44919c3ba4200694a68c9d27631863caac5335ad5a47",
+    "scripts/ai-remote-check.mjs": "2adea67a0f94da097e52e4f8530e651cfcfb4cc04a168599a473379ea76c8638",
+    "api/focus-assistant.js": "95778e8d3c41e3e75ec214fea33613e468333b514e480afa99cefa721ba058e2",
+    "api/_lib/aiCapabilities.js": "302642746e03a9e797985b502e96e4819691de92a7a6a2a614409a35bfdf0133",
+    "vercel.json": "46ecf4c896af09dcdbf9ae624d50572db2139206f4c076d42b6abf176d5e382f"
+  },
+  "caseCorpusHash": "3d67ee8b983cc38e5fa230784cf02cbc6fcb3ec0d4b3e68158dd9f4ed5e143f7",
+  "localExpectedSQLHashes": {
+    "supabase/migrations/020_atomic_ai_usage.sql": "8b2490757a5fa74c65a22f611033fe2deffd36262b9e3cf1684d28963ad973b1",
+    "supabase/migrations/021_ai_admission.sql": "12f5a159bc66ce2dc332859f3cfa14dee8337099ae4181e24b26fd115ca28bde",
+    "supabase/migrations/022_openai_model_admission.sql": "74952a7f4ae10c14698c38e80c96668750e765db7b87e8e2dc50a270b3d9b92f"
+  },
+  "measurementScope": "Remote Focus HTTP and existing remote SQL ledgers; synthetic accounts and fixture context only. Local SQL hashes are expected sources, not proof of remote bytes. No client persistence or human conversation quality is measured.",
+  "selectedCases": [
+    "CONV-OVERLOADED",
+    "CONV-TWO-HOURS",
+    "CONV-DAY",
+    "CONV-WEEK"
+  ],
+  "plannedUsers": 4,
+  "rows": [
+    {
+      "id": "CONV-OVERLOADED",
+      "category": "conversacion_contexto",
+      "input": "Ando con mil cosas y no sé qué hacer primero. ¿Qué me recomiendas con mis pendientes de hoy?",
+      "expect": {
+        "kindAnyOf": [
+          "chat",
+          "clarify"
+        ],
+        "maxActions": 0,
+        "noWrongCreate": true,
+        "replyIncludes": [
+          "certificado",
+          "universidad"
+        ]
+      },
+      "attempted": true,
+      "requestId": "19d86732-70bd-4c9a-87de-e89d2013fba1",
+      "attempts": [
+        {
+          "request_row_id": "eb4fde08-e851-4422-9ca0-0922d7db4ee6",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00023942,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:11:46.94762+00:00",
+          "settled_at": "2026-09-08T23:11:49.398179+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 1,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 1,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 3842,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Hoy partiría por **entregar el certificado a la universidad**, porque vence hoy y tiene prioridad alta. Después, si te queda energía, deja adelantada la revisión de las pantallas de Focus para mañana; comprar comida puede ir después o en un bloque más liviano. En concreto: enfócate ahora en el certificado y evita abrir varias cosas a la vez.",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "chat_only",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "19d86732-70bd-4c9a-87de-e89d2013fba1",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_only",
+          "reply": "Hoy partiría por **entregar el certificado a la universidad**, porque vence hoy y tiene prioridad alta. Después, si te queda energía, deja adelantada la revisión de las pantallas de Focus para mañana; comprar comida puede ir después o en un bloque más liviano. En concreto: enfócate ahora en el certificado y evita abrir varias cosas a la vez.",
+          "actions": [],
+          "_dropped": [],
+          "requestId": "19d86732-70bd-4c9a-87de-e89d2013fba1",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": false,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 1621
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "CONV-TWO-HOURS",
+      "category": "conversacion_tiempo_libre",
+      "input": "Tengo dos horas libres ahora, de 12 a 2 PM. ¿Qué me recomiendas avanzar con mis pendientes?",
+      "expect": {
+        "kindAnyOf": [
+          "chat",
+          "clarify"
+        ],
+        "maxActions": 0,
+        "noWrongCreate": true,
+        "replyIncludes": [
+          "Focus",
+          "certificado"
+        ]
+      },
+      "attempted": true,
+      "requestId": "6965e874-1759-46cf-961a-328007bcd4d8",
+      "attempts": [
+        {
+          "request_row_id": "dbc63dc4-6093-445e-b140-0ff54ca613e0",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.006,
+          "actual_usd": 0.00026182,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:11:53.709632+00:00",
+          "settled_at": "2026-09-08T23:11:57.450024+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 5027,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Tienes libre de 12:00 a 14:00. Como la clase fija parte a las 14:00 y entregar el certificado es a las 15:00, te recomiendo avanzar ahora con **Entregar certificado a la universidad**. Si terminas antes, podrías dejar adelantada una parte de **Revisar las pantallas de Focus**; comprar comida puede quedar para mañana.",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "chat_only",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "6965e874-1759-46cf-961a-328007bcd4d8",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_only",
+          "reply": "Tienes libre de 12:00 a 14:00. Como la clase fija parte a las 14:00 y entregar el certificado es a las 15:00, te recomiendo avanzar ahora con **Entregar certificado a la universidad**. Si terminas antes, podrías dejar adelantada una parte de **Revisar las pantallas de Focus**; comprar comida puede quedar para mañana.",
+          "actions": [],
+          "_dropped": [],
+          "requestId": "6965e874-1759-46cf-961a-328007bcd4d8",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": false,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 343
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "CONV-DAY",
+      "category": "conversacion_plan_dia",
+      "input": "Hilante, mañana quiero avanzar tres horas con Focus, ir una hora al gym y tengo fútbol de 8 a 9:30 PM. Organízame el día, no quiero levantarme antes de las 9 AM y no muevas el fútbol.",
+      "expect": {
+        "kindAnyOf": [
+          "event",
+          "multi"
+        ],
+        "minActions": 2,
+        "titlesInclude": [
+          [
+            "Focus"
+          ],
+          [
+            "gym",
+            "gimnasio"
+          ]
+        ]
+      },
+      "attempted": true,
+      "requestId": "407d1504-b574-4e81-9d86-17adb6ebdcb4",
+      "attempts": [
+        {
+          "request_row_id": "52a44d08-fad2-4f57-a013-fd6373a53b23",
+          "attempt_index": 0,
+          "model": "gpt-5.6-terra",
+          "tier": "terra",
+          "reason": "planning",
+          "state": "settled",
+          "reserved_usd": 0.062,
+          "actual_usd": 0.0113265,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:12:02.744946+00:00",
+          "settled_at": "2026-09-08T23:12:07.674758+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "planning",
+          "decision": {
+            "tier": "terra",
+            "reason": "planning",
+            "signals": {
+              "planning": true,
+              "week": false,
+              "constraints": 2,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 3,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 2
+            },
+            "solEligible": true
+          }
+        },
+        {
+          "model": "gpt-5.6-sol",
+          "input": 24000,
+          "output": 3200,
+          "outputCeiling": 4096,
+          "reasoningEffort": "medium",
+          "timeoutMs": 40000,
+          "events": 40,
+          "tasks": 30,
+          "memories": 8,
+          "provider": "openai",
+          "tier": "sol",
+          "premium": true,
+          "maxInputTokens": 24000,
+          "maxOutputTokens": 3200,
+          "routeReason": "reserved_complex_recovery",
+          "decision": {
+            "tier": "terra",
+            "reason": "planning",
+            "signals": {
+              "planning": true,
+              "week": false,
+              "constraints": 2,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 3,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 2
+            },
+            "solEligible": true
+          }
+        }
+      ],
+      "latencyMs": 7357,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Te propongo este horario. Revisa los bloques y sus duraciones antes de guardarlo.",
+        "actions": [],
+        "proposed_actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Avanzar con Focus",
+              "date": "2026-09-09",
+              "time": "10:00 AM",
+              "endTime": "1:00 PM",
+              "section": "focus",
+              "icon": "menu_book"
+            },
+            "actionId": "407d1504-b574-4e81-9d86-17adb6ebdcb4:0"
+          },
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Gym",
+              "date": "2026-09-09",
+              "time": "6:30 PM",
+              "endTime": "7:30 PM",
+              "section": "evening",
+              "icon": "local_hospital"
+            },
+            "actionId": "407d1504-b574-4e81-9d86-17adb6ebdcb4:1"
+          }
+        ],
+        "mode": "proposal",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "407d1504-b574-4e81-9d86-17adb6ebdcb4",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-terra",
+          "reason": "planning"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "proposal",
+          "reply": "Te propongo este horario. Revisa los bloques y sus duraciones antes de guardarlo.",
+          "actions": [],
+          "_dropped": [],
+          "requestId": "407d1504-b574-4e81-9d86-17adb6ebdcb4",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-terra",
+            "route": "remote_ai",
+            "reason": "planning"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [
+            {
+              "type": "add_event",
+              "event": {
+                "date": "2026-09-09",
+                "icon": "menu_book",
+                "time": "10:00 AM",
+                "title": "Avanzar con Focus",
+                "endTime": "1:00 PM",
+                "section": "focus"
+              },
+              "actionId": "407d1504-b574-4e81-9d86-17adb6ebdcb4:0"
+            },
+            {
+              "type": "add_event",
+              "event": {
+                "date": "2026-09-09",
+                "icon": "local_hospital",
+                "time": "6:30 PM",
+                "title": "Gym",
+                "endTime": "7:30 PM",
+                "section": "evening"
+              },
+              "actionId": "407d1504-b574-4e81-9d86-17adb6ebdcb4:1"
+            }
+          ],
+          "execution_pending": true,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 572
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "CONV-WEEK",
+      "category": "conversacion_plan_semana",
+      "input": "Organízame la próxima semana, del 14 al 20 de septiembre, considerando mis clases fijas de universidad, tres sesiones de una hora de gimnasio, seis horas en total para Focus, mis pendientes y sueño de 11 PM a 7 AM. Deja viernes y sábado libres desde las 7 PM. No muevas las clases. Si no alcanza el tiempo, prioriza por importancia y explícame qué falta.",
+      "expect": {
+        "kindAnyOf": [
+          "event",
+          "multi"
+        ],
+        "minActions": 2,
+        "titlesInclude": [
+          [
+            "Focus"
+          ],
+          [
+            "gym",
+            "gimnasio"
+          ]
+        ]
+      },
+      "attempted": true,
+      "requestId": "708e8641-51bd-45b4-b5dd-311871af0cf0",
+      "attempts": [
+        {
+          "request_row_id": "df4b2e42-e44f-43e6-9443-cc81bea0c559",
+          "attempt_index": 0,
+          "model": "gpt-5.6-sol",
+          "tier": "sol",
+          "reason": "weekly_constraints",
+          "state": "settled",
+          "reserved_usd": 0.117,
+          "actual_usd": 0.049469,
+          "outcome": "failed",
+          "created_at": "2026-09-08T23:12:12.083577+00:00",
+          "settled_at": "2026-09-08T23:12:35.329215+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-sol",
+          "input": 24000,
+          "output": 3200,
+          "outputCeiling": 4096,
+          "reasoningEffort": "medium",
+          "timeoutMs": 40000,
+          "events": 40,
+          "tasks": 30,
+          "memories": 8,
+          "provider": "openai",
+          "tier": "sol",
+          "premium": true,
+          "maxInputTokens": 24000,
+          "maxOutputTokens": 3200,
+          "routeReason": "weekly_constraints",
+          "decision": {
+            "tier": "sol",
+            "reason": "weekly_constraints",
+            "signals": {
+              "planning": true,
+              "week": true,
+              "constraints": 2,
+              "conflicts": true,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 3
+            },
+            "solEligible": true
+          }
+        }
+      ],
+      "latencyMs": 24184,
+      "httpStatus": 200,
+      "output": {
+        "reply": "No pude preparar ese cambio con seguridad. ¿Me das un poco más de detalle?",
+        "actions": [],
+        "proposed_actions": [],
+        "confidence": 0,
+        "mode": "clarification",
+        "shouldAskUser": true,
+        "requestId": "708e8641-51bd-45b4-b5dd-311871af0cf0",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": false,
+          "issues": [
+            "unrequested_creation",
+            "planned_missing_activity"
+          ]
+        },
+        "_dropped": [
+          "unrequested_creation",
+          "planned_missing_activity"
+        ],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-sol",
+          "reason": "weekly_constraints"
+        }
+      },
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "invalid_runtime_contract"
+        ]
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "clarification",
+          "reply": "No pude preparar ese cambio con seguridad. ¿Me das un poco más de detalle?",
+          "actions": [],
+          "_dropped": [
+            "unrequested_creation",
+            "planned_missing_activity"
+          ],
+          "requestId": "708e8641-51bd-45b4-b5dd-311871af0cf0",
+          "confidence": 0,
+          "processing": {
+            "model": "gpt-5.6-sol",
+            "route": "remote_ai",
+            "reason": "weekly_constraints"
+          },
+          "validation": {
+            "ok": false,
+            "issues": [
+              "unrequested_creation",
+              "planned_missing_activity"
+            ]
+          },
+          "shouldAskUser": true,
+          "proposed_actions": [],
+          "execution_pending": false,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 404
+      },
+      "replayVerified": true
+    }
+  ],
+  "cleanup": {
+    "pendingSyntheticUserIds": [],
+    "deleted": 4,
+    "verified": 4
+  },
+  "summary": {
+    "selected": 4,
+    "attempted": 4,
+    "objectivePass": 3,
+    "objectivePassRate": 0.75,
+    "totalTrackedCostUSD": 0.061296,
+    "trackedCostBasis": "Recorded telemetry accounting, including conservative reservations; not an observed provider bill.",
+    "costObservationSufficient": true,
+    "observedCostAttemptCount": 4,
+    "unobservedCostAttemptCount": 0,
+    "totalObservedCostUSD": 0.061296,
+    "meanInteractionCostUSD": 0.015324,
+    "meanInteractionCostBasis": "Provider-reported token usage priced for every paid attempt, divided by attempted interactions; null when any usage or telemetry is missing. Not an invoice.",
+    "recordedRunChargeUSD": 0.06129674,
+    "latencyPopulation": "successful_http_200",
+    "p50Ms": 5027,
+    "p95Ms": 24184,
+    "replayChecks": 4,
+    "providerAttempts": 4,
+    "humanConversationScore": null,
+    "metrics": {
+      "nova_requests": 4,
+      "nova_provider_attempts": 4,
+      "nova_success": 3,
+      "nova_failure": 1,
+      "nova_outcome_unknown": 0,
+      "nova_retry": 0,
+      "nova_escalation": 0,
+      "nova_escalated_requests": 0,
+      "nova_clarification": 1,
+      "nova_invalid_schema": 0,
+      "nova_cost_usd": 0.061296,
+      "mean_request_cost_usd": 0.015324,
+      "cost_evidence": {
+        "rows": 4,
+        "known_cost_rows": 4,
+        "unknown_cost_rows": 0,
+        "cost_usd": 0.061296,
+        "known_cost_usd": 0.061296,
+        "provider_usage_cost_usd": 0.061296,
+        "reservation_cost_usd": null,
+        "unknown_cost_basis_rows": 0
+      },
+      "usage_measured_attempts": 4,
+      "reserved_cost_attempts": 0,
+      "mean_input_tokens": 2473,
+      "mean_output_tokens": 633.5,
+      "input_measured_attempts": 4,
+      "output_measured_attempts": 4,
+      "provider_attempt_p50_ms": 3654,
+      "provider_attempt_p95_ms": 23138,
+      "provider_latency_measured_attempts": 4,
+      "request_p50_ms": null,
+      "request_p95_ms": null,
+      "request_latency_measured_requests": 0,
+      "request_partial_elapsed_p50_ms": 3805,
+      "request_partial_elapsed_p95_ms": 23275,
+      "request_partial_elapsed_measured_requests": 4,
+      "model_distribution": {
+        "initial_request_model": {
+          "gpt-5.6-luna": {
+            "count": 2,
+            "percent": 50
+          },
+          "gpt-5.6-terra": {
+            "count": 1,
+            "percent": 25
+          },
+          "gpt-5.6-sol": {
+            "count": 1,
+            "percent": 25
+          }
+        },
+        "final_observed_request_model": {
+          "gpt-5.6-luna": {
+            "count": 2,
+            "percent": 50
+          },
+          "gpt-5.6-terra": {
+            "count": 1,
+            "percent": 25
+          },
+          "gpt-5.6-sol": {
+            "count": 1,
+            "percent": 25
+          }
+        },
+        "provider_attempt_model": {
+          "gpt-5.6-luna": {
+            "count": 2,
+            "percent": 50
+          },
+          "gpt-5.6-terra": {
+            "count": 1,
+            "percent": 25
+          },
+          "gpt-5.6-sol": {
+            "count": 1,
+            "percent": 25
+          }
+        },
+        "denominators": {
+          "initial_request_model": 4,
+          "final_observed_request_model": 4,
+          "provider_attempt_model": 4
+        },
+        "final_model_basis": "Last recorded attempt, ordered by attempt index then timestamp. This is not evidence of durable request completion."
+      },
+      "sol_requests": 1,
+      "sol_request_percent": 25,
+      "sol_provider_attempts": 1,
+      "sol_attempt_percent": 25,
+      "requests_with_unknown_model": 0,
+      "sol_telemetry_calendar_cost": {
+        "today_utc": {
+          "from": "2026-09-08T00:00:00.000Z",
+          "through": "2026-09-08T23:12:42.292Z",
+          "coverage_complete": false,
+          "observed_attempts": 1,
+          "unknown_date_attempts": 0,
+          "unattributed_attempts": 0,
+          "unknown_cost_attempts": 0,
+          "observed_known_cost_usd": 0.049469,
+          "cost_usd": null
+        },
+        "month_utc": {
+          "from": "2026-09-01T00:00:00.000Z",
+          "through": "2026-09-08T23:12:42.292Z",
+          "coverage_complete": false,
+          "observed_attempts": 1,
+          "unknown_date_attempts": 0,
+          "unattributed_attempts": 0,
+          "unknown_cost_attempts": 0,
+          "observed_known_cost_usd": 0.049469,
+          "cost_usd": null
+        }
+      },
+      "escalation_reasons": {},
+      "routing_reasons": {
+        "everyday_request": 2,
+        "planning": 1,
+        "weekly_constraints": 1
+      },
+      "reasoning_effort_attempts": {
+        "low": 1,
+        "medium": 1,
+        "none": 2
+      },
+      "output_reasoning_tokens": 963,
+      "output_reasoning_measured_attempts": 4,
+      "cache": {
+        "measured_usage_attempts": 4,
+        "read_measured_attempts": 4,
+        "read_hit_attempts": 2,
+        "read_hit_percent": 50,
+        "write_measured_attempts": 4,
+        "write_attempts": 2,
+        "write_percent": 50,
+        "read_tokens": 4162,
+        "write_tokens": 4162,
+        "openai_complete_breakdown_attempts": 4,
+        "openai_cached_read_input_percent": 42.07440355843106,
+        "savings_measured_attempts": 4,
+        "read_savings_usd": 0.0007491600000000001,
+        "write_premium_usd": 0.0031215,
+        "net_savings_usd": -0.00237234,
+        "savings_basis": "Recorded per-attempt price calculation only; missing usage, breakdown or price evidence is unknown. Net savings subtract cache-write premiums."
+      },
+      "nova_tool_success": null,
+      "nova_tool_failure": null,
+      "measurement_scope": "Provider telemetry only; success/failure describe the last observed provider attempt, not durable server completion or client persistence. Missing dimensions are unknown; model shares include unknown/legacy model buckets. No client receipts, rejected admissions or unrecorded paid attempts are inferred. Calendar cost is complete only with supplied coverage from UTC period start. Never add these telemetry costs to the admission ledger."
+    }
+  },
+  "finishedAt": "2026-09-08T23:12:42.291Z",
+  "conversationChecks": {
+    "fixtureSHA256": "7576fd7c6ed060a7da871aa730d460268cf034e76115cba931f568f5b5db6f60",
+    "measurementScope": "Four independent synthetic conversations. Structural checks are additional to the unchanged objective grader. No client persistence, six-turn continuity or human conversation quality is measured.",
+    "results": [
+      {
+        "scenarioId": "overloaded",
+        "caseId": "CONV-OVERLOADED",
+        "status": "measured",
+        "pass": true,
+        "fails": [],
+        "measurements": {
+          "plannedBlocks": 0,
+          "focusMinutes": 0,
+          "gymMinutes": 0,
+          "gymSessions": 0,
+          "executableActions": 0,
+          "proposedActions": 0
+        },
+        "humanConversationScore": null,
+        "notAutomaticallyMeasured": [
+          "Naturalness, usefulness, emotional acknowledgement, invented claims in free text and completeness of explanations require human review."
+        ]
+      },
+      {
+        "scenarioId": "available-time",
+        "caseId": "CONV-TWO-HOURS",
+        "status": "measured",
+        "pass": true,
+        "fails": [],
+        "measurements": {
+          "plannedBlocks": 0,
+          "focusMinutes": 0,
+          "gymMinutes": 0,
+          "gymSessions": 0,
+          "executableActions": 0,
+          "proposedActions": 0
+        },
+        "humanConversationScore": null,
+        "notAutomaticallyMeasured": [
+          "Naturalness, usefulness, emotional acknowledgement, invented claims in free text and completeness of explanations require human review."
+        ]
+      },
+      {
+        "scenarioId": "day-with-constraints",
+        "caseId": "CONV-DAY",
+        "status": "measured",
+        "pass": true,
+        "fails": [],
+        "measurements": {
+          "plannedBlocks": 2,
+          "focusMinutes": 180,
+          "gymMinutes": 60,
+          "gymSessions": 1,
+          "executableActions": 0,
+          "proposedActions": 2
+        },
+        "humanConversationScore": null,
+        "notAutomaticallyMeasured": [
+          "Naturalness, usefulness, emotional acknowledgement, invented claims in free text and completeness of explanations require human review."
+        ]
+      },
+      {
+        "scenarioId": "weekly-constraints",
+        "caseId": "CONV-WEEK",
+        "status": "measured",
+        "pass": false,
+        "fails": [
+          "invalid_runtime_contract"
+        ],
+        "measurements": {},
+        "humanConversationScore": null
+      }
+    ],
+    "measured": 4,
+    "passed": 3,
+    "constraintPassRate": 0.75,
+    "allFourMeasuredAndPassed": false,
+    "solCoverage": "observed_in_remote_attempt",
+    "humanConversationScore": null,
+    "clientPersistenceMeasured": false,
+    "continuityMeasured": false
+  },
+  "provenanceReview": {
+    "deploymentCommit": "94b578a",
+    "deploymentCommitEvidence": "Operator-confirmed immutable V6 preview; this benchmark does not retrieve deployed source bytes.",
+    "sourceHashMeaning": "Existing sourceHashes record the local files loaded at runner startup, not deployed server bytes. Local router and contract had concurrent V7 edits; HTTP requests still targeted the immutable V6 origin. Original hashes and outcomes remain unchanged.",
+    "apiSourceComparisons": [
+      {
+        "file": "api/_lib/novaRuntime.js",
+        "expectedCommitSHA256": "4ce256ad641a0615a22e14b831adb20cc289f1a0d2c58751fd0ff58c66a074fc",
+        "localRunnerSnapshotSHA256": "4ce256ad641a0615a22e14b831adb20cc289f1a0d2c58751fd0ff58c66a074fc",
+        "matches": true
+      },
+      {
+        "file": "api/_lib/novaRouter.js",
+        "expectedCommitSHA256": "846b2cf5b20d262916bd37691cc9c570c248afcdc5a4a123347f5fd5d5d7c862",
+        "localRunnerSnapshotSHA256": "33a81eed4ad1771273d5ba7bf8e13679de83ccaad439e1ad10fd1328125b014e",
+        "matches": false
+      },
+      {
+        "file": "api/_lib/openaiNova.js",
+        "expectedCommitSHA256": "c7fad6becb841f2865e505a6cab235d84790ec2d7ca5436939329dc21e5e39d3",
+        "localRunnerSnapshotSHA256": "c7fad6becb841f2865e505a6cab235d84790ec2d7ca5436939329dc21e5e39d3",
+        "matches": true
+      },
+      {
+        "file": "api/_lib/novaPrompt.js",
+        "expectedCommitSHA256": "b97a68ea8dcec1484888de38bb3471ea549d3323282c992006ffbd64639ab4a1",
+        "localRunnerSnapshotSHA256": "b97a68ea8dcec1484888de38bb3471ea549d3323282c992006ffbd64639ab4a1",
+        "matches": true
+      },
+      {
+        "file": "api/_lib/novaPendingProposal.js",
+        "expectedCommitSHA256": "3277422169a926f7cdf5b430d419e3f85fc09aede546e457cfffb815309e5277",
+        "localRunnerSnapshotSHA256": "3277422169a926f7cdf5b430d419e3f85fc09aede546e457cfffb815309e5277",
+        "matches": true
+      },
+      {
+        "file": "api/_lib/novaContract.js",
+        "expectedCommitSHA256": "f5481521b27ff08339c1c4336f912ae344f1a3fd7c63c6d06d531603dbadf08f",
+        "localRunnerSnapshotSHA256": "5e81e51434c9eecbb5ee17791f9763f5068f9b82306a690c2083aaf49b4a4277",
+        "matches": false
+      },
+      {
+        "file": "api/_lib/novaAdmission.js",
+        "expectedCommitSHA256": "5d2bc5996b5b615fa17b953e8c484fef31a7cc162bee51cd0f6a29284e112470",
+        "localRunnerSnapshotSHA256": "5d2bc5996b5b615fa17b953e8c484fef31a7cc162bee51cd0f6a29284e112470",
+        "matches": true
+      },
+      {
+        "file": "api/_lib/novaSafety.js",
+        "expectedCommitSHA256": "3f17b7a0a36cc19b9b6ed99775f70b646b5e7b04d79b0efdd12e9abe8712c5a6",
+        "localRunnerSnapshotSHA256": "3f17b7a0a36cc19b9b6ed99775f70b646b5e7b04d79b0efdd12e9abe8712c5a6",
+        "matches": true
+      },
+      {
+        "file": "api/_lib/aiPricing.js",
+        "expectedCommitSHA256": "89110922bb1872b1ccdcd2ab6430aa61e360c1366a75843f1fcd9c7876047a73",
+        "localRunnerSnapshotSHA256": "89110922bb1872b1ccdcd2ab6430aa61e360c1366a75843f1fcd9c7876047a73",
+        "matches": true
+      },
+      {
+        "file": "api/_lib/aiUsageTracking.js",
+        "expectedCommitSHA256": "a847767ddecb9cd14efc01cd4ed33fb0e23e55b0a58aa5c023f5d4e075aad4c1",
+        "localRunnerSnapshotSHA256": "a847767ddecb9cd14efc01cd4ed33fb0e23e55b0a58aa5c023f5d4e075aad4c1",
+        "matches": true
+      },
+      {
+        "file": "api/_lib/dateContext.js",
+        "expectedCommitSHA256": "dda6f4b027fd8a97c96a8f0c9a1bdddf94ff58a493477a910692a2936ee5bd53",
+        "localRunnerSnapshotSHA256": "dda6f4b027fd8a97c96a8f0c9a1bdddf94ff58a493477a910692a2936ee5bd53",
+        "matches": true
+      },
+      {
+        "file": "api/_lib/usageLimits.js",
+        "expectedCommitSHA256": "4f5ef8e2260a44bde6903ee2bad9a7549d6b5f9932db74fe5d34536e243b5cd2",
+        "localRunnerSnapshotSHA256": "4f5ef8e2260a44bde6903ee2bad9a7549d6b5f9932db74fe5d34536e243b5cd2",
+        "matches": true
+      },
+      {
+        "file": "api/_lib/assistantBrand.js",
+        "expectedCommitSHA256": "b5218a8ad63bfb17179048b7003832d4e5b8cbf73be4eea9d52b0911c2322860",
+        "localRunnerSnapshotSHA256": "b5218a8ad63bfb17179048b7003832d4e5b8cbf73be4eea9d52b0911c2322860",
+        "matches": true
+      }
+    ],
+    "localDifferences": [
+      "api/_lib/novaRouter.js",
+      "api/_lib/novaContract.js"
+    ],
+    "conversationWrapperSHA256": "33cd6a4a05de1c2bd6a550f8e413152d14ea653510c87ab334baa758712a585a",
+    "wrapperHashObservation": "Read after completion; wrapper was not edited during this run.",
+    "httpPacing": "Actual HTTP minimum interval was 2500ms. The later request for 5000ms arrived after process startup; the coordinator accepted the running interval. No restart or external retry occurred."
+  }
+}

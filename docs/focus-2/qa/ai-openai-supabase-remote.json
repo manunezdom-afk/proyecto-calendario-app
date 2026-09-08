@@ -1,0 +1,85 @@
+{
+  "project": "hvwqeemtfoyvfmongwzo",
+  "completedAt": "2026-09-08T21:10:30.169861+00:00",
+  "migrationsApplied": [
+    "020_atomic_ai_usage.sql",
+    "021_ai_admission.sql",
+    "022_openai_model_admission.sql"
+  ],
+  "migrationHashes": [
+    {
+      "name": "020_atomic_ai_usage.sql",
+      "sha256": "8b2490757a5fa74c65a22f611033fe2deffd36262b9e3cf1684d28963ad973b1"
+    },
+    {
+      "name": "021_ai_admission.sql",
+      "sha256": "12f5a159bc66ce2dc332859f3cfa14dee8337099ae4181e24b26fd115ca28bde"
+    },
+    {
+      "name": "022_openai_model_admission.sql",
+      "sha256": "74952a7f4ae10c14698c38e80c96668750e765db7b87e8e2dc50a270b3d9b92f"
+    }
+  ],
+  "appliedAt": "2026-09-08T21:04:51.793961+00:00",
+  "historyVersions": [
+    "020",
+    "021",
+    "022"
+  ],
+  "rlsTables": 5,
+  "serviceOnlyCallableRoutines": 17,
+  "controlRollbackTest": "passed",
+  "databaseLiveCheck": {
+    "status": "passed",
+    "remoteVerified": true,
+    "mode": "live_requested",
+    "project": "https://hvwqeemtfoyvfmongwzo.supabase.co",
+    "deployment": "https://www.usefocus.me",
+    "credentials": {
+      "serviceRolePresent": true,
+      "anonPresent": true,
+      "expectedProjectConfigured": true
+    },
+    "plannedChecks": [
+      "read-only migration 022 and auth preflight",
+      "8 concurrent identical IDs",
+      "6 concurrent distinct IDs",
+      "quota/rate/budget denial",
+      "disabled Sol denial",
+      "durable replay",
+      "anon/authenticated RLS",
+      "scoped synthetic cleanup and anonymous costs"
+    ],
+    "chat": {
+      "status": "not_requested"
+    },
+    "runId": "d7537a07-23fe-4ede-8b87-9fa31e75f766",
+    "startedAt": "2026-09-08T21:09:01.503Z",
+    "reportPath": "/tmp/focus-supabase-checkpoint-20260908/live-db-report.json",
+    "passed": [
+      "Read-only auth and migration 022 preflight before writes",
+      "Admin-created synthetic account and session; no email or billing change",
+      "Eight simultaneous identical IDs produce one lease and durable replay",
+      "Six simultaneous distinct IDs enforce one active request per user",
+      "Tightened quota, rate and user budget reject before reservation",
+      "Disabled Sol never starts; database-only fixtures finish at zero cost",
+      "Anon/authenticated roles cannot read private ledgers or execute model RPC",
+      "Only run-owned accounts hard-deleted; replay scrubbed and anonymous costs retained"
+    ],
+    "cleanup": {
+      "pendingSyntheticUserIds": [],
+      "deleted": 1,
+      "verified": 1
+    },
+    "finishedAt": "2026-09-08T21:09:15.478Z"
+  },
+  "providerCalls": 0,
+  "realUserContentRead": false,
+  "destructiveRealUserOperations": false,
+  "credentialsIncluded": false,
+  "notes": [
+    "The existing service-role credential was read from the authenticated project dashboard, not created or rotated.",
+    "The legacy invoker trigger function is not a callable PostgREST operation.",
+    "Only the disposable account from this run was hard-deleted. Three zero-cost request ledger rows remain anonymous."
+  ]
+}

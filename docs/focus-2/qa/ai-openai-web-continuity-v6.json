@@ -1,0 +1,1616 @@
+{
+  "status": "completed_with_regression",
+  "asOfUTC": "2026-09-08T23:19:57.160Z",
+  "deployment": {
+    "version": "V6",
+    "sourceCommit": "94b578a",
+    "origin": "https://focus-dnj0qcav4-manunezdom-9658s-projects.vercel.app"
+  },
+  "method": {
+    "realBrowser": "Playwright with installed Chrome, isolated private profile",
+    "client": "NovaWidget",
+    "login": "Real password form of pre-created exclusively synthetic account",
+    "history": "Only real UI messages and client-generated receipts; no history/storage injection",
+    "responses": "Live OpenAI through deployment API; no mocks",
+    "sql": "Read-only queries filtered by verified owned account; no server-side data modifications during conversation",
+    "consent": "OpenAI/chat and Anthropic/photo notice reviewed and accepted through UI before first request",
+    "synthetic": true,
+    "humanQualityScore": null,
+    "humanReview": "pending",
+    "noAutomaticRetries": true,
+    "noOffClientReplay": true,
+    "localAndSQLPersistenceObserved": true
+  },
+  "limits": {
+    "messagesMaximum": 6,
+    "actualMessages": 6,
+    "minimumIntervalMS": 20000,
+    "actualIntervalsMS": [
+      33067,
+      43319,
+      52005,
+      56497,
+      84447
+    ],
+    "runBudgetUSD": 0.5,
+    "existingUserDailyBudgetUSD": 0.25,
+    "budgetChanges": false
+  },
+  "summary": {
+    "scenarioPassed": false,
+    "concreteRegression": "Turn 2 cannot resolve “mejor a las 11 AM” because no discussedEventIds are sent. Gym remains at10.",
+    "requests": 6,
+    "modelAttempts": 6,
+    "usageRows": 6,
+    "accountedCostUSD": 0.01374808,
+    "observedProviderUsageEstimatedCostUSD": 0.013747,
+    "costExplanation": "Ledger and provider-usage-based telemetry are alternative evidence of the same cost, not added together; estimates are not an invoice.",
+    "allRequestsCompleted": true,
+    "allAttemptsSettled": true,
+    "unsettledReservationsUSD": 0,
+    "models": {
+      "gpt-5.6-luna": 4,
+      "gpt-5.6-terra": 2
+    },
+    "solUsed": false,
+    "eventsSaved": 2,
+    "tasksSaved": 1,
+    "pendingProposals": 1,
+    "proposalApprovals": 0,
+    "reload": {
+      "performed": true,
+      "historyVisible": true,
+      "gymAt10Visible": true,
+      "pendingProposalVisible": true,
+      "additionalAIRequests": 0
+    },
+    "costFieldDifferenceUSD": 0.00000108
+  },
+  "baseline": {
+    "events": [
+      {
+        "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+        "title": "Fútbol",
+        "time": "8:00 PM - 9:30 PM",
+        "description": "",
+        "section": "evening",
+        "icon": "sports_soccer",
+        "dot_color": "bg-secondary-container",
+        "date": "2026-09-09",
+        "featured": false,
+        "created_at": "2026-09-08T21:41:34.83415+00:00",
+        "updated_at": "2026-09-08T21:41:34.83415+00:00",
+        "reminder_offsets": null,
+        "timezone": "America/Santiago"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+        "label": "Revisar las pantallas de Focus",
+        "done": false,
+        "priority": "Alta",
+        "category": "hoy",
+        "done_at": null,
+        "created_at": "2026-09-08T21:41:35.098894+00:00",
+        "updated_at": "2026-09-08T21:41:35.098894+00:00",
+        "parent_task_id": null,
+        "linked_event_id": null,
+        "due_date": "2026-09-09",
+        "due_time": null
+      }
+    ],
+    "suggestions": []
+  },
+  "turns": [
+    {
+      "turn": 1,
+      "sentAtUTC": "2026-09-08T23:11:56.164Z",
+      "requestId": "502894a8-3e41-45bf-a16b-516dbf84c2ce",
+      "requestPayload": {
+        "message": "pon gym mañana a las 10 AM",
+        "events": [
+          {
+            "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+            "title": "Fútbol",
+            "time": "8:00 PM - 9:30 PM",
+            "description": "",
+            "section": "evening",
+            "icon": "sports_soccer",
+            "dotColor": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "reminderOffsets": null,
+            "timezone": "America/Santiago"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+            "label": "Revisar las pantallas de Focus",
+            "done": false,
+            "priority": "Alta",
+            "category": "hoy",
+            "doneAt": null,
+            "date": "2026-09-09",
+            "time": null
+          }
+        ],
+        "history": [],
+        "location": null,
+        "profile": {
+          "chronotype": null,
+          "role": null,
+          "setupDone": false,
+          "snoozedUntil": null,
+          "timezone": "America/Santiago"
+        },
+        "memories": [],
+        "behavior": null,
+        "clientNow": 1788909115759,
+        "clientTimezone": "America/Santiago",
+        "novaPersonality": "focus"
+      },
+      "httpStatus": 200,
+      "response": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Gym",
+              "date": "2026-09-09",
+              "time": "10:00 AM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "502894a8-3e41-45bf-a16b-516dbf84c2ce:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "502894a8-3e41-45bf-a16b-516dbf84c2ce",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "clientVisibleReply": "Añadí «Gym» en este dispositivo.",
+      "latencyMS": 2649,
+      "checks": {
+        "singleGymCreated": true,
+        "datePreserved": true,
+        "at10": true,
+        "uiCommitReceipt": true,
+        "sqlCommitObserved": true
+      },
+      "sqlAfter": {
+        "events": [
+          {
+            "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+            "title": "Fútbol",
+            "time": "8:00 PM - 9:30 PM",
+            "description": "",
+            "section": "evening",
+            "icon": "sports_soccer",
+            "dot_color": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "created_at": "2026-09-08T21:41:34.83415+00:00",
+            "updated_at": "2026-09-08T21:41:34.83415+00:00",
+            "reminder_offsets": null,
+            "timezone": "America/Santiago"
+          },
+          {
+            "id": "96aed143-0f63-58ef-a132-3eb9baf71c93",
+            "title": "Gym",
+            "time": "10:00 AM",
+            "description": "",
+            "section": "evening",
+            "icon": "event",
+            "dot_color": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "created_at": "2026-09-08T23:11:59.130403+00:00",
+            "updated_at": "2026-09-08T23:11:59.130403+00:00",
+            "reminder_offsets": null,
+            "timezone": "America/Santiago"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+            "label": "Revisar las pantallas de Focus",
+            "done": false,
+            "priority": "Alta",
+            "category": "hoy",
+            "done_at": null,
+            "created_at": "2026-09-08T21:41:35.098894+00:00",
+            "updated_at": "2026-09-08T21:41:35.098894+00:00",
+            "parent_task_id": null,
+            "linked_event_id": null,
+            "due_date": "2026-09-09",
+            "due_time": null
+          }
+        ],
+        "suggestions": []
+      },
+      "ledger": {
+        "state": "completed",
+        "accountedUSD": 0.00027442,
+        "reservedUSD": 0.067,
+        "settledUSD": 0.00027442
+      },
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00027442,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:11:56.763757+00:00",
+          "settled_at": "2026-09-08T23:11:58.746046+00:00"
+        }
+      ],
+      "observedUsage": [
+        {
+          "model": "gpt-5.6-luna",
+          "inputTokens": 2375,
+          "outputTokens": 145,
+          "estimatedCostUSD": 0.000274,
+          "costBasis": "provider_usage",
+          "usageSource": "openai_usage",
+          "validationOK": true,
+          "provider": "openai"
+        }
+      ],
+      "screenshot": "web-continuity-v6/v6-turn1.png"
+    },
+    {
+      "turn": 2,
+      "sentAtUTC": "2026-09-08T23:12:29.231Z",
+      "requestId": "640b3b41-0e34-407c-8ff5-a2abd8578482",
+      "requestPayload": {
+        "message": "mejor a las 11 AM",
+        "events": [
+          {
+            "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+            "title": "Fútbol",
+            "time": "8:00 PM - 9:30 PM",
+            "description": "",
+            "section": "evening",
+            "icon": "sports_soccer",
+            "dotColor": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "reminderOffsets": null,
+            "timezone": "America/Santiago"
+          },
+          {
+            "id": "96aed143-0f63-58ef-a132-3eb9baf71c93",
+            "title": "Gym",
+            "time": "10:00 AM",
+            "description": "",
+            "section": "evening",
+            "icon": "event",
+            "dotColor": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "reminderOffsets": null,
+            "timezone": "America/Santiago"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+            "label": "Revisar las pantallas de Focus",
+            "done": false,
+            "priority": "Alta",
+            "category": "hoy",
+            "doneAt": null,
+            "date": "2026-09-09",
+            "time": null
+          }
+        ],
+        "history": [
+          {
+            "role": "user",
+            "content": "pon gym mañana a las 10 AM"
+          },
+          {
+            "role": "assistant",
+            "content": "Añadí «Gym» en este dispositivo."
+          }
+        ],
+        "location": null,
+        "profile": {
+          "chronotype": null,
+          "role": null,
+          "setupDone": false,
+          "snoozedUntil": null,
+          "timezone": "America/Santiago"
+        },
+        "memories": [],
+        "behavior": null,
+        "clientNow": 1788909148798,
+        "clientTimezone": "America/Santiago",
+        "novaPersonality": "focus"
+      },
+      "httpStatus": 200,
+      "response": {
+        "reply": "No pude preparar ese cambio con seguridad. ¿Me das un poco más de detalle?",
+        "actions": [],
+        "proposed_actions": [],
+        "confidence": 0,
+        "mode": "clarification",
+        "shouldAskUser": true,
+        "requestId": "640b3b41-0e34-407c-8ff5-a2abd8578482",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": false,
+          "issues": [
+            "ambiguous_event"
+          ]
+        },
+        "_dropped": [
+          "ambiguous_event"
+        ],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "clientVisibleReply": "No pude preparar ese cambio con seguridad. ¿Me das un poco más de detalle?",
+      "latencyMS": 2925,
+      "checks": {
+        "sameGymId": true,
+        "movedTo11": false,
+        "noDuplicate": true,
+        "failure": "Backend rejected contextual edit with ambiguous_event; UI requested clarification."
+      },
+      "sqlAfter": {
+        "events": [
+          {
+            "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+            "title": "Fútbol",
+            "time": "8:00 PM - 9:30 PM",
+            "description": "",
+            "section": "evening",
+            "icon": "sports_soccer",
+            "dot_color": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "created_at": "2026-09-08T21:41:34.83415+00:00",
+            "updated_at": "2026-09-08T21:41:34.83415+00:00",
+            "reminder_offsets": null,
+            "timezone": "America/Santiago"
+          },
+          {
+            "id": "96aed143-0f63-58ef-a132-3eb9baf71c93",
+            "title": "Gym",
+            "time": "10:00 AM",
+            "description": "",
+            "section": "evening",
+            "icon": "event",
+            "dot_color": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "created_at": "2026-09-08T23:11:59.130403+00:00",
+            "updated_at": "2026-09-08T23:11:59.130403+00:00",
+            "reminder_offsets": null,
+            "timezone": "America/Santiago"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+            "label": "Revisar las pantallas de Focus",
+            "done": false,
+            "priority": "Alta",
+            "category": "hoy",
+            "done_at": null,
+            "created_at": "2026-09-08T21:41:35.098894+00:00",
+            "updated_at": "2026-09-08T21:41:35.098894+00:00",
+            "parent_task_id": null,
+            "linked_event_id": null,
+            "due_date": "2026-09-09",
+            "due_time": null
+          }
+        ],
+        "suggestions": []
+      },
+      "ledger": {
+        "state": "completed",
+        "accountedUSD": 0.00031802,
+        "reservedUSD": 0.068,
+        "settledUSD": 0.00031802
+      },
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00031802,
+          "outcome": "failed",
+          "created_at": "2026-09-08T23:12:29.772151+00:00",
+          "settled_at": "2026-09-08T23:12:31.945674+00:00"
+        }
+      ],
+      "observedUsage": [
+        {
+          "model": "gpt-5.6-luna",
+          "inputTokens": 2461,
+          "outputTokens": 167,
+          "estimatedCostUSD": 0.000318,
+          "costBasis": "provider_usage",
+          "usageSource": "openai_usage",
+          "validationOK": false,
+          "provider": "openai"
+        }
+      ],
+      "screenshot": "web-continuity-v6/v6-turn2.png"
+    },
+    {
+      "turn": 3,
+      "sentAtUTC": "2026-09-08T23:13:12.550Z",
+      "requestId": "84abd319-d713-4f45-85d2-ddb18009801e",
+      "requestPayload": {
+        "message": "y recuérdame llevar agua",
+        "events": [
+          {
+            "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+            "title": "Fútbol",
+            "time": "8:00 PM - 9:30 PM",
+            "description": "",
+            "section": "evening",
+            "icon": "sports_soccer",
+            "dotColor": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "reminderOffsets": null,
+            "timezone": "America/Santiago"
+          },
+          {
+            "id": "96aed143-0f63-58ef-a132-3eb9baf71c93",
+            "title": "Gym",
+            "time": "10:00 AM",
+            "description": "",
+            "section": "evening",
+            "icon": "event",
+            "dotColor": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "reminderOffsets": null,
+            "timezone": "America/Santiago"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+            "label": "Revisar las pantallas de Focus",
+            "done": false,
+            "priority": "Alta",
+            "category": "hoy",
+            "doneAt": null,
+            "date": "2026-09-09",
+            "time": null
+          }
+        ],
+        "history": [
+          {
+            "role": "user",
+            "content": "pon gym mañana a las 10 AM"
+          },
+          {
+            "role": "assistant",
+            "content": "Añadí «Gym» en este dispositivo."
+          },
+          {
+            "role": "user",
+            "content": "mejor a las 11 AM"
+          },
+          {
+            "role": "assistant",
+            "content": "No pude preparar ese cambio con seguridad. ¿Me das un poco más de detalle?"
+          }
+        ],
+        "location": null,
+        "profile": {
+          "chronotype": null,
+          "role": null,
+          "setupDone": false,
+          "snoozedUntil": null,
+          "timezone": "America/Santiago"
+        },
+        "memories": [],
+        "behavior": null,
+        "clientNow": 1788909192059,
+        "clientTimezone": "America/Santiago",
+        "novaPersonality": "focus"
+      },
+      "httpStatus": 200,
+      "response": {
+        "reply": "¿Quieres que «Llevar agua» sea una tarea sin fecha, o que te avise antes del Gym de mañana?",
+        "actions": [],
+        "proposed_actions": [],
+        "confidence": 0,
+        "mode": "clarification",
+        "shouldAskUser": true,
+        "requestId": "84abd319-d713-4f45-85d2-ddb18009801e",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": false,
+          "issues": [
+            "unknown_event"
+          ]
+        },
+        "_dropped": [
+          "unknown_event"
+        ],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "simple_continuation"
+        }
+      },
+      "clientVisibleReply": "¿Quieres que «Llevar agua» sea una tarea sin fecha, o que te avise antes del Gym de mañana?",
+      "latencyMS": 4048,
+      "checks": {
+        "askedForMissingReminderInformation": true,
+        "noMutation": true,
+        "noInventedReminderOffset": true,
+        "modelPlanValidated": false
+      },
+      "sqlAfter": {
+        "events": [
+          {
+            "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+            "title": "Fútbol",
+            "time": "8:00 PM - 9:30 PM",
+            "description": "",
+            "section": "evening",
+            "icon": "sports_soccer",
+            "dot_color": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "created_at": "2026-09-08T21:41:34.83415+00:00",
+            "updated_at": "2026-09-08T21:41:34.83415+00:00",
+            "reminder_offsets": null,
+            "timezone": "America/Santiago"
+          },
+          {
+            "id": "96aed143-0f63-58ef-a132-3eb9baf71c93",
+            "title": "Gym",
+            "time": "10:00 AM",
+            "description": "",
+            "section": "evening",
+            "icon": "event",
+            "dot_color": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "created_at": "2026-09-08T23:11:59.130403+00:00",
+            "updated_at": "2026-09-08T23:11:59.130403+00:00",
+            "reminder_offsets": null,
+            "timezone": "America/Santiago"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+            "label": "Revisar las pantallas de Focus",
+            "done": false,
+            "priority": "Alta",
+            "category": "hoy",
+            "done_at": null,
+            "created_at": "2026-09-08T21:41:35.098894+00:00",
+            "updated_at": "2026-09-08T21:41:35.098894+00:00",
+            "parent_task_id": null,
+            "linked_event_id": null,
+            "due_date": "2026-09-09",
+            "due_time": null
+          }
+        ],
+        "suggestions": []
+      },
+      "ledger": {
+        "state": "completed",
+        "accountedUSD": 0.00047982,
+        "reservedUSD": 0.069,
+        "settledUSD": 0.00047982
+      },
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "simple_continuation",
+          "state": "settled",
+          "reserved_usd": 0.006,
+          "actual_usd": 0.00047982,
+          "outcome": "failed",
+          "created_at": "2026-09-08T23:13:13.082218+00:00",
+          "settled_at": "2026-09-08T23:13:16.402+00:00"
+        }
+      ],
+      "observedUsage": [
+        {
+          "model": "gpt-5.6-luna",
+          "inputTokens": 2496,
+          "outputTokens": 296,
+          "estimatedCostUSD": 0.00048,
+          "costBasis": "provider_usage",
+          "usageSource": "openai_usage",
+          "validationOK": false,
+          "provider": "openai"
+        }
+      ],
+      "screenshot": "web-continuity-v6/v6-turn3.png"
+    },
+    {
+      "turn": 4,
+      "sentAtUTC": "2026-09-08T23:14:04.555Z",
+      "requestId": "af24aa1c-c916-4966-b0d6-d1c51efb2afb",
+      "requestPayload": {
+        "message": "qué más tengo mañana",
+        "events": [
+          {
+            "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+            "title": "Fútbol",
+            "time": "8:00 PM - 9:30 PM",
+            "description": "",
+            "section": "evening",
+            "icon": "sports_soccer",
+            "dotColor": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "reminderOffsets": null,
+            "timezone": "America/Santiago"
+          },
+          {
+            "id": "96aed143-0f63-58ef-a132-3eb9baf71c93",
+            "title": "Gym",
+            "time": "10:00 AM",
+            "description": "",
+            "section": "evening",
+            "icon": "event",
+            "dotColor": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "reminderOffsets": null,
+            "timezone": "America/Santiago"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+            "label": "Revisar las pantallas de Focus",
+            "done": false,
+            "priority": "Alta",
+            "category": "hoy",
+            "doneAt": null,
+            "date": "2026-09-09",
+            "time": null
+          }
+        ],
+        "history": [
+          {
+            "role": "user",
+            "content": "pon gym mañana a las 10 AM"
+          },
+          {
+            "role": "assistant",
+            "content": "Añadí «Gym» en este dispositivo."
+          },
+          {
+            "role": "user",
+            "content": "mejor a las 11 AM"
+          },
+          {
+            "role": "assistant",
+            "content": "No pude preparar ese cambio con seguridad. ¿Me das un poco más de detalle?"
+          },
+          {
+            "role": "user",
+            "content": "y recuérdame llevar agua"
+          },
+          {
+            "role": "assistant",
+            "content": "¿Quieres que «Llevar agua» sea una tarea sin fecha, o que te avise antes del Gym de mañana?"
+          }
+        ],
+        "location": null,
+        "profile": {
+          "chronotype": null,
+          "role": null,
+          "setupDone": false,
+          "snoozedUntil": null,
+          "timezone": "America/Santiago"
+        },
+        "memories": [],
+        "behavior": null,
+        "clientNow": 1788909243979,
+        "clientTimezone": "America/Santiago",
+        "novaPersonality": "focus"
+      },
+      "httpStatus": 200,
+      "response": {
+        "reply": "Mañana tienes Gym a las 10:00 AM, Fútbol de 8:00 a 9:30 PM y la tarea «Revisar las pantallas de Focus».",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "chat_only",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "af24aa1c-c916-4966-b0d6-d1c51efb2afb",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "simple_continuation"
+        }
+      },
+      "clientVisibleReply": "Mañana tienes Gym a las 10:00 AM, Fútbol de 8:00 a 9:30 PM y la tarea «Revisar las pantallas de Focus».",
+      "latencyMS": 3083,
+      "checks": {
+        "answerMatchesActualSavedState": true,
+        "originalScenarioGymAt11": false,
+        "noMutation": true,
+        "upstreamFailure": "Turn 2 did not move Gym; query correctly reports 10 AM."
+      },
+      "sqlAfter": {
+        "events": [
+          {
+            "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+            "title": "Fútbol",
+            "time": "8:00 PM - 9:30 PM",
+            "description": "",
+            "section": "evening",
+            "icon": "sports_soccer",
+            "dot_color": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "created_at": "2026-09-08T21:41:34.83415+00:00",
+            "updated_at": "2026-09-08T21:41:34.83415+00:00",
+            "reminder_offsets": null,
+            "timezone": "America/Santiago"
+          },
+          {
+            "id": "96aed143-0f63-58ef-a132-3eb9baf71c93",
+            "title": "Gym",
+            "time": "10:00 AM",
+            "description": "",
+            "section": "evening",
+            "icon": "event",
+            "dot_color": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "created_at": "2026-09-08T23:11:59.130403+00:00",
+            "updated_at": "2026-09-08T23:11:59.130403+00:00",
+            "reminder_offsets": null,
+            "timezone": "America/Santiago"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+            "label": "Revisar las pantallas de Focus",
+            "done": false,
+            "priority": "Alta",
+            "category": "hoy",
+            "done_at": null,
+            "created_at": "2026-09-08T21:41:35.098894+00:00",
+            "updated_at": "2026-09-08T21:41:35.098894+00:00",
+            "parent_task_id": null,
+            "linked_event_id": null,
+            "due_date": "2026-09-09",
+            "due_time": null
+          }
+        ],
+        "suggestions": []
+      },
+      "ledger": {
+        "state": "completed",
+        "accountedUSD": 0.00022142,
+        "reservedUSD": 0.07,
+        "settledUSD": 0.00022142
+      },
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "simple_continuation",
+          "state": "settled",
+          "reserved_usd": 0.006,
+          "actual_usd": 0.00022142,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:14:05.794478+00:00",
+          "settled_at": "2026-09-08T23:14:07.318151+00:00"
+        }
+      ],
+      "observedUsage": [
+        {
+          "model": "gpt-5.6-luna",
+          "inputTokens": 2536,
+          "outputTokens": 74,
+          "estimatedCostUSD": 0.000221,
+          "costBasis": "provider_usage",
+          "usageSource": "openai_usage",
+          "validationOK": true,
+          "provider": "openai"
+        }
+      ],
+      "screenshot": "web-continuity-v6/v6-turn4.png"
+    },
+    {
+      "turn": 5,
+      "sentAtUTC": "2026-09-08T23:15:01.052Z",
+      "requestId": "72d9a43c-6988-4180-9ff0-4e2ce1985ed9",
+      "requestPayload": {
+        "message": "organízame la tarde",
+        "events": [
+          {
+            "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+            "title": "Fútbol",
+            "time": "8:00 PM - 9:30 PM",
+            "description": "",
+            "section": "evening",
+            "icon": "sports_soccer",
+            "dotColor": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "reminderOffsets": null,
+            "timezone": "America/Santiago"
+          },
+          {
+            "id": "96aed143-0f63-58ef-a132-3eb9baf71c93",
+            "title": "Gym",
+            "time": "10:00 AM",
+            "description": "",
+            "section": "evening",
+            "icon": "event",
+            "dotColor": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "reminderOffsets": null,
+            "timezone": "America/Santiago"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+            "label": "Revisar las pantallas de Focus",
+            "done": false,
+            "priority": "Alta",
+            "category": "hoy",
+            "doneAt": null,
+            "date": "2026-09-09",
+            "time": null
+          }
+        ],
+        "history": [
+          {
+            "role": "user",
+            "content": "pon gym mañana a las 10 AM"
+          },
+          {
+            "role": "assistant",
+            "content": "Añadí «Gym» en este dispositivo."
+          },
+          {
+            "role": "user",
+            "content": "mejor a las 11 AM"
+          },
+          {
+            "role": "assistant",
+            "content": "No pude preparar ese cambio con seguridad. ¿Me das un poco más de detalle?"
+          },
+          {
+            "role": "user",
+            "content": "y recuérdame llevar agua"
+          },
+          {
+            "role": "assistant",
+            "content": "¿Quieres que «Llevar agua» sea una tarea sin fecha, o que te avise antes del Gym de mañana?"
+          },
+          {
+            "role": "user",
+            "content": "qué más tengo mañana"
+          },
+          {
+            "role": "assistant",
+            "content": "Mañana tienes Gym a las 10:00 AM, Fútbol de 8:00 a 9:30 PM y la tarea «Revisar las pantallas de Focus»."
+          }
+        ],
+        "location": null,
+        "profile": {
+          "chronotype": null,
+          "role": null,
+          "setupDone": false,
+          "snoozedUntil": null,
+          "timezone": "America/Santiago"
+        },
+        "memories": [],
+        "behavior": null,
+        "clientNow": 1788909300548,
+        "clientTimezone": "America/Santiago",
+        "novaPersonality": "focus"
+      },
+      "httpStatus": 200,
+      "response": {
+        "reply": "Te propongo este horario. Revisa los bloques y sus duraciones antes de guardarlo.",
+        "actions": [],
+        "proposed_actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Revisar las pantallas de Focus",
+              "date": "2026-09-09",
+              "time": "4:30 PM",
+              "endTime": "6:00 PM",
+              "section": "focus",
+              "icon": "menu_book"
+            },
+            "actionId": "72d9a43c-6988-4180-9ff0-4e2ce1985ed9:0"
+          }
+        ],
+        "mode": "proposal",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "72d9a43c-6988-4180-9ff0-4e2ce1985ed9",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-terra",
+          "reason": "planning"
+        }
+      },
+      "clientVisibleReply": "Preparé una propuesta. Revisa los cambios en la bandeja antes de aplicarlos.",
+      "latencyMS": 10044,
+      "checks": {
+        "pendingProposalStored": true,
+        "noProposalAutoApplied": true,
+        "footballUnchanged": true,
+        "window": "2026-09-09 16:30–18:00",
+        "reviewInspectedInUI": true
+      },
+      "sqlAfter": {
+        "events": [
+          {
+            "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+            "title": "Fútbol",
+            "time": "8:00 PM - 9:30 PM",
+            "description": "",
+            "section": "evening",
+            "icon": "sports_soccer",
+            "dot_color": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "created_at": "2026-09-08T21:41:34.83415+00:00",
+            "updated_at": "2026-09-08T21:41:34.83415+00:00",
+            "reminder_offsets": null,
+            "timezone": "America/Santiago"
+          },
+          {
+            "id": "96aed143-0f63-58ef-a132-3eb9baf71c93",
+            "title": "Gym",
+            "time": "10:00 AM",
+            "description": "",
+            "section": "evening",
+            "icon": "event",
+            "dot_color": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "created_at": "2026-09-08T23:11:59.130403+00:00",
+            "updated_at": "2026-09-08T23:11:59.130403+00:00",
+            "reminder_offsets": null,
+            "timezone": "America/Santiago"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+            "label": "Revisar las pantallas de Focus",
+            "done": false,
+            "priority": "Alta",
+            "category": "hoy",
+            "done_at": null,
+            "created_at": "2026-09-08T21:41:35.098894+00:00",
+            "updated_at": "2026-09-08T21:41:35.098894+00:00",
+            "parent_task_id": null,
+            "linked_event_id": null,
+            "due_date": "2026-09-09",
+            "due_time": null
+          }
+        ],
+        "suggestions": [
+          {
+            "id": "e28654b3-14ce-564f-a0be-b51910d22ba3",
+            "kind": "add_event",
+            "payload": {
+              "event": {
+                "date": "2026-09-09",
+                "icon": "menu_book",
+                "time": "4:30 PM",
+                "title": "Revisar las pantallas de Focus",
+                "endTime": "6:00 PM",
+                "section": "focus"
+              },
+              "actionId": "72d9a43c-6988-4180-9ff0-4e2ce1985ed9:0",
+              "proposalContext": {
+                "id": "proposal-72d9a43c-6988-4180-9ff0-4e2ce1985ed9",
+                "originalRequest": "organízame la tarde"
+              }
+            },
+            "preview_title": "Crear: Revisar las pantallas de Focus",
+            "preview_body": "2026-09-09 · 4:30 PM · 6:00 PM",
+            "preview_icon": "add_circle",
+            "reason": "Propuesta pendiente de revisión.",
+            "status": "pending",
+            "batch_id": "proposal-72d9a43c-6988-4180-9ff0-4e2ce1985ed9",
+            "created_at": "2026-09-08T23:15:11.453091+00:00",
+            "resolved_at": null
+          }
+        ]
+      },
+      "ledger": {
+        "state": "completed",
+        "accountedUSD": 0.0071022,
+        "reservedUSD": 0.128,
+        "settledUSD": 0.0071022
+      },
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "model": "gpt-5.6-terra",
+          "tier": "terra",
+          "reason": "planning",
+          "state": "settled",
+          "reserved_usd": 0.064,
+          "actual_usd": 0.0071022,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:15:03.632238+00:00",
+          "settled_at": "2026-09-08T23:15:10.616049+00:00"
+        }
+      ],
+      "observedUsage": [
+        {
+          "model": "gpt-5.6-terra",
+          "inputTokens": 2562,
+          "outputTokens": 477,
+          "estimatedCostUSD": 0.007102,
+          "costBasis": "provider_usage",
+          "usageSource": "openai_usage",
+          "validationOK": true,
+          "provider": "openai"
+        }
+      ],
+      "screenshot": "web-continuity-v6/v6-turn5.png"
+    },
+    {
+      "turn": 6,
+      "sentAtUTC": "2026-09-08T23:16:25.499Z",
+      "requestId": "2d47f9b8-a930-4d92-95c4-1d48c753fec7",
+      "requestPayload": {
+        "message": "no quiero estudiar después de las 8 PM",
+        "events": [
+          {
+            "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+            "title": "Fútbol",
+            "time": "8:00 PM - 9:30 PM",
+            "description": "",
+            "section": "evening",
+            "icon": "sports_soccer",
+            "dotColor": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "reminderOffsets": null,
+            "timezone": "America/Santiago"
+          },
+          {
+            "id": "96aed143-0f63-58ef-a132-3eb9baf71c93",
+            "title": "Gym",
+            "time": "10:00 AM",
+            "description": "",
+            "section": "evening",
+            "icon": "event",
+            "dotColor": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "reminderOffsets": null,
+            "timezone": "America/Santiago"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+            "label": "Revisar las pantallas de Focus",
+            "done": false,
+            "priority": "Alta",
+            "category": "hoy",
+            "doneAt": null,
+            "date": "2026-09-09",
+            "time": null
+          }
+        ],
+        "history": [
+          {
+            "role": "user",
+            "content": "pon gym mañana a las 10 AM"
+          },
+          {
+            "role": "assistant",
+            "content": "Añadí «Gym» en este dispositivo."
+          },
+          {
+            "role": "user",
+            "content": "mejor a las 11 AM"
+          },
+          {
+            "role": "assistant",
+            "content": "No pude preparar ese cambio con seguridad. ¿Me das un poco más de detalle?"
+          },
+          {
+            "role": "user",
+            "content": "y recuérdame llevar agua"
+          },
+          {
+            "role": "assistant",
+            "content": "¿Quieres que «Llevar agua» sea una tarea sin fecha, o que te avise antes del Gym de mañana?"
+          },
+          {
+            "role": "user",
+            "content": "qué más tengo mañana"
+          },
+          {
+            "role": "assistant",
+            "content": "Mañana tienes Gym a las 10:00 AM, Fútbol de 8:00 a 9:30 PM y la tarea «Revisar las pantallas de Focus»."
+          },
+          {
+            "role": "user",
+            "content": "organízame la tarde"
+          },
+          {
+            "role": "assistant",
+            "content": "Preparé una propuesta. Revisa los cambios en la bandeja antes de aplicarlos."
+          }
+        ],
+        "pendingProposal": {
+          "id": "proposal-72d9a43c-6988-4180-9ff0-4e2ce1985ed9",
+          "originalRequest": "organízame la tarde",
+          "actions": [
+            {
+              "type": "add_event",
+              "event": {
+                "title": "Revisar las pantallas de Focus",
+                "date": "2026-09-09",
+                "time": "4:30 PM",
+                "endTime": "6:00 PM"
+              }
+            }
+          ]
+        },
+        "location": null,
+        "profile": {
+          "chronotype": null,
+          "role": null,
+          "setupDone": false,
+          "snoozedUntil": null,
+          "timezone": "America/Santiago"
+        },
+        "memories": [],
+        "behavior": null,
+        "clientNow": 1788909385041,
+        "clientTimezone": "America/Santiago",
+        "novaPersonality": "focus"
+      },
+      "httpStatus": 200,
+      "response": {
+        "reply": "Te propongo este horario. Revisa los bloques y sus duraciones antes de guardarlo.",
+        "actions": [],
+        "proposed_actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Revisar las pantallas de Focus",
+              "date": "2026-09-09",
+              "time": "4:30 PM",
+              "endTime": "6:00 PM",
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "2d47f9b8-a930-4d92-95c4-1d48c753fec7:0"
+          }
+        ],
+        "replacesProposalId": "proposal-72d9a43c-6988-4180-9ff0-4e2ce1985ed9",
+        "mode": "proposal",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "2d47f9b8-a930-4d92-95c4-1d48c753fec7",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-terra",
+          "reason": "planning"
+        }
+      },
+      "clientVisibleReply": "Preparé una propuesta. Revisa los cambios en la bandeja antes de aplicarlos.",
+      "latencyMS": 4972,
+      "checks": {
+        "pendingContextSent": true,
+        "matchingReplacement": true,
+        "onePendingReplacement": true,
+        "priorProposalMarkedRejected": true,
+        "constraintAccumulated": true,
+        "windowEndsBefore20": true,
+        "noProposalAutoApplied": true,
+        "footballUnchanged": true
+      },
+      "sqlAfter": {
+        "events": [
+          {
+            "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+            "title": "Fútbol",
+            "time": "8:00 PM - 9:30 PM",
+            "description": "",
+            "section": "evening",
+            "icon": "sports_soccer",
+            "dot_color": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "created_at": "2026-09-08T21:41:34.83415+00:00",
+            "updated_at": "2026-09-08T21:41:34.83415+00:00",
+            "reminder_offsets": null,
+            "timezone": "America/Santiago"
+          },
+          {
+            "id": "96aed143-0f63-58ef-a132-3eb9baf71c93",
+            "title": "Gym",
+            "time": "10:00 AM",
+            "description": "",
+            "section": "evening",
+            "icon": "event",
+            "dot_color": "bg-secondary-container",
+            "date": "2026-09-09",
+            "featured": false,
+            "created_at": "2026-09-08T23:11:59.130403+00:00",
+            "updated_at": "2026-09-08T23:11:59.130403+00:00",
+            "reminder_offsets": null,
+            "timezone": "America/Santiago"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+            "label": "Revisar las pantallas de Focus",
+            "done": false,
+            "priority": "Alta",
+            "category": "hoy",
+            "done_at": null,
+            "created_at": "2026-09-08T21:41:35.098894+00:00",
+            "updated_at": "2026-09-08T21:41:35.098894+00:00",
+            "parent_task_id": null,
+            "linked_event_id": null,
+            "due_date": "2026-09-09",
+            "due_time": null
+          }
+        ],
+        "suggestions": [
+          {
+            "id": "747cc05c-ca13-5ef8-a367-c66aa5cae5ac",
+            "kind": "add_event",
+            "payload": {
+              "event": {
+                "date": "2026-09-09",
+                "icon": "event",
+                "time": "4:30 PM",
+                "title": "Revisar las pantallas de Focus",
+                "endTime": "6:00 PM",
+                "section": "evening"
+              },
+              "actionId": "2d47f9b8-a930-4d92-95c4-1d48c753fec7:0",
+              "proposalContext": {
+                "id": "proposal-2d47f9b8-a930-4d92-95c4-1d48c753fec7",
+                "originalRequest": "organízame la tarde\nno quiero estudiar después de las 8 PM"
+              }
+            },
+            "preview_title": "Crear: Revisar las pantallas de Focus",
+            "preview_body": "2026-09-09 · 4:30 PM · 6:00 PM",
+            "preview_icon": "add_circle",
+            "reason": "Propuesta pendiente de revisión.",
+            "status": "pending",
+            "batch_id": "proposal-2d47f9b8-a930-4d92-95c4-1d48c753fec7",
+            "created_at": "2026-09-08T23:16:30.727608+00:00",
+            "resolved_at": null
+          },
+          {
+            "id": "e28654b3-14ce-564f-a0be-b51910d22ba3",
+            "kind": "add_event",
+            "payload": {
+              "event": {
+                "date": "2026-09-09",
+                "icon": "menu_book",
+                "time": "4:30 PM",
+                "title": "Revisar las pantallas de Focus",
+                "endTime": "6:00 PM",
+                "section": "focus"
+              },
+              "actionId": "72d9a43c-6988-4180-9ff0-4e2ce1985ed9:0",
+              "proposalContext": {
+                "id": "proposal-72d9a43c-6988-4180-9ff0-4e2ce1985ed9",
+                "originalRequest": "organízame la tarde"
+              }
+            },
+            "preview_title": "Crear: Revisar las pantallas de Focus",
+            "preview_body": "2026-09-09 · 4:30 PM · 6:00 PM",
+            "preview_icon": "add_circle",
+            "reason": "Propuesta pendiente de revisión.",
+            "status": "rejected",
+            "batch_id": "proposal-72d9a43c-6988-4180-9ff0-4e2ce1985ed9",
+            "created_at": "2026-09-08T23:15:11.453091+00:00",
+            "resolved_at": "2026-09-08T23:16:30.453+00:00"
+          }
+        ]
+      },
+      "ledger": {
+        "state": "completed",
+        "accountedUSD": 0.0053522,
+        "reservedUSD": 0.183,
+        "settledUSD": 0.0053522
+      },
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "model": "gpt-5.6-terra",
+          "tier": "terra",
+          "reason": "planning",
+          "state": "settled",
+          "reserved_usd": 0.064,
+          "actual_usd": 0.0053522,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:16:26.357975+00:00",
+          "settled_at": "2026-09-08T23:16:30.278337+00:00"
+        }
+      ],
+      "observedUsage": [
+        {
+          "model": "gpt-5.6-terra",
+          "inputTokens": 2659,
+          "outputTokens": 315,
+          "estimatedCostUSD": 0.005352,
+          "costBasis": "provider_usage",
+          "usageSource": "openai_usage",
+          "validationOK": true,
+          "provider": "openai"
+        }
+      ],
+      "screenshot": "web-continuity-v6/v6-turn6.png"
+    }
+  ],
+  "finalSnapshot": {
+    "events": [
+      {
+        "id": "3f3f9d38-6b0d-4264-918c-8499e5abfc86",
+        "title": "Fútbol",
+        "time": "8:00 PM - 9:30 PM",
+        "description": "",
+        "section": "evening",
+        "icon": "sports_soccer",
+        "dot_color": "bg-secondary-container",
+        "date": "2026-09-09",
+        "featured": false,
+        "created_at": "2026-09-08T21:41:34.83415+00:00",
+        "updated_at": "2026-09-08T21:41:34.83415+00:00",
+        "reminder_offsets": null,
+        "timezone": "America/Santiago"
+      },
+      {
+        "id": "96aed143-0f63-58ef-a132-3eb9baf71c93",
+        "title": "Gym",
+        "time": "10:00 AM",
+        "description": "",
+        "section": "evening",
+        "icon": "event",
+        "dot_color": "bg-secondary-container",
+        "date": "2026-09-09",
+        "featured": false,
+        "created_at": "2026-09-08T23:11:59.130403+00:00",
+        "updated_at": "2026-09-08T23:11:59.130403+00:00",
+        "reminder_offsets": null,
+        "timezone": "America/Santiago"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "fb5aaa9d-3006-497e-a18d-67b4cc665383",
+        "label": "Revisar las pantallas de Focus",
+        "done": false,
+        "priority": "Alta",
+        "category": "hoy",
+        "done_at": null,
+        "created_at": "2026-09-08T21:41:35.098894+00:00",
+        "updated_at": "2026-09-08T21:41:35.098894+00:00",
+        "parent_task_id": null,
+        "linked_event_id": null,
+        "due_date": "2026-09-09",
+        "due_time": null
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "747cc05c-ca13-5ef8-a367-c66aa5cae5ac",
+        "kind": "add_event",
+        "payload": {
+          "event": {
+            "date": "2026-09-09",
+            "icon": "event",
+            "time": "4:30 PM",
+            "title": "Revisar las pantallas de Focus",
+            "endTime": "6:00 PM",
+            "section": "evening"
+          },
+          "actionId": "2d47f9b8-a930-4d92-95c4-1d48c753fec7:0",
+          "proposalContext": {
+            "id": "proposal-2d47f9b8-a930-4d92-95c4-1d48c753fec7",
+            "originalRequest": "organízame la tarde\nno quiero estudiar después de las 8 PM"
+          }
+        },
+        "preview_title": "Crear: Revisar las pantallas de Focus",
+        "preview_body": "2026-09-09 · 4:30 PM · 6:00 PM",
+        "preview_icon": "add_circle",
+        "reason": "Propuesta pendiente de revisión.",
+        "status": "pending",
+        "batch_id": "proposal-2d47f9b8-a930-4d92-95c4-1d48c753fec7",
+        "created_at": "2026-09-08T23:16:30.727608+00:00",
+        "resolved_at": null
+      },
+      {
+        "id": "e28654b3-14ce-564f-a0be-b51910d22ba3",
+        "kind": "add_event",
+        "payload": {
+          "event": {
+            "date": "2026-09-09",
+            "icon": "menu_book",
+            "time": "4:30 PM",
+            "title": "Revisar las pantallas de Focus",
+            "endTime": "6:00 PM",
+            "section": "focus"
+          },
+          "actionId": "72d9a43c-6988-4180-9ff0-4e2ce1985ed9:0",
+          "proposalContext": {
+            "id": "proposal-72d9a43c-6988-4180-9ff0-4e2ce1985ed9",
+            "originalRequest": "organízame la tarde"
+          }
+        },
+        "preview_title": "Crear: Revisar las pantallas de Focus",
+        "preview_body": "2026-09-09 · 4:30 PM · 6:00 PM",
+        "preview_icon": "add_circle",
+        "reason": "Propuesta pendiente de revisión.",
+        "status": "rejected",
+        "batch_id": "proposal-72d9a43c-6988-4180-9ff0-4e2ce1985ed9",
+        "created_at": "2026-09-08T23:15:11.453091+00:00",
+        "resolved_at": "2026-09-08T23:16:30.453+00:00"
+      }
+    ]
+  },
+  "screenshots": [
+    {
+      "path": "web-continuity-v6/v6-reload.png",
+      "sha256": "8e625454637c44d9b20487f98b02341401f2fab2001d479d3f5f7e2c5bc0b2b2"
+    },
+    {
+      "path": "web-continuity-v6/v6-seed-calendar.png",
+      "sha256": "23dd3bbf596d7fef7e199ff5c16ab20ad9c67b58e6ac3b80ab15c7d622675fa9"
+    },
+    {
+      "path": "web-continuity-v6/v6-turn1.png",
+      "sha256": "bc167f2dd4f96837e59b4a2ceac70b5bd80fe11d7abc206cb0c1f738b69fd7da"
+    },
+    {
+      "path": "web-continuity-v6/v6-turn2.png",
+      "sha256": "713f5ec221b94010cd902a07f226c5096dc1f508b0ce46f0e012f9e48c6d5746"
+    },
+    {
+      "path": "web-continuity-v6/v6-turn3.png",
+      "sha256": "4b94e835c1a4103d31a9dcbaec9d9e6b27a9589166d134f47232acac15856891"
+    },
+    {
+      "path": "web-continuity-v6/v6-turn4.png",
+      "sha256": "de31c62f566e912128b7a80041718f5385be624df5c4f966346210ae64b894aa"
+    },
+    {
+      "path": "web-continuity-v6/v6-turn5-inbox.png",
+      "sha256": "1c4ef114701353d4404e6a80c3eb9dc09a13def082d1d36285a94b62ddca0f2e"
+    },
+    {
+      "path": "web-continuity-v6/v6-turn5.png",
+      "sha256": "9286335d656ce0ca3e08c4c33272629fa4d61b2d11716e4253c74f82394a2b50"
+    },
+    {
+      "path": "web-continuity-v6/v6-turn6-inbox.png",
+      "sha256": "f15d41ef1d4f3fd2502f9f1ab5301ba9e85f22bec1190daca00cc798fb8b9baf"
+    },
+    {
+      "path": "web-continuity-v6/v6-turn6.png",
+      "sha256": "26bde40e8a405c6369ce98759452acd844ff53d70be050f3289d6710334cafb4"
+    }
+  ],
+  "evidenceHashes": {
+    "networkSHA256": "6bdd8f51dc8164615671f940556e9543bd7cfbed70a2997dcf59f2e55b1e4995",
+    "finalScopedSQLSHA256": "2ababd083d28b7213bf205bd38887722c92c0cdca9f44f3c7e56fff37b34d5cf",
+    "uiObservationsSHA256": "e2b93dfed87f47cf12b87de6e14a78a03bb3dedb53a258d6f62e85d57d722896"
+  },
+  "cleanup": {
+    "status": "retained_for_explicitly_authorized_follow_up",
+    "accountsCreatedDuringThisRun": 0,
+    "accountsDeletedDuringThisRun": 0,
+    "reason": "Parent requested preservation of this synthetic account for post-fix V8 UI verification; credentials and browser profile stay only in private /tmp directory."
+  },
+  "limitations": [
+    "The six-turn scenario does not fully pass because the contextual move failed.",
+    "Reminder clarification is safe, but the provider plan for that turn failed validation; this is not six validated successful model plans.",
+    "No notification delivery was tested.",
+    "Proposal 6 already ended before20, so this proves pending-context preservation and replacement, not an exercised time-shift past the cutoff.",
+    "No claim is made about a human quality rating or production deployment."
+  ],
+  "postRunRestorationIssue": {
+    "status": "confirmed_fixed_locally_not_yet_retested_on_preview",
+    "observedAtUTC": "2026-09-08T23:34:06.157Z",
+    "ui": "Manual deletion of the synthetic Gym and rejection of the pending proposal changed local UI.",
+    "sql": "Gym row remained present and proposal remained pending/resolved_at null after repeated scoped reads.",
+    "network": "Restored isolated Chrome profile was online but emitted no Supabase REST requests.",
+    "cause": "AuthContext awaited Supabase work from an async SIGNED_IN callback, while SDK restoration waited for that callback holding its session lock.",
+    "regressionEvidence": "Actual Supabase SDK + mocked REST transport: old provider effect fails3/3; corrected effect passes3/3.",
+    "cleanupBaselineVerified": false,
+    "additionalProviderCalls": 0
+  }
+}

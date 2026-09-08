@@ -1,0 +1,1954 @@
+{
+  "version": 1,
+  "mode": "remote-http-real-sql",
+  "status": "failed",
+  "runId": "3bc60d9f-5147-4a94-83e5-5d1ed08a8aed",
+  "reportPath": "/Users/martinnunezdominguez/Developer/focus/docs/focus-2/qa/ai-openai-remote-211.json",
+  "deployment": "https://focus-qvw73rotf-manunezdom-9658s-projects.vercel.app",
+  "budgetUSD": 1,
+  "requestReservationBoundUSD": 0.25,
+  "boundEvidence": "Operator must verify this deployment enforces at most US$0.25 per logical request; no global budget or quota is changed by this runner.",
+  "fixedNow": "2026-09-08T15:00:00.000Z",
+  "sourceHashes": {
+    "api/_lib/novaRuntime.js": "124b2571598949e8a2314ded4dc07a62979a313b27a6565ad7d7957ea3b8e9b1",
+    "api/_lib/novaRouter.js": "006c6ba27b112372bc311ccd4de45115675e565915096b391561bbc7574bf0ec",
+    "api/_lib/openaiNova.js": "8181cbf23b81ac6a71b5f05c87346d61e1923f06077694e4a2dbb8cdeb77e86c",
+    "api/_lib/novaPrompt.js": "a4e8b3827d8eff9428dd4fa2072480e9cc40156d26de512525a96dcedc333c63",
+    "api/_lib/novaContract.js": "0d3be66603f3c05f28797cbf4158364338c95e5f4565f0dab284139b3b4da4aa",
+    "api/_lib/novaAdmission.js": "5d2bc5996b5b615fa17b953e8c484fef31a7cc162bee51cd0f6a29284e112470",
+    "api/_lib/novaSafety.js": "2c7b6f36dcd6ec629ad687702d772c39bb26ad811bcd120ac639cb378ef2e96d",
+    "api/_lib/aiPricing.js": "89110922bb1872b1ccdcd2ab6430aa61e360c1366a75843f1fcd9c7876047a73",
+    "api/_lib/aiUsageTracking.js": "a847767ddecb9cd14efc01cd4ed33fb0e23e55b0a58aa5c023f5d4e075aad4c1",
+    "api/_lib/dateContext.js": "dda6f4b027fd8a97c96a8f0c9a1bdddf94ff58a493477a910692a2936ee5bd53",
+    "api/_lib/usageLimits.js": "4f5ef8e2260a44bde6903ee2bad9a7549d6b5f9932db74fe5d34536e243b5cd2",
+    "api/_lib/assistantBrand.js": "b5218a8ad63bfb17179048b7003832d4e5b8cbf73be4eea9d52b0911c2322860",
+    "scripts/ai-router-benchmark.mjs": "ed3591ba11775caca8108e5d1e509a7c42dab65adeabdc4da4abd21e9ed1a40e",
+    "scripts/lib/ephemeral-ai-database.mjs": "85203cda7bcd938de48fe5280e735b3833eeb42d4ba095392d9bd186b1e3548a",
+    "scripts/ai-benchmark-grade.mjs": "a424e505d132801f5066aab7f4c3825a4714505becda2a15dad87e0768ff456a",
+    "scripts/ai-metrics.mjs": "70bbc80e2a313e54797e1fe8a4faa75de2cbbf5289ed61921ab79884b1f93b83",
+    "tests/nova-battery/cases.json": "ee5b1a9aa4462a2f0727fdc3d858515fefdf76be8e2734d4773de1044e494229"
+  },
+  "runnerSourceHashes": {
+    "scripts/ai-remote-benchmark.mjs": "d81c781bf9f07a465dfaa6e2f745a407f4b0de5a26c79d6e718899ee146dfdcc",
+    "scripts/ai-remote-check.mjs": "2adea67a0f94da097e52e4f8530e651cfcfb4cc04a168599a473379ea76c8638",
+    "api/focus-assistant.js": "95778e8d3c41e3e75ec214fea33613e468333b514e480afa99cefa721ba058e2",
+    "api/_lib/aiCapabilities.js": "302642746e03a9e797985b502e96e4819691de92a7a6a2a614409a35bfdf0133",
+    "vercel.json": "46ecf4c896af09dcdbf9ae624d50572db2139206f4c076d42b6abf176d5e382f"
+  },
+  "caseCorpusHash": "925f8a617f973ed3f2645a5db8692469fe853e26377bdb4f93ee70beda6e07fb",
+  "localExpectedSQLHashes": {
+    "supabase/migrations/020_atomic_ai_usage.sql": "8b2490757a5fa74c65a22f611033fe2deffd36262b9e3cf1684d28963ad973b1",
+    "supabase/migrations/021_ai_admission.sql": "12f5a159bc66ce2dc332859f3cfa14dee8337099ae4181e24b26fd115ca28bde",
+    "supabase/migrations/022_openai_model_admission.sql": "74952a7f4ae10c14698c38e80c96668750e765db7b87e8e2dc50a270b3d9b92f"
+  },
+  "measurementScope": "Remote Focus HTTP and existing remote SQL ledgers; synthetic accounts and fixture context only. Local SQL hashes are expected sources, not proof of remote bytes. No client persistence or human conversation quality is measured.",
+  "selectedCases": [
+    "A1",
+    "B11",
+    "C21",
+    "D31",
+    "E41",
+    "F51",
+    "G61",
+    "H71",
+    "I81",
+    "J91",
+    "K101",
+    "L111",
+    "M121",
+    "N131",
+    "O141",
+    "X151",
+    "X161",
+    "X166",
+    "X171",
+    "X176",
+    "X181",
+    "X186",
+    "X191",
+    "X196",
+    "X201",
+    "A2",
+    "B12",
+    "C22",
+    "D32",
+    "E42",
+    "F52",
+    "G62",
+    "H72",
+    "I82",
+    "J92",
+    "K102",
+    "L112",
+    "M122",
+    "N132",
+    "O142",
+    "X152",
+    "X162",
+    "X167",
+    "X172",
+    "X177",
+    "X182",
+    "X187",
+    "X192",
+    "X197",
+    "X202",
+    "A3",
+    "B13",
+    "C23",
+    "D33",
+    "E43",
+    "F53",
+    "G63",
+    "H73",
+    "I83",
+    "J93",
+    "K103",
+    "L113",
+    "M123",
+    "N133",
+    "O143",
+    "X153",
+    "X163",
+    "X168",
+    "X173",
+    "X178",
+    "X183",
+    "X188",
+    "X193",
+    "X198",
+    "X203",
+    "A4",
+    "B14",
+    "C24",
+    "D34",
+    "E44",
+    "F54",
+    "G64",
+    "H74",
+    "I84",
+    "J94",
+    "K104",
+    "L114",
+    "M124",
+    "N134",
+    "O144",
+    "X154",
+    "X164",
+    "X169",
+    "X174",
+    "X179",
+    "X184",
+    "X189",
+    "X194",
+    "X199",
+    "X204",
+    "A5",
+    "B15",
+    "C25",
+    "D35",
+    "E45",
+    "F55",
+    "G65",
+    "H75",
+    "I85",
+    "J95",
+    "K105",
+    "L115",
+    "M125",
+    "N135",
+    "O145",
+    "X155",
+    "X165",
+    "X170",
+    "X175",
+    "X180",
+    "X185",
+    "X190",
+    "X195",
+    "X200",
+    "X205",
+    "A6",
+    "B16",
+    "C26",
+    "D36",
+    "E46",
+    "F56",
+    "G66",
+    "H76",
+    "I86",
+    "J96",
+    "K106",
+    "L116",
+    "M126",
+    "N136",
+    "O146",
+    "X156",
+    "X206",
+    "A7",
+    "B17",
+    "C27",
+    "D37",
+    "E47",
+    "F57",
+    "G67",
+    "H77",
+    "I87",
+    "J97",
+    "K107",
+    "L117",
+    "M127",
+    "N137",
+    "O147",
+    "X157",
+    "X207",
+    "A8",
+    "B18",
+    "C28",
+    "D38",
+    "E48",
+    "F58",
+    "G68",
+    "H78",
+    "I88",
+    "J98",
+    "K108",
+    "L118",
+    "M128",
+    "N138",
+    "O148",
+    "X158",
+    "X208",
+    "A9",
+    "B19",
+    "C29",
+    "D39",
+    "E49",
+    "F59",
+    "G69",
+    "H79",
+    "I89",
+    "J99",
+    "K109",
+    "L119",
+    "M129",
+    "N139",
+    "O149",
+    "X159",
+    "X209",
+    "A10",
+    "B20",
+    "C30",
+    "D40",
+    "E50",
+    "F60",
+    "G70",
+    "H80",
+    "I90",
+    "J100",
+    "K110",
+    "L120",
+    "M130",
+    "N140",
+    "O150",
+    "X160",
+    "X210",
+    "X211"
+  ],
+  "plannedUsers": 24,
+  "rows": [
+    {
+      "id": "A1",
+      "category": "eventos_simples",
+      "input": "fútbol a las 5",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "futbol"
+        ],
+        "timeAnyOf": [
+          "5:00 PM"
+        ],
+        "date": "today",
+        "endTimeNull": true
+      },
+      "attempted": true,
+      "requestId": "54a32aad-93f9-4bf0-8a75-5dfcff38f3d5",
+      "attempts": [
+        {
+          "request_row_id": "72aff3a2-4955-4572-afaf-64dd1d99214c",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00073435,
+          "outcome": "success",
+          "created_at": "2026-09-08T21:48:32.545418+00:00",
+          "settled_at": "2026-09-08T21:48:34.493833+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 17311,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Fútbol",
+              "date": "2026-09-08",
+              "time": "5:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "54a32aad-93f9-4bf0-8a75-5dfcff38f3d5:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "54a32aad-93f9-4bf0-8a75-5dfcff38f3d5",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "B11",
+      "category": "subtitulos",
+      "input": "reunión a las 8 de mindfulness",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "reunion"
+        ],
+        "subtitleIncludes": [
+          "mindfulness"
+        ],
+        "timeAnyOf": [
+          "8:00 PM",
+          "8:00 AM"
+        ],
+        "allowClarify": true
+      },
+      "attempted": true,
+      "requestId": "b5835be0-c673-40da-af3c-dbf737f6036f",
+      "attempts": [
+        {
+          "request_row_id": "40ffdffa-fa3e-4499-b1c1-a2f9a60bfee6",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00013986,
+          "outcome": "success",
+          "created_at": "2026-09-08T21:48:41.828674+00:00",
+          "settled_at": "2026-09-08T21:48:43.218248+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 4536,
+      "httpStatus": 200,
+      "output": {
+        "reply": "¿La reunión de mindfulness es a las 08:00 o a las 20:00?",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "clarification",
+        "shouldAskUser": true,
+        "confidence": 0.9,
+        "requestId": "b5835be0-c673-40da-af3c-dbf737f6036f",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "C21",
+      "category": "recordatorios",
+      "input": "acuérdame llevar la pelota",
+      "expect": {
+        "kindAnyOf": [
+          "reminder",
+          "task",
+          "clarify"
+        ],
+        "titleIncludes": [
+          "pelota"
+        ],
+        "allowClarify": true
+      },
+      "attempted": true,
+      "requestId": "532b8d26-593c-4af4-8cab-1ac3b875b08e",
+      "attempts": [
+        {
+          "request_row_id": "bb426023-d960-425e-984b-9c92799125e3",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00024746,
+          "outcome": "success",
+          "created_at": "2026-09-08T21:48:51.052675+00:00",
+          "settled_at": "2026-09-08T21:48:53.226267+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 5492,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_task",
+            "task": {
+              "label": "Llevar la pelota",
+              "priority": "Media",
+              "category": "hoy",
+              "linkedEventId": null,
+              "parentTaskId": null,
+              "date": null
+            },
+            "actionId": "532b8d26-593c-4af4-8cab-1ac3b875b08e:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "532b8d26-593c-4af4-8cab-1ac3b875b08e",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "D31",
+      "category": "duraciones",
+      "input": "estudiar publicidad a las 7 por 30 minutos",
+      "expect": {
+        "kind": "event",
+        "timeAnyOf": [
+          "7:00 PM"
+        ],
+        "durationMinutes": 30
+      },
+      "attempted": true,
+      "requestId": "662d5339-979d-4529-b7d7-93e40d0d36bf",
+      "attempts": [
+        {
+          "request_row_id": "11503457-28cf-40c8-b2d9-5977b90379ac",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00025806,
+          "outcome": "success",
+          "created_at": "2026-09-08T21:49:00.335491+00:00",
+          "settled_at": "2026-09-08T21:49:03.358031+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 6383,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Estudiar",
+              "date": "2026-09-08",
+              "time": "7:00 PM",
+              "endTime": "7:30 PM",
+              "section": "focus",
+              "icon": "menu_book",
+              "subtitle": "Publicidad"
+            },
+            "actionId": "662d5339-979d-4529-b7d7-93e40d0d36bf:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "662d5339-979d-4529-b7d7-93e40d0d36bf",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "E41",
+      "category": "fechas",
+      "input": "mañana tengo fútbol a las 5",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "futbol"
+        ],
+        "timeAnyOf": [
+          "5:00 PM"
+        ],
+        "date": "tomorrow"
+      },
+      "attempted": true,
+      "requestId": "366c1f80-af21-41b6-a4f8-dcda848da906",
+      "attempts": [
+        {
+          "request_row_id": "631f32ea-2025-48e6-a3c6-544db0a378b4",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00024886,
+          "outcome": "success",
+          "created_at": "2026-09-08T21:49:10.450632+00:00",
+          "settled_at": "2026-09-08T21:49:12.3087+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 4966,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Fútbol",
+              "date": "2026-09-09",
+              "time": "5:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "366c1f80-af21-41b6-a4f8-dcda848da906:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "366c1f80-af21-41b6-a4f8-dcda848da906",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "F51",
+      "category": "horas_ambiguas",
+      "input": "fútbol a las cinco",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "futbol"
+        ],
+        "timeAnyOf": [
+          "5:00 PM"
+        ]
+      },
+      "attempted": true,
+      "requestId": "b63319cc-552e-47ea-9680-5e08c16fb990",
+      "attempts": [
+        {
+          "request_row_id": "144f932b-9c52-4e71-8fd1-2b65fc1923db",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00025546,
+          "outcome": "success",
+          "created_at": "2026-09-08T21:49:19.970966+00:00",
+          "settled_at": "2026-09-08T21:49:22.920627+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 5957,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Fútbol",
+              "date": "2026-09-08",
+              "time": "5:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "b63319cc-552e-47ea-9680-5e08c16fb990:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "b63319cc-552e-47ea-9680-5e08c16fb990",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "G61",
+      "category": "multi",
+      "input": "mañana dentista a las 11 y acuérdame llevar radiografía",
+      "expect": {
+        "kindAnyOf": [
+          "event",
+          "multi"
+        ],
+        "titleIncludes": [
+          "dentista"
+        ],
+        "date": "tomorrow",
+        "subtitleOrSecondActionIncludes": [
+          "radiografia"
+        ]
+      },
+      "attempted": true,
+      "requestId": "260c4c04-480c-40ed-8f8e-963f0f9a2fa2",
+      "attempts": [
+        {
+          "request_row_id": "0e597883-11e4-4ce6-ae4e-eeac8755d7cd",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.006,
+          "actual_usd": 0.00037286,
+          "outcome": "success",
+          "created_at": "2026-09-08T21:49:34.776634+00:00",
+          "settled_at": "2026-09-08T21:49:37.739583+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 8406,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Dentista",
+              "date": "2026-09-09",
+              "time": "11:00 AM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "local_hospital"
+            },
+            "actionId": "260c4c04-480c-40ed-8f8e-963f0f9a2fa2:0"
+          },
+          {
+            "type": "add_task",
+            "task": {
+              "label": "Llevar radiografía",
+              "priority": "Media",
+              "category": "hoy",
+              "linkedEventId": null,
+              "parentTaskId": null,
+              "date": null
+            },
+            "actionId": "260c4c04-480c-40ed-8f8e-963f0f9a2fa2:1"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "260c4c04-480c-40ed-8f8e-963f0f9a2fa2",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "H71",
+      "category": "contexto",
+      "input": "a las 11",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "dentista"
+        ],
+        "timeAnyOf": [
+          "11:00 AM"
+        ],
+        "date": "tomorrow"
+      },
+      "attempted": true,
+      "requestId": "902db0c5-e332-46a4-8298-b9087ea4e28b",
+      "attempts": [
+        {
+          "request_row_id": "775a9567-a444-4b6a-bb73-b55690c95bee",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "simple_continuation",
+          "state": "settled",
+          "reserved_usd": 0.006,
+          "actual_usd": 0.00026486,
+          "outcome": "success",
+          "created_at": "2026-09-08T21:49:47.198825+00:00",
+          "settled_at": "2026-09-08T21:49:49.237519+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "simple_continuation",
+          "decision": {
+            "tier": "luna",
+            "reason": "simple_continuation",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": true,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "simple_continuation",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": true,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 4864,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Dentista",
+              "date": "2026-09-09",
+              "time": "11:00 AM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "local_hospital"
+            },
+            "actionId": "902db0c5-e332-46a4-8298-b9087ea4e28b:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "902db0c5-e332-46a4-8298-b9087ea4e28b",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "I81",
+      "category": "conversacion",
+      "input": "qué hago si estoy cansado",
+      "expect": {
+        "kind": "chat"
+      },
+      "attempted": true,
+      "requestId": "64813ca1-6dbf-4319-b63b-c2322a5eac17",
+      "attempts": [
+        {
+          "request_row_id": "ec8be5ef-2f6f-4347-b370-a142dbe82d9d",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00028686,
+          "outcome": "success",
+          "created_at": "2026-09-08T21:49:56.439703+00:00",
+          "settled_at": "2026-09-08T21:49:58.739064+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 5304,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Si estás cansado, pausa un momento: toma agua, come algo si no has comido y descansa 15–20 minutos. Si puedes, baja la exigencia; si el cansancio es intenso, persistente o viene con otros síntomas, consulta a un profesional.",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "chat_only",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "64813ca1-6dbf-4319-b63b-c2322a5eac17",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "J91",
+      "category": "no_crear",
+      "input": "quizás mañana vaya al gym",
+      "expect": {
+        "kind": "chat"
+      },
+      "attempted": true,
+      "requestId": "1c4ba14b-5f44-4468-a759-865743a0994d",
+      "attempts": [
+        {
+          "request_row_id": "a68b538e-8760-48fd-b7ab-53a3ac68c852",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00013086,
+          "outcome": "success",
+          "created_at": "2026-09-08T21:50:06.137029+00:00",
+          "settled_at": "2026-09-08T21:50:09.279766+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 6632,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Si finalmente vas, dime la hora y te lo agendo.",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "chat_only",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "1c4ba14b-5f44-4468-a759-865743a0994d",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "K101",
+      "category": "informal",
+      "input": "ponme futbol a las 5 porfa",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "futbol"
+        ],
+        "timeAnyOf": [
+          "5:00 PM"
+        ]
+      },
+      "attempted": true,
+      "requestId": "5567e95d-1da0-4aa6-bb4b-08b8048361d2",
+      "attempts": [
+        {
+          "request_row_id": "99acbfb9-38d4-4de9-9af5-89e006ae5eb5",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00024786,
+          "outcome": "success",
+          "created_at": "2026-09-08T21:50:16.396736+00:00",
+          "settled_at": "2026-09-08T21:50:18.195526+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 5134,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Fútbol",
+              "date": "2026-09-08",
+              "time": "5:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "5567e95d-1da0-4aa6-bb4b-08b8048361d2:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "5567e95d-1da0-4aa6-bb4b-08b8048361d2",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "replay_mismatch"
+        ]
+      },
+      "replayVerified": false
+    }
+  ],
+  "cleanup": {
+    "pendingSyntheticUserIds": [],
+    "deleted": 24,
+    "verified": 24
+  },
+  "summary": {
+    "selected": 211,
+    "attempted": 11,
+    "objectivePass": 10,
+    "objectivePassRate": 0.9090909090909091,
+    "totalTrackedCostUSD": 0.003187,
+    "trackedCostBasis": "Recorded telemetry accounting, including conservative reservations; not an observed provider bill.",
+    "costObservationSufficient": true,
+    "observedCostAttemptCount": 11,
+    "unobservedCostAttemptCount": 0,
+    "totalObservedCostUSD": 0.003187,
+    "meanInteractionCostUSD": 0.0002897272727272727,
+    "meanInteractionCostBasis": "Provider-reported token usage priced for every paid attempt, divided by attempted interactions; null when any usage or telemetry is missing. Not an invoice.",
+    "recordedRunChargeUSD": 0.00318735,
+    "latencyPopulation": "successful_http_200",
+    "p50Ms": 5492,
+    "p95Ms": 17311,
+    "replayChecks": 10,
+    "providerAttempts": 11,
+    "humanConversationScore": null,
+    "metrics": {
+      "nova_requests": 11,
+      "nova_provider_attempts": 11,
+      "nova_success": 11,
+      "nova_failure": 0,
+      "nova_outcome_unknown": 0,
+      "nova_retry": 0,
+      "nova_escalation": 0,
+      "nova_escalated_requests": 0,
+      "nova_clarification": 1,
+      "nova_invalid_schema": 0,
+      "nova_cost_usd": 0.003187,
+      "mean_request_cost_usd": 0.0002897272727272727,
+      "cost_evidence": {
+        "rows": 11,
+        "known_cost_rows": 11,
+        "unknown_cost_rows": 0,
+        "cost_usd": 0.003187,
+        "known_cost_usd": 0.003187,
+        "provider_usage_cost_usd": 0.003187,
+        "reservation_cost_usd": null,
+        "unknown_cost_basis_rows": 0
+      },
+      "usage_measured_attempts": 11,
+      "reserved_cost_attempts": 0,
+      "mean_input_tokens": 2287.181818181818,
+      "mean_output_tokens": 141.72727272727272,
+      "input_measured_attempts": 11,
+      "output_measured_attempts": 11,
+      "provider_attempt_p50_ms": 2065,
+      "provider_attempt_p95_ms": 3031,
+      "provider_latency_measured_attempts": 11,
+      "request_p50_ms": null,
+      "request_p95_ms": null,
+      "request_latency_measured_requests": 0,
+      "request_partial_elapsed_p50_ms": 2158,
+      "request_partial_elapsed_p95_ms": 3135,
+      "request_partial_elapsed_measured_requests": 11,
+      "model_distribution": {
+        "initial_request_model": {
+          "gpt-5.6-luna": {
+            "count": 11,
+            "percent": 100
+          },
+          "gpt-5.6-terra": {
+            "count": 0,
+            "percent": 0
+          },
+          "gpt-5.6-sol": {
+            "count": 0,
+            "percent": 0
+          }
+        },
+        "final_observed_request_model": {
+          "gpt-5.6-luna": {
+            "count": 11,
+            "percent": 100
+          },
+          "gpt-5.6-terra": {
+            "count": 0,
+            "percent": 0
+          },
+          "gpt-5.6-sol": {
+            "count": 0,
+            "percent": 0
+          }
+        },
+        "provider_attempt_model": {
+          "gpt-5.6-luna": {
+            "count": 11,
+            "percent": 100
+          },
+          "gpt-5.6-terra": {
+            "count": 0,
+            "percent": 0
+          },
+          "gpt-5.6-sol": {
+            "count": 0,
+            "percent": 0
+          }
+        },
+        "denominators": {
+          "initial_request_model": 11,
+          "final_observed_request_model": 11,
+          "provider_attempt_model": 11
+        },
+        "final_model_basis": "Last recorded attempt, ordered by attempt index then timestamp. This is not evidence of durable request completion."
+      },
+      "sol_requests": 0,
+      "sol_request_percent": 0,
+      "sol_provider_attempts": 0,
+      "sol_attempt_percent": 0,
+      "requests_with_unknown_model": 0,
+      "sol_telemetry_calendar_cost": {
+        "today_utc": {
+          "from": "2026-09-08T00:00:00.000Z",
+          "through": "2026-09-08T21:50:45.810Z",
+          "coverage_complete": false,
+          "observed_attempts": 0,
+          "unknown_date_attempts": 0,
+          "unattributed_attempts": 0,
+          "unknown_cost_attempts": 0,
+          "observed_known_cost_usd": 0,
+          "cost_usd": null
+        },
+        "month_utc": {
+          "from": "2026-09-01T00:00:00.000Z",
+          "through": "2026-09-08T21:50:45.810Z",
+          "coverage_complete": false,
+          "observed_attempts": 0,
+          "unknown_date_attempts": 0,
+          "unattributed_attempts": 0,
+          "unknown_cost_attempts": 0,
+          "observed_known_cost_usd": 0,
+          "cost_usd": null
+        }
+      },
+      "escalation_reasons": {},
+      "routing_reasons": {
+        "everyday_request": 10,
+        "simple_continuation": 1
+      },
+      "reasoning_effort_attempts": {
+        "none": 11
+      },
+      "output_reasoning_tokens": 0,
+      "output_reasoning_measured_attempts": 11,
+      "cache": {
+        "measured_usage_attempts": 11,
+        "read_measured_attempts": 11,
+        "read_hit_attempts": 10,
+        "read_hit_percent": 90.9090909090909,
+        "write_measured_attempts": 11,
+        "write_attempts": 1,
+        "write_percent": 9.090909090909092,
+        "read_tokens": 21230,
+        "write_tokens": 2123,
+        "openai_complete_breakdown_attempts": 11,
+        "openai_cached_read_input_percent": 84.38332207162446,
+        "savings_measured_attempts": 11,
+        "read_savings_usd": 0.0038214000000000004,
+        "write_premium_usd": 0.00010614999999999998,
+        "net_savings_usd": 0.0037152500000000002,
+        "savings_basis": "Recorded per-attempt price calculation only; missing usage, breakdown or price evidence is unknown. Net savings subtract cache-write premiums."
+      },
+      "nova_tool_success": null,
+      "nova_tool_failure": null,
+      "measurement_scope": "Provider telemetry only; success/failure describe the last observed provider attempt, not durable server completion or client persistence. Missing dimensions are unknown; model shares include unknown/legacy model buckets. No client receipts, rejected admissions or unrecorded paid attempts are inferred. Calendar cost is complete only with supplied coverage from UTC period start. Never add these telemetry costs to the admission ledger."
+    }
+  },
+  "errorCode": "replay_mismatch",
+  "finishedAt": "2026-09-08T21:50:45.810Z"
+}

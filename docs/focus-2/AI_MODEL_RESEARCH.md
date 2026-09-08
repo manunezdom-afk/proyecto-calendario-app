@@ -1,5 +1,7 @@
 # Modelos para Hilante: evidencia documental
 
+> Comparación histórica de candidatos del 8 de septiembre de 2026. La decisión posterior del usuario es OpenAI exclusivamente para chat: [implementación actual](AI_OPENAI_IMPLEMENTATION.md). Los proveedores de esta tabla no constituyen un router activo.
+
 Revisado el **8 de septiembre de 2026**. Precios en USD por millón de tokens, API directa, procesamiento estándar y texto; sin impuestos, descuentos negociados, batch, prioridad ni herramientas alojadas. Esta investigación no ha enviado inferencias pagadas ni inspeccionado credenciales. La presencia de un modelo en el catálogo no demuestra acceso desde la cuenta de Focus.
 
 ## Ocho candidatos para medir

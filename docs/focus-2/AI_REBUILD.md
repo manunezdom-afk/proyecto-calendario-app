@@ -1,4 +1,6 @@
-# Hilante: reconstrucción de la IA
+# Hilante: reconstrucción de la IA — registro histórico
+
+> Este registro conserva la etapa anterior a la migración OpenAI del 8 de septiembre. Sus defaults de proveedor, presupuesto y consentimiento ya no describen el código actual. La configuración vigente y el estado de despliegue están en [AI_OPENAI_IMPLEMENTATION.md](AI_OPENAI_IMPLEMENTATION.md). Las mediciones Haiku siguen siendo evidencia histórica, no resultados de OpenAI.
 
 Revisión local del 8 de septiembre de 2026. El nombre visible permanece **Hilante**. Este documento describe código y pruebas locales; no acredita un despliegue de Vercel ni una migración aplicada a Supabase.
 

@@ -1,0 +1,360 @@
+{
+  "version": 1,
+  "mode": "remote-http-real-sql",
+  "status": "completed",
+  "runId": "84764f23-c413-492f-b549-2a0cc4e36da5",
+  "reportPath": "/tmp/focus-ai-remote-smoke.json",
+  "deployment": "https://focus-nyypuz3je-manunezdom-9658s-projects.vercel.app",
+  "budgetUSD": 0.25,
+  "requestReservationBoundUSD": 0.25,
+  "boundEvidence": "Operator must verify this deployment enforces at most US$0.25 per logical request; no global budget or quota is changed by this runner.",
+  "fixedNow": "2026-09-08T15:00:00.000Z",
+  "sourceHashes": {
+    "api/_lib/novaRuntime.js": "509def512a05d9bc12de289648631de7ff06d754153e744d87e46e247bd8b03f",
+    "api/_lib/novaRouter.js": "006c6ba27b112372bc311ccd4de45115675e565915096b391561bbc7574bf0ec",
+    "api/_lib/openaiNova.js": "8181cbf23b81ac6a71b5f05c87346d61e1923f06077694e4a2dbb8cdeb77e86c",
+    "api/_lib/novaPrompt.js": "c79fdc7cebf554e8fea71bd3ae04b463fd08af196ea5c6f1d3397eff210e6a01",
+    "api/_lib/novaContract.js": "75a01303079d61dd646b3bd44493b5be7b2bf075ea644195d228721d9fa3de02",
+    "api/_lib/novaAdmission.js": "5d2bc5996b5b615fa17b953e8c484fef31a7cc162bee51cd0f6a29284e112470",
+    "api/_lib/novaSafety.js": "2c7b6f36dcd6ec629ad687702d772c39bb26ad811bcd120ac639cb378ef2e96d",
+    "api/_lib/aiPricing.js": "89110922bb1872b1ccdcd2ab6430aa61e360c1366a75843f1fcd9c7876047a73",
+    "api/_lib/aiUsageTracking.js": "a847767ddecb9cd14efc01cd4ed33fb0e23e55b0a58aa5c023f5d4e075aad4c1",
+    "api/_lib/dateContext.js": "dda6f4b027fd8a97c96a8f0c9a1bdddf94ff58a493477a910692a2936ee5bd53",
+    "api/_lib/usageLimits.js": "4f5ef8e2260a44bde6903ee2bad9a7549d6b5f9932db74fe5d34536e243b5cd2",
+    "api/_lib/assistantBrand.js": "b5218a8ad63bfb17179048b7003832d4e5b8cbf73be4eea9d52b0911c2322860",
+    "scripts/ai-router-benchmark.mjs": "ed3591ba11775caca8108e5d1e509a7c42dab65adeabdc4da4abd21e9ed1a40e",
+    "scripts/lib/ephemeral-ai-database.mjs": "85203cda7bcd938de48fe5280e735b3833eeb42d4ba095392d9bd186b1e3548a",
+    "scripts/ai-benchmark-grade.mjs": "a424e505d132801f5066aab7f4c3825a4714505becda2a15dad87e0768ff456a",
+    "scripts/ai-metrics.mjs": "70bbc80e2a313e54797e1fe8a4faa75de2cbbf5289ed61921ab79884b1f93b83",
+    "tests/nova-battery/cases.json": "ee5b1a9aa4462a2f0727fdc3d858515fefdf76be8e2734d4773de1044e494229"
+  },
+  "localExpectedSQLHashes": {
+    "supabase/migrations/020_atomic_ai_usage.sql": "8b2490757a5fa74c65a22f611033fe2deffd36262b9e3cf1684d28963ad973b1",
+    "supabase/migrations/021_ai_admission.sql": "12f5a159bc66ce2dc332859f3cfa14dee8337099ae4181e24b26fd115ca28bde",
+    "supabase/migrations/022_openai_model_admission.sql": "74952a7f4ae10c14698c38e80c96668750e765db7b87e8e2dc50a270b3d9b92f"
+  },
+  "measurementScope": "Remote Focus HTTP and existing remote SQL ledgers; synthetic accounts and fixture context only. Local SQL hashes are expected sources, not proof of remote bytes. No client persistence or human conversation quality is measured.",
+  "selectedCases": [
+    "A1"
+  ],
+  "plannedUsers": 1,
+  "rows": [
+    {
+      "id": "A1",
+      "category": "eventos_simples",
+      "input": "fútbol a las 5",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "futbol"
+        ],
+        "timeAnyOf": [
+          "5:00 PM"
+        ],
+        "date": "today",
+        "endTimeNull": true
+      },
+      "attempted": true,
+      "requestId": "3c9ff17a-4542-48db-ac97-6ddeb96e8047",
+      "attempts": [
+        {
+          "request_row_id": "6bdd3925-0bde-4188-bc92-22a1196e22d8",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00065465,
+          "outcome": "success",
+          "created_at": "2026-09-08T21:19:18.812418+00:00",
+          "settled_at": "2026-09-08T21:19:22.809332+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 7732,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Fútbol",
+              "date": "2026-09-08",
+              "time": "5:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "3c9ff17a-4542-48db-ac97-6ddeb96e8047:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "3c9ff17a-4542-48db-ac97-6ddeb96e8047",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayVerified": true
+    }
+  ],
+  "cleanup": {
+    "pendingSyntheticUserIds": [],
+    "deleted": 1,
+    "verified": 1
+  },
+  "summary": {
+    "selected": 1,
+    "attempted": 1,
+    "objectivePass": 1,
+    "objectivePassRate": 1,
+    "totalTrackedCostUSD": 0.000655,
+    "trackedCostBasis": "Recorded telemetry accounting, including conservative reservations; not an observed provider bill.",
+    "costObservationSufficient": true,
+    "observedCostAttemptCount": 1,
+    "unobservedCostAttemptCount": 0,
+    "totalObservedCostUSD": 0.000655,
+    "meanInteractionCostUSD": 0.000655,
+    "meanInteractionCostBasis": "Provider-reported token usage priced for every paid attempt, divided by attempted interactions; null when any usage or telemetry is missing. Not an invoice.",
+    "recordedRunChargeUSD": 0.00065465,
+    "latencyPopulation": "successful_http_200",
+    "p50Ms": 7732,
+    "p95Ms": 7732,
+    "replayChecks": 1,
+    "providerAttempts": 1,
+    "humanConversationScore": null,
+    "metrics": {
+      "nova_requests": 1,
+      "nova_provider_attempts": 1,
+      "nova_success": 1,
+      "nova_failure": 0,
+      "nova_outcome_unknown": 0,
+      "nova_retry": 0,
+      "nova_escalation": 0,
+      "nova_escalated_requests": 0,
+      "nova_clarification": 0,
+      "nova_invalid_schema": 0,
+      "nova_cost_usd": 0.000655,
+      "mean_request_cost_usd": 0.000655,
+      "cost_evidence": {
+        "rows": 1,
+        "known_cost_rows": 1,
+        "unknown_cost_rows": 0,
+        "cost_usd": 0.000655,
+        "known_cost_usd": 0.000655,
+        "provider_usage_cost_usd": 0.000655,
+        "reservation_cost_usd": null,
+        "unknown_cost_basis_rows": 0
+      },
+      "usage_measured_attempts": 1,
+      "reserved_cost_attempts": 0,
+      "mean_input_tokens": 1969,
+      "mean_output_tokens": 142,
+      "input_measured_attempts": 1,
+      "output_measured_attempts": 1,
+      "provider_attempt_p50_ms": 3861,
+      "provider_attempt_p95_ms": 3861,
+      "provider_latency_measured_attempts": 1,
+      "request_p50_ms": null,
+      "request_p95_ms": null,
+      "request_latency_measured_requests": 0,
+      "request_partial_elapsed_p50_ms": 4068,
+      "request_partial_elapsed_p95_ms": 4068,
+      "request_partial_elapsed_measured_requests": 1,
+      "model_distribution": {
+        "initial_request_model": {
+          "gpt-5.6-luna": {
+            "count": 1,
+            "percent": 100
+          },
+          "gpt-5.6-terra": {
+            "count": 0,
+            "percent": 0
+          },
+          "gpt-5.6-sol": {
+            "count": 0,
+            "percent": 0
+          }
+        },
+        "final_observed_request_model": {
+          "gpt-5.6-luna": {
+            "count": 1,
+            "percent": 100
+          },
+          "gpt-5.6-terra": {
+            "count": 0,
+            "percent": 0
+          },
+          "gpt-5.6-sol": {
+            "count": 0,
+            "percent": 0
+          }
+        },
+        "provider_attempt_model": {
+          "gpt-5.6-luna": {
+            "count": 1,
+            "percent": 100
+          },
+          "gpt-5.6-terra": {
+            "count": 0,
+            "percent": 0
+          },
+          "gpt-5.6-sol": {
+            "count": 0,
+            "percent": 0
+          }
+        },
+        "denominators": {
+          "initial_request_model": 1,
+          "final_observed_request_model": 1,
+          "provider_attempt_model": 1
+        },
+        "final_model_basis": "Last recorded attempt, ordered by attempt index then timestamp. This is not evidence of durable request completion."
+      },
+      "sol_requests": 0,
+      "sol_request_percent": 0,
+      "sol_provider_attempts": 0,
+      "sol_attempt_percent": 0,
+      "requests_with_unknown_model": 0,
+      "sol_telemetry_calendar_cost": {
+        "today_utc": {
+          "from": "2026-09-08T00:00:00.000Z",
+          "through": "2026-09-08T21:19:32.224Z",
+          "coverage_complete": false,
+          "observed_attempts": 0,
+          "unknown_date_attempts": 0,
+          "unattributed_attempts": 0,
+          "unknown_cost_attempts": 0,
+          "observed_known_cost_usd": 0,
+          "cost_usd": null
+        },
+        "month_utc": {
+          "from": "2026-09-01T00:00:00.000Z",
+          "through": "2026-09-08T21:19:32.224Z",
+          "coverage_complete": false,
+          "observed_attempts": 0,
+          "unknown_date_attempts": 0,
+          "unattributed_attempts": 0,
+          "unknown_cost_attempts": 0,
+          "observed_known_cost_usd": 0,
+          "cost_usd": null
+        }
+      },
+      "escalation_reasons": {},
+      "routing_reasons": {
+        "everyday_request": 1
+      },
+      "reasoning_effort_attempts": {
+        "none": 1
+      },
+      "output_reasoning_tokens": 0,
+      "output_reasoning_measured_attempts": 1,
+      "cache": {
+        "measured_usage_attempts": 1,
+        "read_measured_attempts": 1,
+        "read_hit_attempts": 0,
+        "read_hit_percent": 0,
+        "write_measured_attempts": 1,
+        "write_attempts": 1,
+        "write_percent": 100,
+        "read_tokens": 0,
+        "write_tokens": 1809,
+        "openai_complete_breakdown_attempts": 1,
+        "openai_cached_read_input_percent": 0,
+        "savings_measured_attempts": 1,
+        "read_savings_usd": 0,
+        "write_premium_usd": 0.00009044999999999998,
+        "net_savings_usd": -0.00009044999999999998,
+        "savings_basis": "Recorded per-attempt price calculation only; missing usage, breakdown or price evidence is unknown. Net savings subtract cache-write premiums."
+      },
+      "nova_tool_success": null,
+      "nova_tool_failure": null,
+      "measurement_scope": "Provider telemetry only; success/failure describe the last observed provider attempt, not durable server completion or client persistence. Missing dimensions are unknown; model shares include unknown/legacy model buckets. No client receipts, rejected admissions or unrecorded paid attempts are inferred. Calendar cost is complete only with supplied coverage from UTC period start. Never add these telemetry costs to the admission ledger."
+    }
+  },
+  "finishedAt": "2026-09-08T21:19:32.223Z"
+}

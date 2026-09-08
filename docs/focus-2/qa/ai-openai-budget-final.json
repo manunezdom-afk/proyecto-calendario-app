@@ -1,0 +1,85 @@
+{
+  "status": "remote_read_verified",
+  "intermediate": true,
+  "startedAt": "2026-09-08T23:30:13.645Z",
+  "finishedAt": "2026-09-08T23:30:13.980Z",
+  "projectRef": "hvwqeemtfoyvfmongwzo",
+  "providerCalls": 0,
+  "mutations": 0,
+  "personalRowsRead": 0,
+  "readOnlyRPCs": [
+    "focus_ai_model_metrics",
+    "focus_ai_get_control"
+  ],
+  "policy": {
+    "requests_per_minute": 5,
+    "max_concurrent": 1,
+    "lease_seconds": 55,
+    "daily_budget_usd": 5,
+    "monthly_budget_usd": 20,
+    "user_daily_budget_usd": 0.25,
+    "user_monthly_budget_usd": 5,
+    "request_budget_usd": 0.25,
+    "sol_daily_budget_usd": 0.5,
+    "sol_monthly_budget_usd": 3,
+    "sol_user_daily_requests": 2,
+    "sol_user_monthly_requests": 10,
+    "sol_enabled": true,
+    "economy_percent": 90,
+    "alert_percentages": [
+      50,
+      75,
+      90
+    ],
+    "sol_share_alert_percent": 5,
+    "sol_share_min_requests": 20
+  },
+  "policySource": "Previously verified Vercel configuration supplied to metrics; this call does not reread Vercel env.",
+  "metrics": {
+    "tiers": [
+      {
+        "tier": "luna",
+        "model": "gpt-5.6-luna",
+        "attempts": 272,
+        "cost_usd": 0.07880654,
+        "requests": 272,
+        "unresolved_attempts": 0
+      },
+      {
+        "tier": "sol",
+        "model": "gpt-5.6-sol",
+        "attempts": 2,
+        "cost_usd": 0.170469,
+        "requests": 2,
+        "unresolved_attempts": 0
+      },
+      {
+        "tier": "terra",
+        "model": "gpt-5.6-terra",
+        "attempts": 13,
+        "cost_usd": 0.0798197,
+        "requests": 13,
+        "unresolved_attempts": 0
+      }
+    ],
+    "status": "ok",
+    "budget_level": "normal",
+    "model_metrics": {
+      "sol_request_count": 2,
+      "sol_request_share": 0.007042253521126761,
+      "paid_request_count": 284,
+      "sol_daily_spent_usd": 0.170469,
+      "sol_monthly_spent_usd": 0.170469
+    },
+    "daily_spent_usd": 0.32909524,
+    "monthly_spent_usd": 0.33342224
+  },
+  "control": {
+    "status": "ok",
+    "updated_at": "2026-09-08T21:04:51.793961+00:00",
+    "paid_enabled": true
+  },
+  "accountingBasis": "Ledger accounting includes conservative reservations when usage was unknown. Do not equate with an observed provider invoice or add request/attempt/telemetry totals.",
+  "window": "daily=UTC day; monthly=rolling 30 days. Separate read-only RPC statements, no transactional snapshot.",
+  "perUserLimits": "Not inspected; aggregate RPC zero user fields omitted."
+}

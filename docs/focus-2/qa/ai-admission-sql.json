@@ -1,7 +1,7 @@
 {
   "engine": "PGlite / PostgreSQL WASM",
-  "runAt": "2026-09-08T15:09:09.149Z",
-  "passed": 21,
+  "runAt": "2026-09-08T20:51:34.499Z",
+  "passed": 34,
   "checks": [
     "migration applies and reapplies in PostgreSQL",
     "first request reserves and consumes one message",
@@ -23,7 +23,20 @@
     "a colliding client ID cannot conceal a legacy provider charge",
     "anonymous clients cannot invoke service RPC or read cache",
     "deleting an account scrubs replay while retaining anonymous cost",
-    "missing policy and unknown limits fail closed"
+    "missing policy and unknown limits fail closed",
+    "022 requires exact model, finite reservation, sequential attempt and genuine lease",
+    "022 unknown attempt charges its reservation and finish cannot hide it",
+    "022 reserves Sol only when started and limits one Sol attempt per request",
+    "022 independent Sol daily and monthly money caps permit a cheaper same-index fallback",
+    "022 Sol user daily/monthly attempt quotas do not block Luna",
+    "022 logical contention includes another owner pending Sol cost and releases no unknown money",
+    "022 economy at 90 percent blocks Sol before any model row while Luna remains available",
+    "022 configurable monthly alerts are persisted once and returned as structured events",
+    "022 explicit disabled Sol and malformed alert configuration fail closed",
+    "022 overrun is immediately visible to global admission and cannot be reduced at finish",
+    "022 invalid settlement cannot finish or release a request with no authorized model",
+    "022 database kill immediately denies new admission and leased attempts while preserving private replay",
+    "022 Sol metrics remain anonymous after account deletion and all operational tables are private"
   ],
   "limitation": "Single database connection: execution, privileges and sequential invariants verified; multi-process advisory lock contention requires staging PostgreSQL."
 }

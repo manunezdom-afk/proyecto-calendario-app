@@ -1,0 +1,2670 @@
+{
+  "version": 1,
+  "mode": "remote-http-real-sql",
+  "status": "completed",
+  "runId": "1e334643-262b-428b-866b-e925dc38998e",
+  "reportPath": "/Users/martinnunezdominguez/Developer/focus/docs/focus-2/qa/ai-experience-remote-v6.json",
+  "deployment": "https://focus-dnj0qcav4-manunezdom-9658s-projects.vercel.app",
+  "transport": "direct_https",
+  "httpIntervalMs": 5000,
+  "budgetUSD": 0.5,
+  "requestReservationBoundUSD": 0.25,
+  "boundEvidence": "Operator must verify this deployment enforces at most US$0.25 per logical request; no global budget or quota is changed by this runner.",
+  "fixedNow": "2026-09-08T15:00:00.000Z",
+  "sourceHashes": {
+    "api/_lib/novaRuntime.js": "4ce256ad641a0615a22e14b831adb20cc289f1a0d2c58751fd0ff58c66a074fc",
+    "api/_lib/novaRouter.js": "846b2cf5b20d262916bd37691cc9c570c248afcdc5a4a123347f5fd5d5d7c862",
+    "api/_lib/openaiNova.js": "c7fad6becb841f2865e505a6cab235d84790ec2d7ca5436939329dc21e5e39d3",
+    "api/_lib/novaPrompt.js": "b97a68ea8dcec1484888de38bb3471ea549d3323282c992006ffbd64639ab4a1",
+    "api/_lib/novaPendingProposal.js": "3277422169a926f7cdf5b430d419e3f85fc09aede546e457cfffb815309e5277",
+    "api/_lib/novaContract.js": "f5481521b27ff08339c1c4336f912ae344f1a3fd7c63c6d06d531603dbadf08f",
+    "api/_lib/novaAdmission.js": "5d2bc5996b5b615fa17b953e8c484fef31a7cc162bee51cd0f6a29284e112470",
+    "api/_lib/novaSafety.js": "3f17b7a0a36cc19b9b6ed99775f70b646b5e7b04d79b0efdd12e9abe8712c5a6",
+    "api/_lib/aiPricing.js": "89110922bb1872b1ccdcd2ab6430aa61e360c1366a75843f1fcd9c7876047a73",
+    "api/_lib/aiUsageTracking.js": "a847767ddecb9cd14efc01cd4ed33fb0e23e55b0a58aa5c023f5d4e075aad4c1",
+    "api/_lib/dateContext.js": "dda6f4b027fd8a97c96a8f0c9a1bdddf94ff58a493477a910692a2936ee5bd53",
+    "api/_lib/usageLimits.js": "4f5ef8e2260a44bde6903ee2bad9a7549d6b5f9932db74fe5d34536e243b5cd2",
+    "api/_lib/assistantBrand.js": "b5218a8ad63bfb17179048b7003832d4e5b8cbf73be4eea9d52b0911c2322860",
+    "scripts/ai-router-benchmark.mjs": "08178036d182a68f57eb9eb163ee39bbaf841d6c31461a6e325904fb8a2ed95f",
+    "scripts/lib/ephemeral-ai-database.mjs": "85203cda7bcd938de48fe5280e735b3833eeb42d4ba095392d9bd186b1e3548a",
+    "scripts/ai-benchmark-grade.mjs": "a424e505d132801f5066aab7f4c3825a4714505becda2a15dad87e0768ff456a",
+    "scripts/ai-metrics.mjs": "70bbc80e2a313e54797e1fe8a4faa75de2cbbf5289ed61921ab79884b1f93b83",
+    "tests/nova-battery/cases.json": "ee5b1a9aa4462a2f0727fdc3d858515fefdf76be8e2734d4773de1044e494229"
+  },
+  "runnerSourceHashes": {
+    "scripts/ai-remote-benchmark.mjs": "dc67bc9dcfd6762c7dca44919c3ba4200694a68c9d27631863caac5335ad5a47",
+    "scripts/ai-remote-check.mjs": "2adea67a0f94da097e52e4f8530e651cfcfb4cc04a168599a473379ea76c8638",
+    "api/focus-assistant.js": "95778e8d3c41e3e75ec214fea33613e468333b514e480afa99cefa721ba058e2",
+    "api/_lib/aiCapabilities.js": "302642746e03a9e797985b502e96e4819691de92a7a6a2a614409a35bfdf0133",
+    "vercel.json": "46ecf4c896af09dcdbf9ae624d50572db2139206f4c076d42b6abf176d5e382f"
+  },
+  "caseCorpusHash": "de40c12bcffd4c3b67e028afdee045e14a93a6dcda7642d4d3b34601f2b278a9",
+  "localExpectedSQLHashes": {
+    "supabase/migrations/020_atomic_ai_usage.sql": "8b2490757a5fa74c65a22f611033fe2deffd36262b9e3cf1684d28963ad973b1",
+    "supabase/migrations/021_ai_admission.sql": "12f5a159bc66ce2dc332859f3cfa14dee8337099ae4181e24b26fd115ca28bde",
+    "supabase/migrations/022_openai_model_admission.sql": "74952a7f4ae10c14698c38e80c96668750e765db7b87e8e2dc50a270b3d9b92f"
+  },
+  "measurementScope": "Remote Focus HTTP and existing remote SQL ledgers; synthetic accounts and fixture context only. Local SQL hashes are expected sources, not proof of remote bytes. No client persistence or human conversation quality is measured.",
+  "selectedCases": [
+    "UX1",
+    "UX2",
+    "UX3",
+    "UX4",
+    "UX5",
+    "UX6",
+    "UX7",
+    "UX8",
+    "UX9",
+    "UX10",
+    "UX11",
+    "UX12",
+    "UX13"
+  ],
+  "plannedUsers": 2,
+  "rows": [
+    {
+      "id": "UX1",
+      "category": "informal_semantics",
+      "input": "salgo a la casa de un amigo en 20",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "amigo"
+        ],
+        "timeRelativeMinutes": 20,
+        "date": "today"
+      },
+      "attempted": true,
+      "requestId": "dc9d0746-de9e-47f6-9953-0c6fec170bbf",
+      "attempts": [
+        {
+          "request_row_id": "c63331a6-7d6b-4b2c-a311-7f5670f09ba4",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00076585,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:07:12.574713+00:00",
+          "settled_at": "2026-09-08T23:07:15.439962+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 6307,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Casa de un amigo",
+              "date": "2026-09-08",
+              "time": "12:20 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "dc9d0746-de9e-47f6-9953-0c6fec170bbf:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "dc9d0746-de9e-47f6-9953-0c6fec170bbf",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_with_action",
+          "reply": "Preparé estos cambios para guardarlos en Focus.",
+          "actions": [
+            {
+              "type": "add_event",
+              "event": {
+                "date": "2026-09-08",
+                "icon": "event",
+                "time": "12:20 PM",
+                "title": "Casa de un amigo",
+                "endTime": null,
+                "section": "evening"
+              },
+              "actionId": "dc9d0746-de9e-47f6-9953-0c6fec170bbf:0"
+            }
+          ],
+          "_dropped": [],
+          "requestId": "dc9d0746-de9e-47f6-9953-0c6fec170bbf",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": true,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 3146
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "UX2",
+      "category": "informal_semantics",
+      "input": "en 20 minutos me voy donde un amigo",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "amigo"
+        ],
+        "timeRelativeMinutes": 20,
+        "date": "today"
+      },
+      "attempted": true,
+      "requestId": "a886dacf-b9bb-4f55-bec0-16432cd285b1",
+      "attempts": [
+        {
+          "request_row_id": "16f8a3f3-8634-4367-a3c4-a0edb6cd23e1",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00026042,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:07:22.576541+00:00",
+          "settled_at": "2026-09-08T23:07:24.436791+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 3080,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Ir donde un amigo",
+              "date": "2026-09-08",
+              "time": "12:20 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "a886dacf-b9bb-4f55-bec0-16432cd285b1:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "a886dacf-b9bb-4f55-bec0-16432cd285b1",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_with_action",
+          "reply": "Preparé estos cambios para guardarlos en Focus.",
+          "actions": [
+            {
+              "type": "add_event",
+              "event": {
+                "date": "2026-09-08",
+                "icon": "event",
+                "time": "12:20 PM",
+                "title": "Ir donde un amigo",
+                "endTime": null,
+                "section": "evening"
+              },
+              "actionId": "a886dacf-b9bb-4f55-bec0-16432cd285b1:0"
+            }
+          ],
+          "_dropped": [],
+          "requestId": "a886dacf-b9bb-4f55-bec0-16432cd285b1",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": true,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 1663
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "UX3",
+      "category": "informal_semantics",
+      "input": "en un rato tengo que ir donde el mati",
+      "expect": {
+        "kindAnyOf": [
+          "task",
+          "clarify"
+        ],
+        "allowClarify": true
+      },
+      "attempted": true,
+      "requestId": "e136f14e-df00-401c-a7af-79b0ba321a27",
+      "attempts": [
+        {
+          "request_row_id": "42728b31-208e-4d98-8e2a-bd998fb63c4b",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00014022,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:07:32.185637+00:00",
+          "settled_at": "2026-09-08T23:07:33.739964+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 2382,
+      "httpStatus": 200,
+      "output": {
+        "reply": "¿A qué hora tienes que ir donde el Mati?",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "clarification",
+        "shouldAskUser": true,
+        "confidence": 0.9,
+        "requestId": "e136f14e-df00-401c-a7af-79b0ba321a27",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "clarification",
+          "reply": "¿A qué hora tienes que ir donde el Mati?",
+          "actions": [],
+          "_dropped": [],
+          "requestId": "e136f14e-df00-401c-a7af-79b0ba321a27",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": true,
+          "proposed_actions": [],
+          "execution_pending": false,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 465
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "UX4",
+      "category": "informal_semantics",
+      "input": "tipo 8 voy a la casa de la fran",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "fran"
+        ],
+        "timeAnyOf": [
+          "8:00 PM"
+        ],
+        "date": "today"
+      },
+      "attempted": true,
+      "requestId": "bf606703-4ecd-4df0-a56f-4b8aad0775d8",
+      "attempts": [
+        {
+          "request_row_id": "155196a0-bcb2-4c48-870a-f70cc516b66b",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00025922,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:07:42.236054+00:00",
+          "settled_at": "2026-09-08T23:07:44.267555+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 2858,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Ir a la casa de la Fran",
+              "date": "2026-09-08",
+              "time": "8:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "bf606703-4ecd-4df0-a56f-4b8aad0775d8:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "bf606703-4ecd-4df0-a56f-4b8aad0775d8",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_with_action",
+          "reply": "Preparé estos cambios para guardarlos en Focus.",
+          "actions": [
+            {
+              "type": "add_event",
+              "event": {
+                "date": "2026-09-08",
+                "icon": "event",
+                "time": "8:00 PM",
+                "title": "Ir a la casa de la Fran",
+                "endTime": null,
+                "section": "evening"
+              },
+              "actionId": "bf606703-4ecd-4df0-a56f-4b8aad0775d8:0"
+            }
+          ],
+          "_dropped": [],
+          "requestId": "bf606703-4ecd-4df0-a56f-4b8aad0775d8",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": true,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 408
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "UX5",
+      "category": "informal_semantics",
+      "input": "mañana después de almuerzo voy donde un amigo",
+      "expect": {
+        "kindAnyOf": [
+          "task",
+          "clarify"
+        ],
+        "allowClarify": true
+      },
+      "attempted": true,
+      "requestId": "aff558bf-1567-46b2-a852-158a99088e49",
+      "attempts": [
+        {
+          "request_row_id": "9b2fd3a4-9f6c-4ca3-9c6a-2b1d12e215cf",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00011642,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:07:54.80006+00:00",
+          "settled_at": "2026-09-08T23:07:56.33674+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 1,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 1,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 4934,
+      "httpStatus": 200,
+      "output": {
+        "reply": "No hice cambios. Cuéntame qué necesitas.",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "chat_only",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "aff558bf-1567-46b2-a852-158a99088e49",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "kind: esperaba task|clarify, obtuve [chat]"
+        ],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_only",
+          "reply": "No hice cambios. Cuéntame qué necesitas.",
+          "actions": [],
+          "_dropped": [],
+          "requestId": "aff558bf-1567-46b2-a852-158a99088e49",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": false,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 1571
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "UX6",
+      "category": "informal_semantics",
+      "input": "a las 9 salgo pa donde la vale",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "vale"
+        ],
+        "timeAnyOf": [
+          "9:00 PM"
+        ],
+        "date": "today"
+      },
+      "attempted": true,
+      "requestId": "1539aa6f-ba5f-44e9-8c79-ea876bc878c2",
+      "attempts": [
+        {
+          "request_row_id": "2b6048ba-520a-4dde-9280-7fb43063aa1f",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00028202,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:08:03.518115+00:00",
+          "settled_at": "2026-09-08T23:08:05.450117+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 3441,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Salir pa donde la vale",
+              "date": "2026-09-08",
+              "time": "9:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "1539aa6f-ba5f-44e9-8c79-ea876bc878c2:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "1539aa6f-ba5f-44e9-8c79-ea876bc878c2",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_with_action",
+          "reply": "Preparé estos cambios para guardarlos en Focus.",
+          "actions": [
+            {
+              "type": "add_event",
+              "event": {
+                "date": "2026-09-08",
+                "icon": "event",
+                "time": "9:00 PM",
+                "title": "Salir pa donde la vale",
+                "endTime": null,
+                "section": "evening"
+              },
+              "actionId": "1539aa6f-ba5f-44e9-8c79-ea876bc878c2:0"
+            }
+          ],
+          "_dropped": [],
+          "requestId": "1539aa6f-ba5f-44e9-8c79-ea876bc878c2",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": true,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 1035
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "UX7",
+      "category": "informal_semantics",
+      "input": "en media hora me voy a fútbol",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "futbol"
+        ],
+        "timeRelativeMinutes": 30,
+        "date": "today"
+      },
+      "attempted": true,
+      "requestId": "df9122f5-7a7d-46d6-8c2c-556e69deeb3b",
+      "attempts": [
+        {
+          "request_row_id": "2a48131e-9236-45eb-a961-6ec12dc1d707",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00025522,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:08:12.923131+00:00",
+          "settled_at": "2026-09-08T23:08:14.969227+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 2808,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Fútbol",
+              "date": "2026-09-08",
+              "time": "12:30 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "df9122f5-7a7d-46d6-8c2c-556e69deeb3b:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "df9122f5-7a7d-46d6-8c2c-556e69deeb3b",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_with_action",
+          "reply": "Preparé estos cambios para guardarlos en Focus.",
+          "actions": [
+            {
+              "type": "add_event",
+              "event": {
+                "date": "2026-09-08",
+                "icon": "event",
+                "time": "12:30 PM",
+                "title": "Fútbol",
+                "endTime": null,
+                "section": "evening"
+              },
+              "actionId": "df9122f5-7a7d-46d6-8c2c-556e69deeb3b:0"
+            }
+          ],
+          "_dropped": [],
+          "requestId": "df9122f5-7a7d-46d6-8c2c-556e69deeb3b",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": true,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 1462
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "UX8",
+      "category": "informal_semantics",
+      "input": "en 15 tengo que salir al dentista",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "dentista"
+        ],
+        "timeRelativeMinutes": 15,
+        "date": "today"
+      },
+      "attempted": true,
+      "requestId": "5faa06d7-09d1-470c-95d1-bbc4d18bbc57",
+      "attempts": [
+        {
+          "request_row_id": "4c16e60a-60bb-43fb-a7ae-b5513fbf39e3",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00028202,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:08:23.490602+00:00",
+          "settled_at": "2026-09-08T23:08:25.86186+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 3651,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Salir al dentista",
+              "date": "2026-09-08",
+              "time": "12:15 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "local_hospital"
+            },
+            "actionId": "5faa06d7-09d1-470c-95d1-bbc4d18bbc57:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "5faa06d7-09d1-470c-95d1-bbc4d18bbc57",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_with_action",
+          "reply": "Preparé estos cambios para guardarlos en Focus.",
+          "actions": [
+            {
+              "type": "add_event",
+              "event": {
+                "date": "2026-09-08",
+                "icon": "local_hospital",
+                "time": "12:15 PM",
+                "title": "Salir al dentista",
+                "endTime": null,
+                "section": "evening"
+              },
+              "actionId": "5faa06d7-09d1-470c-95d1-bbc4d18bbc57:0"
+            }
+          ],
+          "_dropped": [],
+          "requestId": "5faa06d7-09d1-470c-95d1-bbc4d18bbc57",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": true,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 632
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "UX9",
+      "category": "informal_semantics",
+      "input": "en 20 minutos me voy a la casa de un amigo",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "amigo"
+        ],
+        "timeRelativeMinutes": 20,
+        "date": "today"
+      },
+      "attempted": true,
+      "requestId": "c0827618-3c30-4874-b2f5-5075b28028a1",
+      "attempts": [
+        {
+          "request_row_id": "f24eae2e-fc51-4e2e-9d0c-3ad9407217c6",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00029582,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:08:34.653978+00:00",
+          "settled_at": "2026-09-08T23:08:36.705347+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 3619,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Ir a la casa de un amigo",
+              "date": "2026-09-08",
+              "time": "12:20 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "c0827618-3c30-4874-b2f5-5075b28028a1:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "c0827618-3c30-4874-b2f5-5075b28028a1",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_with_action",
+          "reply": "Preparé estos cambios para guardarlos en Focus.",
+          "actions": [
+            {
+              "type": "add_event",
+              "event": {
+                "date": "2026-09-08",
+                "icon": "event",
+                "time": "12:20 PM",
+                "title": "Ir a la casa de un amigo",
+                "endTime": null,
+                "section": "evening"
+              },
+              "actionId": "c0827618-3c30-4874-b2f5-5075b28028a1:0"
+            }
+          ],
+          "_dropped": [],
+          "requestId": "c0827618-3c30-4874-b2f5-5075b28028a1",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": true,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 610
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "UX10",
+      "category": "informal_semantics",
+      "input": "como a las 8 voy a la casa de un amigo",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "amigo"
+        ],
+        "timeAnyOf": [
+          "8:00 PM"
+        ],
+        "date": "today"
+      },
+      "attempted": true,
+      "requestId": "102f8f79-e65a-4577-a799-938f593d0746",
+      "attempts": [
+        {
+          "request_row_id": "29ccc2fd-6372-4626-9cf9-272badfd1d3f",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00028962,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:08:47.679738+00:00",
+          "settled_at": "2026-09-08T23:08:50.727565+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 2,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 2,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 4841,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Ir a la casa de un amigo",
+              "date": "2026-09-08",
+              "time": "8:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "102f8f79-e65a-4577-a799-938f593d0746:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "102f8f79-e65a-4577-a799-938f593d0746",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_with_action",
+          "reply": "Preparé estos cambios para guardarlos en Focus.",
+          "actions": [
+            {
+              "type": "add_event",
+              "event": {
+                "date": "2026-09-08",
+                "icon": "event",
+                "time": "8:00 PM",
+                "title": "Ir a la casa de un amigo",
+                "endTime": null,
+                "section": "evening"
+              },
+              "actionId": "102f8f79-e65a-4577-a799-938f593d0746:0"
+            }
+          ],
+          "_dropped": [],
+          "requestId": "102f8f79-e65a-4577-a799-938f593d0746",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": true,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 317
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "UX11",
+      "category": "informal_semantics",
+      "input": "mañana tengo fútbol a las 6 y acuérdame llevar la camiseta",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "futbol"
+        ],
+        "timeAnyOf": [
+          "6:00 PM"
+        ],
+        "date": "tomorrow"
+      },
+      "attempted": true,
+      "requestId": "650c2b66-b15a-403a-b3d6-e371cb77e7a0",
+      "attempts": [
+        {
+          "request_row_id": "364df023-bba0-40ee-a352-ae571f14b12d",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00037442,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:08:58.585805+00:00",
+          "settled_at": "2026-09-08T23:09:02.152051+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 1,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 5197,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Fútbol",
+              "date": "2026-09-09",
+              "time": "6:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "650c2b66-b15a-403a-b3d6-e371cb77e7a0:0"
+          },
+          {
+            "type": "add_task",
+            "task": {
+              "label": "Llevar la camiseta",
+              "priority": "Media",
+              "category": "hoy",
+              "linkedEventId": null,
+              "parentTaskId": null,
+              "date": null
+            },
+            "actionId": "650c2b66-b15a-403a-b3d6-e371cb77e7a0:1"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "650c2b66-b15a-403a-b3d6-e371cb77e7a0",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_with_action",
+          "reply": "Preparé estos cambios para guardarlos en Focus.",
+          "actions": [
+            {
+              "type": "add_event",
+              "event": {
+                "date": "2026-09-09",
+                "icon": "event",
+                "time": "6:00 PM",
+                "title": "Fútbol",
+                "endTime": null,
+                "section": "evening"
+              },
+              "actionId": "650c2b66-b15a-403a-b3d6-e371cb77e7a0:0"
+            },
+            {
+              "task": {
+                "date": null,
+                "label": "Llevar la camiseta",
+                "category": "hoy",
+                "priority": "Media",
+                "parentTaskId": null,
+                "linkedEventId": null
+              },
+              "type": "add_task",
+              "actionId": "650c2b66-b15a-403a-b3d6-e371cb77e7a0:1"
+            }
+          ],
+          "_dropped": [],
+          "requestId": "650c2b66-b15a-403a-b3d6-e371cb77e7a0",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": true,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 494
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "UX12",
+      "category": "informal_semantics",
+      "input": "en media hora salgo al dentista",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "dentista"
+        ],
+        "timeRelativeMinutes": 30,
+        "date": "today"
+      },
+      "attempted": true,
+      "requestId": "3f34660a-d02d-4c03-abc6-9f0f567893b8",
+      "attempts": [
+        {
+          "request_row_id": "287c6f13-3e70-4828-a94a-20ea69bf8e5b",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00026142,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:09:10.5751+00:00",
+          "settled_at": "2026-09-08T23:09:12.528299+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 0,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 1,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 2992,
+      "httpStatus": 200,
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Salir al dentista",
+              "date": "2026-09-08",
+              "time": "12:30 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "local_hospital",
+              "subtitle": "Dentista"
+            },
+            "actionId": "3f34660a-d02d-4c03-abc6-9f0f567893b8:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "3f34660a-d02d-4c03-abc6-9f0f567893b8",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "chat_with_action",
+          "reply": "Preparé estos cambios para guardarlos en Focus.",
+          "actions": [
+            {
+              "type": "add_event",
+              "event": {
+                "date": "2026-09-08",
+                "icon": "local_hospital",
+                "time": "12:30 PM",
+                "title": "Salir al dentista",
+                "endTime": null,
+                "section": "evening",
+                "subtitle": "Dentista"
+              },
+              "actionId": "3f34660a-d02d-4c03-abc6-9f0f567893b8:0"
+            }
+          ],
+          "_dropped": [],
+          "requestId": "3f34660a-d02d-4c03-abc6-9f0f567893b8",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": false,
+          "proposed_actions": [],
+          "execution_pending": true,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 363
+      },
+      "replayVerified": true
+    },
+    {
+      "id": "UX13",
+      "category": "informal_semantics",
+      "input": "mañana después de almuerzo estudio economía",
+      "expect": {
+        "kindAnyOf": [
+          "task",
+          "clarify"
+        ],
+        "allowClarify": true
+      },
+      "attempted": true,
+      "requestId": "b9198bef-90ef-4175-922e-757dc56d9222",
+      "attempts": [
+        {
+          "request_row_id": "20938e84-3672-4a37-8d75-a8666c9dc1a5",
+          "attempt_index": 0,
+          "model": "gpt-5.6-luna",
+          "tier": "luna",
+          "reason": "everyday_request",
+          "state": "settled",
+          "reserved_usd": 0.005,
+          "actual_usd": 0.00013522,
+          "outcome": "success",
+          "created_at": "2026-09-08T23:09:20.829712+00:00",
+          "settled_at": "2026-09-08T23:09:22.25565+00:00"
+        }
+      ],
+      "routes": [
+        {
+          "model": "gpt-5.6-luna",
+          "input": 12000,
+          "output": 1600,
+          "outputCeiling": 2048,
+          "reasoningEffort": "none",
+          "timeoutMs": 12000,
+          "events": 12,
+          "tasks": 12,
+          "memories": 4,
+          "provider": "openai",
+          "tier": "luna",
+          "premium": false,
+          "maxInputTokens": 12000,
+          "maxOutputTokens": 1600,
+          "routeReason": "everyday_request",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 1,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        },
+        {
+          "model": "gpt-5.6-terra",
+          "input": 18000,
+          "output": 2400,
+          "outputCeiling": 3072,
+          "reasoningEffort": "low",
+          "timeoutMs": 18000,
+          "events": 24,
+          "tasks": 20,
+          "memories": 6,
+          "provider": "openai",
+          "tier": "terra",
+          "premium": true,
+          "maxInputTokens": 18000,
+          "maxOutputTokens": 2400,
+          "routeReason": "reserved_recovery",
+          "decision": {
+            "tier": "luna",
+            "reason": "everyday_request",
+            "signals": {
+              "planning": false,
+              "week": false,
+              "constraints": 1,
+              "conflicts": false,
+              "bulkDestructive": false,
+              "independentClauses": 0,
+              "explicitTimes": 0,
+              "references": 0,
+              "continuation": false,
+              "relevantItems": 0
+            },
+            "solEligible": false
+          }
+        }
+      ],
+      "latencyMs": 2539,
+      "httpStatus": 200,
+      "output": {
+        "reply": "¿A qué hora quieres estudiar economía mañana?",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "clarification",
+        "shouldAskUser": true,
+        "confidence": 0.9,
+        "requestId": "b9198bef-90ef-4175-922e-757dc56d9222",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": [],
+        "processing": {
+          "route": "remote_ai",
+          "model": "gpt-5.6-luna",
+          "reason": "everyday_request"
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "replayObservation": {
+        "httpStatus": 200,
+        "body": {
+          "mode": "clarification",
+          "reply": "¿A qué hora quieres estudiar economía mañana?",
+          "actions": [],
+          "_dropped": [],
+          "requestId": "b9198bef-90ef-4175-922e-757dc56d9222",
+          "confidence": 0.9,
+          "processing": {
+            "model": "gpt-5.6-luna",
+            "route": "remote_ai",
+            "reason": "everyday_request"
+          },
+          "validation": {
+            "ok": true,
+            "issues": []
+          },
+          "shouldAskUser": true,
+          "proposed_actions": [],
+          "execution_pending": false,
+          "follow_up_question": null,
+          "smart_actions_blocked": false,
+          "smart_actions_message": null
+        },
+        "latencyMs": 363
+      },
+      "replayVerified": true
+    }
+  ],
+  "cleanup": {
+    "pendingSyntheticUserIds": [],
+    "deleted": 2,
+    "verified": 2
+  },
+  "summary": {
+    "selected": 13,
+    "attempted": 13,
+    "objectivePass": 12,
+    "objectivePassRate": 0.9230769230769231,
+    "totalTrackedCostUSD": 0.003716,
+    "trackedCostBasis": "Recorded telemetry accounting, including conservative reservations; not an observed provider bill.",
+    "costObservationSufficient": true,
+    "observedCostAttemptCount": 13,
+    "unobservedCostAttemptCount": 0,
+    "totalObservedCostUSD": 0.003716,
+    "meanInteractionCostUSD": 0.00028584615384615383,
+    "meanInteractionCostBasis": "Provider-reported token usage priced for every paid attempt, divided by attempted interactions; null when any usage or telemetry is missing. Not an invoice.",
+    "recordedRunChargeUSD": 0.00371789,
+    "latencyPopulation": "successful_http_200",
+    "p50Ms": 3441,
+    "p95Ms": 6307,
+    "replayChecks": 13,
+    "providerAttempts": 13,
+    "humanConversationScore": null,
+    "metrics": {
+      "nova_requests": 13,
+      "nova_provider_attempts": 13,
+      "nova_success": 13,
+      "nova_failure": 0,
+      "nova_outcome_unknown": 0,
+      "nova_retry": 0,
+      "nova_escalation": 0,
+      "nova_escalated_requests": 0,
+      "nova_clarification": 2,
+      "nova_invalid_schema": 0,
+      "nova_cost_usd": 0.003716,
+      "mean_request_cost_usd": 0.00028584615384615383,
+      "cost_evidence": {
+        "rows": 13,
+        "known_cost_rows": 13,
+        "unknown_cost_rows": 0,
+        "cost_usd": 0.003716,
+        "known_cost_usd": 0.003716,
+        "provider_usage_cost_usd": 0.003716,
+        "reservation_cost_usd": null,
+        "unknown_cost_basis_rows": 0
+      },
+      "usage_measured_attempts": 13,
+      "reserved_cost_attempts": 0,
+      "mean_input_tokens": 2259.3846153846152,
+      "mean_output_tokens": 143.23076923076923,
+      "input_measured_attempts": 13,
+      "output_measured_attempts": 13,
+      "provider_attempt_p50_ms": 1921,
+      "provider_attempt_p95_ms": 2887,
+      "provider_latency_measured_attempts": 13,
+      "request_p50_ms": null,
+      "request_p95_ms": null,
+      "request_latency_measured_requests": 0,
+      "request_partial_elapsed_p50_ms": 2020,
+      "request_partial_elapsed_p95_ms": 3013,
+      "request_partial_elapsed_measured_requests": 13,
+      "model_distribution": {
+        "initial_request_model": {
+          "gpt-5.6-luna": {
+            "count": 13,
+            "percent": 100
+          },
+          "gpt-5.6-terra": {
+            "count": 0,
+            "percent": 0
+          },
+          "gpt-5.6-sol": {
+            "count": 0,
+            "percent": 0
+          }
+        },
+        "final_observed_request_model": {
+          "gpt-5.6-luna": {
+            "count": 13,
+            "percent": 100
+          },
+          "gpt-5.6-terra": {
+            "count": 0,
+            "percent": 0
+          },
+          "gpt-5.6-sol": {
+            "count": 0,
+            "percent": 0
+          }
+        },
+        "provider_attempt_model": {
+          "gpt-5.6-luna": {
+            "count": 13,
+            "percent": 100
+          },
+          "gpt-5.6-terra": {
+            "count": 0,
+            "percent": 0
+          },
+          "gpt-5.6-sol": {
+            "count": 0,
+            "percent": 0
+          }
+        },
+        "denominators": {
+          "initial_request_model": 13,
+          "final_observed_request_model": 13,
+          "provider_attempt_model": 13
+        },
+        "final_model_basis": "Last recorded attempt, ordered by attempt index then timestamp. This is not evidence of durable request completion."
+      },
+      "sol_requests": 0,
+      "sol_request_percent": 0,
+      "sol_provider_attempts": 0,
+      "sol_attempt_percent": 0,
+      "requests_with_unknown_model": 0,
+      "sol_telemetry_calendar_cost": {
+        "today_utc": {
+          "from": "2026-09-08T00:00:00.000Z",
+          "through": "2026-09-08T23:09:31.017Z",
+          "coverage_complete": false,
+          "observed_attempts": 0,
+          "unknown_date_attempts": 0,
+          "unattributed_attempts": 0,
+          "unknown_cost_attempts": 0,
+          "observed_known_cost_usd": 0,
+          "cost_usd": null
+        },
+        "month_utc": {
+          "from": "2026-09-01T00:00:00.000Z",
+          "through": "2026-09-08T23:09:31.017Z",
+          "coverage_complete": false,
+          "observed_attempts": 0,
+          "unknown_date_attempts": 0,
+          "unattributed_attempts": 0,
+          "unknown_cost_attempts": 0,
+          "observed_known_cost_usd": 0,
+          "cost_usd": null
+        }
+      },
+      "escalation_reasons": {},
+      "routing_reasons": {
+        "everyday_request": 13
+      },
+      "reasoning_effort_attempts": {
+        "none": 13
+      },
+      "output_reasoning_tokens": 0,
+      "output_reasoning_measured_attempts": 13,
+      "cache": {
+        "measured_usage_attempts": 13,
+        "read_measured_attempts": 13,
+        "read_hit_attempts": 12,
+        "read_hit_percent": 92.3076923076923,
+        "write_measured_attempts": 13,
+        "write_attempts": 1,
+        "write_percent": 7.6923076923076925,
+        "read_tokens": 24972,
+        "write_tokens": 2081,
+        "openai_complete_breakdown_attempts": 13,
+        "openai_cached_read_input_percent": 85.01974669753507,
+        "savings_measured_attempts": 13,
+        "read_savings_usd": 0.004494960000000002,
+        "write_premium_usd": 0.00010404999999999998,
+        "net_savings_usd": 0.004390910000000002,
+        "savings_basis": "Recorded per-attempt price calculation only; missing usage, breakdown or price evidence is unknown. Net savings subtract cache-write premiums."
+      },
+      "nova_tool_success": null,
+      "nova_tool_failure": null,
+      "measurement_scope": "Provider telemetry only; success/failure describe the last observed provider attempt, not durable server completion or client persistence. Missing dimensions are unknown; model shares include unknown/legacy model buckets. No client receipts, rejected admissions or unrecorded paid attempts are inferred. Calendar cost is complete only with supplied coverage from UTC period start. Never add these telemetry costs to the admission ledger."
+    }
+  },
+  "finishedAt": "2026-09-08T23:09:31.016Z",
+  "presentationChecks": [
+    {
+      "id": "UX1",
+      "pass": true,
+      "failures": [],
+      "humanNaturalnessScore": null
+    },
+    {
+      "id": "UX2",
+      "pass": true,
+      "failures": [],
+      "humanNaturalnessScore": null
+    },
+    {
+      "id": "UX3",
+      "pass": true,
+      "failures": [],
+      "humanNaturalnessScore": null
+    },
+    {
+      "id": "UX4",
+      "pass": true,
+      "failures": [],
+      "humanNaturalnessScore": null
+    },
+    {
+      "id": "UX5",
+      "pass": false,
+      "failures": [],
+      "humanNaturalnessScore": null
+    },
+    {
+      "id": "UX6",
+      "pass": true,
+      "failures": [],
+      "humanNaturalnessScore": null
+    },
+    {
+      "id": "UX7",
+      "pass": true,
+      "failures": [],
+      "humanNaturalnessScore": null
+    },
+    {
+      "id": "UX8",
+      "pass": true,
+      "failures": [],
+      "humanNaturalnessScore": null
+    },
+    {
+      "id": "UX9",
+      "pass": true,
+      "failures": [],
+      "humanNaturalnessScore": null
+    },
+    {
+      "id": "UX10",
+      "pass": true,
+      "failures": [],
+      "humanNaturalnessScore": null
+    },
+    {
+      "id": "UX11",
+      "pass": true,
+      "failures": [],
+      "humanNaturalnessScore": null
+    },
+    {
+      "id": "UX12",
+      "pass": false,
+      "failures": [
+        "redundant_description"
+      ],
+      "humanNaturalnessScore": null
+    },
+    {
+      "id": "UX13",
+      "pass": true,
+      "failures": [],
+      "humanNaturalnessScore": null
+    }
+  ]
+}
