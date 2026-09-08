@@ -994,7 +994,7 @@ export default function App() {
             onDeleteTask={deleteTask}
             onProposeActions={handleProposeActions}
             onOpenInbox={openInbox}
-            proposeMode={true}
+            proposeMode={false}
             isDesktop={isDesktop}
           />
         </Suspense>

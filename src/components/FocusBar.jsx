@@ -48,6 +48,7 @@ async function callFocusAssistant({ message, events, tasks, memories, history, r
       }),
     })
   } catch (netErr) {
+    if (netErr?.code === 'assistant_updating') throw netErr
     // Sin esto, una desconexión de red o un AbortController por timeout dejaba
     // al cliente colgado en "Focus está pensando…". Ahora propagamos un código
     // que el caller mapea a un mensaje útil.
@@ -449,6 +450,7 @@ export default function FocusBar({
       if (outcome.ok || !prepared.ok) { requestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'focusbar') }
     } catch (err) {
       if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
+      if (err.code === 'assistant_updating') setText(msg)
       if (err.completedRetryable) { requestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'focusbar') }
       // Mensaje preciso por código. Si callFocusAssistant ya armó un texto
       // amigable, usamos ese; si no, caemos al fallback genérico de Nova.

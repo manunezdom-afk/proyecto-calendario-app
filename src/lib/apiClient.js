@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { supabase } from './supabase'
+import { fetchWithAICompatibility } from './aiCapabilities.js'
 
 const DEFAULT_API_ORIGIN = 'https://www.usefocus.me'
 
@@ -57,7 +58,7 @@ export async function apiFetch(path, options = {}) {
   }
 
   try {
-    return await fetch(apiUrl(path), { ...options, headers, signal: ctrl.signal })
+    return await fetchWithAICompatibility(apiUrl(path), { ...options, headers, signal: ctrl.signal })
   } finally {
     clearTimeout(timeoutId)
   }

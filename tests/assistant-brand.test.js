@@ -73,7 +73,8 @@ for (const [provider, call, messagesKey] of [
       await assert.rejects(call({ systemPrompt: 'Eres Hilante, la asistente.',
         message, history, apiKey: 'test-no-network' }))
       assert.deepEqual(body[messagesKey].slice(-3), [...history, { role: 'user', content: message }])
-      assert.match(body[messagesKey][0].content, /Eres Hilante/)
+      const instructions = body[messagesKey][0].content
+      assert.match(Array.isArray(instructions) ? instructions[0].text : instructions, /Eres Hilante/)
     } finally { globalThis.fetch = previousFetch }
   })
 }

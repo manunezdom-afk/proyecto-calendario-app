@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 
 /**
- * Tarjeta de consentimiento previa al primer mensaje a Nova.
+ * Tarjeta de consentimiento previa al primer envío a Hilante.
  * Nombra a los proveedores de IA que reciben datos (Guideline 5.1.2(i)) y
  * enlaza la política de privacidad. El mensaje del usuario queda retenido
  * por el caller hasta que acepte; "Ahora no" lo devuelve al input.
@@ -28,9 +28,12 @@ export default function AIConsentCard({ onAccept, onCancel }) {
           <p className="mt-0.5 text-[12px] leading-snug text-outline">
             Para responder, tu mensaje y el contexto necesario de tu agenda
             (eventos, tareas y memorias) se envían a{' '}
-            <strong>Anthropic, DeepSeek u OpenAI</strong>, según el proveedor habilitado.
-            Si analizas fotos, las imágenes se envían a Anthropic. La transcripción
-            de audio en el servidor está pausada. No usamos tus datos para
+            <strong>OpenAI</strong>. Si analizas fotos, las imágenes se envían a{' '}
+            <strong>Anthropic</strong> para extraer actividades que puedes revisar.
+            El dictado web usa el reconocimiento de tu navegador, que puede
+            procesar el audio fuera de este dispositivo;
+            la transcripción de audio en el servidor de Focus está pausada.
+            No usamos tus datos para
             publicidad ni los vendemos.{' '}
             <a
               href="/privacidad"

@@ -66,6 +66,19 @@ test('reviewed snapshot refuses a manual change before approval', () => {
   assert.equal(called, false)
 })
 
+test('direct edits retain the requested snapshot and cannot overwrite an intervening change', () => {
+  const plan = prepare([{ type: 'edit_event', id: event.id, updates: { time: '12:00' } }])
+  assert.equal(plan.kind, 'execute')
+  let calls = 0
+  const outcome = applyAssistantActions(plan.actions, { ...context,
+    events: [{ ...event, time: '13:00' }],
+    onEditEvent() { calls++; return { ...event, time: '12:00' } },
+  })
+  assert.equal(outcome.ok, false)
+  assert.equal(calls, 0)
+  assert.deepEqual(outcome.receipts, [])
+})
+
 test('new save/forget memory actions require review and map the existing memory shape', () => {
   const saved = prepare([{ type: 'save_memory', memory: { key: 'Café', value: 'Sin azúcar', category: 'preference' } }])
   assert.equal(saved.kind, 'review')

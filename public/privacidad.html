@@ -96,7 +96,8 @@
   <li><strong>Señales de uso en la versión web</strong>: se guardan señales de actividad y preferencias de uso asociadas a tu cuenta para personalizar las sugerencias.</li>
   <li><strong>Uso del servicio de IA</strong>: cuando se hace una petición externa, el servicio registra datos asociados a la cuenta, como la función usada, el modelo, la cantidad de tokens, el costo estimado y el resultado, sin incluir el contenido de tus mensajes en ese registro.</li>
   <li><strong>Ubicación aproximada en la versión web</strong> (opcional): cuando otorgas permiso, se usa para dar contexto local a las sugerencias. La app iOS actual no solicita tu ubicación.</li>
-  <li><strong>Fotos en la versión web</strong> (opcional): al aceptar el análisis, las imágenes se envían a Anthropic para extraer una vista previa de actividades. Focus no guarda las fotos en su base de datos. La transcripción de audio en el servidor está pausada. En la app iOS actual el dictado exige reconocimiento en el dispositivo: el audio no se envía a un proveedor externo. Puedes revisar y editar el texto transcrito antes de usarlo. Si después lo envías a Hilante con IA externa, ese texto se procesa como cualquier otro mensaje.</li>
+  <li><strong>Fotos en la versión web</strong> (opcional): al aceptar el análisis, las imágenes se envían a Anthropic para extraer una vista previa de actividades. Focus no guarda las fotos en su base de datos. Puedes revisar y corregir las actividades antes de importarlas.</li>
+  <li><strong>Dictado</strong> (opcional): en la app iOS el reconocimiento se realiza en el iPhone; el audio no se envía a OpenAI ni a Anthropic. Puedes revisar y editar el texto antes de enviarlo. En la web se usa el reconocimiento de voz del navegador, cuyo procesamiento puede depender de servicios externos del navegador; Focus no garantiza reconocimiento local en la web. La transcripción de audio en el servidor de Focus está pausada. Cuando envías texto dictado al chat de Hilante, OpenAI lo procesa como cualquier otro mensaje.</li>
   <li><strong>Resultados temporales de IA</strong>: para recuperar una respuesta sin repetir la llamada ni duplicar sus cambios, el servidor guarda temporalmente el resultado y sus propuestas asociados a tu cuenta. Pueden incluir títulos de actividades, fechas, texto de respuesta o memorias propuestas. El registro de admisión usa una huella del mensaje o de las imágenes, no el mensaje original ni las fotos. La retención se explica en la sección 7.</li>
 </ul>
 
@@ -112,15 +113,14 @@
 <h2>3. Con quién compartimos datos</h2>
 <p>Compartimos solo lo estrictamente necesario con estos proveedores que procesan datos por nosotros:</p>
 
-<p><strong>Proveedores de inteligencia artificial.</strong> Cuando una petición usa IA externa, tu mensaje y el contexto necesario se envían al proveedor habilitado para generar la respuesta. Pedimos consentimiento antes de enviar texto o fotos a IA externa. En iOS puedes retirarlo en Ajustes → Privacidad → Permitir IA externa y seguir creando pendientes y eventos manualmente. Retirar el permiso detiene futuros envíos; no retira una petición que ya haya llegado a un proveedor.</p>
+<p><strong>Proveedores de inteligencia artificial.</strong> El chat de Hilante utiliza OpenAI. Para responder recibe tu mensaje, una parte de la conversación reciente y el contexto necesario de eventos, tareas y memorias cuyo uso esté activado. El análisis opcional de fotos utiliza Anthropic. Pedimos consentimiento antes de enviar texto o fotos a IA externa. En iOS puedes retirarlo en Ajustes → Privacidad → Permitir IA externa y seguir creando pendientes y eventos manualmente. Retirar el permiso detiene futuros envíos; no retira una petición que ya haya llegado a un proveedor.</p>
 <div class="card">
   <ul>
-    <li><strong>Anthropic</strong> (Claude): proveedor configurado por defecto para el chat en esta versión y proveedor del análisis de fotos, por ejemplo, para extraer actividades de un horario.</li>
-    <li><strong>DeepSeek</strong>: alternativa configurable para el chat. Puede recibir el mensaje y el contexto necesario de agenda cuando esté habilitado. Sus servidores pueden estar fuera de tu país (ver sección 4).</li>
-    <li><strong>OpenAI</strong>: alternativa configurable para el chat. Puede recibir el mensaje y el contexto necesario cuando esté habilitado. La transcripción de voz con Whisper en el servidor está pausada en esta versión.</li>
+    <li><strong>OpenAI</strong>: proveedor del chat de Hilante; procesa los mensajes y el contexto necesario para responder y proponer acciones.</li>
+    <li><strong>Anthropic</strong> (Claude): proveedor del análisis de fotos en la web, por ejemplo, para extraer actividades de un horario. Esta función recibe las imágenes y el contexto de fecha y zona horaria necesario para interpretarlas; no recibe las conversaciones del chat.</li>
   </ul>
 </div>
-<p>El proveedor puede variar según la configuración del servicio. Google/Gemini no procesa solicitudes de usuarios en esta versión. No usamos tus conversaciones para publicidad ni las vendemos. El procesamiento, la retención y otros usos por parte de cada proveedor se rigen por las condiciones aplicables a su servicio de API; desactivar el almacenamiento de conversaciones en una API no elimina necesariamente sus registros operativos.</p>
+<p>DeepSeek y Google/Gemini no procesan solicitudes de usuarios en esta versión. No usamos tus conversaciones para publicidad ni las vendemos. El procesamiento, la retención y otros usos por parte de cada proveedor se rigen por las condiciones aplicables a su servicio de API; desactivar el almacenamiento de conversaciones en una API no elimina necesariamente sus registros operativos.</p>
 
 <p><strong>Infraestructura y servicios.</strong></p>
 <div class="card">

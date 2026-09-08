@@ -79,7 +79,7 @@ function NovaWidget({
   onUpdateTask,
   onDeleteTask,
   onProposeActions,   // (actions, {reply}) => void — modo propuesta
-  proposeMode = true, // si true, Nova no ejecuta directo; encola sugerencias
+  proposeMode = false, // El contrato exige revisión para propuestas, borrados y memorias.
   onOpenInbox,
   isDesktop = false,
 }) {
@@ -723,6 +723,7 @@ function NovaWidget({
       if (outcome.ok || !prepared.ok) { requestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'widget') }
     } catch (err) {
       if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
+      if (err.code === 'assistant_updating') setInput(msg)
       if (err.completedRetryable) { requestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'widget') }
       const errMsg = err?.message && typeof err.message === 'string' && err.message.length < 200
         ? err.message

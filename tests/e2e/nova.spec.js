@@ -15,7 +15,7 @@ async function mockAssistant(page, respond) {
 }
 async function openHilante(page, { consent = true } = {}) {
   await page.goto('/?view=calendar')
-  if (consent) await page.evaluate(() => localStorage.setItem('focus_ai_consent_v1', '1'))
+  if (consent) await page.evaluate(() => localStorage.setItem('focus_ai_consent_v2', '1'))
   const opener = page.getByRole('button', { name: 'Abrir Hilante', exact: true })
   await expect(opener).toBeVisible({ timeout: 10_000 })
   await opener.click()
@@ -39,6 +39,8 @@ test.describe('Hilante — consentimiento y resultado verificable', () => {
       const url = new URL(route.request().url())
       return ['localhost', '127.0.0.1'].includes(url.hostname) ? route.continue() : route.abort()
     })
+    await page.route('**/api/ai-capabilities', route => route.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ runtime: 'focus-openai-v1', chat_provider: 'openai' }) }))
     await page.addInitScript(() => {
       localStorage.setItem('focus_onboarding_completed_v1', '1')
       localStorage.setItem('focus_welcome_last', new Date().toISOString().slice(0, 10))
@@ -53,10 +55,13 @@ test.describe('Hilante — consentimiento y resultado verificable', () => {
     let calls = 0
     await mockAssistant(page, ({ requestId }) => { calls++; return { body: reply(requestId, 'Podemos ordenar tus pendientes paso a paso.') } })
     await openHilante(page, { consent: false })
+    await page.evaluate(() => localStorage.setItem('focus_ai_consent_v1', '1'))
     await send(page, 'Ayúdame a ordenar mis pendientes')
     const consent = page.getByRole('alertdialog', { name: 'Consentimiento para usar inteligencia artificial' })
     await expect(consent).toBeVisible()
-    await expect(consent).toContainText('Anthropic, DeepSeek u OpenAI')
+    await expect(consent).toContainText('OpenAI')
+    await expect(consent).toContainText('Si analizas fotos, las imágenes se envían a Anthropic')
+    await expect(consent).not.toContainText('DeepSeek')
     expect(calls).toBe(0)
     await consent.getByRole('button', { name: 'Ahora no' }).click()
     await expect(input(page)).toHaveValue('Ayúdame a ordenar mis pendientes')
@@ -65,6 +70,26 @@ test.describe('Hilante — consentimiento y resultado verificable', () => {
     await consent.getByRole('button', { name: 'Aceptar y enviar' }).click()
     await expect(page.getByText('Podemos ordenar tus pendientes paso a paso.', { exact: true })).toBeVisible()
     expect(calls).toBe(1)
+  })
+
+  test('un servidor antiguo no recibe el mensaje y el borrador se conserva', async ({ page }) => {
+    let calls = 0
+    const checks = []
+    await page.route('**/api/ai-capabilities', route => {
+      checks.push({ method: route.request().method(), headers: route.request().headers(), body: route.request().postData() })
+      return route.fulfill({ status: 404, contentType: 'text/html', body: '<html>Previous deployment</html>' })
+    })
+    await mockAssistant(page, ({ requestId }) => { calls++; return { body: reply(requestId, 'No debe recibirse.') } })
+    await openHilante(page)
+    await send(page, 'Este mensaje privado debe quedarse aquí')
+    await expect(page.getByText('Estamos actualizando Hilante. Tu mensaje sigue aquí; vuelve a intentarlo en un momento.', { exact: true })).toBeVisible()
+    await expect(input(page)).toHaveValue('Este mensaje privado debe quedarse aquí')
+    await expect(sendButton(page)).toBeEnabled()
+    expect(calls).toBe(0)
+    expect(checks).toHaveLength(1)
+    expect(checks[0].method).toBe('GET')
+    expect(checks[0].headers.authorization).toBeUndefined()
+    expect(checks[0].body).toBeNull()
   })
 
   test('una acción válida confirma un recibo y queda guardada localmente', async ({ page }) => {
@@ -96,6 +121,55 @@ test.describe('Hilante — consentimiento y resultado verificable', () => {
     await expect(page.getByText('No hay cambios guardados que confirmen esa respuesta. Repite la solicitud.', { exact: true })).toBeVisible()
     await expect(page.getByText('Guardé Gym E2E para mañana.', { exact: true })).toHaveCount(0)
     expect((await savedEvents(page)).filter(event => event.title === 'Gym E2E')).toHaveLength(0)
+  })
+
+  test('crear y editar se guardan directamente; borrar exige aprobar la propuesta', async ({ page }) => {
+    await mockAssistant(page, ({ requestId, body }) => {
+      const current = body.events.find(event => event.title === 'Lectura E2E')
+      const action = body.message.startsWith('Crea')
+        ? { type: 'add_event', event: { title: 'Lectura E2E', date: TODAY, time: '10:00' } }
+        : body.message.startsWith('Mueve')
+          ? { type: 'edit_event', id: current?.id, updates: { time: '11:00' } }
+          : { type: 'delete_event', id: current?.id }
+      return { body: { requestId, mode: 'chat_with_action', confidence: 1,
+        reply: 'Acción interpretada.', actions: [action], proposed_actions: [] } }
+    })
+    await openHilante(page)
+    await send(page, 'Crea Lectura E2E hoy a las 10')
+    await expect(page.getByText('Añadí «Lectura E2E» en este dispositivo.', { exact: true }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /Abrir bandeja/ })).toHaveCount(0)
+    const created = (await savedEvents(page)).find(event => event.title === 'Lectura E2E')
+    expect(created.time).toBe('10:00')
+    await send(page, 'Mueve Lectura E2E a las 11')
+    await expect(page.getByText('Actualicé el evento en este dispositivo.', { exact: true }).first()).toBeVisible()
+    const edited = (await savedEvents(page)).filter(event => event.title === 'Lectura E2E')
+    expect(edited).toHaveLength(1)
+    expect(edited[0].id).toBe(created.id)
+    expect(edited[0].time).toBe('11:00')
+    await send(page, 'Borra Lectura E2E')
+    await expect(page.getByText('Preparé una propuesta. Revisa los cambios en la bandeja antes de aplicarlos.', { exact: true })).toBeVisible()
+    expect((await savedEvents(page)).some(event => event.id === created.id)).toBe(true)
+    await page.getByRole('button', { name: /Abrir bandeja/ }).click()
+    await page.getByRole('button', { name: /Aprobar/ }).click()
+    await expect(page.getByText('Eliminé el evento en este dispositivo.', { exact: true })).toBeVisible()
+    expect((await savedEvents(page)).some(event => event.id === created.id)).toBe(false)
+  })
+
+  test('un fallo de almacenamiento no confirma la creación directa', async ({ page }) => {
+    await mockAssistant(page, ({ requestId }) => ({ body: { requestId, mode: 'chat_with_action', confidence: 1,
+      reply: 'Guardé Lectura E2E.', actions: [{ type: 'add_event', event: { title: 'Lectura E2E', date: TODAY, time: '10:00' } }], proposed_actions: [] } }))
+    await openHilante(page)
+    await page.evaluate(() => {
+      const original = Storage.prototype.setItem
+      Storage.prototype.setItem = function (key, value) {
+        if (key.startsWith('focus_events')) throw new DOMException('Synthetic storage full', 'QuotaExceededError')
+        return original.call(this, key, value)
+      }
+    })
+    await send(page, 'Crea Lectura E2E hoy a las 10')
+    await expect(page.getByText('No pude guardar todos los cambios en este dispositivo. Revisa tus pendientes antes de repetirlos.', { exact: true })).toBeVisible()
+    await expect(page.getByText('Guardé Lectura E2E.', { exact: true })).toHaveCount(0)
+    expect((await savedEvents(page)).filter(event => event.title === 'Lectura E2E')).toHaveLength(0)
   })
 
   test('error definitivo libera el envío y el reintento explícito usa otra identidad', async ({ page }) => {
