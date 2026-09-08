@@ -3,38 +3,436 @@
   "reviewer": null,
   "reviewedAt": null,
   "providerMeasured": false,
-  "rubric": ["Uses only known context", "Maintains references across turns", "Brief and natural Spanish", "Asks only for genuinely missing information", "Distinguishes proposed plans from saved actions", "Respects fixed events and time constraints"],
+  "rubric": [
+    "Uses only known context",
+    "Maintains references across turns",
+    "Brief and natural Spanish",
+    "Asks only for genuinely missing information",
+    "Distinguishes proposed plans from saved actions",
+    "Respects fixed events and time constraints"
+  ],
   "conversations": [
     {
       "id": "continuity",
-      "turns": ["pon gym mañana a las 10 AM", "mejor a las 11 AM", "y recuérdame llevar agua", "qué más tengo mañana", "organízame la tarde", "no quiero estudiar después de las 8 PM"],
+      "turns": [
+        "pon gym mañana a las 10 AM",
+        "mejor a las 11 AM",
+        "y recuérdame llevar agua",
+        "qué más tengo mañana",
+        "organízame la tarde",
+        "no quiero estudiar después de las 8 PM"
+      ],
       "review": "Apply and verify the real client receipt between turns. Changing the hour must edit the same event. A reminder lacking an alert time must not invent one. Planning respects the final cutoff.",
-      "scores": null
+      "scores": null,
+      "syntheticInitialState": {
+        "events": [
+          {
+            "id": "a1111111-1111-4111-8111-111111111111",
+            "title": "Fútbol",
+            "date": "2026-09-09",
+            "time": "8:00 PM",
+            "endTime": "9:30 PM",
+            "icon": "sport",
+            "section": "evening"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "b1111111-1111-4111-8111-111111111111",
+            "label": "Revisar las pantallas de Focus",
+            "date": "2026-09-09",
+            "time": null,
+            "priority": "Alta",
+            "done": false
+          }
+        ],
+        "memories": [],
+        "history": [],
+        "discussedEventIds": []
+      },
+      "executionContract": {
+        "mode": "sequential_actual_outputs_required",
+        "turnCount": 6,
+        "oneLogicalRequestIdPerTurn": true,
+        "replayEachTurnWithSamePayloadAndId": true,
+        "nextState": "Use the actual prior validated response. Apply confirmed executable actions only to an explicitly labelled in-memory synthetic state; never substitute an expected result. Record simulated receipts, not client or server persistence.",
+        "proposals": "Keep proposals pending and separate from saved synthetic events until explicit approval. Do not silently inject unapproved blocks as saved calendar context.",
+        "history": "Append actual user messages and actual assistant replies. Do not write fabricated success confirmations.",
+        "runnerCompatibility": "runRemoteBenchmark(cases) is independent-case execution and does not maintain conversational state. Running six static fixtures is not evidence for this sequence. Use a stateful conversation harness or the real native client with observed receipts.",
+        "scopeNotMeasured": [
+          "Native persistence",
+          "Notification delivery",
+          "Human conversation quality"
+        ]
+      },
+      "turnChecks": [
+        {
+          "turn": 1,
+          "request": "pon gym mañana a las 10 AM",
+          "required": "One gym create plan for 2026-09-09 at10AM. Capture its real generated action ID and the synthetic event ID assigned by the harness."
+        },
+        {
+          "turn": 2,
+          "request": "mejor a las 11 AM",
+          "required": "Edit that same gym ID to11AM on2026-09-09. No second gym event; preserve the prior duration if supplied."
+        },
+        {
+          "turn": 3,
+          "request": "y recuérdame llevar agua",
+          "required": "Preserve the water detail or ask for the missing alert time. Do not invent an alert time/offset; do not move gym."
+        },
+        {
+          "turn": 4,
+          "request": "qué más tengo mañana",
+          "required": "Read-only reply consistent with gym11AM and fixed football20PM. No write actions or invented obligations."
+        },
+        {
+          "turn": 5,
+          "request": "organízame la tarde",
+          "required": "Return a reviewable proposal using current synthetic context; keep it pending, preserve gym and football."
+        },
+        {
+          "turn": 6,
+          "request": "no quiero estudiar después de las 8 PM",
+          "required": "Refine the pending afternoon proposal or clarify its target. No study interval may overlap time after20:00; compare full interval, not start only. No mutation of fixed football or unapproved prior proposal."
+        }
+      ]
     },
     {
       "id": "overloaded",
-      "turns": ["ando con mil cosas", "no sé qué hacer primero"],
+      "turns": [
+        "ando con mil cosas",
+        "no sé qué hacer primero"
+      ],
       "context": "Run once with an empty agenda and once with actual synthetic pending tasks and deadlines.",
       "review": "Acknowledge briefly and help choose a concrete next step using available context. Do not invent obligations or turn emotional disclosure into a task.",
-      "scores": null
+      "scores": null,
+      "runnerCase": {
+        "id": "CONV-OVERLOADED",
+        "cat": "conversacion_contexto",
+        "input": "Ando con mil cosas y no sé qué hacer primero. ¿Qué me recomiendas con mis pendientes de hoy?",
+        "events": [],
+        "tasks": [
+          {
+            "id": "b2222222-2222-4222-8222-222222222222",
+            "label": "Entregar certificado a la universidad",
+            "date": "2026-09-08",
+            "time": "3:00 PM",
+            "priority": "Alta",
+            "done": false
+          },
+          {
+            "id": "b1111111-1111-4111-8111-111111111111",
+            "label": "Revisar las pantallas de Focus",
+            "date": "2026-09-09",
+            "time": null,
+            "priority": "Alta",
+            "done": false
+          },
+          {
+            "id": "b3333333-3333-4333-8333-333333333333",
+            "label": "Comprar comida",
+            "date": "2026-09-09",
+            "time": null,
+            "priority": "Media",
+            "done": false
+          }
+        ],
+        "memories": [],
+        "expect": {
+          "kindAnyOf": [
+            "chat",
+            "clarify"
+          ],
+          "maxActions": 0,
+          "noWrongCreate": true,
+          "replyIncludes": [
+            "certificado",
+            "universidad"
+          ]
+        }
+      },
+      "objectiveChecks": {
+        "noActionsOrProposals": true,
+        "noMemoryWriteFromEmotionalDisclosure": true,
+        "mustNotInventTasksPeopleOrDeadlines": true,
+        "urgentKnownTaskId": "b2222222-2222-4222-8222-222222222222",
+        "humanReviewStillRequired": [
+          "Whether the next step is useful",
+          "Natural and brief acknowledgement",
+          "Whether any clarification was necessary"
+        ]
+      }
     },
     {
       "id": "available-time",
-      "turns": ["tengo dos horas libres", "quiero avanzar con Focus pero también ir al gym"],
+      "turns": [
+        "tengo dos horas libres",
+        "quiero avanzar con Focus pero también ir al gym"
+      ],
       "review": "Offer an achievable division as a proposal. Identify missing commute/duration assumptions instead of asserting a saved schedule.",
-      "scores": null
+      "scores": null,
+      "runnerCase": {
+        "id": "CONV-TWO-HOURS",
+        "cat": "conversacion_tiempo_libre",
+        "input": "Tengo dos horas libres ahora, de 12 a 2 PM. ¿Qué me recomiendas avanzar con mis pendientes?",
+        "events": [
+          {
+            "id": "a5555555-5555-4555-8555-555555555555",
+            "title": "Clase fija",
+            "date": "2026-09-08",
+            "time": "2:00 PM",
+            "endTime": "4:00 PM",
+            "icon": "book",
+            "section": "afternoon"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "b2222222-2222-4222-8222-222222222222",
+            "label": "Entregar certificado a la universidad",
+            "date": "2026-09-08",
+            "time": "3:00 PM",
+            "priority": "Alta",
+            "done": false
+          },
+          {
+            "id": "b1111111-1111-4111-8111-111111111111",
+            "label": "Revisar las pantallas de Focus",
+            "date": "2026-09-09",
+            "time": null,
+            "priority": "Alta",
+            "done": false
+          },
+          {
+            "id": "b3333333-3333-4333-8333-333333333333",
+            "label": "Comprar comida",
+            "date": "2026-09-09",
+            "time": null,
+            "priority": "Media",
+            "done": false
+          }
+        ],
+        "memories": [
+          "La revisión de pantallas de Focus requiere aproximadamente una hora. El certificado requiere aproximadamente media hora."
+        ],
+        "expect": {
+          "kindAnyOf": [
+            "chat",
+            "clarify"
+          ],
+          "maxActions": 0,
+          "noWrongCreate": true,
+          "replyIncludes": [
+            "Focus",
+            "certificado"
+          ]
+        }
+      },
+      "objectiveChecks": {
+        "availableInterval": {
+          "date": "2026-09-08",
+          "start": "12:00",
+          "end": "14:00"
+        },
+        "noActionsOrProposals": true,
+        "knownTaskIdsOnly": [
+          "b2222222-2222-4222-8222-222222222222",
+          "b1111111-1111-4111-8111-111111111111",
+          "b3333333-3333-4333-8333-333333333333"
+        ],
+        "mustNotInventCommuteOrTaskDuration": true,
+        "humanReviewStillRequired": [
+          "Check any suggested allocation fits inside two hours and ends before the fixed class",
+          "Useful prioritization is not inferred from keyword matching"
+        ]
+      }
     },
     {
       "id": "day-with-constraints",
-      "turns": ["Hilante, mañana quiero avanzar tres horas con Focus, ir al gym y tengo fútbol a las 8 PM. Organízame el día pero no quiero levantarme antes de las 9 AM."],
+      "turns": [
+        "Hilante, mañana quiero avanzar tres horas con Focus, ir al gym y tengo fútbol a las 8 PM. Organízame el día pero no quiero levantarme antes de las 9 AM."
+      ],
       "review": "Consult supplied agenda, preserve football at 20:00, allocate three hours to Focus, schedule nothing before 09:00 and propose uncertain durations for review. Never claim persisted changes until a receipt exists.",
-      "scores": null
+      "scores": null,
+      "runnerCase": {
+        "id": "CONV-DAY",
+        "cat": "conversacion_plan_dia",
+        "input": "Hilante, mañana quiero avanzar tres horas con Focus, ir una hora al gym y tengo fútbol de 8 a 9:30 PM. Organízame el día, no quiero levantarme antes de las 9 AM y no muevas el fútbol.",
+        "events": [
+          {
+            "id": "a1111111-1111-4111-8111-111111111111",
+            "title": "Fútbol",
+            "date": "2026-09-09",
+            "time": "8:00 PM",
+            "endTime": "9:30 PM",
+            "icon": "sport",
+            "section": "evening"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "b1111111-1111-4111-8111-111111111111",
+            "label": "Revisar las pantallas de Focus",
+            "date": "2026-09-09",
+            "time": null,
+            "priority": "Alta",
+            "done": false
+          }
+        ],
+        "memories": [],
+        "expect": {
+          "kindAnyOf": [
+            "event",
+            "multi"
+          ],
+          "minActions": 2,
+          "titlesInclude": [
+            [
+              "Focus"
+            ],
+            [
+              "gym",
+              "gimnasio"
+            ]
+          ]
+        }
+      },
+      "objectiveChecks": {
+        "mode": "proposal",
+        "executableActionsMustBeEmpty": true,
+        "fixedEventIdsUnchanged": [
+          "a1111111-1111-4111-8111-111111111111"
+        ],
+        "noDuplicateOfFixedEvents": true,
+        "proposalDate": "2026-09-09",
+        "earliestNewStart": "09:00",
+        "focusTotalMinutes": 180,
+        "gymTotalMinutes": 60,
+        "mustNotOverlapFixedEvents": true,
+        "newBlocksMustNotOverlapEachOther": true,
+        "explicitStartAndEndRequiredForPlannedBlocks": true
+      }
     },
     {
       "id": "weekly-constraints",
-      "turns": ["Organízame toda la semana considerando universidad, gimnasio, Focus, mis pendientes, horas de sueño y que quiero dejar viernes y sábado por la noche libres. Si ves que no alcanza el tiempo, prioriza por importancia y explícame qué moverías."],
+      "turns": [
+        "Organízame toda la semana considerando universidad, gimnasio, Focus, mis pendientes, horas de sueño y que quiero dejar viernes y sábado por la noche libres. Si ves que no alcanza el tiempo, prioriza por importancia y explícame qué moverías."
+      ],
       "review": "Use relevant synthetic events and preferences, protect Friday/Saturday evenings including overlapping blocks, preserve fixed commitments and explain any assumptions or unsatisfied goals. A higher tier does not confer permission to invent commitments.",
-      "scores": null
+      "scores": null,
+      "runnerCase": {
+        "id": "CONV-WEEK",
+        "cat": "conversacion_plan_semana",
+        "input": "Organízame la próxima semana, del 14 al 20 de septiembre, considerando mis clases fijas de universidad, tres sesiones de una hora de gimnasio, seis horas en total para Focus, mis pendientes y sueño de 11 PM a 7 AM. Deja viernes y sábado libres desde las 7 PM. No muevas las clases. Si no alcanza el tiempo, prioriza por importancia y explícame qué falta.",
+        "events": [
+          {
+            "id": "a2222222-2222-4222-8222-222222222222",
+            "title": "Universidad: clase fija",
+            "date": "2026-09-14",
+            "time": "9:00 AM",
+            "endTime": "1:00 PM",
+            "icon": "book",
+            "section": "morning"
+          },
+          {
+            "id": "a3333333-3333-4333-8333-333333333333",
+            "title": "Universidad: laboratorio fijo",
+            "date": "2026-09-16",
+            "time": "10:00 AM",
+            "endTime": "12:00 PM",
+            "icon": "book",
+            "section": "morning"
+          },
+          {
+            "id": "a4444444-4444-4444-8444-444444444444",
+            "title": "Universidad: seminario fijo",
+            "date": "2026-09-17",
+            "time": "2:00 PM",
+            "endTime": "5:00 PM",
+            "icon": "book",
+            "section": "afternoon"
+          }
+        ],
+        "tasks": [
+          {
+            "id": "b4444444-4444-4444-8444-444444444444",
+            "label": "Entregar trabajo de comunicación",
+            "date": "2026-09-18",
+            "time": "5:00 PM",
+            "priority": "Alta",
+            "done": false
+          }
+        ],
+        "memories": [],
+        "expect": {
+          "kindAnyOf": [
+            "event",
+            "multi"
+          ],
+          "minActions": 2,
+          "titlesInclude": [
+            [
+              "Focus"
+            ],
+            [
+              "gym",
+              "gimnasio"
+            ]
+          ]
+        }
+      },
+      "objectiveChecks": {
+        "mode": "proposal",
+        "executableActionsMustBeEmpty": true,
+        "fixedEventIdsUnchanged": [
+          "a2222222-2222-4222-8222-222222222222",
+          "a3333333-3333-4333-8333-333333333333",
+          "a4444444-4444-4444-8444-444444444444"
+        ],
+        "dateRange": [
+          "2026-09-14",
+          "2026-09-20"
+        ],
+        "blockedIntervals": [
+          {
+            "date": "2026-09-18",
+            "start": "19:00",
+            "end": "24:00"
+          },
+          {
+            "date": "2026-09-19",
+            "start": "19:00",
+            "end": "24:00"
+          }
+        ],
+        "dailySleepBlocked": [
+          "23:00",
+          "07:00"
+        ],
+        "checkIntervalOverlapNotJustStartTime": true,
+        "focusRequestedMinutes": 360,
+        "gymRequestedSessions": 3,
+        "gymMinutesPerSession": 60,
+        "mustNotOverlapFixedEvents": true,
+        "noDuplicateOfFixedEvents": true,
+        "newBlocksMustNotOverlapEachOther": true,
+        "unmetGoals": "Record any missing requested allocation separately. A disclosure is not full completion."
+      },
+      "modelObservation": {
+        "expectedInitialTierFromLocalRouter": "sol",
+        "assertFromRemoteAttemptsOnly": true,
+        "ifEconomyOrLimitsDowngrade": "Record actual tier and mark Sol coverage unmeasured; do not force or override the production router."
+      }
     }
-  ]
+  ],
+  "preparation": {
+    "status": "prepared_not_executed",
+    "fixedNow": "2026-09-08T15:00:00.000Z",
+    "clientTimezone": "America/Santiago",
+    "source": "Five existing conversation scenarios, enriched with synthetic context and objective constraints; no new provider observations.",
+    "objectiveScope": "The existing grader only evaluates runnerCase.expect. objectiveChecks below require an additional constraint review and must not be reported as measured automatically.",
+    "humanConversationScore": null,
+    "clientPersistenceMeasured": false
+  }
 }
