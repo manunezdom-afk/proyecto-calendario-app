@@ -1,10 +1,11 @@
 import { activeIntentText } from './novaContract.js'
 import { novaInputTokenLimit, novaOutputTokenLimit } from './novaSafety.js'
+import { activePendingProposal } from './novaPendingProposal.js'
 
 export const NOVA_MODEL_TIERS = Object.freeze({
   luna: Object.freeze({ model: 'gpt-5.6-luna', input: 12000, output: 1600, outputCeiling: 2048, reasoningEffort: 'none', timeoutMs: 12000, events: 12, tasks: 12, memories: 4 }),
   terra: Object.freeze({ model: 'gpt-5.6-terra', input: 18000, output: 2400, outputCeiling: 3072, reasoningEffort: 'low', timeoutMs: 18000, events: 24, tasks: 20, memories: 6 }),
-  sol: Object.freeze({ model: 'gpt-5.6-sol', input: 24000, output: 3200, outputCeiling: 4096, reasoningEffort: 'medium', timeoutMs: 25000, events: 40, tasks: 30, memories: 8 }),
+  sol: Object.freeze({ model: 'gpt-5.6-sol', input: 24000, output: 3200, outputCeiling: 4096, reasoningEffort: 'medium', timeoutMs: 40000, events: 40, tasks: 30, memories: 8 }),
 })
 export const NOVA_RUNTIME_MODELS = Object.freeze(Object.values(NOVA_MODEL_TIERS).map(tier => tier.model))
 const normalize = text => String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -20,9 +21,14 @@ const setting = (name, fallback, ceiling) => {
 export function analyzeNovaRequest(body = {}) {
   const current = normalize(body.message)
   const text = normalize(activeIntentText(body.message, body.history || []))
-  const planning = /\b(?:organiz\w*|orden\w*|planific\w*|reorganiz\w*|distribu\w*|prioriz\w*|armame (?:el|un) (?:dia|plan))\b/.test(text)
-  const week = /\b(?:toda la semana|esta semana|proxima semana|semanal|cada dia|lunes a viernes)\b/.test(text)
-  const constraints = matches(text, /\b(?:no (?:quiero|puedo|antes|despues)|sin (?:quitar|mover|sacrificar)|al menos|como maximo|minimo|maximo|antes de|despues de|excepto|deja\w*[^,;.]{0,30}libre|prioriza\w*|considerando)\b/g)
+  const pending = activePendingProposal(body.message, body.pendingProposal, body.events)
+  // Original planning complexity is a routing signal only. Message, history
+  // and execution authority remain unchanged in the runtime and validator.
+  const originalDecision = pending ? analyzeNovaRequest({ ...body, message: pending.originalRequest, history: [], pendingProposal: null }) : null
+  const planning = !!pending || /\b(?:organiz\w*|orden\w*|planific\w*|reorganiz\w*|distribu\w*|prioriz\w*|armame (?:el|un) (?:dia|plan))\b/.test(text)
+  const week = originalDecision?.signals.week || /\b(?:toda la semana|esta semana|proxima semana|semanal|cada dia|lunes a viernes)\b/.test(text)
+  const constraints = Math.max(originalDecision?.signals.constraints || 0,
+    matches(text, /\b(?:no (?:quiero|puedo|antes|despues)|sin (?:quitar|mover|sacrificar)|al menos|como maximo|minimo|maximo|antes de|despues de|excepto|deja\w*[^,;.]{0,30}libre|prioriza\w*|considerando)\b/g))
   const conflicts = /\b(?:solap\w*|coincid\w*|choc\w*|conflict\w*|contradict\w*|no alcanza|no cabe|no me da el tiempo)\b/.test(text)
   const bulkDestructive = /\b(?:borra\w*|elimina\w*|olvida\w*)[^.!?]{0,60}\b(?:todo|todos|toda|todas|complet[oa])\b/.test(text)
   const actions = matches(text, /\b(?:comprar|pagar|llamar|mandar|enviar|estudiar|gym|gimnasio|futbol|universidad|clase|prueba|reunion|dormir|sueno|trabajar|focus)\b/g)
@@ -34,8 +40,10 @@ export function analyzeNovaRequest(body = {}) {
     const words = normalize(item.title || item.label).match(/[a-z]{4,}/g) || []
     return words.some(word => text.includes(word))
   }).length
-  const signals = { planning, week, constraints, conflicts, bulkDestructive, independentClauses, explicitTimes, references, continuation, relevantItems }
-  const deep = planning && ((week && (constraints >= 2 || actions >= 4 || relevantItems >= 12))
+  const signals = { planning, week, constraints, conflicts, bulkDestructive, independentClauses, explicitTimes, references, continuation, relevantItems,
+    ...(pending ? { pendingRefinement: true, pendingBlocks: pending.actions.length } : {}) }
+  const deep = originalDecision?.tier === 'sol' || pending && week && constraints >= 1 && pending.actions.length >= 4
+    || planning && ((week && (constraints >= 2 || actions >= 4 || relevantItems >= 12))
     || (conflicts && constraints >= 2) || (constraints >= 4 && actions >= 4))
   const moderate = planning || conflicts || bulkDestructive || independentClauses >= 3
     || (references >= 2 && (body.history || []).length >= 4)

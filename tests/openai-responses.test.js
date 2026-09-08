@@ -54,3 +54,16 @@ test('Sol prices cover cached writes and long context; new admission stops befor
  assert.deepEqual([long.input,long.cachedInput,long.output,long.cacheWrite],[8,.8,30,10])
  assert.equal(calculateAICost({model:'gpt-5.6-sol',at:date,input_tokens:1000,cached_input_tokens:500,cache_creation_input_tokens:100,output_tokens:200}).cost_usd,.0063)
 })
+
+test('provider timeouts are capped per tier and preserve an earlier runtime cancellation',async()=>{
+ const savedFetch=globalThis.fetch,savedTimeout=AbortSignal.timeout,timeouts=[],signals=[]
+ AbortSignal.timeout=ms=>{timeouts.push(ms);return new AbortController().signal}
+ globalThis.fetch=async(_url,options)=>{signals.push(options.signal);return{ok:true,json:async()=>({status:'completed',output_text:'{}'})}}
+ try {
+  for(const model of ['gpt-5.6-luna','gpt-5.6-terra','gpt-5.6-sol'])await callOpenAINova({model,systemPrompt:'safe',message:'hola',apiKey:'offline-test',timeoutMs:999999})
+  assert.deepEqual(timeouts,[12000,18000,40000])
+  const overall=new AbortController();overall.abort(new DOMException('Global request deadline','TimeoutError'))
+  await callOpenAINova({model:'gpt-5.6-sol',systemPrompt:'safe',message:'hola',apiKey:'offline-test',signal:overall.signal})
+  assert.equal(timeouts.at(-1),40000);assert.equal(signals.at(-1).aborted,true);assert.equal(signals.at(-1).reason,overall.signal.reason)
+ }finally{globalThis.fetch=savedFetch;AbortSignal.timeout=savedTimeout}
+})

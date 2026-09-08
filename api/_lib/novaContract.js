@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { hasExplicitEditIntent, hasExplicitDeleteIntent } from './calendarIntent.js'
 import { userMentionedExplicitDuration, userAskedToBlockTime } from './durations.js'
 import { addCivilDays, validTimezone } from './dateContext.js'
+import { activePendingProposal, pendingProposalSchedules, pendingReplacementIssues } from './novaPendingProposal.js'
 
 export const NOVA_ACTION_TYPES = Object.freeze(['create_event', 'create_reminder', 'create_task',
   'edit_event', 'delete_event', 'edit_task', 'complete_task', 'delete_task',
@@ -100,7 +101,7 @@ function planningIssues(schedules, events, scope, dateContext) {
     const from = clockMinutes(item.time), to = from + item.duration
     if (from == null || to > 1440) { issues.add('invalid_planned_interval'); continue }
     if (day && item.date !== day) issues.add('planned_date_conflict')
-    for (const match of text.matchAll(/\bno\s+([^.;,]{0,80}?)\b(antes|despues) de (?:las?\s*)?(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?/g)) {
+    for (const match of text.matchAll(/\bno\s+([^.;,]{0,80}?)\b(antes|despues)\s+(?:de\s+)?(?:las?\s*)?(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?/g)) {
       let hour = Number(match[3])
       if (match[5]) hour = hour % 12 + (match[5] === 'pm' ? 12 : 0)
       else if (match[2] === 'despues' && hour < 12) hour += 12
@@ -251,7 +252,7 @@ export function activeIntentText(message, history = []) {
 
 /** Single, provider-independent gate. Returns a plan; persistence happens in Focus. */
 export function validateNovaPlan({ payload, userMessage = '', history = [], events = [], tasks = [],
-  memories = [], discussedEventIds = [], requestId, reqId, dateContext, strict = true } = {}) {
+  memories = [], discussedEventIds = [], pendingProposal = null, requestId, reqId, dateContext, strict = true } = {}) {
   const id = requestId || reqId || null
   const issues = []
   const reject = code => { issues.push(code) }
@@ -274,9 +275,10 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
     reject('mode_action_conflict'); return empty()
   }
   if (!bounded(payload.userConfirmationText ?? '', 2000, true)) { reject('invalid_reply'); return empty() }
-  const scope = activeIntentText(userMessage, history)
+  const pending = activePendingProposal(userMessage, pendingProposal, events)
+  const scope = pending ? String(userMessage) : activeIntentText(userMessage, history)
   const scopeNorm = norm(scope)
-  const planning = planningIntent(scope)
+  const planning = !!pending || planningIntent(scope)
   const durationAllowed = planning || userMentionedExplicitDuration(scope) || userAskedToBlockTime(scope)
   const eventIds = new Set(events.map(event => event?.id).filter(Boolean))
   const taskIds = new Set(tasks.map(task => task?.id).filter(Boolean))
@@ -296,6 +298,7 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
       else reject('missing_clarification')
       continue
     }
+    if (pending && !['create_event', 'edit_event'].includes(a.type)) { reject('pending_proposal_non_calendar_action'); continue }
     if (a.confidence === 'low') { reject('low_confidence'); continue }
     if (speculative(userMessage)) { reject('speculative_intent'); continue }
     if (negatedAction(userMessage, a.type)) { reject('negated_mutation'); continue }
@@ -334,8 +337,8 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
         action = { type: 'delete_event', id: targetId }
       } else {
         const original = events.find(event => event.id === targetId)
-        if (planning && scopeNorm.split(/[.;,]/).some(part => part.includes(norm(original.title))
-          && /\b(?:fij[oa]|inamovible|sin mover|no (?:quiero )?mover)\b/.test(part))) { reject('planned_fixed_event'); continue }
+        if (planning && [scope, pending?.originalRequest || ''].some(text => norm(text).split(/[.;,]/).some(part => part.includes(norm(original.title))
+          && /\b(?:fij[oa]|inamovible|sin mover|no (?:quiero )?mover)\b/.test(part)))) { reject('planned_fixed_event'); continue }
         const requestedReminder = a.reminderOffsetMinutes != null && /\b(?:avis\w*|recuerd\w*|acuerd\w*)\b/.test(scopeNorm)
         if (!planning && !hasExplicitEditIntent(scope) && !requestedReminder) { reject('missing_edit_intent'); continue }
         const updates = {}
@@ -396,7 +399,8 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
       if (!bounded(a.title, 120) || /^(?:evento|recordatorio|tarea|horas?|hoy|ma[nñ]ana|\d{1,2}(?::\d{2})?)$/i.test(a.title.trim())) {
         reject('invalid_title'); continue
       }
-      const evidence = planning && a.type !== 'create_task' ? `${scope}\n${tasks.map(task => task.label).join('\n')}` : scope
+      const evidence = pending ? `${scope}\n${pendingProposalSchedules(pending, events).map(event => event.title).join('\n')}`
+        : planning && a.type !== 'create_task' ? `${scope}\n${tasks.map(task => task.label).join('\n')}` : scope
       if ((!planning && (informational(scope) || conversational(scope))) || !groundedTitle(a.title, evidence, planning ? [] : memories)) { reject('unrequested_creation'); continue }
       if (a.type === 'create_task') {
         if (informational(scope) || conversational(scope)) { reject('unrequested_creation'); continue }
@@ -436,6 +440,12 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
     actions.push(action)
   }
   if (planning) planningIssues(plannedSchedules, events, scope, dateContext).forEach(reject)
+  if (pending && actions.length) {
+    // Original constraints remain data about this draft, never sourceText or
+    // permission to execute. Validate the revised schedule against both sets.
+    planningIssues(plannedSchedules, events, pending.originalRequest, dateContext).forEach(reject)
+    pendingReplacementIssues(pending, actions, events).forEach(reject)
+  }
   if (issues.includes('reminder_needs_time')) return empty('¿A qué hora quieres que te avise?')
   if (issues.length) return empty(bounded(payload.clarificationQuestion, 400) && /\?/.test(payload.clarificationQuestion)
     && !pastClaim.test(norm(payload.clarificationQuestion)) ? payload.clarificationQuestion : defaultQuestion)
@@ -444,8 +454,9 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
   const needsClarification = payload.needsClarification === true || questions.length > 0 || !!implicitQuestion
   const question = payload.clarificationQuestion || questions[0] || implicitQuestion || null
   if (needsClarification && !bounded(question, 400)) { reject('missing_clarification'); return empty() }
-  const proposed = planning || destructive || pastOrAmbiguousTime || speculative(userMessage) || ['proposal', 'confirmation'].includes(mode) || (payload.proposed_actions?.length || 0) > 0
   if (mode === 'clarification' && actions.length) { reject('mode_action_conflict'); return empty() }
+  if (pending && needsClarification) return { ...empty(question), validation: { ok: true, issues: [] } }
+  const proposed = planning || destructive || pastOrAmbiguousTime || speculative(userMessage) || ['proposal', 'confirmation'].includes(mode) || (payload.proposed_actions?.length || 0) > 0
   if (needsClarification && actions.length && !/[,;\n]|\by\b/.test(scope)) { reject('ambiguous_partial_execution'); return empty() }
   const finalMode = actions.length ? (proposed ? 'proposal' : 'chat_with_action') : (needsClarification ? 'clarification' : 'chat_only')
   let reply = String(payload.userConfirmationText || '').trim()
@@ -454,6 +465,7 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
   else if (needsClarification) reply = question
   else if (!reply || pastClaim.test(norm(reply)) || /^listo[.!]?$/i.test(reply)) reply = 'No hice cambios. Cuéntame qué necesitas.'
   return { reply, actions: proposed ? [] : actions, proposed_actions: proposed ? actions : [],
+    ...(pending && actions.length && proposed && !needsClarification ? { replacesProposalId: pending.id } : {}),
     mode: finalMode, shouldAskUser: needsClarification && !actions.length, confidence: 0.9,
     requestId: id, smart_actions_blocked: false, smart_actions_message: null,
     follow_up_question: actions.length && needsClarification ? question : null,

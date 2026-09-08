@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { validTimezone } from './dateContext.js'
+import { sanitizePendingProposal } from './novaPendingProposal.js'
 
 // One request budget shared by every provider. Only bounded, expected fields
 // reach a prompt; diagnostics never contain the user's input or provider body.
@@ -42,6 +43,7 @@ export function sanitizeNovaRequest(raw) {
     // Calendar capture does not need the address book or behavioral profile.
     contacts: [], profile: null, behavior: null, location: null,
   }
+  result.pendingProposal = sanitizePendingProposal(raw.pendingProposal, result.events)
   return { body: result }
 }
 

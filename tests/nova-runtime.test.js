@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { executeNovaRequest, selectNovaRoutes } from '../api/_lib/novaRuntime.js'
 import { sanitizeNovaRequest } from '../api/_lib/novaSafety.js'
 import { wirePlan, wireAction } from './helpers/novaFixtures.js'
+import { splitNovaSystemPrompt, NOVA_CONTEXT_MARKER } from '../api/_lib/novaPrompt.js'
 const body = message => sanitizeNovaRequest({ message, clientNow: Date.parse('2026-09-08T14:00Z'), clientTimezone: 'America/Santiago' }).body
 function database({ admission = 'admitted', consume = 'ok', finish = 'completed', begin = 'started', settle = 'settled' } = {}) {
   const calls = []; let stored
@@ -23,6 +24,59 @@ function environment(overrides = {}) {
   return () => keys.forEach(key => saved[key] === undefined ? delete process.env[key] : process.env[key] = saved[key])
 }
 const response = plan => ({ status: 'completed', output_text: JSON.stringify(plan), usage: { input_tokens: 1000, output_tokens: 200, input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } } })
+
+test('pending refinement reaches the provider as unsaved context and returns only a durably finished replacement', async () => {
+  const restore = environment(); const admin = database(); let calls = 0
+  const message = 'No quiero estudiar después de las 8 PM'
+  const originalRequest = 'Organiza la tarde de mañana con una hora de estudiar economía'
+  const pendingProposal = { id: 'draft-calendar-1', originalRequest, actions: [
+    { type: 'add_event', event: { title: 'Estudiar economía', date: '2026-09-09', time: '8:00 PM', endTime: '9:00 PM' }, reviewedTask: { label: 'unrelated private snapshot' } },
+  ] }
+  const requestBody = sanitizeNovaRequest({ message, pendingProposal,
+    history: [{ role: 'user', content: originalRequest }, { role: 'assistant', content: 'Preparé una propuesta pendiente.' }],
+    clientNow: Date.parse('2026-09-08T14:00Z'), clientTimezone: 'America/Santiago' }).body
+  try {
+    const out = await executeNovaRequest({ admin, userId: 'user', requestId: 'refinement-request', body: requestBody, plan: 'free',
+      track: async () => ({ ok: true }), callProviders: { openai: async args => {
+        calls++; assert.equal(args.message, message)
+        assert.deepEqual(args.history, requestBody.history)
+        const { context } = splitNovaSystemPrompt(args.systemPrompt)
+        const data = JSON.parse(context.slice(NOVA_CONTEXT_MARKER.length))
+        assert.deepEqual(data.events, [])
+        assert.equal(data.pendingProposal.status, 'not_saved')
+        assert.equal(data.pendingProposal.originalRequest, originalRequest)
+        assert.equal(data.pendingProposal.actions[0].event.endTime, '9:00 PM')
+        assert.doesNotMatch(context, /unrelated private snapshot/)
+        return response(wirePlan([wireAction({ type: 'create_event', title: 'Estudiar economía', dateISO: '2026-09-09',
+          time: '18:00', durationMinutes: 60, sourceText: message })], { mode: 'proposal' }))
+      } } })
+    assert.equal(calls, 1); assert.equal(out.httpStatus, 200)
+    assert.deepEqual(out.body.actions, [])
+    assert.equal(out.body.replacesProposalId, pendingProposal.id)
+    assert.equal(out.body.proposed_actions[0].event.endTime, '7:00 PM')
+    assert.deepEqual(admin.calls.at(-1).args.p_response, out)
+    assert.equal(admin.calls.at(-1).name, 'focus_ai_finish')
+  } finally { restore() }
+})
+
+test('blocked smart quota or uncertain finish cannot close an existing pending proposal', async () => {
+  const restore = environment()
+  const message = 'Ajusta la propuesta: no quiero terminar después de las 20'
+  const requestBody = sanitizeNovaRequest({ message, clientNow: Date.parse('2026-09-08T14:00Z'), clientTimezone: 'America/Santiago',
+    pendingProposal: { id: 'draft-calendar-2', originalRequest: 'Organiza mañana con una hora de Gym', actions: [
+      { type: 'add_event', event: { title: 'Gym', date: '2026-09-09', time: '18:00', endTime: '19:00' } },
+    ] } }).body
+  try {
+    for (const options of [{ consume: 'quota' }, { finish: 'unavailable' }]) {
+      const out = await executeNovaRequest({ admin: database(options), userId: 'user', requestId: 'pending-denied', body: requestBody, plan: 'free',
+        track: async () => ({ ok: true }), callProviders: { openai: async () => response(wirePlan([
+          wireAction({ type: 'create_event', title: 'Gym', dateISO: '2026-09-09', time: '17:00', durationMinutes: 60, sourceText: message }),
+        ], { mode: 'proposal' })) } })
+      assert.equal(out.body.replacesProposalId, undefined)
+      assert.equal(out.body.actions.length, 0); assert.equal(out.body.proposed_actions.length, 0)
+    }
+  } finally { restore() }
+})
 async function invoke({ admin = database(), provider, message = 'comprar pan', track = async () => ({ ok: true }) } = {}) {
   return executeNovaRequest({ admin, userId: 'user', requestId: 'request', body: body(message), plan: 'free',
     callProviders: { openai: provider || (async () => response(wirePlan([wireAction()]))) }, track })

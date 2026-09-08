@@ -2,6 +2,24 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { analyzeNovaRequest, selectNovaRoutes, novaTierRoute, shouldEscalateNova } from '../api/_lib/novaRouter.js'
 const classify = message => analyzeNovaRequest({message})
+const pendingBlocks = count => Array.from({ length: count }, (_, index) => ({ type: 'add_event', event: {
+ title: index % 2 ? 'Gym' : 'Focus', date: `2026-09-${String(14 + index % 7).padStart(2, '0')}`,
+ time: '09:00', endTime: '10:00',
+} }))
+test('weekly draft refinement uses original constraints and multiple pending blocks as objective complexity',()=>{
+ const body={message:'No quiero terminar después de las 20',pendingProposal:{id:'week-plan',
+  originalRequest:'Organiza la próxima semana con Focus y Gym.',actions:pendingBlocks(4)}}
+ const decision=analyzeNovaRequest(body)
+ assert.equal(decision.tier,'sol');assert.equal(decision.signals.week,true)
+ assert.equal(decision.signals.pendingBlocks,4)
+ assert.deepEqual(selectNovaRoutes(body).map(route=>route.tier),['sol'])
+})
+test('an unrelated turn or long daily draft cannot inherit weekly premium complexity',()=>{
+ const pendingProposal={id:'day-plan',originalRequest:'Organiza la tarde con Focus. '+ 'detalle '.repeat(450),actions:pendingBlocks(12)}
+ assert.equal(analyzeNovaRequest({message:'No quiero terminar después de las 20',pendingProposal}).tier,'terra')
+ pendingProposal.originalRequest='Organiza toda la semana sin mover universidad y deja las noches libres, considerando Focus y Gym.'
+ assert.equal(analyzeNovaRequest({message:'comprar pan',pendingProposal}).tier,'luna')
+})
 for (const message of ['crear tarea comprar pan','gym mañana a las 7','acuérdame pagar el internet','mueve fútbol para las 8','qué tengo mañana','completa comprar pan','borra mi reunión','recuerda que Cata es mi polola','ando con mil cosas','no sé qué hacer primero']) {
  test(`Luna handles everyday intent: ${message}`,()=>assert.equal(classify(message).tier,'luna'))
 }

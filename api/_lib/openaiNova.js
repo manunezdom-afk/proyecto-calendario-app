@@ -8,7 +8,6 @@ export const NOVA_OPENAI_SCHEMA = NOVA_PLAN_SCHEMA
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
 const DEFAULT_MODEL = 'gpt-5.6-luna'
 const DEFAULT_MAX_OUTPUT_TOKENS = 1600
-const DEFAULT_TIMEOUT_MS = 18000
 
 export async function callOpenAINova({
   message,
@@ -21,7 +20,7 @@ export async function callOpenAINova({
   reasoningEffort,
   maxOutputTokens,
   maxInputTokens = 12000,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+  timeoutMs,
 }) {
   const selectedModel = model || DEFAULT_MODEL
   if (!NOVA_RUNTIME_MODELS.includes(selectedModel)) throw Object.assign(new Error('unsupported_model'), { code: 'unsupported_model' })
@@ -68,7 +67,8 @@ export async function callOpenAINova({
     },
     reasoning: { effort },
   }
-  const boundedSignal = AbortSignal.timeout(Math.max(1, Math.min(25000, timeoutMs)))
+  const boundedSignal = AbortSignal.timeout(Math.max(1, Math.floor(Math.min(config.timeoutMs,
+    Number.isFinite(timeoutMs) ? timeoutMs : config.timeoutMs))))
     const response = await fetch(OPENAI_RESPONSES_URL, {
       method: 'POST',
       headers: {

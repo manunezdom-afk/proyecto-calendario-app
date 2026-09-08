@@ -7,6 +7,7 @@ import { ACTION_TYPES, messageForLimit } from './usageLimits.js'
 import { trackAIUsageEvent } from './aiUsageTracking.js'
 import { calculateAICost, getModelPricing } from './aiPricing.js'
 import { selectNovaRoutes, novaTierRoute, shouldEscalateNova } from './novaRouter.js'
+import { activePendingProposal } from './novaPendingProposal.js'
 import { admitNovaRequest, finishNovaRequest, consumeNovaQuota, reserveAttemptCost, reserveRequestCost,
   beginNovaAttempt, settleNovaAttempt } from './novaAdmission.js'
 export { selectNovaRoutes } from './novaRouter.js'
@@ -54,7 +55,8 @@ function relevantContext(body, dateContext, route) {
 export function prepareNovaRoute(body, dateContext, route) {
   const context = relevantContext(body, dateContext, route)
   while (true) {
-    const systemPrompt = buildOpenAISystemPrompt({ ...dateContext, ...context, discussedEventIds: body.discussedEventIds })
+    const systemPrompt = buildOpenAISystemPrompt({ ...dateContext, ...context, discussedEventIds: body.discussedEventIds,
+      pendingProposal: activePendingProposal(body.message, body.pendingProposal, body.events) })
     try {
       const history = boundNovaInput({ systemPrompt, message: body.message, history: body.history,
         schema: NOVA_OPENAI_SCHEMA.schema, maxInputTokens: route.maxInputTokens })
@@ -166,7 +168,8 @@ export async function executeNovaRequest({ admin, userId, requestId, body, plan,
       let payload
       try { payload = JSON.parse(output) } catch { throw Object.assign(new Error('invalid_json'), { code: 'invalid_json' }) }
       result = validateNovaPlan({ payload, userMessage: body.message, history: route.history,
-        events: body.events, tasks: body.tasks, memories: route.memories, discussedEventIds: body.discussedEventIds, dateContext, requestId })
+        events: body.events, tasks: body.tasks, memories: route.memories, discussedEventIds: body.discussedEventIds,
+        pendingProposal: body.pendingProposal, dateContext, requestId })
       if (!result.validation.ok) error = Object.assign(new Error('invalid_plan'), { code: 'invalid_plan' })
     } catch (failure) { error = failure }
     const usage = usageFor(data)
@@ -212,6 +215,7 @@ export async function executeNovaRequest({ admin, userId, requestId, body, plan,
       reply: messageForLimit(plan, ACTION_TYPES.NOVA_SMART_ACTION), smart_actions_blocked: true,
       smart_actions_message: messageForLimit(plan, ACTION_TYPES.NOVA_SMART_ACTION) } } : unavailable(requestId)
   }
+  if (response.body.mode !== 'proposal' || !response.body.proposed_actions?.length || response.body.smart_actions_blocked) delete response.body.replacesProposalId
   if (!trackingOK) actualUSD = Math.max(actualUSD, reserveUSD)
   if (response.httpStatus === 503) response.body = { ...response.body, request_completed: true, request_retryable: true }
   const finalized = await finishNovaRequest({ admin, userId, requestId, leaseId, response, actualUSD,
