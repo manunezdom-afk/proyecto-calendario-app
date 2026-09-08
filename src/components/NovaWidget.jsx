@@ -1,3 +1,4 @@
+import { clearEventReference, rememberEventReceipt, consumeEventReference } from '../utils/assistantEventReference.js'
 import { appendProposalRequest, PROPOSAL_CONTEXT_LIMIT } from '../utils/pendingProposal.js'
 import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -88,6 +89,14 @@ function NovaWidget({
   const { profile } = useUserProfile()
   const { user } = useAuth()
   const { memories, addMemory, deleteMemory, deleteMemories } = useUserMemories()
+  const referenceOwnerRef = useRef(user?.id)
+  useEffect(() => {
+    if (referenceOwnerRef.current !== user?.id) {
+      clearEventReference(sessionStorage, referenceOwnerRef.current)
+      clearEventReference(sessionStorage, user?.id)
+      referenceOwnerRef.current = user?.id
+    }
+  }, [user?.id])
   const epochRef = useRef(null)
   epochRef.current = advanceAccountEpoch(epochRef.current, user?.id)
   const liveRef = useRef(null)
@@ -565,6 +574,7 @@ function NovaWidget({
     if (!consentGranted && !hasAIConsent()) { setConsentPendingPhoto(file); return }
     busyRef.current = true
     const sentContext = liveRef.current
+    clearEventReference(sessionStorage, sentContext.userId)
     const signature = `${sentContext.userId || 'guest'}:${file.name}:${file.size}:${file.lastModified}`
     try {
       const saved = await prepareLogicalRequest(localStorage, sentContext.userId, 'widget_photo', signature)
@@ -638,6 +648,9 @@ function NovaWidget({
       setReply(PROPOSAL_CONTEXT_LIMIT)
       return
     }
+    const discussedEventIds = consumeEventReference(sessionStorage, sentContext.userId, {
+      message: msg, events: sentContext.events, history: historyRef.current, pendingProposal: sentContext.pendingProposal,
+    })
     busyRef.current = true
     let requestId
     try {
@@ -672,6 +685,7 @@ function NovaWidget({
           events,
           tasks,
           history: historyRef.current.slice(0, -1).slice(-20),
+          discussedEventIds,
           pendingProposal: sentContext.pendingProposal || undefined,
           location,
           profile,
@@ -717,6 +731,7 @@ function NovaWidget({
       let outcome = prepared
       if (prepared.ok && prepared.kind === 'review') outcome = enqueueAssistantReview(prepared.actions, onProposeActions, { originalRequest: msg, replacesProposalId: data.replacesProposalId, expectedProposal: sentContext.pendingProposal })
       if (prepared.ok && prepared.kind === 'execute') outcome = applyAssistantActions(prepared.actions, liveRef.current)
+      rememberEventReceipt(sessionStorage, sentContext.userId, outcome, prepared.kind)
       if (outcome.ok && prepared.kind === 'review') {
         setChips(prepared.actions.map(action => ({ id: action.actionId, icon: 'auto_awesome', label: actionLabel(action), done: true, proposed: true })))
       } else {

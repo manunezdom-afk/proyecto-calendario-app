@@ -1,3 +1,4 @@
+import { clearEventReference, rememberEventReceipt, consumeEventReference } from '../utils/assistantEventReference.js'
 import { appendProposalRequest, PROPOSAL_CONTEXT_LIMIT } from '../utils/pendingProposal.js'
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -28,7 +29,7 @@ const SR = typeof window !== 'undefined' &&
 
 function describeAction(action) { return action.receiptMessage || actionLabel(action) }
 
-async function callFocusAssistant({ message, events, tasks, memories, history, requestId, pendingProposal }) {
+async function callFocusAssistant({ message, events, tasks, memories, history, requestId, pendingProposal, discussedEventIds }) {
   let res
   try {
     res = await apiFetch('/api/focus-assistant', {
@@ -39,6 +40,7 @@ async function callFocusAssistant({ message, events, tasks, memories, history, r
         events,
         tasks,
         history,
+        discussedEventIds,
         pendingProposal: pendingProposal || undefined,
         memories,
         clientNow: Date.now(),
@@ -107,6 +109,14 @@ export default function FocusBar({
 }) {
   const { user } = useAuth()
   const { memories, addMemory, deleteMemory, deleteMemories } = useUserMemories()
+  const referenceOwnerRef = useRef(user?.id)
+  useEffect(() => {
+    if (referenceOwnerRef.current !== user?.id) {
+      clearEventReference(sessionStorage, referenceOwnerRef.current)
+      clearEventReference(sessionStorage, user?.id)
+      referenceOwnerRef.current = user?.id
+    }
+  }, [user?.id])
   const epochRef = useRef(null)
   epochRef.current = advanceAccountEpoch(epochRef.current, user?.id)
   const liveRef = useRef(null)
@@ -378,6 +388,7 @@ export default function FocusBar({
   // y Nova lo maneja. El pill desaparece tras undo (o al cerrar reply).
   function handleUndo() {
     if (!lastApplied) return
+    clearEventReference(sessionStorage, user?.id)
     lastApplied.eventIds?.forEach((id) => onDeleteEvent?.(id))
     lastApplied.taskIds?.forEach((id) => onDeleteTask?.(id))
     lastApplied.memoryIds?.forEach((id) => deleteMemory?.(id))
@@ -403,6 +414,9 @@ export default function FocusBar({
       setReply({ content: PROPOSAL_CONTEXT_LIMIT, actions: [] })
       return
     }
+    const discussedEventIds = consumeEventReference(sessionStorage, sentContext.userId, {
+      message: msg, events: sentContext.events, history: historyRef.current, pendingProposal: sentContext.pendingProposal,
+    })
     busyRef.current = true
     let requestId
     try {
@@ -439,13 +453,14 @@ export default function FocusBar({
         events,
         tasks,
         memories,
-        history: historyRef.current.slice(0, -1).slice(-20), requestId, pendingProposal: sentContext.pendingProposal,
+        history: historyRef.current.slice(0, -1).slice(-20), requestId, discussedEventIds, pendingProposal: sentContext.pendingProposal,
       })
       if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
       const prepared = prepareAssistantResponse(result, sentContext, { requestId })
       let outcome = prepared
       if (prepared.ok && prepared.kind === 'review') outcome = enqueueAssistantReview(prepared.actions, onProposeActions, { originalRequest: msg, replacesProposalId: result.replacesProposalId, expectedProposal: sentContext.pendingProposal })
       if (prepared.ok && prepared.kind === 'execute') outcome = applyAssistantActions(prepared.actions, liveRef.current)
+      rememberEventReceipt(sessionStorage, sentContext.userId, outcome, prepared.kind)
       const receipts = outcome.receipts || []
       const actions = receipts.map(item => ({ ...item.action, receiptMessage: item.message }))
       const undoable = receipts.filter(item => item.undo)
@@ -481,6 +496,7 @@ export default function FocusBar({
     if (!consentGranted && !hasAIConsent()) { setConsentPendingPhoto(file); return }
     busyRef.current = true
     const sentContext = liveRef.current
+    clearEventReference(sessionStorage, sentContext.userId)
     const signature = `${sentContext.userId || 'guest'}:${file.name}:${file.size}:${file.lastModified}`
     try {
       const saved = await prepareLogicalRequest(localStorage, sentContext.userId, 'focusbar_photo', signature)

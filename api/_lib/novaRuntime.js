@@ -9,7 +9,7 @@ import { calculateAICost, getModelPricing } from './aiPricing.js'
 import { selectNovaRoutes, novaTierRoute, shouldEscalateNova } from './novaRouter.js'
 import { activePendingProposal } from './novaPendingProposal.js'
 import { admitNovaRequest, finishNovaRequest, consumeNovaQuota, reserveAttemptCost, reserveRequestCost,
-  beginNovaAttempt, settleNovaAttempt } from './novaAdmission.js'
+  beginNovaAttempt, settleNovaAttempt, recoverNovaReplay } from './novaAdmission.js'
 export { selectNovaRoutes } from './novaRouter.js'
 
 function usageFor(data) {
@@ -119,6 +119,10 @@ export async function executeNovaRequest({ admin, userId, requestId, body, plan,
           actionType: ACTION_TYPES.NOVA_MESSAGE, plan, reserveUSD, modelAttemptsRequired: true })
       }
     } catch { /* Keep the original budget denial if the smaller route is invalid. */ }
+  }
+  if (admission.status === 'unavailable' && !admission.reason) {
+    const recovered = await recoverNovaReplay({ admin, userId, requestId, message: body.message, actionType: ACTION_TYPES.NOVA_MESSAGE })
+    if (recovered.status === 'replay') admission = recovered
   }
   if (admission.status !== 'admitted') return admissionResponse(admission, requestId, plan)
   const leaseId = admission.lease_id

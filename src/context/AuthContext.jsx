@@ -25,31 +25,42 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
 
-    // Sincroniza colas que pueden haber quedado pendientes entre sesiones:
-    // escrituras offline, señales, suscripción push y modelo de behavior.
-    // Se llama tanto al SIGNED_IN de un login nuevo como al hidratar una
-    // sesión ya existente (getSession). Antes sólo corría en SIGNED_IN,
-    // así que al abrir la app con sesión persistida las cosas quedaban
-    // en la cola hasta que el usuario interactuara con la red.
-    async function syncOnSession(u, { freshLogin }) {
+    let disposed = false
+    let authVersion = 0
+    let generation = 0
+    let currentUserId = null
+    let syncTimer = null
+
+    const publishSession = sessionUser => {
+      if (currentUserId !== (sessionUser?.id ?? null)) generation += 1
+      currentUserId = sessionUser?.id ?? null
+      setUser(sessionUser)
+      setSignalsUserId(currentUserId)
+      setLoading(false)
+    }
+
+    async function syncOnSession(u, { freshLogin, isCurrent }) {
       try {
-        if (freshLogin) {
-          // Al login nuevo limpiamos las claves globales (sin userId) para
-          // que cualquier caché residual de una sesión anterior no se
-          // muestre como datos del usuario recién entrado.
-          dataService.clearGlobalCache()
-        }
+        if (!isCurrent()) return
+        if (freshLogin) dataService.clearGlobalCache()
         await dataService.flushQueue()
+        if (!isCurrent()) return
         await flushSignalsQueue()
+        if (!isCurrent()) return
         await fetchBehavior(u.id).catch(() => {})
+        if (!isCurrent()) return
         await flushPendingSubscription().catch(() => {})
+        if (!isCurrent()) return
         await flushPendingNativeToken().catch(() => {})
+        if (!isCurrent()) return
         const native = await getNativePushStatus().catch(() => null)
+        if (!isCurrent()) return
         if (native?.supported && native.permission === 'granted') {
           await registerNativePush({ prompt: false }).catch(() => {})
         }
-        const s = await getPushStatus()
-        if (s.supported && s.permission === 'granted' && !s.subscribed) {
+        if (!isCurrent()) return
+        const status = await getPushStatus()
+        if (isCurrent() && status.supported && status.permission === 'granted' && !status.subscribed) {
           await subscribeToPush().catch(() => {})
         }
       } catch (err) {
@@ -57,46 +68,59 @@ export function AuthProvider({ children }) {
       }
     }
 
+    function scheduleSync(sessionUser, freshLogin) {
+      clearTimeout(syncTimer)
+      const scheduledGeneration = generation
+      const isCurrent = () => !disposed && generation === scheduledGeneration && currentUserId === sessionUser.id
+      // Supabase waits for auth callbacks while holding its session lock.
+      // A later task lets that lock release before any REST call needs it.
+      syncTimer = setTimeout(() => {
+        syncTimer = null
+        if (isCurrent()) void syncOnSession(sessionUser, { freshLogin, isCurrent })
+      }, 0)
+    }
+
+    const initialVersion = authVersion
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (disposed || authVersion !== initialVersion) return
       const current = session?.user ?? null
-      setUser(current)
-      setSignalsUserId(current?.id ?? null)
-      if (current) {
-        fetchBehavior(current.id).catch(() => {})
-        // Sesión ya existente al abrir la app: sincronizar colas.
-        syncOnSession(current, { freshLogin: false })
-      }
-      setLoading(false)
+      publishSession(current)
+      if (current) scheduleSync(current, false)
+    }).catch(() => {
+      if (!disposed && authVersion === initialVersion) setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
+        if (disposed) return
+        authVersion += 1
         const newUser = session?.user ?? null
-        setUser(newUser)
-        setSignalsUserId(newUser?.id ?? null)
+        publishSession(newUser)
         if (event === 'PASSWORD_RECOVERY') {
-          // Llegó al app desde un link de "olvidé mi contraseña". Forzamos
-          // el modal abierto en el paso de "nueva contraseña" antes de hacer
-          // sync de nada — el usuario debe setear su nueva password primero.
+          clearTimeout(syncTimer)
+          generation += 1
           setRecoveryMode(true)
           setAuthModal(true)
           return
         }
-        if (event === 'SIGNED_IN' && newUser) {
-          await syncOnSession(newUser, { freshLogin: true })
+        if (['SIGNED_IN', 'INITIAL_SESSION'].includes(event) && newUser) {
+          scheduleSync(newUser, event === 'SIGNED_IN')
         }
         if (event === 'SIGNED_OUT') {
+          clearTimeout(syncTimer)
+          generation += 1
           setRecoveryMode(false)
-          // SIGNED_OUT puede llegar desde OTRA pestaña (storage event)
-          // o desde un refresh token expirado/revocado — casos en los
-          // que nuestro signOut() no corrió. Aseguramos limpieza de
-          // datos privados aunque sea redundante con signOut() local.
           try { clearPrivateUserDataLocal() } catch {}
         }
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      disposed = true
+      generation += 1
+      clearTimeout(syncTimer)
+      subscription.unsubscribe()
+    }
   }, [])
 
   // Deep-link OAuth callback para Google en app nativa (Capacitor).

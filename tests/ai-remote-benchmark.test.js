@@ -12,7 +12,7 @@ const cases=Array.from({length:3},(_,i)=>({id:'T'+i,cat:'tasks',input:'comprar p
 const options=(extra=[])=>parseRemoteBenchmarkOptions(['--live','--base-url',origin,'--limit','3','--users','1',...extra])
 const reply=(data,status=200)=>new Response(JSON.stringify(data),{status})
 
-function fake({cost=.01,uncertain=false,legacy=false,ownerMismatch=false,extraReplay=false,terminalFailure=false}={}) {
+function fake({cost=.01,uncertain=false,legacy=false,ownerMismatch=false,extraReplay=false,terminalFailure=false,unavailableReplay=false,changedReplayLedger=false}={}) {
  const users=new Map(),ledger=new Map(),attempts=[],events=[],calls=[];let paid=0
  const fetchImpl=async(url,request={})=>{
   const u=new URL(url),path=u.pathname,body=request.body?JSON.parse(request.body):{},method=request.method||'GET'
@@ -30,6 +30,7 @@ function fake({cost=.01,uncertain=false,legacy=false,ownerMismatch=false,extraRe
     if(!uncertain)events.push({user_id:userId,action_type:'nova_message',model_used:'gpt-5.6-luna',input_tokens:1000,output_tokens:200,estimated_cost_usd:cost,metadata:{request_id:id,admission_lease_id:row.lease_id,cost_basis:'provider_usage',usage_source:'openai_usage'}})
     if(uncertain)throw new Error('private-token unknown transport')
    }else if(extraReplay){paid++;attempts.push({request_row_id:row.id,model:'gpt-5.6-terra',attempt_index:1,state:'settled',actual_usd:.02});row.actual_usd+=.02}
+   else if(unavailableReplay){if(changedReplayLedger)row.state='in_progress';return reply({requestId:id,error:'assistant_unavailable',actions:[],proposed_actions:[]},503)}
    return reply(row.response,terminalFailure?503:200)
   }
   assert.equal(u.origin,EXPECTED_SUPABASE_URL)
@@ -120,6 +121,23 @@ test('extra replay attempts fail the run and remain in accounting',async()=>{
  assert.equal(report.status,'failed');assert.equal(report.errorCode,'replay_mismatch');assert.equal(server.paid,2)
  assert.equal(report.summary.providerAttempts,2);assert.equal(report.summary.recordedRunChargeUSD,.03)
  assert.equal(report.summary.costObservationSufficient,false)
+})
+
+test('a transient unavailable replay stays a failed case while unchanged durable accounting permits the next distinct case',async()=>{
+ const server=fake({unavailableReplay:true}),report=await run(server)
+ assert.equal(report.status,'completed',report.errorCode)
+ assert.equal(report.summary.objectivePass,0);assert.equal(report.summary.replayChecks,0)
+ assert.equal(report.summary.replayAvailabilityFailures,3);assert.equal(server.paid,3)
+ assert.equal(server.calls.filter(call=>call.path==='/api/focus-assistant').length,6,'no replay retries or repeated paid cases')
+ assert.ok(report.rows.every(row=>row.verdict.fails.includes('replay_mismatch')&&row.replayAvailabilityFailure.caseStillFailed))
+ assert.equal(report.summary.recordedRunChargeUSD,.03);assert.equal(report.cleanup.verified,1)
+})
+
+test('a replay outage cannot continue when durable state changed after the first response',async()=>{
+ const server=fake({unavailableReplay:true,changedReplayLedger:true}),report=await run(server)
+ assert.equal(report.status,'failed');assert.equal(report.errorCode,'replay_mismatch')
+ assert.equal(server.paid,1);assert.equal(report.summary.attempted,1)
+ assert.equal(report.summary.replayAvailabilityFailures,0);assert.equal(report.cleanup.verified,1)
 })
 test('Vercel CLI receives only private config path; rejects redirects to other origins',async()=>{
  let configPath

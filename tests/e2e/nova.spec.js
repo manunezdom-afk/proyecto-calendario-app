@@ -104,7 +104,7 @@ test.describe('Hilante — consentimiento y resultado verificable', () => {
     await page.getByRole('button', { name: /Abrir bandeja/ }).click()
     await expect(page.getByRole('heading', { name: 'Bandeja de Hilante', exact: true })).toBeVisible()
     await page.getByRole('button', { name: /Aprobar/ }).click()
-    await expect(page.getByText('Añadí «Gym E2E» en este dispositivo.', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Añadí Gym E2E en este dispositivo.', { exact: true }).first()).toBeVisible()
     await expect.poll(async () => (await savedEvents(page)).filter(event => event.title === 'Gym E2E').length).toBe(1)
     const stored = (await savedEvents(page)).find(event => event.title === 'Gym E2E')
     expect(stored.date).toBe(TODAY)
@@ -155,7 +155,7 @@ test.describe('Hilante — consentimiento y resultado verificable', () => {
     await page.getByRole('button', { name: /Abrir bandeja/ }).click()
     await expect(page.getByText(/17:00.*19:00/).first()).toBeVisible()
     await page.getByRole('button', { name: /Aprobar/ }).click()
-    await expect(page.getByText('Añadí «Estudiar continuidad E2E» en este dispositivo.', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Añadí Estudiar continuidad E2E en este dispositivo.', { exact: true }).first()).toBeVisible()
     const saved = (await savedEvents(page)).filter(row => row.title === 'Estudiar continuidad E2E')
     expect(saved).toHaveLength(1)
     expect(parseTimeRange(saved[0].time).startH).toBe(17)
@@ -206,7 +206,7 @@ test.describe('Hilante — consentimiento y resultado verificable', () => {
     })
     await openHilante(page)
     await send(page, 'Crea Lectura E2E hoy a las 10')
-    await expect(page.getByText('Añadí «Lectura E2E» en este dispositivo.', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Añadí Lectura E2E en este dispositivo.', { exact: true }).first()).toBeVisible()
     await expect(page.getByRole('button', { name: /Abrir bandeja/ })).toHaveCount(0)
     const created = (await savedEvents(page)).find(event => event.title === 'Lectura E2E')
     expect(created.time).toBe('10:00')
@@ -225,9 +225,73 @@ test.describe('Hilante — consentimiento y resultado verificable', () => {
     expect((await savedEvents(page)).some(event => event.id === created.id)).toBe(false)
   })
 
+  test('una continuación usa el ID del recibo real y conserva el mismo evento', async ({ page }) => {
+    const requests = []
+    await mockAssistant(page, ({ requestId, body }) => {
+      requests.push(body)
+      if (body.message.startsWith('pon gym')) return { body: { requestId, mode: 'chat_with_action', confidence: 1,
+        reply: 'Cambio preparado.', actions: [{ type: 'add_event', event: { title: 'Gym continuidad E2E', date: TODAY, time: '10:00' } }], proposed_actions: [] } }
+      const id = body.discussedEventIds?.[0]
+      return id && body.events.some(event => event.id === id)
+        ? { body: { requestId, mode: 'chat_with_action', confidence: 1, reply: 'Cambio preparado.', actions: [{ type: 'edit_event', id, updates: { time: '11:00' } }], proposed_actions: [] } }
+        : { body: reply(requestId, 'No hay un recibo vigente para esa referencia.') }
+    })
+    await openHilante(page)
+    await send(page, 'pon gym mañana a las 10 AM')
+    await expect(page.getByText('Añadí Gym continuidad E2E en este dispositivo.', { exact: true }).first()).toBeVisible()
+    const created = (await savedEvents(page)).find(event => event.title === 'Gym continuidad E2E')
+    await send(page, 'mejor a las 11 AM')
+    await expect(page.getByText('Actualicé el evento en este dispositivo.', { exact: true }).first()).toBeVisible()
+    const current = (await savedEvents(page)).filter(event => event.title === 'Gym continuidad E2E')
+    expect(current).toHaveLength(1)
+    expect(current[0]).toMatchObject({ id: created.id, time: '11:00' })
+    expect(requests[0].discussedEventIds).toEqual([])
+    expect(requests[1].discussedEventIds).toEqual([created.id])
+    expect(requests[1].history.at(-1).content).toBe('Añadí Gym continuidad E2E en este dispositivo.')
+  })
+
+  test('el recibo de Mi Día continúa en Hilante y una tarea nueva elimina la referencia', async ({ page }) => {
+    const requests = []
+    await mockAssistant(page, ({ requestId, body }) => {
+      requests.push(body)
+      if (body.message.startsWith('Crea')) return { body: { requestId, mode: 'chat_with_action', confidence: 1,
+        reply: 'Preparado.', actions: [{ type: 'add_event', event: { title: 'Gym entre vistas E2E', date: TODAY, time: '10:00' } }], proposed_actions: [] } }
+      if (body.message === 'compra pan') return { body: { requestId, mode: 'chat_with_action', confidence: 1,
+        reply: 'Preparado.', actions: [{ type: 'add_task', task: { label: 'Comprar pan E2E' } }], proposed_actions: [] } }
+      const id = body.discussedEventIds?.[0]
+      return id ? { body: { requestId, mode: 'chat_with_action', confidence: 1, reply: 'Preparado.',
+        actions: [{ type: 'edit_event', id, updates: { time: '11:00' } }], proposed_actions: [] } }
+        : { body: reply(requestId, 'Indica qué evento quieres cambiar.') }
+    })
+    await page.goto('/')
+    await page.evaluate(() => localStorage.setItem('focus_ai_consent_v2', '1'))
+    const composer = page.getByRole('textbox').first()
+    await composer.fill('Crea Gym entre vistas E2E hoy a las 10')
+    await composer.press('Enter')
+    await expect(page.getByText('Añadí Gym entre vistas E2E en este dispositivo.', { exact: true }).first()).toBeVisible()
+    const created = (await savedEvents(page)).find(event => event.title === 'Gym entre vistas E2E')
+    await page.getByRole('button', { name: 'Calendario', exact: true }).click()
+    await page.getByRole('button', { name: 'Abrir Hilante', exact: true }).click()
+    await send(page, 'mejor a las 11 AM')
+    await expect(page.getByText('Actualicé el evento en este dispositivo.', { exact: true }).first()).toBeVisible()
+    expect(requests[1].discussedEventIds).toEqual([created.id])
+    await send(page, 'compra pan')
+    await expect(page.getByText('Añadí la tarea Comprar pan E2E en este dispositivo.', { exact: true }).first()).toBeVisible()
+    expect(requests[2].discussedEventIds).toEqual([])
+    await send(page, 'mejor a las 12 AM')
+    await expect(page.getByText('Indica qué evento quieres cambiar.', { exact: true }).last()).toBeVisible()
+    expect(requests[3].discussedEventIds).toEqual([])
+    expect((await savedEvents(page)).filter(event => event.id === created.id)).toMatchObject([{ time: '11:00' }])
+  })
+
   test('un fallo de almacenamiento no confirma la creación directa', async ({ page }) => {
-    await mockAssistant(page, ({ requestId }) => ({ body: { requestId, mode: 'chat_with_action', confidence: 1,
-      reply: 'Guardé Lectura E2E.', actions: [{ type: 'add_event', event: { title: 'Lectura E2E', date: TODAY, time: '10:00' } }], proposed_actions: [] } }))
+    const requests = []
+    await mockAssistant(page, ({ requestId, body }) => {
+      requests.push(body)
+      if (requests.length > 1) return { body: reply(requestId, 'No hay evento guardado que pueda cambiar.') }
+      return { body: { requestId, mode: 'chat_with_action', confidence: 1,
+        reply: 'Guardé Lectura E2E.', actions: [{ type: 'add_event', event: { title: 'Lectura E2E', date: TODAY, time: '10:00' } }], proposed_actions: [] } }
+    })
     await openHilante(page)
     await page.evaluate(() => {
       const original = Storage.prototype.setItem
@@ -240,6 +304,9 @@ test.describe('Hilante — consentimiento y resultado verificable', () => {
     await expect(page.getByText('No pude guardar todos los cambios en este dispositivo. Revisa tus pendientes antes de repetirlos.', { exact: true })).toBeVisible()
     await expect(page.getByText('Guardé Lectura E2E.', { exact: true })).toHaveCount(0)
     expect((await savedEvents(page)).filter(event => event.title === 'Lectura E2E')).toHaveLength(0)
+    await send(page, 'mejor a las 11 AM')
+    await expect(page.getByText('No hay evento guardado que pueda cambiar.', { exact: true })).toBeVisible()
+    expect(requests[1].discussedEventIds).toEqual([])
   })
 
   test('error definitivo libera el envío y el reintento explícito usa otra identidad', async ({ page }) => {

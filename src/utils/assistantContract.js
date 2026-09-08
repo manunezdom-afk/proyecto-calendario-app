@@ -177,7 +177,7 @@ export function applyConfirmedAction(action, handlers = {}, { reviewed = false }
   switch (action.type) {
     case 'add_event':
       saved = handlers.onAddEvent?.({ ...action.event, id: stableActionIdentifier(action.actionId, 'event') })
-      if (saved?.id === stableActionIdentifier(action.actionId, 'event')) return receipt(`Añadí «${saved.title}» en este dispositivo.`, saved, () => handlers.onDeleteEvent?.(saved.id))
+      if (saved?.id === stableActionIdentifier(action.actionId, 'event')) return receipt(`Añadí ${saved.title} en este dispositivo.`, saved, () => handlers.onDeleteEvent?.(saved.id))
       break
     case 'add_recurring_event': {
       const expanded = expandRecurrence(action)
@@ -199,7 +199,7 @@ export function applyConfirmedAction(action, handlers = {}, { reviewed = false }
       break
     case 'add_task':
       saved = handlers.onAddTask?.({ ...action.task, id: stableActionIdentifier(action.actionId, 'task') })
-      if (saved?.id === stableActionIdentifier(action.actionId, 'task')) return receipt(`Añadí la tarea «${saved.label}» en este dispositivo.`, saved, () => handlers.onDeleteTask?.(saved.id))
+      if (saved?.id === stableActionIdentifier(action.actionId, 'task')) return receipt(`Añadí la tarea ${saved.label} en este dispositivo.`, saved, () => handlers.onDeleteTask?.(saved.id))
       break
     case 'complete_task':
       saved = handlers.onUpdateTask?.(action.id, { done: action.done })

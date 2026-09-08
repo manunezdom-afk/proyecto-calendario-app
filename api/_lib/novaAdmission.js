@@ -56,13 +56,31 @@ export function reserveRequestCost(routes) {
   if (amount > numeric('AI_MAX_COST_PER_REQUEST_USD', 0.25, 0.50)) throw Object.assign(new Error('request_cost_limit'), { code: 'request_cost_limit' })
   return amount
 }
+const admissionOperations = new Set(['focus_ai_admit', 'focus_ai_begin_attempt', 'focus_ai_settle_attempt',
+  'focus_ai_consume', 'focus_ai_finish', 'focus_ai_model_metrics', 'focus_ai_get_control', 'focus_ai_set_control', 'durable_replay_read'])
+function admissionDiagnostic(operation, outcome, started, signal, error) {
+  // Operational categories only: never log RPC arguments, IDs, error messages,
+  // SQL details, fingerprints or the private cached response.
+  const failure = signal?.aborted || ['AbortError', 'TimeoutError'].includes(error?.name) ? 'timeout'
+    : ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN'].includes(error?.code) ? 'transport_error' : outcome
+  console.warn('[nova_admission]', JSON.stringify({ operation: admissionOperations.has(operation) ? operation : 'unknown',
+    outcome: failure, duration_ms: Math.max(0, Date.now() - started) }))
+}
 export async function admissionRPC(admin, name, args) {
-  if (typeof admin?.rpc !== 'function') return { status: 'unavailable' }
+  const started = Date.now(), signal = AbortSignal.timeout(3000)
+  if (typeof admin?.rpc !== 'function') {
+    admissionDiagnostic(name, 'missing_client', started)
+    return { status: 'unavailable' }
+  }
   try {
     let query = admin.rpc(name, args)
-    if (typeof query?.abortSignal === 'function') query = query.abortSignal(AbortSignal.timeout(3000))
+    if (typeof query?.abortSignal === 'function') query = query.abortSignal(signal)
     const { data, error } = await query
-    if (error || !data || typeof data.status !== 'string') return { status: 'unavailable' }
+    if (error || !data || typeof data.status !== 'string') {
+      admissionDiagnostic(name, error ? 'database_error' : 'malformed_response', started, signal, error)
+      return { status: 'unavailable' }
+    }
+    if (data.status === 'unavailable') admissionDiagnostic(name, 'database_unavailable', started)
     for (const alert of Array.isArray(data.budget_alerts) ? data.budget_alerts : []) {
       if (typeof alert.scope === 'string' && Number.isFinite(Number(alert.threshold_percent))) {
         console.warn('[ai_budget_alert]', JSON.stringify({ id: alert.id, scope: alert.scope,
@@ -71,7 +89,46 @@ export async function admissionRPC(admin, name, args) {
     }
     if (data.reservation_overrun === true) console.warn('[ai_budget_alert]', JSON.stringify({ scope: 'reservation_overrun' }))
     return data
-  } catch { return { status: 'unavailable' } }
+  } catch (error) {
+    admissionDiagnostic(name, 'database_error', started, signal, error)
+    return { status: 'unavailable' }
+  }
+}
+
+export async function recoverNovaReplay({ admin, userId, requestId, message, actionType }) {
+  // One read after uncertain admission, never another mutating admission or a
+  // provider authorization. A completed row is immutable until TTL/account
+  // cleanup; ownership, exact intent and expiry must still match after the read.
+  const started = Date.now(), signal = AbortSignal.timeout(1500)
+  const unavailable = () => ({ status: 'unavailable' })
+  if (typeof admin?.from !== 'function' || !userId || !requestId || typeof message !== 'string' || !actionType) return unavailable()
+  const fingerprint = createHash('sha256').update(message.trim()).digest('hex')
+  try {
+    const query = admin.from('focus_ai_requests')
+      .select('user_id,request_id,fingerprint,action_type,state,response_expires_at,response')
+      .eq('user_id', userId).eq('request_id', requestId).eq('fingerprint', fingerprint).eq('action_type', actionType)
+      .in('state', ['completed', 'failed']).gt('response_expires_at', new Date(started).toISOString()).limit(1).maybeSingle()
+    if (typeof query?.abortSignal !== 'function') return unavailable()
+    const { data, error } = await query.abortSignal(signal)
+    if (error || signal.aborted) {
+      admissionDiagnostic('durable_replay_read', 'database_error', started, signal, error)
+      return unavailable()
+    }
+    const cached = data?.response
+    if (!data || data.user_id !== userId || data.request_id !== requestId || data.fingerprint !== fingerprint
+      || data.action_type !== actionType || !Number.isFinite(Date.parse(data.response_expires_at))
+      || Date.parse(data.response_expires_at) <= Date.now()
+      || !((data.state === 'completed' && cached?.httpStatus === 200) || (data.state === 'failed' && cached?.httpStatus === 503))
+      || cached.body?.requestId !== requestId || !Array.isArray(cached.body.actions) || !Array.isArray(cached.body.proposed_actions)) {
+      admissionDiagnostic('durable_replay_read', 'not_recoverable', started)
+      return unavailable()
+    }
+    admissionDiagnostic('durable_replay_read', 'recovered', started)
+    return { status: 'replay', response: cached }
+  } catch (error) {
+    admissionDiagnostic('durable_replay_read', 'database_error', started, signal, error)
+    return unavailable()
+  }
 }
 export async function admitNovaRequest({ admin, userId, requestId, message, actionType, plan, reserveUSD, modelAttemptsRequired = false }) {
   if (!paidAICallsEnabled()) return { status: 'unavailable', reason: 'paid_ai_disabled' }

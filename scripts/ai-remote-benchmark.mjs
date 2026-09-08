@@ -6,7 +6,7 @@ import { randomUUID, randomBytes, createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseEnv, promisify } from 'node:util'
+import { parseEnv, promisify, isDeepStrictEqual } from 'node:util'
 import { execFile } from 'node:child_process'
 import { allowedChatOrigin, remoteConfiguration, remoteTransport } from './ai-remote-check.mjs'
 import { benchmarkSourceHashes, evaluateBenchmarkOutput, verifyBenchmarkReplay, summarizeBenchmarkCosts } from './ai-router-benchmark.mjs'
@@ -57,6 +57,20 @@ export function mayStartRemoteRequest(recordedCost,budget) {
   return valueNumber(recordedCost)!==null && budget<=1 && recordedCost+MAX_REQUEST_USD<=budget+1e-9
 }
 
+// Availability is an observed failed case, not an idempotency breach. Continue
+// to a DIFFERENT corpus case only when SQL proves the original request is still
+// completed, every paid attempt is unchanged/settled and accounting is stable.
+// No replay retry, new UUID for the same case, or relaxed semantic grader.
+export function settledReplayUnavailable(output,replay,before,after,attemptsBefore,attemptsAfter) {
+  return output.httpStatus===200 && replay.httpStatus===503
+    && replay.body?.error==='assistant_unavailable' && replay.body?.requestId===output.body?.requestId
+    && before?.state==='completed' && after?.state==='completed'
+    && ['id','user_id','request_id','lease_id','actual_usd','reserved_usd'].every(key=>before[key]===after[key])
+    && valueNumber(after.actual_usd)!==null && attemptsBefore.length>0
+    && attemptsBefore.every(attempt=>attempt.state==='settled')
+    && isDeepStrictEqual(attemptsBefore,attemptsAfter)
+}
+
 // curl's config and response files are private; credentials never enter argv,
 // shell strings or console output. Vercel CLI supplies its own protection bypass.
 export function vercelFocusFetch(origin,{execImpl=exec}={}) {
@@ -105,7 +119,8 @@ export async function runRemoteBenchmark(options,{env=process.env,fetchImpl=fetc
     report.summary={selected:selected.length,attempted:attempted.length,objectivePass:attempted.filter(r=>r.verdict?.pass).length,
       objectivePassRate:attempted.length?attempted.filter(r=>r.verdict?.pass).length/attempted.length:null,
       ...summarizeBenchmarkCosts(rows,telemetry),recordedRunChargeUSD:options.live?recordedCost:null,latencyPopulation:'successful_http_200',p50Ms:percentile(latencies,.5),p95Ms:percentile(latencies,.95),
-      replayChecks:rows.filter(r=>r.replayVerified).length,providerAttempts:rows.reduce((n,r)=>n+r.attempts.length,0),humanConversationScore:null,metrics:summarizeAIMetrics(telemetry)}
+      replayChecks:rows.filter(r=>r.replayVerified).length,replayAvailabilityFailures:rows.filter(r=>r.replayAvailabilityFailure).length,
+      providerAttempts:rows.reduce((n,r)=>n+r.attempts.length,0),humanConversationScore:null,metrics:summarizeAIMetrics(telemetry)}
     if(writeReport)try {writeSnapshot(reportPath,report)}catch {
       report.checkpointWriteFailed=true
       if(required)throw new BenchError('checkpoint_write_failed')
@@ -181,12 +196,20 @@ export async function runRemoteBenchmark(options,{env=process.env,fetchImpl=fetc
       row.attempts=observed.attempts.filter(a=>a.request_row_id===requestRow?.id)
       if(output.httpStatus===200||output.body.request_completed===true) {
         check(output.httpStatus===200 ? requestRow?.state==='completed' : ['completed','failed'].includes(requestRow?.state),'durable_request_missing')
-        const count=row.attempts.length,{latencyMs:replayLatencyMs,...replay}=await http('/api/focus-assistant',{method:'POST',body:{requestId,payload},token:user.token})
+        const attemptsBefore=structuredClone(row.attempts),count=row.attempts.length,
+          {latencyMs:replayLatencyMs,...replay}=await http('/api/focus-assistant',{method:'POST',body:{requestId,payload},token:user.token})
         row.replayObservation={...replay,latencyMs:replayLatencyMs}
         ledger=await ownedLedger();observed=await evidence(ledger)
         row.attempts=observed.attempts.filter(a=>a.request_row_id===requestRow.id)
         row.replayVerified=verifyBenchmarkReplay(output,replay,count,row.attempts.length)
-        if(!row.replayVerified){row.verdict={pass:false,fails:[...(row.verdict.fails||[]),'replay_mismatch']};throw new BenchError('replay_mismatch')}
+        if(!row.replayVerified){
+          row.verdict={pass:false,fails:[...(row.verdict.fails||[]),'replay_mismatch']}
+          const after=ledger.find(r=>r.id===requestRow.id)
+          if(settledReplayUnavailable(output,replay,requestRow,after,attemptsBefore,row.attempts)) {
+            row.replayAvailabilityFailure={httpStatus:503,originalStillCompleted:true,attemptsUnchanged:true,
+              accountingUnchanged:true,retryPerformed:false,caseStillFailed:true}
+          } else throw new BenchError('replay_mismatch')
+        }
       }
       checkpoint()
       onProgress({phase:'case',caseId:c.id,httpStatus:row.httpStatus,objectivePass:row.verdict.pass,latencyMs:row.latencyMs,
