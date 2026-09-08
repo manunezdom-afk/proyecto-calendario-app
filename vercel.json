@@ -6,6 +6,7 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
+    { "source": "/api/ai-capabilities", "destination": "/api/focus-assistant?capabilities=1" },
     {
       "source": "/((?!api/|icons/|assets/|sw\\.js|manifest\\.json|.*\\.(?:js|css|png|jpg|jpeg|svg|ico|webp|woff2?|ttf|map)).*)",
       "destination": "/index.html"

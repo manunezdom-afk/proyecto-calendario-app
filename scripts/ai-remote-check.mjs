@@ -20,7 +20,7 @@ export function allowedChatOrigin(value) {
   try {
     const u=new URL(value)
     if(u.protocol!=='https:' || u.username || u.password || u.port || u.search || u.hash || !['','/'].includes(u.pathname))return null
-    return ['www.usefocus.me','usefocus.me'].includes(u.hostname) || /^focus-app(?:-[a-z0-9-]+)?-manunezdom-9658s-projects\.vercel\.app$/.test(u.hostname) ? u.origin : null
+    return ['www.usefocus.me','usefocus.me'].includes(u.hostname) || /^focus(?:-app)?(?:-[a-z0-9-]+)?-manunezdom-9658s-projects\.vercel\.app$/.test(u.hostname) ? u.origin : null
   } catch {return null}
 }
 export function parseRemoteOptions(argv=[]) {

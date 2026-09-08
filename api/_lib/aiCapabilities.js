@@ -1,4 +1,4 @@
-import { setCorsHeaders } from './_lib/security.js'
+import { setCorsHeaders } from './security.js'
 
 // Consent boundary during coordinated deployments. Clients read this before
 // sending any conversation to the server. No key, user data or model tier leaks.

@@ -1,3 +1,4 @@
+import handleCapabilities from './_lib/aiCapabilities.js'
 import { executeNovaRequest } from './_lib/novaRuntime.js'
 import { sanitizeNovaRequest, novaRequestId } from './_lib/novaSafety.js'
 import { ASSISTANT_NAME } from './_lib/assistantBrand.js'
@@ -11,6 +12,8 @@ import { getUserPlan } from './_lib/usageLimits.js'
 export const maxDuration = 60
 
 export default async function handler(req, res) {
+  // Keep the compatibility probe on this function to fit the existing hosting plan.
+  if (req.query?.capabilities === '1') return handleCapabilities(req, res)
   setCorsHeaders(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })

@@ -19,6 +19,9 @@ test('chat is explicit and only exact owned HTTPS deployment origins are allowed
   for(const value of ['http://usefocus.me','https://usefocus.me.evil.test','https://usefocus.me@evil.test','https://usefocus.me/api','https://usefocus.me?key=x',
     'https://focus-app-other.vercel.app','https://focus-app-x-manunezdom-9658s-projects.vercel.app.evil.test'])assert.equal(allowedChatOrigin(value),null)
   assert.equal(allowedChatOrigin('https://focus-app-abc123-manunezdom-9658s-projects.vercel.app'),'https://focus-app-abc123-manunezdom-9658s-projects.vercel.app')
+  assert.equal(allowedChatOrigin('https://focus-h423snno2-manunezdom-9658s-projects.vercel.app'),'https://focus-h423snno2-manunezdom-9658s-projects.vercel.app')
+  for(const value of ['https://focus-h423snno2-another-team.vercel.app','https://other-h423snno2-manunezdom-9658s-projects.vercel.app',
+    'https://focus-h423snno2-manunezdom-9658s-projects.vercel.app.evil.test','https://focus-h423snno2-manunezdom-9658s-projects.vercel.app/private'])assert.equal(allowedChatOrigin(value),null)
   assert.equal(parseRemoteOptions(['--live-db','--chat']).chat,true)
 })
 test('missing credentials and a different Supabase project fail before all networking',async()=>{
