@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { parseTimeRange } from '../../src/utils/eventDuration.js'
 
 // Every provider request is mocked; unrelated external HTTP is blocked.
 // These tests verify UI receipts, not claims written by the simulated model.
@@ -112,6 +113,75 @@ test.describe('Hilante — consentimiento y resultado verificable', () => {
     await expect(input(page)).toHaveValue('')
     await input(page).fill('otro mensaje')
     await expect(sendButton(page)).toBeEnabled()
+  })
+
+  test('refinar una propuesta conserva el plan pendiente y solo guarda el horario aprobado', async ({ page }) => {
+    const requests = []
+    await mockAssistant(page, ({ requestId, body }) => {
+      requests.push(body)
+      if (body.message === 'Necesito pensarlo') return { body: { ...reply(requestId, 'Tu propuesta sigue pendiente.'), mode: 'clarification' } }
+      const secondRefinement = body.message.startsWith('Prefiero')
+      const refining = body.message.startsWith('No quiero') || secondRefinement
+      return { body: { requestId, mode: 'proposal', confidence: 1, reply: 'Propuesta preparada.', actions: [],
+        ...(refining ? { replacesProposalId: body.pendingProposal?.id } : {}),
+        proposed_actions: [{ type: 'add_event', event: { title: 'Estudiar continuidad E2E', date: TODAY,
+          time: secondRefinement ? '17:00' : refining ? '18:00' : '19:00', endTime: secondRefinement ? '19:00' : refining ? '20:00' : '21:00' } }] } }
+    })
+    const pending = () => page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('focus_suggestions'))
+      .flatMap(key => { try { return JSON.parse(localStorage.getItem(key)) || [] } catch { return [] } }).filter(row => row.status === 'pending'))
+    await openHilante(page)
+    await send(page, 'Organízame la tarde con dos horas de estudio')
+    await expect.poll(async () => (await pending()).length).toBe(1)
+    const first = (await pending())[0]
+    expect((await savedEvents(page)).filter(row => row.title === 'Estudiar continuidad E2E')).toHaveLength(0)
+    await send(page, 'Necesito pensarlo')
+    await expect(page.getByText('Tu propuesta sigue pendiente.', { exact: true }).last()).toBeVisible()
+    expect((await pending())[0].id).toBe(first.id)
+    await send(page, 'No quiero estudiar después de las 8 PM')
+    await expect.poll(async () => (await pending())[0]?.payload?.event?.endTime).toBe('20:00')
+    const current = await pending()
+    expect(current).toHaveLength(1)
+    expect(current[0].id).not.toBe(first.id)
+    expect(requests[2].pendingProposal.id).toBe(first.batchId)
+    expect(requests[2].pendingProposal.originalRequest).toBe('Organízame la tarde con dos horas de estudio')
+    expect(requests[2].pendingProposal.actions[0].event.endTime).toBe('21:00')
+    expect(requests[2].events.some(row => row.title === 'Estudiar continuidad E2E')).toBe(false)
+    expect(JSON.stringify(requests[2].pendingProposal)).not.toContain('reviewedEvent')
+    await send(page, 'Prefiero comenzar a las 17')
+    await expect.poll(async () => (await pending())[0]?.payload?.event?.endTime).toBe('19:00')
+    expect(requests[3].pendingProposal.originalRequest).toBe('Organízame la tarde con dos horas de estudio\nNo quiero estudiar después de las 8 PM')
+    expect((await pending())[0].payload.proposalContext.originalRequest).toBe('Organízame la tarde con dos horas de estudio\nNo quiero estudiar después de las 8 PM\nPrefiero comenzar a las 17')
+    expect((await savedEvents(page)).filter(row => row.title === 'Estudiar continuidad E2E')).toHaveLength(0)
+    await page.getByRole('button', { name: /Abrir bandeja/ }).click()
+    await expect(page.getByText(/17:00.*19:00/).first()).toBeVisible()
+    await page.getByRole('button', { name: /Aprobar/ }).click()
+    await expect(page.getByText('Añadí «Estudiar continuidad E2E» en este dispositivo.', { exact: true }).first()).toBeVisible()
+    const saved = (await savedEvents(page)).filter(row => row.title === 'Estudiar continuidad E2E')
+    expect(saved).toHaveLength(1)
+    expect(parseTimeRange(saved[0].time).startH).toBe(17)
+    expect(parseTimeRange(saved[0].time).endH).toBe(19)
+  })
+
+  test('el límite de ajustes conserva propuesta y borrador sin otra solicitud', async ({ page }) => {
+    let calls = 0
+    await mockAssistant(page, ({ requestId }) => {
+      calls++
+      return { body: { requestId, mode: 'proposal', confidence: 1, reply: 'Propuesta preparada.', actions: [],
+        proposed_actions: [{ type: 'add_event', event: { title: 'Estudiar límite E2E', date: TODAY, time: '18:00', endTime: '20:00' } }] } }
+    })
+    const pending = () => page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('focus_suggestions'))
+      .flatMap(key => { try { return JSON.parse(localStorage.getItem(key)) || [] } catch { return [] } }).filter(row => row.status === 'pending'))
+    await openHilante(page)
+    const goal = 'Organiza ' + '😀'.repeat(1990)
+    await send(page, goal)
+    await expect.poll(async () => (await pending()).length).toBe(1)
+    const before = await pending()
+    await send(page, 'No quiero estudiar después de las 20')
+    await expect(page.getByText('La propuesta llegó al límite de ajustes. La conservé sin aplicar; descártala y pide una planificación nueva con todos tus requisitos.', { exact: true })).toBeVisible()
+    await expect(input(page)).toHaveValue('No quiero estudiar después de las 20')
+    expect(calls).toBe(1)
+    expect(await pending()).toEqual(before)
+    expect((await savedEvents(page)).filter(row => row.title === 'Estudiar límite E2E')).toHaveLength(0)
   })
 
   test('un texto que afirma guardar sin acciones se rechaza y no crea eventos', async ({ page }) => {

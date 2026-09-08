@@ -1,3 +1,4 @@
+import { appendProposalRequest, PROPOSAL_CONTEXT_LIMIT } from '../utils/pendingProposal.js'
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUserMemories } from '../hooks/useUserMemories'
@@ -27,7 +28,7 @@ const SR = typeof window !== 'undefined' &&
 
 function describeAction(action) { return action.receiptMessage || actionLabel(action) }
 
-async function callFocusAssistant({ message, events, tasks, memories, history, requestId }) {
+async function callFocusAssistant({ message, events, tasks, memories, history, requestId, pendingProposal }) {
   let res
   try {
     res = await apiFetch('/api/focus-assistant', {
@@ -38,6 +39,7 @@ async function callFocusAssistant({ message, events, tasks, memories, history, r
         events,
         tasks,
         history,
+        pendingProposal: pendingProposal || undefined,
         memories,
         clientNow: Date.now(),
         clientTimezone: (typeof Intl !== 'undefined' && Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC',
@@ -98,6 +100,7 @@ export default function FocusBar({
   onDeleteTask,
   events = [],
   tasks = [],
+  pendingProposal = null,
   inline = false,
   seed = null,
   onShowUndo,
@@ -107,7 +110,7 @@ export default function FocusBar({
   const epochRef = useRef(null)
   epochRef.current = advanceAccountEpoch(epochRef.current, user?.id)
   const liveRef = useRef(null)
-  liveRef.current = { epoch: epochRef.current, userId: user?.id, events, tasks, memories, onAddEvent, onEditEvent, onDeleteEvent,
+  liveRef.current = { epoch: epochRef.current, userId: user?.id, events, tasks, memories, pendingProposal, onAddEvent, onEditEvent, onDeleteEvent,
     onAddTask, onUpdateTask, onDeleteTask, onAddMemory: addMemory, onDeleteMemory: deleteMemory, onDeleteMemories: deleteMemories }
   const busyRef = useRef(false)
   const requestRef = useRef(null)
@@ -395,8 +398,12 @@ export default function FocusBar({
       return
     }
 
-    busyRef.current = true
     const sentContext = liveRef.current
+    if (sentContext.pendingProposal && appendProposalRequest(sentContext.pendingProposal.originalRequest, msg) === null) {
+      setReply({ content: PROPOSAL_CONTEXT_LIMIT, actions: [] })
+      return
+    }
+    busyRef.current = true
     let requestId
     try {
       requestRef.current = await prepareLogicalRequest(localStorage, sentContext.userId, 'focusbar', msg)
@@ -432,12 +439,12 @@ export default function FocusBar({
         events,
         tasks,
         memories,
-        history: historyRef.current.slice(0, -1).slice(-20), requestId,
+        history: historyRef.current.slice(0, -1).slice(-20), requestId, pendingProposal: sentContext.pendingProposal,
       })
       if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
       const prepared = prepareAssistantResponse(result, sentContext, { requestId })
       let outcome = prepared
-      if (prepared.ok && prepared.kind === 'review') outcome = enqueueAssistantReview(prepared.actions, onProposeActions)
+      if (prepared.ok && prepared.kind === 'review') outcome = enqueueAssistantReview(prepared.actions, onProposeActions, { originalRequest: msg, replacesProposalId: result.replacesProposalId, expectedProposal: sentContext.pendingProposal })
       if (prepared.ok && prepared.kind === 'execute') outcome = applyAssistantActions(prepared.actions, liveRef.current)
       const receipts = outcome.receipts || []
       const actions = receipts.map(item => ({ ...item.action, receiptMessage: item.message }))

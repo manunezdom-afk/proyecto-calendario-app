@@ -259,6 +259,16 @@ export const dataService = {
     if (error) enqueue({ table: 'suggestions', type: 'upsert', data: row })
   },
 
+  async upsertSuggestions(suggestions, userId) {
+    if (!supabase) return
+    const rows = suggestions.map(suggestion => suggestionToDb(suggestion, userId))
+    // One upsert keeps a replaced batch and its successor together in the queue
+    // and in the database transaction; neither is synchronized item by item.
+    if (!navigator.onLine) { enqueue({ table: 'suggestions', type: 'upsert', data: rows }); return }
+    const { error } = await supabase.from('suggestions').upsert(rows)
+    if (error) enqueue({ table: 'suggestions', type: 'upsert', data: rows })
+  },
+
   async deleteSuggestion(id, userId) {
     if (!supabase) return
     if (!navigator.onLine) { enqueue({ table: 'suggestions', type: 'delete', id, userId }); return }

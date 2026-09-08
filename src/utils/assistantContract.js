@@ -142,6 +142,8 @@ export function prepareAssistantResponse(data, context = {}, { requestId, forceR
     if (claimsExecution(reply)) return failure('No hay cambios guardados que confirmen esa respuesta. Repite la solicitud.')
     return { ok: true, kind: 'chat', message: reply, actions: [] }
   }
+  if (data.replacesProposalId && (mode !== 'proposal' || data.replacesProposalId !== context.pendingProposal?.id)) return failure('La propuesta cambió mientras la ajustaba. Conservé la versión actual sin aplicar.')
+  if (context.pendingProposal && (mode !== 'proposal' || data.replacesProposalId !== context.pendingProposal.id)) return failure('No pude verificar el ajuste. Conservé la propuesta anterior sin aplicar.')
   const raw = mode === 'proposal' ? data.proposed_actions ?? data.proposedActions : data.actions
   if (!Array.isArray(raw) || !raw.length) return failure('La respuesta no contiene cambios que pueda aplicar.')
   const actions = raw.map((action, index) => normalizeAssistantAction(action, context, `${requestId}:${index}`))
@@ -232,8 +234,8 @@ export function applyAssistantActions(actions, handlers) {
   return { ok: true, receipts, message: receipts.map(item => item.message).join('\n') }
 }
 
-export function enqueueAssistantReview(actions, onProposeActions) {
-  const saved = onProposeActions?.(actions, { reply: 'Propuesta pendiente de revisión.' })
+export function enqueueAssistantReview(actions, onProposeActions, options = {}) {
+  const saved = onProposeActions?.(actions, { ...options, reply: 'Propuesta pendiente de revisión.' })
   if (!Array.isArray(saved) || saved.length !== actions.length) return failure('No pude guardar toda la propuesta. Revisa la bandeja antes de repetirla.')
   return { ok: true, message: 'Preparé una propuesta. Revisa los cambios en la bandeja antes de aplicarlos.', actions }
 }

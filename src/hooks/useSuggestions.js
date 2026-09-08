@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
+import { prepareProposalBatch } from '../utils/pendingProposal.js'
 import { advanceAccountEpoch, commitCachedCollection } from '../utils/verifiedMutation.js'
 
 export function useSuggestions() {
@@ -44,6 +45,13 @@ export function useSuggestions() {
     return full
   }, [user?.id])
 
+  const saveProposalBatch = useCallback((incoming, options = {}) => {
+    const batch = prepareProposalBatch(suggestionsRef.current, incoming, options)
+    if (!batch || !commit(batch.next)) return null
+    if (user && batch.changed.length) dataService.upsertSuggestions(batch.changed, user.id).catch(console.warn)
+    return batch.saved
+  }, [user?.id])
+
   const markResolved = useCallback((id, status) => {
     const target = suggestionsRef.current.find(item => item.id === id)
     if (!target) return false
@@ -71,5 +79,5 @@ export function useSuggestions() {
 
   const visible = collectionEpochRef.current === epochRef.current ? suggestions : []
   const pending = useMemo(() => visible.filter(item => item.status === 'pending'), [visible])
-  return { suggestions: visible, pending, pendingCount: pending.length, addSuggestion, approveSuggestion, rejectSuggestion, deleteSuggestion, clearResolved }
+  return { suggestions: visible, pending, pendingCount: pending.length, addSuggestion, saveProposalBatch, approveSuggestion, rejectSuggestion, deleteSuggestion, clearResolved }
 }

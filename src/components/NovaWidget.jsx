@@ -1,3 +1,4 @@
+import { appendProposalRequest, PROPOSAL_CONTEXT_LIMIT } from '../utils/pendingProposal.js'
 import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUserProfile } from '../hooks/useUserProfile'
@@ -71,6 +72,7 @@ function useSimulatedStream(fullText, isLoading) {
 function NovaWidget({
   events = [],
   tasks = [],
+  pendingProposal = null,
   onAddEvent,
   onEditEvent,
   onDeleteEvent,
@@ -89,7 +91,7 @@ function NovaWidget({
   const epochRef = useRef(null)
   epochRef.current = advanceAccountEpoch(epochRef.current, user?.id)
   const liveRef = useRef(null)
-  liveRef.current = { epoch: epochRef.current, userId: user?.id, events, tasks, memories, onAddEvent, onEditEvent, onDeleteEvent,
+  liveRef.current = { epoch: epochRef.current, userId: user?.id, events, tasks, memories, pendingProposal, onAddEvent, onEditEvent, onDeleteEvent,
     onAddTask, onUpdateTask, onDeleteTask, onAddMemory: addMemory, onDeleteMemory: deleteMemory, onDeleteMemories: deleteMemories }
   const busyRef = useRef(false)
   const requestRef = useRef(null)
@@ -631,8 +633,12 @@ function NovaWidget({
       return
     }
 
-    busyRef.current = true
     const sentContext = liveRef.current
+    if (sentContext.pendingProposal && appendProposalRequest(sentContext.pendingProposal.originalRequest, msg) === null) {
+      setReply(PROPOSAL_CONTEXT_LIMIT)
+      return
+    }
+    busyRef.current = true
     let requestId
     try {
       requestRef.current = await prepareLogicalRequest(localStorage, sentContext.userId, 'widget', msg)
@@ -666,6 +672,7 @@ function NovaWidget({
           events,
           tasks,
           history: historyRef.current.slice(0, -1).slice(-20),
+          pendingProposal: sentContext.pendingProposal || undefined,
           location,
           profile,
           memories,
@@ -708,7 +715,7 @@ function NovaWidget({
       if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
       const prepared = prepareAssistantResponse(data, sentContext, { requestId, forceReview: proposeMode })
       let outcome = prepared
-      if (prepared.ok && prepared.kind === 'review') outcome = enqueueAssistantReview(prepared.actions, onProposeActions)
+      if (prepared.ok && prepared.kind === 'review') outcome = enqueueAssistantReview(prepared.actions, onProposeActions, { originalRequest: msg, replacesProposalId: data.replacesProposalId, expectedProposal: sentContext.pendingProposal })
       if (prepared.ok && prepared.kind === 'execute') outcome = applyAssistantActions(prepared.actions, liveRef.current)
       if (outcome.ok && prepared.kind === 'review') {
         setChips(prepared.actions.map(action => ({ id: action.actionId, icon: 'auto_awesome', label: actionLabel(action), done: true, proposed: true })))
@@ -856,6 +863,9 @@ function NovaWidget({
           )}
         </AnimatePresence>
 
+        {reply && !isLoading && (
+          <p role="status" className="rounded-2xl bg-slate-100 px-3 py-2 text-[13px] leading-relaxed text-slate-700">{reply}</p>
+        )}
         {/* Burbuja de respuesta en curso */}
         {isLoading && (
           <motion.div

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { useNativeSwipe } from './lib/useNativeSwipe'
 import { EASE_IOS } from './lib/motion'
@@ -8,6 +8,7 @@ import { useTasks }         from './hooks/useTasks'
 import { useNotifications } from './hooks/useNotifications'
 import { useAppBadge }      from './hooks/useAppBadge'
 import { useNovaPersonalitySync } from './hooks/useNovaPersonalitySync'
+import { pendingCalendarProposal, pendingCalendarAction, appendProposalRequest } from './utils/pendingProposal.js'
 import { useSuggestions }   from './hooks/useSuggestions'
 import { useUserMemories }  from './hooks/useUserMemories'
 import { useAuth }          from './context/AuthContext'
@@ -355,10 +356,13 @@ export default function App() {
     suggestions,
     pendingCount: inboxPendingCount,
     addSuggestion,
+    saveProposalBatch,
     approveSuggestion,
     rejectSuggestion,
     clearResolved: clearResolvedSuggestions,
   } = useSuggestions()
+
+  const pendingProposal = useMemo(() => pendingCalendarProposal(suggestions), [suggestions])
 
   const [inboxOpen, setInboxOpen] = useState(false)
   // Demo de propuesta que Nova muestra en la bandeja vacía para que un usuario
@@ -486,17 +490,20 @@ export default function App() {
   // Callback que Nova invoca con sus propuestas → encolamos
   // useCallback para que NovaWidget (memo) no re-renderice cada vez que App
   // re-renderiza por estado no relacionado (paletteOpen, notifPanelOpen, etc.).
-  const handleProposeActions = useCallback((actions, { reply } = {}) => {
-    const batchId = `batch-${Date.now()}`
-    const saved = []
-    for (const action of actions) {
-      const sug = actionToSuggestion(action, { reason: reply, batchId, events, tasks, memories })
-      const result = sug && addSuggestion(sug)
-      if (!result) break
-      saved.push(result)
-    }
-    return saved
-  }, [events, tasks, memories, addSuggestion])
+  const handleProposeActions = useCallback((actions, { reply, originalRequest, replacesProposalId, expectedProposal } = {}) => {
+    const batchId = `proposal-${actions[0]?.actionId?.split(':')[0] || crypto.randomUUID()}`
+    const goal = replacesProposalId ? appendProposalRequest(expectedProposal?.originalRequest, originalRequest) : originalRequest
+    const calendarOnly = actions.length <= 12 && actions.every(action => pendingCalendarAction(action))
+    const metadata = calendarOnly && typeof goal === 'string' && goal.trim() && goal.length <= 4000
+      ? { id: batchId, originalRequest: goal } : null
+    const incoming = actions.map(action => {
+      const suggestion = actionToSuggestion(action, { reason: reply, batchId, events, tasks, memories })
+      if (suggestion && metadata) suggestion.payload.proposalContext = metadata
+      return suggestion
+    })
+    if (incoming.some(item => !item) || (replacesProposalId && !metadata)) return null
+    return saveProposalBatch(incoming, { replacesProposalId, expectedProposal })
+  }, [events, tasks, memories, saveProposalBatch])
 
   // Estable para que el shallow-compare de NovaWidget memo lo respete.
   const openInbox = useCallback(() => setInboxOpen(true), [])
@@ -726,6 +733,7 @@ export default function App() {
     onAddTask:         addTask,
     onUpdateTask:      updateTask,
     onProposeActions:  handleProposeActions,
+    pendingProposal,
     onToggleTask:      toggleTask,
     onDeleteTask:      deleteTask,
     onEveningShutdown: () => setShowEveningShutdown(true),
@@ -993,6 +1001,7 @@ export default function App() {
             onToggleTask={toggleTask}
             onDeleteTask={deleteTask}
             onProposeActions={handleProposeActions}
+            pendingProposal={pendingProposal}
             onOpenInbox={openInbox}
             proposeMode={false}
             isDesktop={isDesktop}
