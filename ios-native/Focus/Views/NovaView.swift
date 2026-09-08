@@ -185,7 +185,7 @@ struct NovaCaptureField: View {
     private let maxLength = 1800
     private var canSend: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        text.count <= maxLength && !store.isNovaTyping && store.novaPendingProposal == nil
+        text.count <= maxLength && !store.isNovaTyping
     }
 
     var body: some View {
@@ -261,7 +261,7 @@ struct NovaCaptureField: View {
     }
 
     private func send(_ value: String) {
-        guard !store.isNovaTyping, store.novaPendingProposal == nil else { return }
+        guard !store.isNovaTyping else { return }
         focused = false
         text = ""
         onSend()
@@ -318,7 +318,7 @@ struct NovaFeedbackView: View {
                 .font(.subheadline).foregroundStyle(Theme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            Button("Cancelar") { store.cancelNovaRequest() }
+            Button("Cancelar") { store.cancelNovaRequest(preservingProposal: true) }
                 .font(.subheadline.weight(.medium)).foregroundStyle(Theme.Colors.focusAccent)
                 .frame(minHeight: 44)
         }
@@ -332,6 +332,7 @@ struct NovaFeedbackView: View {
         HStack(spacing: 12) {
             Button("Aplicar") { store.confirmNovaProposal() }
                 .buttonStyle(FocusPrimaryButtonStyle()).accessibilityIdentifier("nova.confirm")
+                .disabled(store.isNovaTyping)
             Button("Descartar") { store.cancelNovaProposal() }
                 .font(.subheadline.weight(.medium)).foregroundStyle(Theme.Colors.textSecondary)
                 .frame(maxWidth: .infinity, minHeight: 54)

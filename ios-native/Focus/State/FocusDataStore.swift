@@ -7350,11 +7350,11 @@ final class FocusDataStore: ObservableObject {
     private var novaRequestTask: Task<Void, Never>?
     private var novaRequestID: UUID?
 
-    func cancelNovaRequest() {
+    func cancelNovaRequest(preservingProposal: Bool = false) {
         novaRequestTask?.cancel()
         novaRequestTask = nil
         novaRequestID = nil
-        novaPendingProposal = nil
+        if !preservingProposal { novaPendingProposal = nil }
         novaErrorMessage = nil
         novaLastFailedInput = nil
         lastNovaSubmission = nil
@@ -7432,7 +7432,20 @@ final class FocusDataStore: ObservableObject {
                 cancelNovaProposal()
                 return
             }
-            novaPendingProposal = nil
+        }
+        if let proposal = novaPendingProposal,
+           !proposal.reviewedEvents.allSatisfy({ reviewed in events.first(where: { $0.id == reviewed.id }) == reviewed }) {
+            failNova("Los eventos cambiaron desde la propuesta. Conservé tus cambios; descarta esa propuesta y pide un plan nuevo.", input: trimmed)
+            return
+        }
+        let pendingProposalContext = novaPendingProposal.flatMap { proposal in
+            proposal.localIntents.isEmpty
+                ? NovaService.PendingProposal(id: proposal.id.uuidString, originalRequest: proposal.userText, actions: proposal.actions)
+                : nil
+        }
+        if novaPendingProposal != nil && pendingProposalContext == nil {
+            appendNovaReply("Esta propuesta se puede aplicar o descartar. Para pedir otra, descártala primero.")
+            return
         }
         if !retrying, let last = lastNovaSubmission, last.text == trimmed,
            Date().timeIntervalSince(last.timestamp) < 0.8 { return }
@@ -7465,7 +7478,7 @@ final class FocusDataStore: ObservableObject {
             appendNovaReply("Los avisos por ubicación todavía no están disponibles. ¿A qué hora quieres que te avise?")
             return
         }
-        if let memoryReply = handleMemoryCommand(trimmed: trimmed) {
+        if pendingProposalContext == nil, let memoryReply = handleMemoryCommand(trimmed: trimmed) {
             appendNovaReply(memoryReply)
             return
         }
@@ -7476,9 +7489,9 @@ final class FocusDataStore: ObservableObject {
         }
         let expanded = settings.novaMemoryEnabled
             ? NovaMemoryStore.shared.expandAliases(in: trimmed) : trimmed
-        let intents = NovaResponder.parseAll(expanded, context: novaContext)
+        let intents = pendingProposalContext == nil ? NovaResponder.parseAll(expanded, context: novaContext) : []
         // Learning a personal fact must not swallow another instruction.
-        if settings.novaMemoryEnabled, intents.count == 1,
+        if pendingProposalContext == nil, settings.novaMemoryEnabled, intents.count == 1,
            !NovaActionNormalizer.userMentionedAnyTimeOfDay(in: trimmed),
            !trimmed.lowercased().contains(" y ") {
             if let learned = NovaMemoryStore.shared.tryLearnFromUserText(trimmed) {
@@ -7490,7 +7503,11 @@ final class FocusDataStore: ObservableObject {
                 return
             }
         }
-        if syncCredentials == nil || (!intents.isEmpty && intents.allSatisfy(shouldShortCircuitLocally)) {
+        if pendingProposalContext != nil && syncCredentials == nil {
+            failNova("Necesitas conexión y una sesión para ajustar esta propuesta. La conservé sin aplicar.", input: trimmed)
+            return
+        }
+        if syncCredentials == nil || (pendingProposalContext == nil && !intents.isEmpty && intents.allSatisfy(shouldShortCircuitLocally)) {
             executeLocalNovaIntents(intents, userText: trimmed)
             return
         }
@@ -7539,7 +7556,8 @@ final class FocusDataStore: ObservableObject {
                     personality: NovaService.Personality(rawValue: self.settings.novaPersonality.rawValue) ?? .focus,
                     surface: .novaChat, discussedEventIds: discussedIds,
                     userMemories: self.settings.novaMemoryEnabled
-                        ? NovaMemoryStore.shared.contextForRequest(trimmed) : [], requestID: requestID
+                        ? NovaMemoryStore.shared.contextForRequest(trimmed) : [], requestID: requestID,
+                    pendingProposal: pendingProposalContext
                 ))
                 guard !Task.isCancelled, self.accountGeneration == generation,
                       self.novaRequestID == requestID else { return }
@@ -7558,7 +7576,7 @@ final class FocusDataStore: ObservableObject {
                     // A fresh paid attempt still requires the user's retry tap.
                     FocusLocalStore.clear(.novaPendingRequest)
                 }
-                if let error = error as? NovaServiceError, case .offline = error {
+                if pendingProposalContext == nil, let error = error as? NovaServiceError, case .offline = error {
                     self.executeLocalNovaIntents(intents, userText: trimmed)
                     self.appendNovaReply("Sin conexión. Los cambios guardados en este iPhone se sincronizarán cuando vuelvas a conectarte.")
                 } else {
@@ -7592,6 +7610,19 @@ final class FocusDataStore: ObservableObject {
         defer {
             if novaErrorMessage == nil && novaPendingProposal == nil { FocusLocalStore.clear(.novaPendingRequest) }
         }
+        let replacedProposal: NovaPendingProposal?
+        if let replacedID = result.replacesProposalId {
+            guard result.mode == .proposal, let pending = novaPendingProposal,
+                  pending.id.uuidString.lowercased() == replacedID.lowercased() else {
+                failNova("La propuesta cambió mientras la ajustaba. Conservé la versión actual; vuelve a pedir el cambio.", input: userText)
+                return
+            }
+            replacedProposal = pending
+        } else { replacedProposal = nil }
+        if result.mode == .proposal, novaPendingProposal != nil, replacedProposal == nil {
+            failNova("No pude verificar el ajuste de la propuesta. Conservé la anterior sin aplicar; vuelve a intentarlo.", input: userText)
+            return
+        }
         if result.smartActionsBlocked {
             failNova("\(AssistantBrand.displayName) no pudo aplicar los cambios en este momento. No se guardó ninguna acción de esta respuesta. Puedes crear o editar tus pendientes manualmente.", input: userText)
             return
@@ -7615,6 +7646,10 @@ final class FocusDataStore: ObservableObject {
             appendNovaReply(result.reply)
             return
         }
+        guard novaPendingProposal == nil || result.mode == .proposal else {
+            failNova("El ajuste necesita una propuesta para revisar. Conservé la anterior sin aplicar.", input: userText)
+            return
+        }
         let candidates = result.mode == .proposal ? result.proposedActions : result.actions
         let validation = NovaActionValidator.validate(actions: candidates, userText: userText)
         guard !validation.shouldAsk else {
@@ -7636,7 +7671,7 @@ final class FocusDataStore: ObservableObject {
             novaPendingProposal = NovaPendingProposal(
                 summary: "Revisa estos cambios antes de aplicarlos.",
                 actionLabels: actions.map(novaActionLabel), actions: actions,
-                localIntents: [], userText: userText, generation: accountGeneration,
+                localIntents: [], userText: replacedProposal?.userText ?? userText, generation: accountGeneration,
                 reviewedEvents: reviewedEvents(for: actions), reviewedTasks: reviewedTasks(for: actions),
                 actionIDs: actionIDs,
                 reviewedMemories: actions.contains(where: { if case .forgetMemory = $0 { return true }; return false }) ? NovaMemoryStore.shared.activeMemories : nil

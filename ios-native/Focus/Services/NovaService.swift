@@ -88,6 +88,56 @@ enum NovaService {
         /// el endpoint y la app. Sin PII — UUID o hash corto.
         let requestId: String?
         var followUpQuestion: String? = nil
+        var replacesProposalId: String? = nil
+    }
+
+    /// Review context is distinct from saved events. Only remote calendar
+    /// proposals can be refined; snapshots, memories and local intents stay out.
+    struct PendingProposal: Encodable {
+        let id: String
+        let originalRequest: String
+        let actions: [PendingCalendarAction]
+
+        init?(id: String, originalRequest: String, actions: [BackendAction]) {
+            guard !id.isEmpty, id.count <= 128, !originalRequest.isEmpty,
+                  originalRequest.count <= 4000, !actions.isEmpty, actions.count <= 12 else { return nil }
+            let encoded = actions.compactMap(PendingCalendarAction.init)
+            guard encoded.count == actions.count else { return nil }
+            self.id = id; self.originalRequest = originalRequest; self.actions = encoded
+        }
+    }
+
+    struct PendingCalendarAction: Encodable {
+        struct Fields: Encodable {
+            var title: String? = nil
+            var time: String? = nil
+            var endTime: String? = nil
+            var date: String? = nil
+            var location: String? = nil
+            var subtitle: String? = nil
+            var reminderOffsets: [Int]? = nil
+            var reminderNotes: [String]? = nil
+        }
+        let type: String
+        var id: String? = nil
+        var event: Fields? = nil
+        var updates: Fields? = nil
+
+        init?(_ action: BackendAction) {
+            switch action {
+            case .addEvent(let value):
+                type = "add_event"
+                event = Fields(title: value.title, time: value.timeString, endTime: value.endTimeString,
+                    date: value.dateString, location: value.location, subtitle: value.subtitle,
+                    reminderOffsets: value.reminderOffsets, reminderNotes: value.reminderNotes)
+            case .editEvent(let target, let value):
+                type = "edit_event"; id = target
+                updates = Fields(title: value.title, time: value.timeString, endTime: value.endTimeString,
+                    date: value.dateString, location: value.location, subtitle: value.subtitle,
+                    reminderOffsets: value.reminderOffsets, reminderNotes: value.reminderNotes)
+            default: return nil
+            }
+        }
     }
 
     struct Request {
@@ -101,6 +151,7 @@ enum NovaService {
         let discussedEventIds: [UUID]
         let userMemories: [String]
         let requestID: UUID
+        var pendingProposal: PendingProposal? = nil
     }
 
     static func send(_ request: Request) async throws -> Result {
@@ -108,7 +159,7 @@ enum NovaService {
                        history: request.history, accessToken: request.accessToken,
                        personality: request.personality, surface: request.surface,
                        discussedEventIds: request.discussedEventIds, userMemories: request.userMemories,
-                       requestID: request.requestID)
+                       requestID: request.requestID, pendingProposal: request.pendingProposal)
     }
 
     /// Prospective model text cannot act as an execution receipt. Reject an
@@ -133,13 +184,14 @@ enum NovaService {
         discussedEventIds: [UUID] = [],
         userMemories: [String] = [],
         requestID: UUID = UUID(),
+        pendingProposal: PendingProposal? = nil,
         session: URLSession = .shared
     ) async throws -> Result {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw NovaServiceError.emptyMessage }
         guard trimmed.count <= 4000 else { throw NovaServiceError.messageTooLong }
 
-        let deadline = ProcessInfo.processInfo.systemUptime + 45
+        let deadline = ProcessInfo.processInfo.systemUptime + 55
         try await requireOpenAIChatRuntime(session: session, deadline: deadline)
         try Task.checkCancellation()
 
@@ -166,7 +218,8 @@ enum NovaService {
             clientNow: Int(now.timeIntervalSince1970 * 1000),
             clientTimezone: timezone.identifier,
             discussedEventIds: discussedEventIds.map { $0.uuidString },
-            userMemories: userMemories.isEmpty ? nil : userMemories
+            userMemories: userMemories.isEmpty ? nil : userMemories,
+            pendingProposal: pendingProposal
         )
 
         do {
@@ -221,7 +274,8 @@ enum NovaService {
                     mode: resolvedMode,
                     proposedActions: decoded.proposedActions,
                     requestId: requestID.uuidString,
-                    followUpQuestion: decoded.followUpQuestion
+                    followUpQuestion: decoded.followUpQuestion,
+                    replacesProposalId: decoded.replacesProposalId
                 )
             } catch {
                 throw NovaServiceError.decoding(error)
@@ -494,8 +548,9 @@ private struct BackendRequestPayload: Encodable {
     /// humanas tipo "Juan Pablo es mi coordinador" o "teorías = Teorías
     /// de la Comunicación". El backend OpenAI las inyecta al system prompt
     /// para que GPT pueda resolver referencias sin repreguntar.
-    /// Opcional para back-compat con backend Anthropic que ignora el campo.
+    /// Solo se incluyen las memorias pertinentes para esta petición.
     let userMemories: [String]?
+    let pendingProposal: NovaService.PendingProposal?
 
     enum CodingKeys: String, CodingKey {
         case message
@@ -508,6 +563,7 @@ private struct BackendRequestPayload: Encodable {
         case clientTimezone
         case discussedEventIds
         case userMemories
+        case pendingProposal
     }
 }
 
@@ -575,6 +631,7 @@ private struct BackendResponsePayload: Decodable {
     let mode: String?
     let requestId: String?
     let followUpQuestion: String?
+    let replacesProposalId: String?
 
     enum CodingKeys: String, CodingKey {
         case reply
@@ -587,6 +644,7 @@ private struct BackendResponsePayload: Decodable {
         case mode
         case requestId
         case followUpQuestion = "follow_up_question"
+        case replacesProposalId
     }
 
     init(from decoder: Decoder) throws {
@@ -599,6 +657,7 @@ private struct BackendResponsePayload: Decodable {
         self.mode = try c.decodeIfPresent(String.self, forKey: .mode)
         self.requestId = try c.decodeIfPresent(String.self, forKey: .requestId)
         self.followUpQuestion = try c.decodeIfPresent(String.self, forKey: .followUpQuestion)
+        self.replacesProposalId = try c.decodeIfPresent(String.self, forKey: .replacesProposalId)
         // Decodificar actions de forma resiliente: si un item falla por type
         // desconocido o shape inesperado, lo saltamos en vez de tumbar todo.
         if let raw = try? c.decode([RawAction].self, forKey: .actions) {

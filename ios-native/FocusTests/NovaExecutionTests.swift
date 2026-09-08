@@ -1015,7 +1015,7 @@ extension NovaExecutionTests {
         XCTAssertEqual(calls.map { $0.httpMethod }, ["GET", "POST"])
         XCTAssertEqual(calls.last?.url?.path, "/api/focus-assistant")
         XCTAssertEqual(calls.last?.value(forHTTPHeaderField: "Authorization"), "Bearer synthetic-only")
-        XCTAssertLessThanOrEqual(try XCTUnwrap(calls.last?.timeoutInterval), 45)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(calls.last?.timeoutInterval), 55)
         NovaCapabilityURLProtocol.configure(.init(body: #"{"runtime":"previous","chat_provider":"deepseek"}"#))
         do {
             _ = try await NovaService.send(message: "Segundo mensaje privado", events: [], tasks: [], history: [],
@@ -1092,6 +1092,99 @@ extension NovaExecutionTests {
         XCTAssertEqual(store.events.count, 1)
     }
 
+    func testPendingCalendarContextIsSeparateAndDecodesReplacementIdentity() async throws {
+        let id = UUID().uuidString
+        let pending = try XCTUnwrap(NovaService.PendingProposal(id: id, originalRequest: "Organízame la tarde", actions: [event("Estudiar")]))
+        XCTAssertNil(NovaService.PendingProposal(id: id, originalRequest: "Organízame", actions: [.deleteEvent(id: UUID().uuidString)]))
+        NovaCapabilityURLProtocol.configure(.init(), chatBody: "{\"reply\":\"Preparé el ajuste.\",\"mode\":\"proposal\",\"actions\":[],\"proposed_actions\":[],\"replacesProposalId\":\"\(id)\"}")
+        let session = capabilitySession()
+        defer { session.invalidateAndCancel() }
+        let result = try await NovaService.send(message: "No quiero estudiar después de las 20", events: [], tasks: [], history: [],
+            accessToken: "synthetic-only", pendingProposal: pending, session: session)
+        XCTAssertEqual(result.replacesProposalId, id)
+        let request = try XCTUnwrap(NovaCapabilityURLProtocol.requests.last)
+        let body = try XCTUnwrap(request.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertTrue((json["events"] as? [Any])?.isEmpty == true)
+        let context = try XCTUnwrap(json["pendingProposal"] as? [String: Any])
+        XCTAssertEqual(Set(context.keys), ["id", "originalRequest", "actions"])
+        XCTAssertEqual(context["id"] as? String, id)
+        XCTAssertEqual(context["originalRequest"] as? String, "Organízame la tarde")
+        let actions = try XCTUnwrap(context["actions"] as? [[String: Any]])
+        XCTAssertEqual(actions.first?["type"] as? String, "add_event")
+        XCTAssertNil(actions.first?["reviewedEvent"])
+        XCTAssertNil(actions.first?["actionId"])
+    }
+
+    func testRefinementRetainsPendingPlanUntilVerifiedReplacementAndApproval() async throws {
+        let started = expectation(description: "refinement started")
+        var continuation: CheckedContinuation<NovaService.Result, Never>?
+        var sent: NovaService.Request?
+        let store = FocusDataStore(syncTransport: noNetwork, restoreAccount: false, schedulesNotifications: false, novaTransport: { request in
+            sent = request
+            return await withCheckedContinuation { continuation = $0; started.fulfill() }
+        })
+        store.settings.novaMemoryEnabled = false
+        store.receiveNovaResult(response([], mode: .proposal, proposed: [event("Estudiar")]), userText: "Organízame la tarde")
+        let original = try XCTUnwrap(store.novaPendingProposal?.id)
+        store.syncCredentials = .init(accessToken: "test-only", userId: UUID())
+        NovaAIConsent.grant()
+        defer { store.syncCredentials = nil; store.cancelNovaRequest(); NovaAIConsent.revoke() }
+        store.sendNovaMessage("No quiero estudiar después de las 20")
+        await fulfillment(of: [started], timeout: 3)
+        XCTAssertEqual(store.novaPendingProposal?.id, original)
+        XCTAssertEqual(sent?.pendingProposal?.id, original.uuidString)
+        XCTAssertEqual(sent?.pendingProposal?.originalRequest, "Organízame la tarde")
+        XCTAssertTrue(sent?.events.isEmpty == true)
+        let payload = BackendEventCreate(title: "Estudiar", timeString: "18:00", endTimeString: "20:00",
+            dateString: "2027-09-10", section: nil, icon: "event", reminderOffsets: nil,
+            reminderNotes: nil, location: nil, notes: nil, subtitle: nil)
+        let replacement = NovaService.Result(reply: "Preparé el ajuste.", actions: [], smartActionsBlocked: false,
+            smartActionsMessage: nil, confidence: 1, shouldAskUser: false, mode: .proposal,
+            proposedActions: [.addEvent(payload)], requestId: sent?.requestID.uuidString,
+            replacesProposalId: original.uuidString)
+        continuation?.resume(returning: replacement)
+        for _ in 0..<30 { await Task.yield() }
+        XCTAssertNil(store.novaErrorMessage)
+        XCTAssertNotEqual(store.novaPendingProposal?.id, original)
+        XCTAssertTrue(store.events.isEmpty)
+        XCTAssertTrue(store.novaPendingProposal?.actionLabels.first?.contains("18:00–20:00") == true)
+        store.confirmNovaProposal()
+        let saved = try XCTUnwrap(store.events.first)
+        XCTAssertEqual(try XCTUnwrap(saved.endTime).timeIntervalSince(saved.startTime), 2 * 3600)
+        store.confirmNovaProposal()
+        XCTAssertEqual(store.events.count, 1)
+    }
+
+    func testOfflineClarificationAndUnknownReplacementKeepPendingPlan() async throws {
+        let failed = expectation(description: "refinement failed")
+        let store = FocusDataStore(syncTransport: noNetwork, restoreAccount: false, schedulesNotifications: false, novaTransport: { _ in
+            failed.fulfill()
+            throw NovaServiceError.offline
+        })
+        store.settings.novaMemoryEnabled = false
+        store.receiveNovaResult(response([], mode: .proposal, proposed: [event("Estudiar")]), userText: "Organízame la tarde")
+        let original = try XCTUnwrap(store.novaPendingProposal?.id)
+        store.syncCredentials = .init(accessToken: "test-only", userId: UUID())
+        NovaAIConsent.grant()
+        defer { store.syncCredentials = nil; store.cancelNovaRequest(); NovaAIConsent.revoke() }
+        store.sendNovaMessage("No quiero estudiar después de las 20")
+        await fulfillment(of: [failed], timeout: 3)
+        for _ in 0..<30 { await Task.yield() }
+        XCTAssertEqual(store.novaPendingProposal?.id, original)
+        XCTAssertTrue(store.events.isEmpty)
+        XCTAssertTrue(store.tasks.isEmpty)
+        store.receiveNovaResult(response([], mode: .clarification, reply: "¿Cuánto tiempo quieres estudiar?"), userText: "Ajusta el plan")
+        XCTAssertEqual(store.novaPendingProposal?.id, original)
+        var stale = response([], mode: .proposal, proposed: [event("Otro plan")])
+        stale.replacesProposalId = UUID().uuidString
+        store.receiveNovaResult(stale, userText: "Ajusta el plan")
+        XCTAssertEqual(store.novaPendingProposal?.id, original)
+        store.cancelNovaRequest(preservingProposal: true)
+        XCTAssertEqual(store.novaPendingProposal?.id, original)
+        XCTAssertTrue(store.events.isEmpty)
+    }
+
     private func capabilitySession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [NovaCapabilityURLProtocol.self]
@@ -1127,7 +1220,20 @@ private final class NovaCapabilityURLProtocol: URLProtocol, @unchecked Sendable 
     }
     private static func next(_ request: URLRequest) -> Fixture {
         lock.lock(); defer { lock.unlock() }
-        recorded.append(request)
+        var captured = request
+        if captured.httpBody == nil, let stream = request.httpBodyStream {
+            stream.open()
+            defer { stream.close() }
+            var data = Data()
+            var buffer = [UInt8](repeating: 0, count: 4096)
+            while stream.hasBytesAvailable {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                if count <= 0 { break }
+                data.append(contentsOf: buffer.prefix(count))
+            }
+            captured.httpBody = data
+        }
+        recorded.append(captured)
         return request.url?.path == "/api/ai-capabilities" ? fixture : Fixture(body: chatBody)
     }
     override class func canInit(with request: URLRequest) -> Bool { true }
