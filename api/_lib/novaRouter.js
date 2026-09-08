@@ -1,4 +1,4 @@
-import { activeIntentText } from './novaContract.js'
+import { activeIntentText, relativeMotionMinutes } from './novaContract.js'
 import { novaInputTokenLimit, novaOutputTokenLimit } from './novaSafety.js'
 import { activePendingProposal } from './novaPendingProposal.js'
 
@@ -82,7 +82,7 @@ export function selectNovaRoutes(body = {}) {
 }
 
 const structural = new Set(['invalid_json', 'invalid_schema', 'incomplete_output', 'empty_output', 'output_too_large'])
-const repairable = new Set(['invalid_schema', 'low_confidence', 'missing_intent_evidence', 'task_with_invented_time'])
+const repairable = new Set(['invalid_schema', 'low_confidence', 'missing_intent_evidence', 'task_with_invented_time', 'timed_departure_as_task', 'relative_time_conflict'])
 /** Missing data, negation, unknown IDs and civil-date errors stay clarifications. */
 export function shouldEscalateNova({ error, result, route, nextRoute, body }) {
   if (!nextRoute) return false
@@ -93,6 +93,7 @@ export function shouldEscalateNova({ error, result, route, nextRoute, body }) {
     // A model may over-ask a clearly supplied hour. Retry only when the exact
     // missing field it asks for is explicit in this request/active continuation.
     const scope = normalize(activeIntentText(body.message, body.history || []))
+    if (relativeMotionMinutes(scope) !== null && /\b(?:minutos?|hora|\d{1,2}:00)\b/.test(normalize(result.reply))) return true
     return /\ba que hora\b/.test(normalize(result.reply)) && /\b(?:[012]?\d:[0-5]\d|a las?\s*\d{1,2}\s*(?:am|pm))\b/.test(scope)
   }
   if (result) return false

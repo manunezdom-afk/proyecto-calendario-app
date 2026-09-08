@@ -1,7 +1,7 @@
 import { ASSISTANT_NAME } from './assistantBrand.js'
 import { buildDateContext } from './dateContext.js'
 import { buildOpenAISystemPrompt, NOVA_OPENAI_SCHEMA, callOpenAINova, extractResponsesText } from './openaiNova.js'
-import { validateNovaPlan } from './novaContract.js'
+import { validateNovaPlan, relativeDepartureSchedule } from './novaContract.js'
 import { boundNovaInput, novaInputUpperBound, paidAICallsEnabled } from './novaSafety.js'
 import { ACTION_TYPES, messageForLimit } from './usageLimits.js'
 import { trackAIUsageEvent } from './aiUsageTracking.js'
@@ -54,8 +54,9 @@ function relevantContext(body, dateContext, route) {
 }
 export function prepareNovaRoute(body, dateContext, route) {
   const context = relevantContext(body, dateContext, route)
+  const temporalHints = relativeDepartureSchedule(body.message, dateContext)
   while (true) {
-    const systemPrompt = buildOpenAISystemPrompt({ ...dateContext, ...context, discussedEventIds: body.discussedEventIds,
+    const systemPrompt = buildOpenAISystemPrompt({ ...dateContext, ...context, temporalHints, discussedEventIds: body.discussedEventIds,
       pendingProposal: activePendingProposal(body.message, body.pendingProposal, body.events) })
     try {
       const history = boundNovaInput({ systemPrompt, message: body.message, history: body.history,

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validateNovaPlan, activeIntentText, isNovaWirePlan, relativeMotionMinutes } from '../api/_lib/novaContract.js'
+import { validateNovaPlan, activeIntentText, isNovaWirePlan, relativeMotionMinutes, relativeDepartureSchedule } from '../api/_lib/novaContract.js'
 import { buildNovaSystemPrompt, splitNovaSystemPrompt, NOVA_CONTEXT_MARKER } from '../api/_lib/novaPrompt.js'
 import { callOpenAINova } from '../api/_lib/openaiNova.js'
 import { prepareNovaRoute } from '../api/_lib/novaRuntime.js'
@@ -129,4 +129,46 @@ test('departure shorthand supplies relative minutes without accepting other nume
   assert.equal(out.validation.ok,true,JSON.stringify(out.validation))
  }
  for(const text of ['voy a pagarlo en 20 cuotas','quizás lo pago en 20 cuotas','comprar 20 cosas','en 15 páginas dice salir','salgo en 0','salgo en 999'])assert.equal(relativeMotionMinutes(text),null,text)
+})
+
+test('departure hints use elapsed time across midnight and both Santiago DST transitions',()=>{
+ for(const [instant,dateISO,time] of [
+  ['2026-09-09T02:50Z','2026-09-09','00:10'],
+  ['2026-09-06T03:50Z','2026-09-06','01:10'],
+  ['2026-04-05T02:50Z','2026-04-04','23:10'],
+ ]){
+  const context=buildDateContext(Date.parse(instant),'America/Santiago')
+  const body=sanitizeNovaRequest({message:'salgo a ver a una amiga en 20',temporalHints:{time:'20:00'},
+   clientNow:Date.parse(instant),clientTimezone:'America/Santiago'}).body
+  const route=prepareNovaRoute(body,context,novaTierRoute('luna'))
+  const hints=JSON.parse(splitNovaSystemPrompt(route.systemPrompt).context.slice(NOVA_CONTEXT_MARKER.length)).temporalHints
+  assert.deepEqual(hints,{source:'relative_departure',relativeMinutes:20,dateISO,time})
+ }
+})
+
+test('exact relative departures cannot silently become tasks or the wrong clock time',()=>{
+ for(const [message,minutes] of [['en 20 minutos me voy a ver a un amigo',20],['en media hora salgo al dentista',30],['salgo como en 20 pa la casa de un amigo',20]]){
+  const relative=relativeDepartureSchedule(message,dateContext)
+  assert.equal(relative.relativeMinutes,minutes)
+  const title=message.includes('dentista')?'Dentista':'Ver a un amigo'
+  const task=validate(wirePlan([wireAction({title,sourceText:message})]),message)
+  assert.deepEqual(task.validation.issues,['timed_departure_as_task']);assert.equal(task.actions.length,0)
+  const wrong=validate(wirePlan([event({title,sourceText:message,time:'20:00'})]),message)
+  assert.ok(wrong.validation.issues.includes('relative_time_conflict'));assert.equal(wrong.actions.length,0)
+  const correct=validate(wirePlan([event({title,sourceText:message,time:relative.time,dateISO:relative.dateISO})]),message)
+  assert.equal(correct.validation.ok,true,JSON.stringify(correct.validation))
+ }
+})
+
+test('hints never invent a relative for vague time, negation, questions, quantities or multiple departures',()=>{
+ for(const message of ['en un rato salgo al dentista','no voy a salir al dentista en 20 minutos','¿salgo al dentista en 20?',
+  'salgo mañana en 20','voy a pagar en 20 cuotas','en 20 salgo al gym y en 40 voy al dentista',
+  'en 20 minutos salgo al gym y en 40 minutos voy al dentista',
+  'en 20 minutos salgo al gym y en 40 voy al dentista', 'en media hora voy al gym y en 40 salgo al dentista']) {
+  assert.equal(relativeDepartureSchedule(message,dateContext),null,message)
+ }
+ for(const message of ['no voy a salir al dentista en 20 minutos','no voy a salir al dentista en 20']){
+  const out=validate(wirePlan([event({title:'Dentista',sourceText:message.slice(3),time:'12:20'})]),message)
+  assert.ok(out.validation.issues.includes('negated_activity'));assert.equal(out.actions.length,0)
+ }
 })

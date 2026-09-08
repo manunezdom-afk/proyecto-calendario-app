@@ -62,3 +62,16 @@ test('escalation distinguishes repairable output from missing authority or data'
  assert.equal(shouldEscalateNova({...base,body:{message:'recuérdame llamar mañana'},result:{shouldAskUser:true,reply:'¿A qué hora?'}}),false)
  for(const status of [400,401,403,429]) assert.equal(shouldEscalateNova({...base,error:{status}}),false)
 })
+
+test('relative departure repair is bounded and never escalates authority, quotas or vague time',()=>{
+ const base={route:novaTierRoute('luna'),nextRoute:novaTierRoute('terra'),body:{message:'en 20 tengo que salir al dentista'}}
+ for(const issue of ['timed_departure_as_task','relative_time_conflict'])
+  assert.equal(shouldEscalateNova({...base,result:{validation:{ok:false,issues:[issue]}}}),true)
+ assert.equal(shouldEscalateNova({...base,result:{shouldAskUser:true,reply:'¿En 20 minutos o a las 20:00?'}}),true)
+ for(const message of ['en un rato voy al dentista','no salgo al dentista en 20','¿salgo al dentista en 20?'])
+  assert.equal(shouldEscalateNova({...base,body:{message},result:{shouldAskUser:true,reply:'¿A qué hora?'}}),false)
+ assert.equal(shouldEscalateNova({...base,result:{validation:{ok:false,issues:['relative_time_conflict','negated_activity']}}}),false)
+ for(const status of [401,403,429]) assert.equal(shouldEscalateNova({...base,error:{status},result:{shouldAskUser:true,reply:'¿A qué hora?'}}),false)
+ assert.equal(shouldEscalateNova({...base,nextRoute:null,result:{validation:{ok:false,issues:['timed_departure_as_task']}}}),false)
+ assert.ok(selectNovaRoutes(base.body).every(route=>route.tier!=='sol'))
+})

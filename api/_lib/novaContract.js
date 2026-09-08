@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { hasExplicitEditIntent, hasExplicitDeleteIntent } from './calendarIntent.js'
 import { userMentionedExplicitDuration, userAskedToBlockTime } from './durations.js'
-import { addCivilDays, validTimezone } from './dateContext.js'
+import { addCivilDays, validTimezone, buildDateContext } from './dateContext.js'
 import { activePendingProposal, pendingProposalSchedules, pendingReplacementIssues } from './novaPendingProposal.js'
 
 export const NOVA_ACTION_TYPES = Object.freeze(['create_event', 'create_reminder', 'create_task',
@@ -54,10 +54,24 @@ const forgetIntent = text => /\b(?:olvida|olvidate|borra|elimina)\b/.test(norm(t
 // quantities such as "en 20 cuotas" are not clock evidence.
 export function relativeMotionMinutes(text) {
   const value = norm(text)
-  if (!/\b(?:salgo|voy|salir|irme)\b/.test(value)) return null
-  const match = value.match(/\ben\s+(\d{1,3})(?=\s+(?:me\s+voy|voy|salgo|tengo\s+que\s+(?:ir|salir))\b|[.!]?$)/)
-  const minutes = match ? Number(match[1]) : 0
+  if (!/\b(?:salgo|voy|salir|irme|ir)\b/.test(value) || speculative(value)
+    || /[?¿]|\b(?:no|nunca|jamas|manana|ayer|lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b|\d{4}-\d{2}-\d{2}/.test(value)) return null
+  const explicit = [...value.matchAll(/\ben\s+(?:(\d{1,3})\s*(minutos?|mins?)|media\s+hora|una?\s+hora)\b/g)]
+  const matches = [...value.matchAll(/\ben\s+(\d{1,3})(?=\s+(?:me\s+voy|voy|salgo|tengo\s+que\s+(?:ir|salir)|(?:pa|para|a)\s+(?:la|el|las|los|donde)|al\b)\b|[.!]?$)/g)]
+  if (explicit.length + matches.length !== 1) return null
+  if (explicit.length === 1) {
+    const minutes = explicit[0][1] ? Number(explicit[0][1]) : /media/.test(explicit[0][0]) ? 30 : 60
+    return minutes > 0 && minutes <= 180 ? minutes : null
+  }
+  const minutes = matches.length === 1 ? Number(matches[0][1]) : 0
   return minutes > 0 && minutes <= 180 ? minutes : null
+}
+export function relativeDepartureSchedule(text, context) {
+  const relativeMinutes = relativeMotionMinutes(text)
+  const now = Date.parse(context?.nowISO)
+  if (relativeMinutes === null || !Number.isFinite(now)) return null
+  const target = buildDateContext(now + relativeMinutes * 60_000, context.tz)
+  return { source: 'relative_departure', relativeMinutes, dateISO: target.todayISO, time: target.currentTime24 }
 }
 const anyTimeSignal = text => relativeMotionMinutes(text) !== null || /\b(?:[012]?\d:[0-5]\d|a las? \w+|de \d{1,2} a \d{1,2}|tipo \w+|en (?:\d+|un[ao]?|dos|tres|media) (?:min\w*|hora\w*)|mediodia|medianoche|\d{1,2}\s*(?:am|pm)|(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo|manana|hoy)\s+\d{1,2})\b/.test(norm(text))
 const hasLocationTrigger = text => /\bcuando (?:llegue|llegues|salga|salgas|este|estes)\b/.test(norm(text))
@@ -409,6 +423,9 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
       destructive = true
       action = { type: 'forget_memory', memory: { key: a.memoryKey.trim().toLowerCase() } }
     } else {
+      if (/\b(?:no|nunca|jamas)\s+(?:(?:me|quiero|puedo|debo|tengo que|voy a)\s+){0,3}(?:salgo|salir|irme|voy|ir)\b/.test(scopeNorm)) {
+        reject('negated_activity'); continue
+      }
       if (!bounded(a.title, 120) || /^(?:evento|recordatorio|tarea|horas?|hoy|ma[nñ]ana|\d{1,2}(?::\d{2})?)$/i.test(a.title.trim())) {
         reject('invalid_title'); continue
       }
@@ -417,6 +434,9 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
       if ((!planning && (informational(scope) || conversational(scope))) || !groundedTitle(a.title, evidence, planning ? [] : memories)) { reject('unrequested_creation'); continue }
       if (a.type === 'create_task') {
         if (informational(scope) || conversational(scope)) { reject('unrequested_creation'); continue }
+        // A task would silently discard an explicit departure time. Ask the
+        // reserved recovery model to interpret it; never fabricate an event.
+        if (relativeMotionMinutes(incoming.length === 1 ? scope : a.sourceText) !== null) { reject('timed_departure_as_task'); continue }
         if (!createIntent(scope)) { reject('missing_create_intent'); continue }
         if (a.time) { reject('task_with_invented_time'); continue }
         const reminderScope = incoming.length === 1 ? scopeNorm : source
@@ -429,6 +449,8 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
           linkedEventId: null, parentTaskId: null, date: a.dateISO || null } }
       } else {
         if (!a.dateISO || !a.time) { reject('missing_event_schedule'); continue }
+        const relative = relativeDepartureSchedule(incoming.length === 1 ? scope : a.sourceText, dateContext)
+        if (relative && (a.dateISO !== relative.dateISO || a.time !== relative.time)) { reject('relative_time_conflict'); continue }
         if (hasLocationTrigger(scope) || (!planning && !anyTimeSignal(scope.replace(/\balas?\s*(?=\d)/gi, 'a las ')))) { reject('missing_exact_time'); continue }
         const reminderSource = incoming.length === 1 ? scopeNorm : source
         if (a.type === 'create_event' && a.reminderOffsetMinutes == null
