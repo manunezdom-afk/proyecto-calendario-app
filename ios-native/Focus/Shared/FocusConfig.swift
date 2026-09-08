@@ -67,16 +67,13 @@ enum FocusConfig {
         "com.googleusercontent.apps.587696845191-f1fh55ukaaqtk7odfb8stntmeoqlglglub"
 }
 
-/// Consentimiento explícito para enviar datos a proveedores de IA externos
-/// (Apple Guideline 5.1.2(i), nov 2025): antes del PRIMER mensaje que sale
-/// al backend hay que nombrar al proveedor (DeepSeek) y pedir permiso.
-/// Solo aplica al path remoto — el parser local del modo demo no manda nada
-/// fuera del dispositivo, así que no gatea.
+/// Consentimiento explícito antes de enviar mensaje y contexto a OpenAI.
+/// Solo aplica a la IA remota; las operaciones locales no envían datos.
 ///
 /// La key lleva versión: si cambia el proveedor principal o el texto del
-/// aviso de forma sustancial, bumpear a `.v2` para volver a pedirlo.
+/// aviso de forma sustancial, versionar para volver a pedirlo.
 enum NovaAIConsent {
-    private static var key: String { FocusLocalStore.scopedStorageKey(for: "novaAIConsent.v2") }
+    private static var key: String { FocusLocalStore.scopedStorageKey(for: "novaAIConsent.v3") }
 
     static var granted: Bool {
         UserDefaults.standard.bool(forKey: key)

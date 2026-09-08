@@ -969,4 +969,179 @@ extension NovaExecutionTests {
         XCTAssertEqual(store.events.first?.title, "Dentista confirmado manualmente")
         XCTAssertTrue(store.novaErrorMessage?.contains("cambiaron") == true)
     }
+
+    func testOldOrUnavailableChatRuntimeNeverReceivesPrivateMessage() async throws {
+        let invalid: [NovaCapabilityURLProtocol.Fixture] = [
+            .init(status: 404, contentType: "text/html", body: "<html>Previous deployment</html>"),
+            .init(contentType: "text/html", body: "<html>Sign in</html>"),
+            .init(body: #"{"runtime":"previous","chat_provider":"anthropic"}"#),
+            .init(body: #"{"runtime":"focus-openai-v1"}"#),
+            .init(body: "not json"),
+            .init(networkFailure: true)
+        ]
+        for fixture in invalid {
+            NovaCapabilityURLProtocol.configure(fixture)
+            let session = capabilitySession()
+            defer { session.invalidateAndCancel() }
+            do {
+                _ = try await NovaService.send(message: "Mensaje privado de prueba", events: [], tasks: [], history: [],
+                    accessToken: "synthetic-only", session: session)
+                XCTFail("The chat must not reach an incompatible deployment")
+            } catch let error as NovaServiceError {
+                guard case .runtimeUpdating = error else { return XCTFail("Unexpected error: \(error)") }
+                XCTAssertFalse(error.canFallbackToLocal)
+                XCTAssertTrue(error.errorDescription?.contains("Estamos actualizando Hilante") == true)
+            }
+            let calls = NovaCapabilityURLProtocol.requests
+            XCTAssertEqual(calls.count, 1)
+            XCTAssertEqual(calls.first?.url?.path, "/api/ai-capabilities")
+            XCTAssertEqual(calls.first?.httpMethod, "GET")
+            XCTAssertNil(calls.first?.value(forHTTPHeaderField: "Authorization"))
+            XCTAssertNil(calls.first?.httpBody)
+            XCTAssertNil(calls.first?.httpBodyStream)
+            XCTAssertEqual(calls.first?.cachePolicy, .reloadIgnoringLocalAndRemoteCacheData)
+            XCTAssertEqual(calls.first?.httpShouldHandleCookies, false)
+        }
+    }
+
+    func testMatchingRuntimeAllowsChatButRollbackIsCheckedAgain() async throws {
+        NovaCapabilityURLProtocol.configure(.init())
+        let session = capabilitySession()
+        defer { session.invalidateAndCancel() }
+        let result = try await NovaService.send(message: "Hola", events: [], tasks: [], history: [],
+            accessToken: "synthetic-only", session: session)
+        XCTAssertEqual(result.reply, "Podemos continuar.")
+        let calls = NovaCapabilityURLProtocol.requests
+        XCTAssertEqual(calls.map { $0.httpMethod }, ["GET", "POST"])
+        XCTAssertEqual(calls.last?.url?.path, "/api/focus-assistant")
+        XCTAssertEqual(calls.last?.value(forHTTPHeaderField: "Authorization"), "Bearer synthetic-only")
+        XCTAssertLessThanOrEqual(try XCTUnwrap(calls.last?.timeoutInterval), 45)
+        NovaCapabilityURLProtocol.configure(.init(body: #"{"runtime":"previous","chat_provider":"deepseek"}"#))
+        do {
+            _ = try await NovaService.send(message: "Segundo mensaje privado", events: [], tasks: [], history: [],
+                accessToken: "synthetic-only", session: session)
+            XCTFail("A cached match must not authorize a rolled back deployment")
+        } catch let error as NovaServiceError {
+            guard case .runtimeUpdating = error else { return XCTFail("Unexpected error: \(error)") }
+        }
+        XCTAssertEqual(NovaCapabilityURLProtocol.requests.map { $0.httpMethod }, ["GET"])
+    }
+
+    func testAutomaticCaptureDoesNotTrustAnUnrequestedDuration() throws {
+        let store = store()
+        let payload = BackendEventCreate(title: "Dentista", timeString: "11:00", endTimeString: "12:00",
+            dateString: "2027-09-10", section: nil, icon: "event", reminderOffsets: nil,
+            reminderNotes: nil, location: nil, notes: nil, subtitle: nil)
+        store.receiveNovaResult(response([.addEvent(payload)]), userText: "Dentista el 10 de septiembre de 2027 a las 11")
+        let saved = try XCTUnwrap(store.events.first)
+        XCTAssertEqual(try XCTUnwrap(saved.endTime).timeIntervalSince(saved.startTime), 5 * 60)
+        XCTAssertEqual(saved.inferredDuration, true)
+    }
+
+    func testServerPlanningProposalPreservesDurationAndWaitsForApproval() async throws {
+        let store = store()
+        let footballStart = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2027, month: 9, day: 10, hour: 20)))
+        let football = FocusEvent(title: "Fútbol", startTime: footballStart, endTime: footballStart.addingTimeInterval(3600))
+        XCTAssertTrue(store.addEvent(football))
+        NovaCapabilityURLProtocol.configure(.init(), chatBody: #"{"reply":"Preparé una propuesta.","mode":"proposal","actions":[],"confidence":1,"proposed_actions":[{"type":"add_event","event":{"title":"Focus","date":"2027-09-10","time":"09:00","endTime":"12:00"}},{"type":"add_event","event":{"title":"Gym","date":"2027-09-10","time":"13:00","endTime":"14:00"}}]}"#)
+        let session = capabilitySession()
+        defer { session.invalidateAndCancel() }
+        let message = "Organiza el 10 de septiembre de 2027 con 3 horas de Focus, 1 hora de Gym y deja mi fútbol a las 20 fijo"
+        let result = try await NovaService.send(message: message, events: store.events, tasks: [], history: [],
+            accessToken: "synthetic-only", session: session)
+        XCTAssertEqual(result.mode, .proposal)
+        store.receiveNovaResult(result, userText: message)
+        XCTAssertEqual(store.events, [football])
+        XCTAssertNotNil(store.novaPendingProposal)
+        XCTAssertTrue(store.novaPendingProposal?.actionLabels.contains(where: { $0.contains("09:00–12:00") }) == true)
+        XCTAssertTrue(store.novaPendingProposal?.actionLabels.contains(where: { $0.contains("13:00–14:00") }) == true)
+        store.confirmNovaProposal()
+        XCTAssertNil(store.novaErrorMessage)
+        XCTAssertEqual(store.events.count, 3)
+        XCTAssertEqual(store.events.first { $0.id == football.id }, football)
+        let focus = try XCTUnwrap(store.events.first { $0.title == "Focus" })
+        let gym = try XCTUnwrap(store.events.first { $0.title == "Gym" })
+        XCTAssertEqual(try XCTUnwrap(focus.endTime).timeIntervalSince(focus.startTime), 3 * 3600)
+        XCTAssertEqual(try XCTUnwrap(gym.endTime).timeIntervalSince(gym.startTime), 3600)
+        store.confirmNovaProposal()
+        XCTAssertEqual(store.events.count, 3)
+    }
+
+    func testReviewedRecurringProposalShowsItsRangeAndCountBeforeSaving() throws {
+        let store = store()
+        let payload = BackendEventCreate(title: "Estudiar", timeString: "10:00", endTimeString: "12:00",
+            dateString: "2027-09-10", section: nil, icon: "event", reminderOffsets: nil,
+            reminderNotes: nil, location: nil, notes: nil, subtitle: nil)
+        let recurring = BackendAction.addRecurringEvent(payload, BackendRecurrence(pattern: "daily", weekday: nil, count: 2, startDate: "2027-09-10"))
+        store.receiveNovaResult(response([], mode: .proposal, proposed: [recurring]), userText: "Organiza dos sesiones de estudio")
+        let label = try XCTUnwrap(store.novaPendingProposal?.actionLabels.first)
+        XCTAssertTrue(label.contains("10:00–12:00"))
+        XCTAssertTrue(label.contains("cada día"))
+        XCTAssertTrue(label.contains("2 próximas"))
+        XCTAssertTrue(store.events.isEmpty)
+        store.confirmNovaProposal()
+        XCTAssertEqual(store.events.count, 2)
+        XCTAssertTrue(store.events.allSatisfy { $0.endTime?.timeIntervalSince($0.startTime) == 2 * 3600 })
+    }
+
+    func testReviewedSingleEventDoesNotExpandIntoAnUnreviewedSeries() throws {
+        let store = store()
+        store.receiveNovaResult(response([], mode: .proposal, proposed: [event()]), userText: "Dentista todos los viernes a las 11")
+        XCTAssertEqual(store.novaPendingProposal?.actionLabels.count, 1)
+        store.confirmNovaProposal()
+        XCTAssertEqual(store.events.count, 1)
+    }
+
+    private func capabilitySession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [NovaCapabilityURLProtocol.self]
+        configuration.urlCache = nil
+        return URLSession(configuration: configuration)
+    }
+
+}
+
+
+/// Synthetic HTTP only: every request, including an unexpected POST, is intercepted.
+private final class NovaCapabilityURLProtocol: URLProtocol, @unchecked Sendable {
+    struct Fixture {
+        var status = 200
+        var contentType = "application/json"
+        var body = #"{"runtime":"focus-openai-v1","chat_provider":"openai"}"#
+        var networkFailure = false
+    }
+    private static let lock = NSLock()
+    private static var fixture = Fixture()
+    private static var chatBody = ""
+    private static var recorded: [URLRequest] = []
+
+    static func configure(_ value: Fixture, chatBody: String = #"{"reply":"Podemos continuar.","mode":"chat_only","actions":[],"proposed_actions":[]}"#) {
+        lock.lock(); defer { lock.unlock() }
+        fixture = value
+        self.chatBody = chatBody
+        recorded = []
+    }
+    static var requests: [URLRequest] {
+        lock.lock(); defer { lock.unlock() }
+        return recorded
+    }
+    private static func next(_ request: URLRequest) -> Fixture {
+        lock.lock(); defer { lock.unlock() }
+        recorded.append(request)
+        return request.url?.path == "/api/ai-capabilities" ? fixture : Fixture(body: chatBody)
+    }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let value = Self.next(request)
+        if value.networkFailure {
+            client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+            return
+        }
+        let response = HTTPURLResponse(url: request.url!, statusCode: value.status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": value.contentType])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(value.body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }

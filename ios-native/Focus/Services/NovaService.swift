@@ -132,16 +132,21 @@ enum NovaService {
         now: Date = Date(),
         discussedEventIds: [UUID] = [],
         userMemories: [String] = [],
-        requestID: UUID = UUID()
+        requestID: UUID = UUID(),
+        session: URLSession = .shared
     ) async throws -> Result {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw NovaServiceError.emptyMessage }
         guard trimmed.count <= 4000 else { throw NovaServiceError.messageTooLong }
 
+        let deadline = ProcessInfo.processInfo.systemUptime + 45
+        try await requireOpenAIChatRuntime(session: session, deadline: deadline)
+        try Task.checkCancellation()
+
         let url = FocusConfig.apiOrigin.appendingPathComponent("api/focus-assistant")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 45  // matchea anthropic SDK timeout backend
+        request.timeoutInterval = max(0.1, deadline - ProcessInfo.processInfo.systemUptime)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -172,7 +177,7 @@ enum NovaService {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await session.data(for: request)
         } catch let urlErr as URLError where urlErr.code == .timedOut {
             throw NovaServiceError.timeout
         } catch let urlErr as URLError where [.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed].contains(urlErr.code) {
@@ -233,6 +238,34 @@ enum NovaService {
             throw NovaServiceError.serviceUnavailable
         default:
             throw NovaServiceError.server(status: http.statusCode)
+        }
+    }
+
+    /// Check the deployed chat contract before transmitting any user content.
+    /// No stored positive result: every send also covers server rollbacks.
+    private static func requireOpenAIChatRuntime(session: URLSession, deadline: TimeInterval) async throws {
+        let url = FocusConfig.apiOrigin.appendingPathComponent("api/ai-capabilities")
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData)
+        request.httpMethod = "GET"
+        request.httpShouldHandleCookies = false
+        request.timeoutInterval = max(0.1, min(5, deadline - ProcessInfo.processInfo.systemUptime))
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("no-store, no-cache", forHTTPHeaderField: "Cache-Control")
+        request.setValue("no-cache", forHTTPHeaderField: "Pragma")
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+                  http.url?.scheme == url.scheme, http.url?.host == url.host, http.url?.port == url.port,
+                  http.value(forHTTPHeaderField: "Content-Type")?.lowercased().contains("application/json") == true,
+                  data.count <= 1024,
+                  let capability = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  capability["runtime"] as? String == "focus-openai-v1",
+                  capability["chat_provider"] as? String == "openai" else {
+                throw NovaServiceError.runtimeUpdating
+            }
+        } catch {
+            if Task.isCancelled { throw CancellationError() }
+            throw NovaServiceError.runtimeUpdating
         }
     }
 
@@ -332,6 +365,7 @@ enum NovaServiceError: Error, LocalizedError {
     case rateLimited
     case badLLMOutput           // 502 (parser falló en backend)
     case serviceUnavailable     // 503/504 (modelo / red upstream)
+    case runtimeUpdating       // Deployment contract does not match the consent.
     case completedRetryableRequest(requestID: UUID)
     case offline
     case timeout
@@ -355,7 +389,7 @@ enum NovaServiceError: Error, LocalizedError {
     /// al parser local con una nota humana.
     var canFallbackToLocal: Bool {
         switch self {
-        case .emptyMessage, .messageTooLong:
+        case .emptyMessage, .messageTooLong, .runtimeUpdating:
             return false
         default:
             return true
@@ -376,6 +410,7 @@ enum NovaServiceError: Error, LocalizedError {
         case .rateLimited:         return "Hay demasiadas solicitudes en este momento. Espera un poco y vuelve a intentarlo."
         case .badLLMOutput:        return "No pude entender bien lo que respondió \(AssistantBrand.displayName). Repite el mensaje, por favor."
         case .serviceUnavailable, .completedRetryableRequest: return "\(AssistantBrand.displayName) no está disponible en este momento. Vuelve a intentarlo en un rato."
+        case .runtimeUpdating:    return "Estamos actualizando \(AssistantBrand.displayName). Tu mensaje sigue aquí; vuelve a intentarlo en un momento."
         case .offline:             return "Sin conexión. Tus cambios quedan en este iPhone hasta que vuelvas a tener internet."
         case .timeout:             return "\(AssistantBrand.displayName) tardó más de lo esperado. Vuelve a intentarlo."
         case .network:             return "Hubo un problema con la conexión. Vuelve a intentarlo."
@@ -409,7 +444,7 @@ enum NovaServiceError: Error, LocalizedError {
             return "Falló la conexión con \(AssistantBrand.displayName) — usé el modo local de respaldo. Revisa tu internet y vuelve a intentarlo."
         case .badLLMOutput, .server, .invalidResponse, .encoding, .decoding:
             return "No pude contactar a \(AssistantBrand.displayName) (IA) — usé el modo local de respaldo. Vuelve a intentarlo en un momento."
-        case .emptyMessage, .messageTooLong:
+        case .emptyMessage, .messageTooLong, .runtimeUpdating:
             return ""  // No aplica: estos no hacen fallback.
         }
     }
@@ -425,6 +460,7 @@ enum NovaServiceError: Error, LocalizedError {
         case .rateLimited:         return "rateLimited(429)"
         case .badLLMOutput:        return "badLLMOutput(502)"
         case .serviceUnavailable:  return "serviceUnavailable(503/504)"
+        case .runtimeUpdating:     return "runtimeUpdating"
         case .completedRetryableRequest: return "completedRetryableRequest(503)"
         case .offline:             return "offline"
         case .timeout:             return "timeout"

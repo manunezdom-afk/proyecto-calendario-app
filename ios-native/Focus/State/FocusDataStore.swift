@@ -6272,7 +6272,8 @@ final class FocusDataStore: ObservableObject {
     func applyBackendActions(
         _ actions: [BackendAction],
         userText: String,
-        actionIDs: [String] = []
+        actionIDs: [String] = [],
+        reviewedTiming: Bool = false
     ) -> NovaApplyOutcome {
         var outcome = NovaApplyOutcome()
         let validation = NovaActionValidator.validate(actions: actions, userText: userText)
@@ -6391,7 +6392,7 @@ final class FocusDataStore: ObservableObject {
                     } else {
                         outcome.ignored.append("add_event(no_time_to_task_invalid)")
                     }
-                } else if !isMultiEventBatch, let localRecurrence = NovaResponder.detectRecurrence(userText.lowercased()),
+                } else if !reviewedTiming, !isMultiEventBatch, let localRecurrence = NovaResponder.detectRecurrence(userText.lowercased()),
                           let backendRecur = makeBackendRecurrence(
                               from: localRecurrence,
                               firstDateString: payload.dateString,
@@ -6407,7 +6408,8 @@ final class FocusDataStore: ObservableObject {
                         payload: payload,
                         recurrence: backendRecur,
                         userText: userText,
-                        isMultiEventBatch: isMultiEventBatch
+                        isMultiEventBatch: isMultiEventBatch,
+                        reviewedTiming: reviewedTiming
                     ) else {
                         outcome.ignored.append(localSaveError == nil ? "invalid_recurrence" : "persistence_failed")
                         break actionLoop
@@ -6432,7 +6434,7 @@ final class FocusDataStore: ObservableObject {
                     } else {
                         outcome.summary = "Ya tenías esas ocurrencias en tu agenda."
                     }
-                } else if let event = makeEvent(from: payload, userText: userText, isMultiEventBatch: isMultiEventBatch) {
+                } else if let event = makeEvent(from: payload, userText: userText, isMultiEventBatch: isMultiEventBatch, reviewedTiming: reviewedTiming) {
                     // Anti-duplicado en el path del backend. El local path
                     // ya tenía esta defensa; ahora la centralizamos también
                     // acá para casos donde el backend genere la acción
@@ -6469,7 +6471,7 @@ final class FocusDataStore: ObservableObject {
                 }
 
             case .addRecurringEvent(let payload, let recurrence):
-                guard let created = expandRecurringEvent(payload: payload, recurrence: recurrence, userText: userText, isMultiEventBatch: isMultiEventBatch) else {
+                guard let created = expandRecurringEvent(payload: payload, recurrence: recurrence, userText: userText, isMultiEventBatch: isMultiEventBatch, reviewedTiming: reviewedTiming) else {
                     outcome.ignored.append(localSaveError == nil ? "invalid_recurrence" : "persistence_failed")
                     break actionLoop
                 }
@@ -6770,7 +6772,8 @@ final class FocusDataStore: ObservableObject {
     private func makeEvent(
         from payload: BackendEventCreate,
         userText: String,
-        isMultiEventBatch: Bool = false
+        isMultiEventBatch: Bool = false,
+        reviewedTiming: Bool = false
     ) -> FocusEvent? {
         // PASO 1: Limpiar título via normalizer (centralizado).
         // El backend puede devolver "Acuérdame buscar a Juan" sin limpiar
@@ -6828,9 +6831,9 @@ final class FocusDataStore: ObservableObject {
                 || NovaActionNormalizer.impliesPunctualReminder(in: userText)
         }()
 
-        // PASO 3: Resolver endTime explícito si el backend lo dio
-        // **Y SOLO SI** el usuario realmente mencionó una hora-fin en su
-        // mensaje. Bug histórico: el modelo IA inventaba `endTimeString` =
+        // PASO 3: Preserve a time range the user reviewed and confirmed.
+        // Automatic captures still require explicit duration in the message.
+        // Bug histórico: el modelo IA inventaba `endTimeString` =
         // `startTime + 1h` aunque el usuario solo dijera "dentista a las 4",
         // y la app respetaba ese rango como real, mostrando "16:00–17:00".
         // El gate `userMentionedExplicitEndTime` (parser local) bloquea esa
@@ -6838,7 +6841,7 @@ final class FocusDataStore: ObservableObject {
         // "por N horas" o "durante N min", se ignora el endTime del backend
         // y el evento queda como punto en el tiempo (`inferredDuration=true`).
         var explicitEnd: Date? = nil
-        if NovaActionNormalizer.userMentionedExplicitEndTime(in: userText),
+        if reviewedTiming || NovaActionNormalizer.userMentionedExplicitEndTime(in: userText),
            let endStr = payload.endTimeString,
            !endStr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            let end = NovaTimeFormatter.resolveDate(
@@ -7183,7 +7186,8 @@ final class FocusDataStore: ObservableObject {
         payload: BackendEventCreate,
         recurrence: BackendRecurrence,
         userText: String,
-        isMultiEventBatch: Bool = false
+        isMultiEventBatch: Bool = false,
+        reviewedTiming: Bool = false
     ) -> [FocusEvent]? {
         let cal = NovaTimeFormatter.calendar()
         guard let firstStart = NovaTimeFormatter.resolveDate(
@@ -7218,7 +7222,7 @@ final class FocusDataStore: ObservableObject {
                     section: payload.section, icon: payload.icon, reminderOffsets: payload.reminderOffsets,
                     reminderNotes: payload.reminderNotes, location: payload.location, notes: payload.notes, subtitle: payload.subtitle)
                 guard let event = makeEvent(from: single, userText: userText,
-                    isMultiEventBatch: isMultiEventBatch) else { return nil }
+                    isMultiEventBatch: isMultiEventBatch, reviewedTiming: reviewedTiming) else { return nil }
                 planned.append(event)
             }
             if planned.count < limit {
@@ -7387,7 +7391,7 @@ final class FocusDataStore: ObservableObject {
             return
         }
         if proposal.localIntents.isEmpty {
-            executeNovaActions(proposal.actions, userText: proposal.userText, actionIDs: proposal.actionIDs)
+            executeNovaActions(proposal.actions, userText: proposal.userText, actionIDs: proposal.actionIDs, reviewedTiming: true)
         } else {
             executeLocalNovaIntents(proposal.localIntents, userText: proposal.userText, confirmed: true,
                                    frozenDeletions: proposal.localDeletionActions)
@@ -7651,11 +7655,21 @@ final class FocusDataStore: ObservableObject {
     private func novaActionLabel(_ action: BackendAction) -> String {
         switch action {
         case .addEvent(let event), .addRecurringEvent(let event, _):
-            return "Crear: \(event.title)\(event.dateString.map { " · \($0)" } ?? "")\(event.timeString.map { " · \($0)" } ?? "")"
+            let timeRange = [event.timeString, event.endTimeString].compactMap { $0 }.joined(separator: "–")
+            let details = [event.dateString, timeRange.isEmpty ? nil : timeRange].compactMap { $0 }.joined(separator: " · ")
+            let label = "Crear: \(event.title)" + (details.isEmpty ? "" : " · " + details)
+            guard case .addRecurringEvent(_, let recurrence) = action else { return label }
+            let pattern = recurrence.pattern.lowercased()
+            let frequency = pattern == "daily" ? "cada día" : pattern == "weekdays" ? "de lunes a viernes" : "cada semana"
+            let count = min(recurrence.count ?? (pattern == "daily" ? 30 : pattern == "weekdays" ? 44 : 26), pattern == "weekly" ? 52 : 60)
+            let weekdays = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"]
+            let weekday = recurrence.weekday.flatMap { weekdays.indices.contains($0) ? weekdays[$0] : nil }
+            let recurrenceDetails = [frequency, weekday, recurrence.startDate.map { "desde \($0)" }, "\(count) próximas"].compactMap { $0 }.joined(separator: " · ")
+            return label + " · " + recurrenceDetails
         case .addTask(let task): return "Añadir tarea: \(task.label)"
         case .editEvent(let id, let updates):
             let name = events.first { $0.id.uuidString.lowercased() == id.lowercased() }?.title ?? "evento"
-            let changes = [updates.title, updates.dateString, updates.timeString, updates.subtitle, updates.location].compactMap { $0 }.joined(separator: " · ")
+            let changes = [updates.title, updates.dateString, updates.timeString.map { "inicio \($0)" }, updates.endTimeString.map { "término \($0)" }, updates.subtitle, updates.location].compactMap { $0 }.joined(separator: " · ")
             return "Editar \(name): \(changes)"
         case .deleteEvent(let id):
             guard let event = events.first(where: { $0.id.uuidString.lowercased() == id.lowercased() }) else { return "Eliminar evento" }
@@ -7695,13 +7709,13 @@ final class FocusDataStore: ObservableObject {
         }
     }
 
-    private func executeNovaActions(_ actions: [BackendAction], userText: String, actionIDs: [String] = []) {
+    private func executeNovaActions(_ actions: [BackendAction], userText: String, actionIDs: [String] = [], reviewedTiming: Bool = false) {
         let validation = NovaActionValidator.validate(actions: actions, userText: userText)
         guard !validation.shouldAsk else {
             failNova("No pude validar todos los cambios. No apliqué la propuesta.", input: userText)
             return
         }
-        let outcome = applyBackendActions(validation.safeActions, userText: userText, actionIDs: actionIDs)
+        let outcome = applyBackendActions(validation.safeActions, userText: userText, actionIDs: actionIDs, reviewedTiming: reviewedTiming)
         if outcome.ignored.contains(where: { $0.contains("persistence_failed") }) {
             let receipt = [outcome.summary, outcome.details].compactMap { $0 }.joined(separator: "\n")
             let failure = outcome.didMutate

@@ -2193,12 +2193,12 @@ struct NovaAIConsentSheet: View {
                 }
                 .padding(.top, Theme.Spacing.xl)
 
-                Text("Para responder, tu mensaje y el contexto de tu agenda (eventos visibles, tareas y las memorias que guardaste) se envían a proveedores externos de inteligencia artificial: **Anthropic, DeepSeek u OpenAI**, según el proveedor habilitado para la solicitud. No se usan para publicidad ni se venden.")
+                Text("Para responder, tu mensaje, parte de la conversación reciente y el contexto necesario de Focus (eventos, tareas y memorias cuyo uso esté activado) se envían a **OpenAI**, nuestro proveedor de inteligencia artificial para Hilante. No usamos tus datos para publicidad ni los vendemos.")
                     .font(Theme.Typography.body)
                     .foregroundStyle(Theme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("El dictado por voz se transcribe en tu iPhone y no sale de él. Si prefieres no usar IA externa, puedes seguir usando el resto de Focus con normalidad.")
+                Text("El audio del dictado se transcribe en tu iPhone. Puedes revisar el texto antes de enviarlo a Hilante. Puedes retirar este permiso en Ajustes y seguir creando pendientes y eventos manualmente.")
                     .font(Theme.Typography.body)
                     .foregroundStyle(Theme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
