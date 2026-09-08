@@ -205,6 +205,24 @@ function groundedTarget(id, items, scope, discussed) {
   return /\b(?:eso|esa|ese|este|esta|anterior|ultimo|muevelo|cambialo|borralo|eliminalo|completalo)\b/.test(norm(scope))
     && (items.length === 1 || discussed.length === 1 && discussed[0] === id)
 }
+function groundedClockCorrection(action, message, events, discussed) {
+  // This is an event reference, not new edit authority. A closed correction
+  // uses the current turn and exactly one live ID supplied by the client; old
+  // prose, several discussed events and a matching display name cannot pick it.
+  if (action.type !== 'edit_event' || !Array.isArray(discussed) || discussed.length !== 1
+    || discussed[0] !== action.targetEventId || !hasExplicitEditIntent(message)) return false
+  const matches = events.filter(event => event.id === action.targetEventId)
+  if (matches.length !== 1 || matches[0].done || matches[0].completed || matches[0].cancelled) return false
+  const clock = norm(message).match(/^mejor\s+a\s+las?\s+(\d{1,2})(?::([0-5]\d))?\s*(am|pm)?[.!]?$/)
+  if (!clock || (!clock[2] && !clock[3])) return false
+  let hour = Number(clock[1])
+  if (clock[3] ? hour < 1 || hour > 12 : hour > 23) return false
+  if (clock[3]) hour = hour % 12 + (clock[3] === 'pm' ? 12 : 0)
+  // A time-only correction cannot also change the day, details or notification.
+  return clockMinutes(action.time) === hour * 60 + Number(clock[2] || 0)
+    && (action.dateISO == null || action.dateISO === matches[0].date)
+    && action.subtitle == null && action.reminderOffsetMinutes == null
+}
 export function civilTimeOccurrences(date, time, timezone) {
   if (!validCivilDate(date) || !validClockTime(time) || !validTimezone(timezone)) return 0
   const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
@@ -366,7 +384,9 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
     const targetTask = a.targetTaskId
     if (['edit_event', 'delete_event'].includes(a.type)) {
       if (!eventIds.has(targetId)) { reject('unknown_event'); continue }
-      if ((!planning || a.type === 'delete_event') && !groundedTarget(targetId, events, scope, discussedEventIds)) { reject('ambiguous_event'); continue }
+      const referencedCorrection = incoming.length === 1 && groundedClockCorrection(a, userMessage, events, discussedEventIds)
+      if ((!planning || a.type === 'delete_event') && !groundedTarget(targetId, events, scope, discussedEventIds)
+        && !referencedCorrection) { reject('ambiguous_event'); continue }
       if (a.type === 'delete_event') {
         if (!hasExplicitDeleteIntent(scope)) { reject('missing_delete_intent'); continue }
         destructive = true

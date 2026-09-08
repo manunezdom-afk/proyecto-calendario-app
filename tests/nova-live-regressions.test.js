@@ -201,3 +201,89 @@ test('event details omit only complete word fragments already present in the sem
   assert.equal(out.actions[0].event.subtitle,expected)
  }
 })
+
+const correctionEvents=[
+ {id:'event-gym',title:'Gym',date:dateContext.tomorrow,time:'10:00 AM',endTime:'11:00 AM'},
+ {id:'event-football',title:'Fútbol',date:dateContext.tomorrow,time:'8:00 PM',endTime:'9:30 PM'},
+]
+const correctEvent=(message,{events=correctionEvents,discussedEventIds=['event-gym'],history=[],action={}}={})=>validateNovaPlan({
+ payload:wirePlan([wireAction({type:'edit_event',title:'Gym',sourceText:message,targetEventId:'event-gym',time:'11:00',...action})]),
+ userMessage:message,events,discussedEventIds,history,dateContext,requestId:'synthetic-correction',
+})
+
+test('a closed clock correction targets exactly the single discussed live event by its stable ID',()=>{
+ for(const message of ['mejor a las 11 AM','Mejor a las 11AM.','mejor a las 11:00']){
+  const out=correctEvent(message)
+  assert.equal(out.validation.ok,true,JSON.stringify({message,validation:out.validation}))
+  assert.equal(out.mode,'chat_with_action');assert.equal(out.actions.length,1)
+  assert.equal(out.actions[0].type,'edit_event');assert.equal(out.actions[0].id,'event-gym')
+  assert.deepEqual(out.actions[0].updates,{time:'11:00 AM'})
+  assert.equal(out.proposed_actions.length,0)
+ }
+})
+
+test('visible event names remain grounded independently of the discussed correction shortcut',()=>{
+ const named=correctEvent('mueve Gym a las 11 AM',{discussedEventIds:[]})
+ assert.equal(named.validation.ok,true);assert.equal(named.actions[0].id,'event-gym')
+ const other=correctEvent('mueve Gym a las 11 AM',{action:{targetEventId:'event-football'}})
+ assert.ok(other.validation.issues.includes('ambiguous_event'));assert.equal(other.actions.length,0)
+})
+
+test('clock corrections never choose among absent, multiple, stale or mismatched discussed IDs',()=>{
+ for(const discussedEventIds of [[],['event-gym','event-football'],['event-gym','missing'],['event-gym','event-gym'],['missing'],['event-football']]){
+  const out=correctEvent('mejor a las 11 AM',{discussedEventIds})
+  assert.ok(out.validation.issues.includes('ambiguous_event'),JSON.stringify({discussedEventIds,validation:out.validation}))
+  assert.equal(out.actions.length+out.proposed_actions.length,0)
+ }
+ const absent=correctEvent('mejor a las 11 AM',{events:[]})
+ assert.ok(absent.validation.issues.includes('unknown_event'));assert.equal(absent.actions.length,0)
+})
+
+test('homonymous events require a specific reference and a discussed ID never aliases a title',()=>{
+ const homonyms=correctionEvents.map(event=>({...event,title:'Gym'}))
+ const named=correctEvent('mueve Gym a las 11 AM',{events:homonyms,discussedEventIds:[]})
+ assert.ok(named.validation.issues.includes('ambiguous_event'));assert.equal(named.actions.length,0)
+ const missingReference=correctEvent('mejor a las 11 AM',{events:homonyms,discussedEventIds:[]})
+ assert.ok(missingReference.validation.issues.includes('ambiguous_event'))
+ const referenced=correctEvent('mejor a las 11 AM',{events:homonyms})
+ assert.equal(referenced.validation.ok,true);assert.equal(referenced.actions[0].id,'event-gym')
+ const visibleID=correctEvent('mejor a las 11 AM',{discussedEventIds:['Gym']})
+ assert.equal(visibleID.validation.ok,false);assert.equal(visibleID.actions.length,0)
+})
+
+test('questions, negation, speculation and quoted corrections supply no implicit event reference',()=>{
+ for(const message of ['¿mejor a las 11 AM?','no, mejor a las 11 AM','mejor no a las 11 AM',
+  'no cambies nada, mejor a las 11 AM','quizás mejor a las 11 AM','dijo "mejor a las 11 AM"',
+  'mejor a las 11 AM y compra pan','a las 11 AM']){
+  const out=correctEvent(message)
+  assert.equal(out.validation.ok,false,JSON.stringify({message,validation:out.validation}))
+  assert.equal(out.actions.length+out.proposed_actions.length,0)
+ }
+})
+
+test('the correction shortcut cannot inherit authority from old history or broaden a clock edit',()=>{
+ const history=[{role:'user',content:'mejor a las 11 AM'},{role:'assistant',content:'¿Algo más?'}]
+ for(const [message,action] of [
+  ['hola',{}],['mejor a las 11 AM',{type:'delete_event'}],
+  ['mejor a las 11 AM',{time:'23:00'}],['mejor a las 11 AM',{dateISO:dateContext.dayAfter}],
+  ['mejor a las 11 AM',{subtitle:'Otra descripción'}],['mejor a las 11 AM',{reminderOffsetMinutes:30}],
+ ]){
+  const out=correctEvent(message,{history,action})
+  assert.equal(out.validation.ok,false,JSON.stringify({message,action,validation:out.validation}))
+  assert.equal(out.actions.length+out.proposed_actions.length,0)
+ }
+})
+
+test('a single correction cannot fan out to multiple actions or revive a completed event',()=>{
+ const message='mejor a las 11 AM'
+ const action=wireAction({type:'edit_event',title:'Gym',sourceText:message,targetEventId:'event-gym',time:'11:00'})
+ const batch=validateNovaPlan({payload:wirePlan([action,{...action,time:'12:00'}]),userMessage:message,
+  events:correctionEvents,discussedEventIds:['event-gym'],dateContext})
+ assert.ok(batch.validation.issues.includes('ambiguous_event'));assert.equal(batch.actions.length,0)
+ for(const state of [{done:true},{completed:true},{cancelled:true}]){
+  const out=correctEvent(message,{events:correctionEvents.map(event=>event.id==='event-gym'?{...event,...state}:event)})
+  assert.equal(out.validation.ok,false);assert.equal(out.actions.length,0)
+ }
+ const duplicateID=correctEvent(message,{events:[...correctionEvents,correctionEvents[0]]})
+ assert.equal(duplicateID.validation.ok,false);assert.equal(duplicateID.actions.length,0)
+})
