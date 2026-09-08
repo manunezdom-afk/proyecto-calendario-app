@@ -341,7 +341,7 @@ export default function App() {
 
   const { events, addEvent, deleteEvent, editEvent } = useEvents()
   const { tasks, addTask, toggleTask, deleteTask, updateTask } = useTasks()
-  const { memories } = useUserMemories()
+  const { memories, addMemory, deleteMemory, deleteMemories } = useUserMemories()
 
   // Badge del icono de la app (iOS PWA y browsers de escritorio compatibles):
   // refleja lo que queda por atender hoy para que la app "llame" al usuario
@@ -385,6 +385,11 @@ export default function App() {
 
   // Handlers para ejecutar una sugerencia aprobada
   const suggestionHandlers = {
+    events, tasks, memories,
+    onUpdateTask: updateTask,
+    onAddMemory: addMemory,
+    onDeleteMemory: deleteMemory,
+    onDeleteMemories: deleteMemories,
     onAddEvent: addEvent,
     onEditEvent: editEvent,
     onDeleteEvent: deleteEvent,
@@ -394,20 +399,19 @@ export default function App() {
   }
 
   function handleApproveSuggestion(id) {
-    const s = suggestions.find((x) => x.id === id)
-    if (s) {
-      const result = applySuggestion(s, suggestionHandlers)
-      // Si la aplicación es reversible (add_event/add_task), ofrecemos Deshacer.
-      // Si no, mantenemos el toast verde de siempre — p. ej. toggles/edits no
-      // tienen estado previo que podamos restaurar.
-      if (result?.undo) {
-        showUndo(result.message, result.undo)
-      } else {
-        const label = s.title || s.summary || 'Sugerencia'
-        setApprovalToast({ id: `${id}-${Date.now()}`, label })
-      }
+    const suggestion = suggestions.find(item => item.id === id && item.status === 'pending')
+    if (!suggestion) return
+    const result = applySuggestion(suggestion, suggestionHandlers)
+    if (!result?.ok) {
+      setApprovalToast({ id: `${id}-${Date.now()}`, label: result?.message || 'No pude guardar el cambio.', error: true })
+      return
     }
-    approveSuggestion(id)
+    if (!approveSuggestion(id)) {
+      setApprovalToast({ id: `${id}-${Date.now()}`, label: 'El cambio quedó guardado, pero no pude cerrar la propuesta. Revisa el resultado antes de repetirla.', error: true })
+      return
+    }
+    if (result.undo) showUndo(result.message, result.undo)
+    else setApprovalToast({ id: `${id}-${Date.now()}`, label: result.message })
   }
 
   useEffect(() => {
@@ -484,11 +488,15 @@ export default function App() {
   // re-renderiza por estado no relacionado (paletteOpen, notifPanelOpen, etc.).
   const handleProposeActions = useCallback((actions, { reply } = {}) => {
     const batchId = `batch-${Date.now()}`
+    const saved = []
     for (const action of actions) {
-      const sug = actionToSuggestion(action, { reason: reply, batchId, events, tasks })
-      if (sug) addSuggestion(sug)
+      const sug = actionToSuggestion(action, { reason: reply, batchId, events, tasks, memories })
+      const result = sug && addSuggestion(sug)
+      if (!result) break
+      saved.push(result)
     }
-  }, [events, tasks, addSuggestion])
+    return saved
+  }, [events, tasks, memories, addSuggestion])
 
   // Estable para que el shallow-compare de NovaWidget memo lo respete.
   const openInbox = useCallback(() => setInboxOpen(true), [])
@@ -716,6 +724,8 @@ export default function App() {
     onEditEvent:       editEvent,
     onDeleteEvent:     deleteEvent,
     onAddTask:         addTask,
+    onUpdateTask:      updateTask,
+    onProposeActions:  handleProposeActions,
     onToggleTask:      toggleTask,
     onDeleteTask:      deleteTask,
     onEveningShutdown: () => setShowEveningShutdown(true),
@@ -979,6 +989,7 @@ export default function App() {
             onEditEvent={editEvent}
             onDeleteEvent={deleteEvent}
             onAddTask={addTask}
+            onUpdateTask={updateTask}
             onToggleTask={toggleTask}
             onDeleteTask={deleteTask}
             onProposeActions={handleProposeActions}
@@ -1032,11 +1043,11 @@ export default function App() {
               style={{ fontVariationSettings: "'FILL' 1" }}
               aria-hidden="true"
             >
-              check_circle
+              {approvalToast.error ? 'error' : 'check_circle'}
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-300/90">
-                {approvalToast.id?.startsWith('day-start-') ? 'Empieza por' : 'Añadido'}
+                {approvalToast.error ? 'No guardado' : approvalToast.id?.startsWith('day-start-') ? 'Empieza por' : 'Guardado'}
               </p>
               <p className="text-[13px] font-semibold leading-tight truncate">{approvalToast.label}</p>
             </div>

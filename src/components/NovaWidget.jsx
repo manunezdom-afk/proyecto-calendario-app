@@ -10,10 +10,13 @@ import { isIOSSafari } from '../lib/permissions'
 import { createVAD } from '../lib/voiceActivityDetector'
 import { readPreferenceSync } from '../hooks/useAppPreferences'
 import { novaSay } from '../utils/novaPersonality'
-import { expandRecurrence } from '../utils/expandRecurrence'
+import { useAuth } from '../context/AuthContext'
+import { prepareAssistantResponse, applyAssistantActions, enqueueAssistantReview, completedRetryableFailure, actionLabel } from '../utils/assistantContract.js'
 import { subscribeModalStack } from '../utils/modalStack'
 import { hasAIConsent, grantAIConsent } from '../lib/aiConsent'
 import AIConsentCard from './AIConsentCard'
+import { advanceAccountEpoch } from '../utils/verifiedMutation.js'
+import { assistantSessionKey, readAssistantHistory, prepareLogicalRequest, clearLogicalRequest } from '../utils/assistantSession.js'
 
 // En Safari iPhone webkitSpeechRecognition existe desde iOS 14.5 y sí funciona
 // en Safari regular con permiso concedido. Antes gateábamos SR=null
@@ -73,6 +76,7 @@ function NovaWidget({
   onDeleteEvent,
   onToggleTask,
   onAddTask,
+  onUpdateTask,
   onDeleteTask,
   onProposeActions,   // (actions, {reply}) => void — modo propuesta
   proposeMode = true, // si true, Nova no ejecuta directo; encola sugerencias
@@ -80,7 +84,19 @@ function NovaWidget({
   isDesktop = false,
 }) {
   const { profile } = useUserProfile()
-  const { memories, addMemory } = useUserMemories()
+  const { user } = useAuth()
+  const { memories, addMemory, deleteMemory, deleteMemories } = useUserMemories()
+  const epochRef = useRef(null)
+  epochRef.current = advanceAccountEpoch(epochRef.current, user?.id)
+  const liveRef = useRef(null)
+  liveRef.current = { epoch: epochRef.current, userId: user?.id, events, tasks, memories, onAddEvent, onEditEvent, onDeleteEvent,
+    onAddTask, onUpdateTask, onDeleteTask, onAddMemory: addMemory, onDeleteMemory: deleteMemory, onDeleteMemories: deleteMemories }
+  const busyRef = useRef(false)
+  const requestRef = useRef(null)
+  const photoRequestRef = useRef(null)
+  const mountedRef = useRef(true)
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false } }, [])
+  const [consentPendingPhoto, setConsentPendingPhoto] = useState(null)
   const [isOpen, setIsOpen]         = useState(false)
   const [input, setInput]           = useState('')
   const [reply, setReply]           = useState('')
@@ -104,7 +120,7 @@ function NovaWidget({
   const hidePillForModal = modalCount > 0 && !isOpen
   const [chatHistory, setChatHistory] = useState(() => {
     try {
-      const raw = sessionStorage.getItem('nova_history')
+      const raw = sessionStorage.getItem(assistantSessionKey('history', user?.id))
       if (raw) {
         const arr = JSON.parse(raw)
         if (Array.isArray(arr)) return arr.filter(
@@ -189,18 +205,12 @@ function NovaWidget({
 
   // Rehidratar historial persistido desde sessionStorage
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem('nova_history')
-      if (raw) {
-        const arr = JSON.parse(raw)
-        if (Array.isArray(arr)) {
-          historyRef.current = arr.filter(
-            h => h && typeof h === 'object' && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string',
-          )
-        }
-      }
-    } catch {}
-  }, [])
+    historyRef.current = readAssistantHistory(sessionStorage, user?.id)
+    requestRef.current = null; photoRequestRef.current = null
+    setConsentPendingMsg(null); setConsentPendingPhoto(null)
+    setChatHistory(historyRef.current)
+    setReply(''); setChips([])
+  }, [user?.id])
 
   // Atajo global Cmd/Ctrl+K
   useEffect(() => {
@@ -545,60 +555,28 @@ function NovaWidget({
     if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null }
   }
 
-  // Ejecutar acciones y mostrar chips
-  const executeAction = useCallback((action) => {
-    if (!action?.type) return
-    const id = `${Date.now()}-${Math.random()}`
-
-    const chipDefs = {
-      add_event:      { icon: 'add_circle',  label: `Creando "${action.event?.title || ''}"` },
-      add_recurring_event: { icon: 'event_repeat', label: `Agendando "${action.event?.title || ''}" recurrente` },
-      edit_event:     { icon: 'edit',        label: `Actualizando evento` },
-      delete_event:   { icon: 'delete',      label: `Eliminando evento` },
-      mark_task_done: { icon: 'task_alt',    label: `Completando tarea` },
-      toggle_task:    { icon: 'task_alt',    label: `Completando tarea` },
-      add_task:       { icon: 'check_box',   label: `Añadiendo tarea "${action.task?.label || ''}"` },
-      delete_task:    { icon: 'delete',      label: `Eliminando tarea` },
+  async function handlePhoto(e, selectedFile = null, consentGranted = false) {
+    const file = selectedFile || e?.target?.files?.[0]
+    if (e?.target) e.target.value = ''
+    if (!file || busyRef.current) return
+    setIsOpen(true)
+    if (!consentGranted && !hasAIConsent()) { setConsentPendingPhoto(file); return }
+    busyRef.current = true
+    const sentContext = liveRef.current
+    const signature = `${sentContext.userId || 'guest'}:${file.name}:${file.size}:${file.lastModified}`
+    try {
+      const saved = await prepareLogicalRequest(localStorage, sentContext.userId, 'widget_photo', signature)
+      photoRequestRef.current = { ...saved, signature, now: saved.createdAt }
+    } catch {
+      busyRef.current = false
+      setReply('No pude guardar la solicitud en este dispositivo. Inténtalo de nuevo.')
+      return
     }
-
-    const def = chipDefs[action.type]
-    if (def) {
-      setChips(prev => [...prev, { id, ...def, done: false }])
-      setTimeout(() => setChips(prev => prev.map(c => c.id === id ? { ...c, done: true } : c)), 400)
-    }
-
-    if (action.type === 'add_event')      onAddEvent?.(action.event)
-    else if (action.type === 'add_recurring_event') {
-      // Nova manda la intención recurrente; el cliente expande a N eventos
-      // con fechas concretas. Ver utils/expandRecurrence.js.
-      const expanded = expandRecurrence(action)
-      for (const ev of expanded) onAddEvent?.(ev)
-    }
-    else if (action.type === 'edit_event')   onEditEvent?.(action.id, action.updates ?? {})
-    else if (action.type === 'delete_event') onDeleteEvent?.(action.id)
-    else if (action.type === 'mark_task_done' || action.type === 'toggle_task') onToggleTask?.(action.id)
-    else if (action.type === 'add_task')     onAddTask?.(action.task)
-    else if (action.type === 'delete_task')  onDeleteTask?.(action.id)
-    else if (action.type === 'remember')     addMemory?.(action.memory)
-  }, [onAddEvent, onEditEvent, onDeleteEvent, onToggleTask, onAddTask, onDeleteTask, addMemory])
-
-  async function handlePhoto(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-    // Defensa contra disparo doble: el botón de cámara está disabled durante
-    // isAnalyzingPhoto, pero el <input type=file hidden> NO. Si el usuario
-    // re-elige antes de que el state se actualice, evitamos pisarle a la
-    // request en curso.
-    if (isAnalyzingPhoto) return
-
+    if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) { busyRef.current = false; return }
+    const photoRequest = photoRequestRef.current
     const preview = URL.createObjectURL(file)
     setPhotoPreview(preview)
-    setIsOpen(true)
-    setReply('')
-    setChips([])
-    setIsAnalyzingPhoto(true)
-
+    setReply(''); setChips([]); setIsAnalyzingPhoto(true)
     try {
       const base64 = await new Promise((resolve, reject) => {
         const reader = new FileReader()
@@ -606,92 +584,41 @@ function NovaWidget({
         reader.onerror = reject
         reader.readAsDataURL(file)
       })
-
+      if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
       const res = await apiFetch('/api/analyze-photo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images: [{ base64, mediaType: file.type || 'image/jpeg' }] }),
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Request-Id': photoRequest.id },
+        body: JSON.stringify({ images: [{ base64, mediaType: file.type || 'image/jpeg' }],
+          clientNow: photoRequest.now, clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' }),
       })
-
       const data = await res.json().catch(() => ({}))
-      // Errores específicos de auth/cuota: mensaje claro al usuario en vez de
-      // un genérico "no se detectaron eventos" que confundiría.
-      if (res.status === 401 || data?.error === 'auth_required') {
-        setReply('Inicia sesión para analizar fotos.')
-        return
+      if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
+      if (!res.ok) {
+        if (completedRetryableFailure(res.status, data, photoRequest.id)) { photoRequestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'widget_photo') }
+        throw new Error(res.status === 401 ? 'Inicia sesión para analizar fotos.' : 'No pude analizar la foto. Vuelve a intentarlo.')
       }
-      if (data?.error === 'quota_exceeded') {
-        // El backend devuelve message específico por plan (free/early_access).
-        setReply(data?.message || 'Llegaste al límite diario de fotos analizadas. Vuelve mañana.')
-        return
-      }
-      const events = data?.events ?? []
-
-      if (events.length === 0) {
-        setReply(novaSay('photo_no_events', readPreferenceSync('novaPersonality')))
-      } else {
-        const names = events.map(ev => `"${ev.title}"`).join(', ')
-        const msg = events.length === 1
-          ? `Encontré 1 evento en la foto: ${names}. ¿Lo agrego al calendario?`
-          : `Encontré ${events.length} eventos en la foto: ${names}. ¿Los agrego?`
-        setReply(msg)
-
-        historyRef.current = [
-          ...historyRef.current,
-          { role: 'user', content: '[Foto enviada]' },
-          { role: 'assistant', content: msg },
-        ]
-        setChatHistory([...historyRef.current])
-        try { sessionStorage.setItem('nova_history', JSON.stringify(historyRef.current.slice(-40))) } catch {}
-
-        setChips(events.map((ev, i) => ({
-          id: `photo-ev-${i}`,
-          icon: 'event',
-          label: ev.title + (ev.time ? ` · ${ev.time}` : '') + (ev.date ? ` · ${ev.date}` : ''),
-          done: false,
-          photoEvent: ev,
-        })))
-      }
-    } catch {
-      setReply(novaSay('error_connection', readPreferenceSync('novaPersonality')))
+      const extracted = Array.isArray(data.events) ? data.events : []
+      if (!extracted.length) { setReply(novaSay('photo_no_events', readPreferenceSync('novaPersonality'))); return }
+      const prepared = prepareAssistantResponse({ mode: 'proposal', proposed_actions: extracted.map(event => ({ type: 'add_event', event })) }, sentContext, { requestId: photoRequest.id })
+      const outcome = prepared.ok ? enqueueAssistantReview(prepared.actions, onProposeActions) : prepared
+      setReply(outcome.message)
+      if (outcome.ok) setChips(prepared.actions.map(action => ({ id: action.actionId, icon: 'event', label: actionLabel(action), done: true, proposed: true })))
+    } catch (error) {
+      if (mountedRef.current && liveRef.current.epoch === sentContext.epoch) setReply(error.message || novaSay('error_connection', readPreferenceSync('novaPersonality')))
     } finally {
-      setIsAnalyzingPhoto(false)
+      busyRef.current = false
       URL.revokeObjectURL(preview)
-      setPhotoPreview(null)
+      if (mountedRef.current) { setIsAnalyzingPhoto(false); setPhotoPreview(null) }
     }
   }
 
-  function confirmPhotoEvents() {
-    // Filtramos por !c.done para evitar doble agendado en double-tap rápido:
-    // entre el primer click y el setChips→done programado, un segundo click
-    // ve los chips aún sin done=true y dispara onAddEvent otra vez.
-    const pending = chips.filter(c => c.photoEvent && !c.done)
-    if (pending.length === 0) return
-    pending.forEach(c => {
-      onAddEvent?.({
-        id: `${Date.now()}-${Math.random()}`,
-        title: c.photoEvent.title,
-        time: c.photoEvent.time ?? '',
-        date: c.photoEvent.date ?? null,
-        description: '',
-        section: 'focus',
-        icon: 'event',
-        dotColor: 'bg-secondary-container',
-        featured: false,
-      })
-    })
-    setChips(prev => prev.map(c => c.photoEvent ? { ...c, done: true } : c))
-    setReply(novaSay('success_photo_multi', readPreferenceSync('novaPersonality')))
-  }
-
-  async function sendMessage(text) {
+  async function sendMessage(text, consentGranted = false) {
     const msg = (text ?? input).trim()
     // No chequeamos isListening aquí: el flush desde r.onend llega justo
     // después de setIsListening(false) y la closure capturada aún ve
     // isListening=true, así que la guardia descartaba el texto dictado.
     // El input está deshabilitado mientras se escucha, así que no hay otra
     // vía donde esta verificación sea necesaria.
-    if (!msg || isLoading) return
+    if (!msg || busyRef.current) return
     if (msg.length > 4000) {
       setReply('El mensaje es demasiado largo. Acórtalo por favor.')
       return
@@ -699,11 +626,23 @@ function NovaWidget({
 
     // Primer uso de Nova en este dispositivo: retener el mensaje y pedir
     // consentimiento para el envío a proveedores de IA antes de transmitir.
-    if (!hasAIConsent()) {
+    if (!consentGranted && !hasAIConsent()) {
       setConsentPendingMsg(msg)
       return
     }
 
+    busyRef.current = true
+    const sentContext = liveRef.current
+    let requestId
+    try {
+      requestRef.current = await prepareLogicalRequest(localStorage, sentContext.userId, 'widget', msg)
+      requestId = requestRef.current.id
+    } catch {
+      busyRef.current = false
+      setReply('No pude guardar la solicitud en este dispositivo. Inténtalo de nuevo.')
+      return
+    }
+    if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) { busyRef.current = false; return }
     setInput('')
     setReply('')
     setChips([])
@@ -721,7 +660,7 @@ function NovaWidget({
     try {
       const res = await apiFetch('/api/focus-assistant', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
         body: JSON.stringify({
           message: msg,
           events,
@@ -761,80 +700,30 @@ function NovaWidget({
             }[code] || data?.message || `Error ${res.status}`)
         const err = new Error(statusMsg)
         err.code = code
+        err.completedRetryable = completedRetryableFailure(res.status, data, requestId)
         throw err
       }
 
       const data = await res.json()
-      const { reply: replyText = '', actions = [] } = data
-
-      // Las memorias se aplican directo en cualquier modo (son transparentes, sin inbox)
-      const memoryActions = actions.filter(a => a?.type === 'remember')
-      const otherActions  = actions.filter(a => a?.type !== 'remember')
-      for (const mem of memoryActions) executeAction(mem)
-
-      // ── Modo propuesta: encolar el resto en vez de ejecutar ──────────────
-      if (proposeMode && otherActions.length > 0 && onProposeActions) {
-        onProposeActions(otherActions, { reply: replyText })
-
-        // Chips visuales: "Propuesta: X"
-        const proposalChips = otherActions.map((action) => {
-          const labelMap = {
-            add_event:           `Propuesta: crear "${action.event?.title || 'evento'}"`,
-            add_recurring_event: `Propuesta: crear recurrente "${action.event?.title || 'evento'}"`,
-            edit_event:          `Propuesta: actualizar evento`,
-            delete_event:        `Propuesta: eliminar evento`,
-            mark_task_done:      `Propuesta: completar tarea`,
-            toggle_task:         `Propuesta: completar tarea`,
-            add_task:            `Propuesta: añadir tarea "${action.task?.label || 'pendiente'}"`,
-            delete_task:         `Propuesta: eliminar tarea`,
-          }
-          const iconMap = {
-            add_event: 'add_circle',
-            add_recurring_event: 'event_repeat',
-            edit_event: 'edit_calendar',
-            delete_event: 'delete',
-            mark_task_done: 'task_alt',
-            toggle_task: 'task_alt',
-            add_task: 'check_box',
-            delete_task: 'delete',
-          }
-          return {
-            id: `${Date.now()}-${Math.random()}`,
-            icon: iconMap[action.type] || 'auto_awesome',
-            label: labelMap[action.type] || 'Propuesta',
-            done: true, // propuesta ya encolada
-            proposed: true,
-          }
-        })
-        setChips(proposalChips)
-
-        const personality = readPreferenceSync('novaPersonality')
-        const suffix = otherActions.length === 1
-          ? novaSay('proposal_suffix_one', personality)
-          : novaSay('proposal_suffix_multi', personality, { n: otherActions.length })
-        setReply(replyText ? `${replyText} ${suffix}` : suffix)
+      if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
+      const prepared = prepareAssistantResponse(data, sentContext, { requestId, forceReview: proposeMode })
+      let outcome = prepared
+      if (prepared.ok && prepared.kind === 'review') outcome = enqueueAssistantReview(prepared.actions, onProposeActions)
+      if (prepared.ok && prepared.kind === 'execute') outcome = applyAssistantActions(prepared.actions, liveRef.current)
+      if (outcome.ok && prepared.kind === 'review') {
+        setChips(prepared.actions.map(action => ({ id: action.actionId, icon: 'auto_awesome', label: actionLabel(action), done: true, proposed: true })))
       } else {
-        // Modo directo (fallback): ejecutar inmediatamente
-        for (const action of otherActions) executeAction(action)
-        const personality = readPreferenceSync('novaPersonality')
-        // El replyText del servidor manda; la personalidad solo entra cuando
-        // el LLM no devolvió texto narrativo (fallback de éxito/fracaso).
-        setReply(
-          replyText
-            || (otherActions.length > 0 || memoryActions.length > 0
-                ? novaSay('success_generic', personality)
-                : novaSay('failure_generic', personality))
-        )
+        setChips((outcome.receipts || []).map(receipt => ({ id: receipt.action.actionId, icon: 'check_circle', label: receipt.message, done: true })))
       }
-
-      historyRef.current = [...historyRef.current, { role: 'assistant', content: replyText }]
+      const message = outcome.message || 'No pude aplicar la respuesta.'
+      historyRef.current = [...historyRef.current, { role: 'assistant', content: message }]
       setChatHistory([...historyRef.current])
       setReply('')
-      // Persistir historial para que sobreviva a refresh (útil en PWA)
-      try {
-        sessionStorage.setItem('nova_history', JSON.stringify(historyRef.current.slice(-40)))
-      } catch {}
+      try { sessionStorage.setItem(assistantSessionKey('history', sentContext.userId), JSON.stringify(historyRef.current.slice(-40))) } catch {}
+      if (outcome.ok || !prepared.ok) { requestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'widget') }
     } catch (err) {
+      if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
+      if (err.completedRetryable) { requestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'widget') }
       const errMsg = err?.message && typeof err.message === 'string' && err.message.length < 200
         ? err.message
         : novaSay('error_connection', readPreferenceSync('novaPersonality'))
@@ -842,7 +731,8 @@ function NovaWidget({
       setChatHistory([...historyRef.current])
       setReply('')
     } finally {
-      setIsLoading(false)
+      busyRef.current = false
+      if (mountedRef.current) setIsLoading(false)
     }
   }
 
@@ -950,20 +840,18 @@ function NovaWidget({
 
         {/* Consentimiento IA de primer uso — retiene el mensaje hasta aceptar */}
         <AnimatePresence>
-          {consentPendingMsg != null && (
-            <AIConsentCard
-              onAccept={() => {
-                grantAIConsent()
-                const msg = consentPendingMsg
-                setConsentPendingMsg(null)
-                sendMessage(msg)
-              }}
-              onCancel={() => {
-                // Devolver el mensaje al input (pudo venir de dictado).
-                setInput(consentPendingMsg)
-                setConsentPendingMsg(null)
-              }}
-            />
+          {(consentPendingMsg != null || consentPendingPhoto != null) && (
+            <AIConsentCard onAccept={() => {
+              grantAIConsent()
+              const file = consentPendingPhoto
+              const message = consentPendingMsg
+              setConsentPendingMsg(null); setConsentPendingPhoto(null)
+              if (file) handlePhoto(null, file, true)
+              else sendMessage(message, true)
+            }} onCancel={() => {
+              if (consentPendingMsg) setInput(consentPendingMsg)
+              setConsentPendingMsg(null); setConsentPendingPhoto(null)
+            }} />
           )}
         </AnimatePresence>
 
@@ -1035,7 +923,7 @@ function NovaWidget({
               )}
               {chips.some(c => c.photoEvent && !c.done) && (
                 <button
-                  onClick={confirmPhotoEvents}
+                  onClick={onOpenInbox}
                   className="mt-0.5 py-1.5 px-3 rounded-xl bg-blue-500 text-white text-[12px] font-semibold hover:bg-blue-600 active:scale-95 transition-all w-fit"
                 >
                   Agregar al calendario

@@ -1,3 +1,4 @@
+import { commitCachedCollection, mergePendingCollection, advanceAccountEpoch } from '../utils/verifiedMutation.js'
 import { useState, useEffect, useRef } from 'react'
 import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
@@ -51,6 +52,9 @@ function createTaskId() {
 
 export function useTasks() {
   const { user } = useAuth()
+  const accountEpochRef = useRef(null)
+  accountEpochRef.current = advanceAccountEpoch(accountEpochRef.current, user?.id)
+  const collectionEpochRef = useRef(accountEpochRef.current)
   // Mismo patrón que useEvents: si el usuario borra y un refetch llega antes
   // de que Supabase confirme el DELETE, ignoramos la tarea "resucitada".
   const pendingDeletesRef = useRef(new Set())
@@ -76,36 +80,30 @@ export function useTasks() {
   // Sin usuario arrancamos vacío: la caché global (focus_tasks sin userId)
   // solía dejar "tareas fantasma" de sesiones anteriores flotando al iniciar
   // sesión. Las tareas reales llegan del refetch a Supabase con user.id.
-  const [tasks, setTasks] = useState([])
+  const [tasks, setTasksState] = useState([])
+  const tasksRef = useRef(tasks)
+  const setTasks = (next) => {
+    const value = typeof next === 'function' ? next(tasksRef.current) : next
+    tasksRef.current = value
+    setTasksState(value)
+  }
+  const commitTasks = (next) => collectionEpochRef.current === accountEpochRef.current && commitCachedCollection(next,
+    value => dataService.setCachedTasks(value, user?.id), setTasks)
 
   const refetch = useCoalescedRefetch(async (tag = '') => {
     if (!user) return
+    const epoch = accountEpochRef.current
     try {
       const cloudTasks = await dataService.fetchTasks(user.id)
+      if (accountEpochRef.current !== epoch || !Array.isArray(cloudTasks)) return
       if (!cloudTasks) return
       const pending = pendingDeletesRef.current
       const cloudFiltered = pending.size > 0
         ? cloudTasks.filter(t => !pending.has(t.id))
         : cloudTasks
 
-      // Preservar upserts pendientes: si el cloud ya trae el id, el escudo
-      // cumplió su función y lo soltamos. Si no, mantenemos la tarea local
-      // dentro del TTL para que un refetch rápido (realtime, visibility)
-      // no borre una tarea recién creada que aún está viajando al backend.
-      sweepStalePending()
-      const cloudIds = new Set(cloudFiltered.map(t => t.id))
-      const pendingToKeep = []
-      for (const [id, { task }] of pendingUpsertsRef.current) {
-        if (cloudIds.has(id)) {
-          pendingUpsertsRef.current.delete(id)
-        } else {
-          pendingToKeep.push(task)
-        }
-      }
-      const merged = pendingToKeep.length > 0
-        ? [...cloudFiltered, ...pendingToKeep]
-        : cloudFiltered
-
+      const { merged, pendingToKeep } = mergePendingCollection(cloudFiltered, pendingUpsertsRef.current,
+        'task', ['label', 'done', 'priority', 'category', 'date', 'time'])
       const hydrated = hydrateTasksWithLinks(merged, user.id)
       setTasks(hydrated)
       dataService.setCachedTasks(hydrated, user.id)
@@ -140,6 +138,10 @@ export function useTasks() {
   }
 
   useEffect(() => {
+    pendingDeletesRef.current.clear()
+    pendingUpsertsRef.current.clear()
+    recentCreationsRef.current.clear()
+    collectionEpochRef.current = accountEpochRef.current
     if (!user) {
       // Al cerrar sesión limpiamos el estado para que la caché global no
       // quede contaminada con tareas del usuario anterior.
@@ -191,28 +193,24 @@ export function useTasks() {
     }
   }, [user?.id, refetch])
 
-  useEffect(() => {
-    // Solo persistimos caché cuando hay usuario. Sin sesión no escribimos a
-    // la clave global para no dejar residuos que reaparezcan al re-login.
-    if (!user?.id) return
-    dataService.setCachedTasks(tasks, user.id)
-  }, [tasks, user?.id])
 
-  function addTask({ label, priority = 'Media', category = 'hoy', linkedEventId = null, parentTaskId = null }) {
+  function addTask({ id: proposedId, label, priority = 'Media', category = 'hoy', linkedEventId = null, parentTaskId = null, date = null, time = null }) {
     const cleanLabel = cleanGeneratedTitle(label) || label
+    if (typeof cleanLabel !== 'string' || !cleanLabel.trim()) return null
+    if (proposedId && tasksRef.current.some(task => task.id === proposedId)) return tasksRef.current.find(task => task.id === proposedId)
 
     // Dedupe defensivo: si la misma `(label|category)` llegó hace menos de
     // DEDUPE_WINDOW_MS, devolvemos la tarea anterior. Cubre LLM duplicado y
     // doble-tap en aprobar sugerencia.
-    const dedupeKey = `${normalizeLabelForDedupe(cleanLabel)}|${category}`
+    const dedupeKey = `${normalizeLabelForDedupe(cleanLabel)}|${category}|${date || ''}|${time || ''}`
     const now = Date.now()
     const recent = recentCreationsRef.current.get(dedupeKey)
-    if (recent && now - recent.at < DEDUPE_WINDOW_MS) {
+    if (!proposedId && recent && now - recent.at < DEDUPE_WINDOW_MS && tasksRef.current.some(item => item.id === recent.task.id)) {
       focusLog(`[Focus] 🛡️ addTask dedupe: "${cleanLabel}" (${dedupeKey}) — ignorada`)
-      return recent.task
+      return tasksRef.current.find(item => item.id === recent.task.id)
     }
 
-    const t = { id: createTaskId(), label: cleanLabel, done: false, priority, category }
+    const t = { id: proposedId || createTaskId(), label: cleanLabel, done: false, priority, category, date, time }
     if (linkedEventId) t.linkedEventId = linkedEventId
     // parentTaskId es la jerarquía tarea↔tarea. linkedEventId tiene prioridad
     // visual: si Nova mandó ambos, mostramos la tarea bajo el evento (más
@@ -224,7 +222,7 @@ export function useTasks() {
       + (linkedEventId ? ` (ligada a evento ${linkedEventId})` : '')
       + (parentTaskId ? ` (subtarea de ${parentTaskId})` : ''),
     )
-    setTasks(prev => [...prev, t])
+    if (!commitTasks([...tasksRef.current, t])) return null
     recentCreationsRef.current.set(dedupeKey, { at: now, task: t })
     if (recentCreationsRef.current.size > 64) {
       for (const [k, v] of recentCreationsRef.current) {
@@ -240,34 +238,16 @@ export function useTasks() {
   }
 
   function toggleTask(id) {
-    setTasks(prev => {
-      const next = prev.map(t => {
-        if (t.id !== id) return t
-        return { ...t, done: !t.done, doneAt: !t.done ? Date.now() : null }
-      })
-      const updated = next.find(t => t.id === id)
-      if (updated) {
-        markPendingUpsert(updated)
-        if (user) dataService.upsertTask(updated, user.id).catch(console.warn)
-        // Señal: solo al marcar como completa (no al desmarcar)
-        if (updated.done) {
-          const now = new Date()
-          logSignal('task_completed', {
-            hour: now.getHours(),
-            weekday: now.getDay(),
-            category: updated.category,
-            priority: updated.priority,
-          })
-        }
-      }
-      return next
-    })
+    const target = tasksRef.current.find(task => task.id === id)
+    if (!target) return null
+    return updateTask(id, { done: !target.done, doneAt: !target.done ? Date.now() : null })
   }
 
   function deleteTask(id) {
+    if (!tasksRef.current.some(task => task.id === id)) return false
+    if (!commitTasks(tasksRef.current.filter(task => task.id !== id))) return false
     pendingDeletesRef.current.add(id)
     pendingUpsertsRef.current.delete(id)
-    setTasks(prev => prev.filter(t => t.id !== id))
     clearTaskLink(id, user?.id)
     clearTaskParent(id, user?.id)
     if (user) {
@@ -277,20 +257,22 @@ export function useTasks() {
     } else {
       pendingDeletesRef.current.delete(id)
     }
+    return true
   }
 
   function updateTask(id, updates) {
-    setTasks(prev => {
-      const next = prev.map(t => t.id === id ? { ...t, ...updates } : t)
-      if (user) {
-        const updated = next.find(t => t.id === id)
-        if (updated) {
-          markPendingUpsert(updated)
-          dataService.upsertTask(updated, user.id).catch(console.warn)
-        }
-      }
-      return next
-    })
+    const target = tasksRef.current.find(task => task.id === id)
+    if (!target || !updates || typeof updates !== 'object') return null
+    const updated = { ...target, ...updates, id }
+    if (typeof updated.label !== 'string' || !updated.label.trim()) return null
+    if ('done' in updates) updated.doneAt = updated.done ? (target.doneAt || Date.now()) : null
+    if (!commitTasks(tasksRef.current.map(task => task.id === id ? updated : task))) return null
+    markPendingUpsert(updated)
+    if (user) dataService.upsertTask(updated, user.id).catch(console.warn)
+    if (!target.done && updated.done) {
+      const now = new Date()
+      logSignal('task_completed', { hour: now.getHours(), weekday: now.getDay(), category: updated.category, priority: updated.priority })
+    }
     // Si el update modifica la jerarquía padre, persistimos en localStorage —
     // Supabase no la conoce, así que no viaja por upsertTask.
     if (user && 'parentTaskId' in updates) {
@@ -300,7 +282,8 @@ export function useTasks() {
         clearTaskParent(id, user.id)
       }
     }
+    return updated
   }
 
-  return { tasks, addTask, toggleTask, deleteTask, updateTask }
+  return { tasks: collectionEpochRef.current === accountEpochRef.current ? tasks : [], addTask, toggleTask, deleteTask, updateTask }
 }

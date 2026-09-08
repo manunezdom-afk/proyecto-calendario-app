@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { writeJsonCache } from '../utils/verifiedMutation.js'
 
 // ── Cache helpers ─────────────────────────────────────────────────────────────
 
@@ -10,7 +11,7 @@ function cacheGet(key, fallback = null) {
 }
 
 function cacheSet(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
+  try { return writeJsonCache(localStorage, key, value) } catch { return false }
 }
 
 // ── DB ↔ App shape converters ─────────────────────────────────────────────────
@@ -48,6 +49,8 @@ function taskToDb(task, userId) {
     priority: task.priority ?? 'Media',
     category: task.category ?? 'hoy',
     done_at: task.doneAt ?? null,
+    due_date: task.date ?? null,
+    due_time: task.time ?? null,
   }
 }
 
@@ -56,6 +59,8 @@ function taskFromDb(row) {
     id: row.id, label: row.label, done: row.done,
     priority: row.priority, category: row.category,
     doneAt: row.done_at,
+    date: row.due_date ?? null,
+    time: row.due_time ?? null,
   }
 }
 
@@ -171,8 +176,7 @@ export const dataService = {
     return cacheGet('focus_events', [])
   },
   setCachedEvents(events, userId) {
-    if (userId) cacheSet(`focus_events_${userId}`, events)
-    else cacheSet('focus_events', events)
+    return cacheSet(userId ? `focus_events_${userId}` : 'focus_events', events)
   },
 
   async fetchEvents(userId) {
@@ -206,8 +210,7 @@ export const dataService = {
     return cacheGet('focus_tasks', fallback)
   },
   setCachedTasks(tasks, userId) {
-    if (userId) cacheSet(`focus_tasks_${userId}`, tasks)
-    else cacheSet('focus_tasks', tasks)
+    return cacheSet(userId ? `focus_tasks_${userId}` : 'focus_tasks', tasks)
   },
 
   async fetchTasks(userId) {
@@ -236,11 +239,11 @@ export const dataService = {
 
   // ── Suggestions (Nova modo propuesta) ──────────────────────────────────────
 
-  getCachedSuggestions() { return cacheGet('focus_suggestions', []) },
-  setCachedSuggestions(suggestions) { cacheSet('focus_suggestions', suggestions) },
+  getCachedSuggestions(userId) { return cacheGet(`focus_suggestions_v2_${userId || 'guest'}`, []) },
+  setCachedSuggestions(suggestions, userId) { return cacheSet(`focus_suggestions_v2_${userId || 'guest'}`, suggestions) },
 
   async fetchSuggestions(userId) {
-    if (!supabase) return this.getCachedSuggestions()
+    if (!supabase) return this.getCachedSuggestions(userId)
     const { data, error } = await supabase
       .from('suggestions').select('*').eq('user_id', userId)
       .order('created_at', { ascending: false })
@@ -286,11 +289,11 @@ export const dataService = {
 
   // ── User memories (Nova persistent memory about the user) ──────────────────
 
-  getCachedMemories() { return cacheGet('focus_user_memories', []) },
-  setCachedMemories(memories) { cacheSet('focus_user_memories', memories) },
+  getCachedMemories(userId) { return cacheGet(`focus_user_memories_v2_${userId || 'guest'}`, []) },
+  setCachedMemories(memories, userId) { return cacheSet(`focus_user_memories_v2_${userId || 'guest'}`, memories) },
 
   async fetchMemories(userId) {
-    if (!supabase) return this.getCachedMemories()
+    if (!supabase) return this.getCachedMemories(userId)
     const { data, error } = await supabase
       .from('user_memories').select('*').eq('user_id', userId)
       .order('pinned', { ascending: false })

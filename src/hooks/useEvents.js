@@ -1,3 +1,4 @@
+import { commitCachedCollection, mergePendingCollection, advanceAccountEpoch } from '../utils/verifiedMutation.js'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
@@ -68,6 +69,9 @@ function normalizeTitleForDedupe(t) {
 
 export function useEvents() {
   const { user } = useAuth()
+  const accountEpochRef = useRef(null)
+  accountEpochRef.current = advanceAccountEpoch(accountEpochRef.current, user?.id)
+  const collectionEpochRef = useRef(accountEpochRef.current)
   // IDs de eventos cuyo DELETE está en vuelo — evita que un refetch previo a la
   // confirmación de Supabase restaure el evento en el estado local (race condition
   // especialmente común en iOS donde visibilitychange dispara refetch en cada tap).
@@ -103,35 +107,28 @@ export function useEvents() {
   // Sin usuario arrancamos vacío: la caché global (focus_events sin userId)
   // solía mostrar eventos de una sesión anterior al iniciar sesión otra vez.
   // La fuente real al login es la tabla events de Supabase.
-  const [events, setEvents] = useState([])
+  const [events, setEventsState] = useState([])
+  const eventsRef = useRef(events)
+  const setEvents = (next) => {
+    const value = typeof next === 'function' ? next(eventsRef.current) : next
+    eventsRef.current = value
+    setEventsState(value)
+  }
+  const commitEvents = (next) => collectionEpochRef.current === accountEpochRef.current && commitCachedCollection(next,
+    value => dataService.setCachedEvents(value, user?.id), setEvents)
 
   const refetch = useCoalescedRefetch(async (tag = '') => {
     if (!user) return
+    const epoch = accountEpochRef.current
     try {
       const cloudEvents = await dataService.fetchEvents(user.id)
+      if (accountEpochRef.current !== epoch || !Array.isArray(cloudEvents)) return
       const pendingDeletes = pendingDeletesRef.current
       const cloudFiltered = pendingDeletes.size > 0
         ? cloudEvents.filter(e => !pendingDeletes.has(e.id))
         : cloudEvents
-      const cloudIds = new Set(cloudFiltered.map(e => e.id))
-
-      // Preservar upserts en vuelo: si el cloud ya trae el id, el pending
-      // cumplió su propósito y lo soltamos. Si no, mantenemos el evento local
-      // (dentro del TTL) para que un refetch acelerado por realtime no borre
-      // un evento que todavía está viajando al backend.
-      sweepStalePending()
-      const pendingToKeep = []
-      for (const [id, { event }] of pendingUpsertsRef.current) {
-        if (cloudIds.has(id)) {
-          pendingUpsertsRef.current.delete(id)
-        } else {
-          pendingToKeep.push(event)
-        }
-      }
-
-      const merged = pendingToKeep.length > 0
-        ? [...cloudFiltered, ...pendingToKeep]
-        : cloudFiltered
+      const { merged, pendingToKeep } = mergePendingCollection(cloudFiltered, pendingUpsertsRef.current,
+        'event', ['title', 'time', 'date', 'description', 'section', 'icon', 'dotColor', 'featured', 'reminderOffsets', 'timezone'])
       setEvents(merged)
       dataService.setCachedEvents(merged, user.id)
       if (pendingToKeep.length > 0) {
@@ -164,6 +161,10 @@ export function useEvents() {
 
   // Carga desde Supabase cuando el usuario inicia sesión
   useEffect(() => {
+    pendingDeletesRef.current.clear()
+    pendingUpsertsRef.current.clear()
+    recentCreationsRef.current.clear()
+    collectionEpochRef.current = accountEpochRef.current
     if (!user) {
       // Al cerrar sesión, limpiamos el estado para que no quede contaminando
       // la próxima sesión (antes los eventos se escribían a la caché global).
@@ -217,14 +218,9 @@ export function useEvents() {
   }, [user?.id, refetch])
 
   // Mantiene el cache local sincronizado (scoped por user)
-  useEffect(() => {
-    // Solo persistimos caché cuando hay usuario. Sin sesión no escribimos a
-    // la clave global para no dejar residuos que reaparezcan al re-login.
-    if (!user?.id) return
-    dataService.setCachedEvents(events, user.id)
-  }, [events, user?.id])
 
-  function addEvent({ title, time, endTime = null, description = '', subtitle = null, section = 'focus', icon = 'event', dotColor = 'bg-secondary-container', date = null, reminderOffsets = null, timezone = null }) {
+  function addEvent({ id: proposedId, title, time, endTime = null, description = '', subtitle = null, section = 'focus', icon = 'event', dotColor = 'bg-secondary-container', date = null, reminderOffsets = null, timezone = null }) {
+    if (proposedId && eventsRef.current.some(event => event.id === proposedId)) return eventsRef.current.find(event => event.id === proposedId)
     let tz = timezone
     if (!tz) {
       try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null } catch { tz = null }
@@ -274,11 +270,11 @@ export function useEvents() {
     const dedupeKey = `${normalizeTitleForDedupe(cleanedTitle)}|${finalTime}|${resolvedDate}`
     const now = Date.now()
     const recent = recentCreationsRef.current.get(dedupeKey)
-    if (recent && now - recent.at < DEDUPE_WINDOW_MS) {
+    if (!proposedId && recent && now - recent.at < DEDUPE_WINDOW_MS && eventsRef.current.some(item => item.id === recent.event.id)) {
       focusLog(`[Focus] 🛡️ addEvent dedupe: "${cleanedTitle}" (${dedupeKey}) — ignorado`)
       // Devolvemos el evento previo para que callers (applySuggestion) que
       // dependen del id devuelto sigan funcionando sin romper undo.
-      return recent.event
+      return eventsRef.current.find(item => item.id === recent.event.id)
     }
 
     const newEvent = {
@@ -286,7 +282,7 @@ export function useEvents() {
       // addEvent en el mismo tick (ej: al crear 12 repeticiones de una
       // reunión semanal). Sin él, Date.now() repetía ID y Supabase upsert
       // colapsaba todas las filas en una.
-      id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: proposedId || `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       title: cleanedTitle,
       time: finalTime,
       description, section, featured: false, icon, dotColor,
@@ -294,6 +290,7 @@ export function useEvents() {
       reminderOffsets,
       timezone: tz,
     }
+    if (!commitEvents([...eventsRef.current, newEvent])) return null
     recentCreationsRef.current.set(dedupeKey, { at: now, event: newEvent })
     // Limpieza periódica para no acumular keys viejos sin cota.
     if (recentCreationsRef.current.size > 64) {
@@ -302,7 +299,6 @@ export function useEvents() {
       }
     }
     focusLog(`[Focus] ➕ addEvent: "${newEvent.title}"`)
-    setEvents(prev => [...prev, newEvent])
     // Marcamos el evento como "upsert pendiente" ANTES del setEvents para
     // que si el realtime de Supabase dispara un refetch entre este punto y
     // el commit del upsert, el escudo lo preserve.
@@ -322,18 +318,11 @@ export function useEvents() {
   }
 
   function deleteEvent(id) {
-    focusLog(`[Focus] 🗑️ deleteEvent: "${id}"`)
+    const removed = eventsRef.current.find(event => event.id === id)
+    if (!removed || !commitEvents(eventsRef.current.filter(event => event.id !== id))) return false
     pendingDeletesRef.current.add(id)
-    // Si el evento que estamos borrando estaba marcado como upsert pendiente,
-    // lo sacamos — si no, el refetch lo resucitaría desde pendingUpsertsRef.
     pendingUpsertsRef.current.delete(id)
-    setEvents(prev => {
-      const removed = prev.find(e => e.id === id)
-      if (removed) {
-        logSignal('event_deleted', { section: removed.section, hour: parseEventHour(removed.time) })
-      }
-      return prev.filter(e => e.id !== id)
-    })
+    logSignal('event_deleted', { section: removed.section, hour: parseEventHour(removed.time) })
     if (user) {
       dataService.deleteEvent(id, user.id)
         .catch(console.warn)
@@ -341,12 +330,12 @@ export function useEvents() {
     } else {
       pendingDeletesRef.current.delete(id)
     }
+    return true
   }
 
   function editEvent(id, updates) {
-    focusLog(`[Focus] ✏️ editEvent: "${id}"`, updates)
-    setEvents(prev => {
-      const next = prev.map(e => {
+    if (!eventsRef.current.some(event => event.id === id) || !updates || typeof updates !== 'object') return null
+      const next = eventsRef.current.map(e => {
         if (e.id !== id) return e
         const merged = { ...e, ...updates }
         // Nova edita el detalle del evento vía `updates.subtitle`; en web eso
@@ -371,24 +360,16 @@ export function useEvents() {
         }
         return merged
       })
-      const updated = next.find(e => e.id === id)
-      if (updated) {
-        // Un edit también puede ser pisado por un refetch si el realtime
-        // notifica antes de que el UPDATE commitee. Lo marcamos igual.
-        markPendingUpsert(updated)
-        if (user) {
-          dataService.upsertEvent(updated, user.id).catch((err) => {
-            console.warn('[Focus] ⚠️ upsertEvent (edit) falló, quedará en cola offline:', err)
-          })
-        }
-      }
-      return next
-    })
+    const updated = next.find(event => event.id === id)
+    if (!updated?.title || !commitEvents(next)) return null
+    markPendingUpsert(updated)
+    if (user) dataService.upsertEvent(updated, user.id).catch(console.warn)
     // Señalamos si es un cambio de hora (útil para aprender cuándo reprograma)
     if (updates.time) {
       logSignal('event_moved', { to_hour: parseEventHour(updates.time) })
     }
+    return updated
   }
 
-  return { events, addEvent, deleteEvent, editEvent }
+  return { events: collectionEpochRef.current === accountEpochRef.current ? events : [], addEvent, deleteEvent, editEvent }
 }

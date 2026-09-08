@@ -26,10 +26,12 @@ export default function AIConsentCard({ onAccept, onCancel }) {
             Hilante usa inteligencia artificial externa
           </p>
           <p className="mt-0.5 text-[12px] leading-snug text-outline">
-            Para responder, tu mensaje y el contexto de tu agenda (eventos, tareas
-            y memorias que guardaste) se envían a proveedores de IA:{' '}
-            <strong>DeepSeek</strong> como principal y OpenAI o Anthropic para voz,
-            fotos o como alternativa. No se usan para publicidad ni se venden.{' '}
+            Para responder, tu mensaje y el contexto necesario de tu agenda
+            (eventos, tareas y memorias) se envían a{' '}
+            <strong>Anthropic, DeepSeek u OpenAI</strong>, según el proveedor habilitado.
+            Si analizas fotos, las imágenes se envían a Anthropic. La transcripción
+            de audio en el servidor está pausada. No usamos tus datos para
+            publicidad ni los vendemos.{' '}
             <a
               href="/privacidad"
               target="_blank"

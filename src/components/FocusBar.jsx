@@ -7,9 +7,12 @@ import { isIOSSafari } from '../lib/permissions'
 import { createVAD } from '../lib/voiceActivityDetector'
 import { readPreferenceSync } from '../hooks/useAppPreferences'
 import { novaSay } from '../utils/novaPersonality'
-import { expandRecurrence } from '../utils/expandRecurrence'
+import { useAuth } from '../context/AuthContext'
+import { prepareAssistantResponse, applyAssistantActions, enqueueAssistantReview, completedRetryableFailure, actionLabel } from '../utils/assistantContract.js'
 import { hasAIConsent, grantAIConsent } from '../lib/aiConsent'
 import AIConsentCard from './AIConsentCard'
+import { advanceAccountEpoch } from '../utils/verifiedMutation.js'
+import { assistantSessionKey, readAssistantHistory, prepareLogicalRequest, clearLogicalRequest } from '../utils/assistantSession.js'
 
 // En Safari iPhone webkitSpeechRecognition existe desde iOS 14.5 y sí funciona
 // en muchos contextos (Safari regular con permiso concedido). Antes gateábamos
@@ -22,93 +25,14 @@ import AIConsentCard from './AIConsentCard'
 const SR = typeof window !== 'undefined' &&
   (/** @type {any} */ (window).SpeechRecognition || /** @type {any} */ (window).webkitSpeechRecognition)
 
-// Busca el evento que Nova intentó borrar cuando manda un id que no existe.
-// Extrae título/hora del texto del reply y matchea contra los eventos reales.
-function resolveEventIdFromReply(events, replyText, action) {
-  if (!Array.isArray(events) || events.length === 0) return null
-  const text = String(replyText || '').toLowerCase()
+function describeAction(action) { return action.receiptMessage || actionLabel(action) }
 
-  // 1. Match por título mencionado entre comillas en el reply
-  const quoted = text.match(/['"]([^'"]{3,80})['"]/)
-  if (quoted) {
-    const needle = quoted[1].toLowerCase().trim()
-    const hit = events.find(e => (e.title || '').toLowerCase().includes(needle) || needle.includes((e.title || '').toLowerCase()))
-    if (hit) return hit.id
-  }
-
-  // 2. Match por hora mencionada ("a las 2:15 PM", "14:15")
-  const timeMatch = text.match(/(\d{1,2})[:.](\d{2})\s*(am|pm)?/)
-  if (timeMatch) {
-    let h = parseInt(timeMatch[1], 10)
-    const m = timeMatch[2]
-    const period = timeMatch[3]
-    if (period === 'pm' && h < 12) h += 12
-    if (period === 'am' && h === 12) h = 0
-    const hh24 = String(h).padStart(2, '0')
-    const targets = [`${hh24}:${m}`, `${h}:${m} ${period?.toUpperCase() || 'PM'}`]
-    const hit = events.find(e => {
-      const t = String(e.time || '').toLowerCase().replace(/\s+/g, '')
-      return targets.some(tt => t === tt.toLowerCase().replace(/\s+/g, ''))
-    })
-    if (hit) return hit.id
-  }
-
-  return null
-}
-
-// Texto humano para los chips de acción que muestra FocusBar debajo del reply.
-// Antes se caía al valor crudo (`action.type`) para cualquier tipo no mapeado,
-// y por eso en móvil aparecía "add_task" en vez de "Tarea agregada".
-function describeAction(a) {
-  if (!a?.type) return ''
-  switch (a.type) {
-    case 'add_event':    return `Agregado: ${a.event?.title ?? 'evento'}`
-    case 'edit_event':   return 'Evento actualizado'
-    case 'delete_event': return 'Evento eliminado'
-    case 'add_task':     return `Tarea agregada: ${a.task?.label ?? 'pendiente'}`
-    case 'toggle_task':  return 'Tarea completada'
-    case 'delete_task':  return 'Tarea eliminada'
-    case 'remember':     return 'Memoria guardada'
-    default:             return 'Acción aplicada'
-  }
-}
-
-// Normaliza un título para comparar eventos de forma tolerante (sin acentos,
-// mayúsculas ni espacios extra). Lo usamos para asociar tareas detectadas por
-// Nova al evento al que pertenecen cuando solo vino el título, no el id.
-function normalizeTitleForMatch(s) {
-  return String(s || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function resolveLinkedEventId(events, task) {
-  if (!task || !Array.isArray(events) || events.length === 0) return null
-  if (task.linkedEventId && events.some(e => e.id === task.linkedEventId)) return task.linkedEventId
-  const wantTitle = normalizeTitleForMatch(task.linkedEventTitle)
-  const wantTime  = String(task.linkedEventTime || '').trim().toLowerCase().replace(/\s+/g, '')
-  if (!wantTitle && !wantTime) return null
-  const byTitleAndTime = events.find(e => {
-    const t = normalizeTitleForMatch(e.title)
-    const h = String(e.time || '').trim().toLowerCase().replace(/\s+/g, '')
-    return wantTitle && wantTime && t === wantTitle && h === wantTime
-  })
-  if (byTitleAndTime) return byTitleAndTime.id
-  const byTime = wantTime ? events.find(e => String(e.time || '').trim().toLowerCase().replace(/\s+/g, '') === wantTime) : null
-  if (byTime) return byTime.id
-  const byTitle = wantTitle ? events.find(e => normalizeTitleForMatch(e.title) === wantTitle) : null
-  return byTitle?.id || null
-}
-
-async function callFocusAssistant({ message, events, tasks, memories, history }) {
+async function callFocusAssistant({ message, events, tasks, memories, history, requestId }) {
   let res
   try {
     res = await apiFetch('/api/focus-assistant', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
       body: JSON.stringify({
         message,
         events,
@@ -156,6 +80,7 @@ async function callFocusAssistant({ message, events, tasks, memories, history })
     const err = new Error(friendly || code || 'error')
     err.code = code
     err.status = res.status
+    err.completedRetryable = completedRetryableFailure(res.status, data, requestId)
     throw err
   }
   return res.json()
@@ -166,6 +91,8 @@ export default function FocusBar({
   onEditEvent,
   onDeleteEvent,
   onAddTask,
+  onUpdateTask,
+  onProposeActions,
   onToggleTask,
   onDeleteTask,
   events = [],
@@ -174,7 +101,19 @@ export default function FocusBar({
   seed = null,
   onShowUndo,
 }) {
-  const { memories, addMemory, deleteMemory } = useUserMemories()
+  const { user } = useAuth()
+  const { memories, addMemory, deleteMemory, deleteMemories } = useUserMemories()
+  const epochRef = useRef(null)
+  epochRef.current = advanceAccountEpoch(epochRef.current, user?.id)
+  const liveRef = useRef(null)
+  liveRef.current = { epoch: epochRef.current, userId: user?.id, events, tasks, memories, onAddEvent, onEditEvent, onDeleteEvent,
+    onAddTask, onUpdateTask, onDeleteTask, onAddMemory: addMemory, onDeleteMemory: deleteMemory, onDeleteMemories: deleteMemories }
+  const busyRef = useRef(false)
+  const requestRef = useRef(null)
+  const photoRequestRef = useRef(null)
+  const mountedRef = useRef(true)
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false } }, [])
+  const [consentPendingPhoto, setConsentPendingPhoto] = useState(null)
   const [text, setText]             = useState('')
   const [isListening, setIsListening] = useState(false)
   const [isThinking, setIsThinking]   = useState(false)
@@ -282,18 +221,11 @@ export default function FocusBar({
 
   // Rehidratar historial persistido (compartido con NovaWidget via sessionStorage)
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem('nova_history')
-      if (raw) {
-        const arr = JSON.parse(raw)
-        if (Array.isArray(arr)) {
-          historyRef.current = arr.filter(
-            h => h && typeof h === 'object' && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string',
-          )
-        }
-      }
-    } catch {}
-  }, [])
+    historyRef.current = readAssistantHistory(sessionStorage, user?.id)
+    requestRef.current = null; photoRequestRef.current = null
+    setConsentPendingMsg(null); setConsentPendingPhoto(null)
+    setReply(null); setLastApplied(null)
+  }, [user?.id])
 
   // Voz:
   //   · interimResults=true → texto en vivo en el input y reset de silenceTimer
@@ -448,20 +380,32 @@ export default function FocusBar({
     setLastApplied(null)
     setReply(null)
     historyRef.current = []
-    try { sessionStorage.removeItem('nova_history') } catch {}
+    try { sessionStorage.removeItem(assistantSessionKey('history', user?.id)) } catch {}
   }
 
-  async function handleSend(input) {
+  async function handleSend(input, consentGranted = false) {
     const msg = (input ?? text).trim()
-    if (!msg || isThinking) return
+    if (!msg || busyRef.current) return
 
     // Primer uso de Nova en este dispositivo: retener el mensaje y pedir
     // consentimiento para el envío a proveedores de IA antes de transmitir.
-    if (!hasAIConsent()) {
+    if (!consentGranted && !hasAIConsent()) {
       setConsentPendingMsg(msg)
       return
     }
 
+    busyRef.current = true
+    const sentContext = liveRef.current
+    let requestId
+    try {
+      requestRef.current = await prepareLogicalRequest(localStorage, sentContext.userId, 'focusbar', msg)
+      requestId = requestRef.current.id
+    } catch {
+      busyRef.current = false
+      setReply({ content: 'No pude guardar la solicitud en este dispositivo. Inténtalo de nuevo.', actions: [] })
+      return
+    }
+    if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) { busyRef.current = false; return }
     setText('')
     setComposerContext(null)
     setIsListening(false)
@@ -487,111 +431,25 @@ export default function FocusBar({
         events,
         tasks,
         memories,
-        history: historyRef.current.slice(0, -1).slice(-20),
+        history: historyRef.current.slice(0, -1).slice(-20), requestId,
       })
-      const { reply: replyText, actions = [] } = result
-
-      // Ejecutar acciones en el calendario, tareas y memorias.
-      // Vamos acumulando los IDs reales de lo creado para poder ofrecer
-      // "Deshacer" inline sin pedirle a Nova que mande delete_* después.
-      const appliedEventIds = []
-      const appliedTaskIds  = []
-      const appliedMemoryIds = []
-      for (const action of actions) {
-        if (action.type === 'add_event' && action.event) {
-          // onAddEvent (useEvents.addEvent) devuelve el evento creado con su
-          // id real asignado por el hook. Nova no manda id, así que sin
-          // capturar el retorno el undo no sabía qué borrar y el toast de
-          // "Deshacer" era ineficaz.
-          const created = onAddEvent?.(action.event)
-          if (created?.id) appliedEventIds.push(created.id)
-        } else if (action.type === 'add_recurring_event') {
-          // Expandimos la intención recurrente a N add_event concretos,
-          // capturando el id real de cada uno para que el undo inline pueda
-          // revertir TODAS las instancias (antes el undo no las cubría y el
-          // usuario quedaba con 30 eventos sin forma de deshacer rápido).
-          const expanded = expandRecurrence(action)
-          for (const ev of expanded) {
-            const created = onAddEvent?.(ev)
-            if (created?.id) appliedEventIds.push(created.id)
-          }
-        } else if (action.type === 'edit_event' && action.id) {
-          const realId = events.some(e => e.id === action.id)
-            ? action.id
-            : (events.find(e => e.title === action.updates?.title || e.time === action.updates?.time)?.id || null)
-          if (realId) onEditEvent?.(realId, action.updates ?? {})
-        } else if (action.type === 'delete_event' && action.id) {
-          const realId = events.some(e => e.id === action.id)
-            ? action.id
-            : resolveEventIdFromReply(events, replyText, action)
-          if (realId) onDeleteEvent?.(realId)
-          else console.warn('[Nova] delete_event con id no encontrado:', action.id)
-        } else if (action.type === 'add_task' && action.task) {
-          // Si Nova emitió la tarea ligada a un evento (linkedEventId, o
-          // linkedEventTitle/linkedEventTime como fallback), resolvemos el id
-          // real del evento para que la tarea aparezca como subtarea debajo
-          // del bloque correspondiente en Mi Día.
-          const linkedEventId = resolveLinkedEventId(events, action.task)
-          const taskPayload = linkedEventId
-            ? { ...action.task, linkedEventId }
-            : action.task
-          // useTasks.addTask devuelve la tarea creada con id real. Antes
-          // tomábamos taskPayload.id que venía de Nova (undefined), así
-          // el undo no borraba la tarea. Ahora capturamos el retorno.
-          const createdTask = onAddTask?.(taskPayload)
-          if (createdTask?.id) appliedTaskIds.push(createdTask.id)
-        } else if (action.type === 'toggle_task' && action.id) {
-          const realId = tasks.some(t => t.id === action.id)
-            ? action.id
-            : (tasks.find(t => (t.label || '').toLowerCase() === String(action.label || '').toLowerCase())?.id || null)
-          if (realId) onToggleTask?.(realId)
-        } else if (action.type === 'delete_task' && action.id) {
-          const realId = tasks.some(t => t.id === action.id)
-            ? action.id
-            : (tasks.find(t => (t.label || '').toLowerCase() === String(action.label || '').toLowerCase())?.id || null)
-          if (realId) onDeleteTask?.(realId)
-        } else if (action.type === 'remember' && action.memory) {
-          const saved = addMemory?.(action.memory)
-          if (saved?.id) appliedMemoryIds.push(saved.id)
-        }
-      }
-      if (appliedEventIds.length || appliedTaskIds.length || appliedMemoryIds.length) {
-        setLastApplied({
-          eventIds:  appliedEventIds,
-          taskIds:   appliedTaskIds,
-          memoryIds: appliedMemoryIds,
-        })
-        // Además del pill inline de la burbuja de reply, empujamos un
-        // UndoToast global que vive 7s arriba del bottom nav. Es la red de
-        // seguridad persistente: aunque el usuario cierre la burbuja o
-        // scrollee lejos, puede revertir desde el toast flotante. El mensaje
-        // es un resumen humano ("Añadí 2 eventos y 1 tarea") para que se
-        // entienda sin abrir nada.
-        if (onShowUndo) {
-          const parts = []
-          if (appliedEventIds.length) parts.push(`${appliedEventIds.length} ${appliedEventIds.length === 1 ? 'evento' : 'eventos'}`)
-          if (appliedTaskIds.length)  parts.push(`${appliedTaskIds.length} ${appliedTaskIds.length === 1 ? 'tarea' : 'tareas'}`)
-          if (appliedMemoryIds.length) parts.push(`${appliedMemoryIds.length} ${appliedMemoryIds.length === 1 ? 'memoria' : 'memorias'}`)
-          const message = novaSay('added_summary', readPreferenceSync('novaPersonality'), {
-            parts: parts.join(' y '),
-          })
-          onShowUndo(message, () => {
-            appliedEventIds.forEach((id) => onDeleteEvent?.(id))
-            appliedTaskIds.forEach((id) => onDeleteTask?.(id))
-            appliedMemoryIds.forEach((id) => deleteMemory?.(id))
-            setLastApplied(null)
-            setReply(null)
-          })
-        }
-      }
-
-      historyRef.current = [...historyRef.current, { role: 'assistant', content: replyText || '' }]
-      try {
-        sessionStorage.setItem('nova_history', JSON.stringify(historyRef.current.slice(-40)))
-      } catch {}
-
-      setReply({ content: replyText, actions })
+      if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
+      const prepared = prepareAssistantResponse(result, sentContext, { requestId })
+      let outcome = prepared
+      if (prepared.ok && prepared.kind === 'review') outcome = enqueueAssistantReview(prepared.actions, onProposeActions)
+      if (prepared.ok && prepared.kind === 'execute') outcome = applyAssistantActions(prepared.actions, liveRef.current)
+      const receipts = outcome.receipts || []
+      const actions = receipts.map(item => ({ ...item.action, receiptMessage: item.message }))
+      const undoable = receipts.filter(item => item.undo)
+      if (undoable.length) onShowUndo?.(receipts.map(item => item.message).join(' '), () => undoable.forEach(item => item.undo()))
+      const message = outcome.message || 'No pude aplicar la respuesta.'
+      historyRef.current = [...historyRef.current, { role: 'assistant', content: message }]
+      try { sessionStorage.setItem(assistantSessionKey('history', sentContext.userId), JSON.stringify(historyRef.current.slice(-40))) } catch {}
+      setReply({ content: message, actions })
+      if (outcome.ok || !prepared.ok) { requestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'focusbar') }
     } catch (err) {
+      if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
+      if (err.completedRetryable) { requestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'focusbar') }
       // Mensaje preciso por código. Si callFocusAssistant ya armó un texto
       // amigable, usamos ese; si no, caemos al fallback genérico de Nova.
       // Siempre liberamos isThinking en el finally — el spinner no debe
@@ -602,18 +460,31 @@ export default function FocusBar({
         : novaSay('error_connection', readPreferenceSync('novaPersonality'))
       setReply({ content: errMsg, actions: [] })
     } finally {
-      setIsThinking(false)
+      busyRef.current = false
+      if (mountedRef.current) setIsThinking(false)
     }
   }
 
-  async function handlePhoto(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-
+  async function handlePhoto(e, selectedFile = null, consentGranted = false) {
+    const file = selectedFile || e?.target?.files?.[0]
+    if (e?.target) e.target.value = ''
+    if (!file || busyRef.current) return
+    if (!consentGranted && !hasAIConsent()) { setConsentPendingPhoto(file); return }
+    busyRef.current = true
+    const sentContext = liveRef.current
+    const signature = `${sentContext.userId || 'guest'}:${file.name}:${file.size}:${file.lastModified}`
+    try {
+      const saved = await prepareLogicalRequest(localStorage, sentContext.userId, 'focusbar_photo', signature)
+      photoRequestRef.current = { ...saved, signature, now: saved.createdAt }
+    } catch {
+      busyRef.current = false
+      setReply({ content: 'No pude guardar la solicitud en este dispositivo. Inténtalo de nuevo.', actions: [] })
+      return
+    }
+    if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) { busyRef.current = false; return }
+    const photoRequest = photoRequestRef.current
     setReply(null)
     setIsAnalyzingPhoto(true)
-
     try {
       const base64 = await new Promise((resolve, reject) => {
         const reader = new FileReader()
@@ -621,60 +492,28 @@ export default function FocusBar({
         reader.onerror = reject
         reader.readAsDataURL(file)
       })
-
+      if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
       const res = await apiFetch('/api/analyze-photo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images: [{ base64, mediaType: file.type || 'image/jpeg' }] }),
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Request-Id': photoRequest.id },
+        body: JSON.stringify({ images: [{ base64, mediaType: file.type || 'image/jpeg' }],
+          clientNow: photoRequest.now, clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' }),
       })
-
       const data = await res.json().catch(() => ({}))
-
-      // Errores específicos antes que "no events": evita confundir al usuario
-      // con "no se detectaron eventos" cuando en realidad se quedó sin cuota.
-      if (res.status === 401 || data?.error === 'auth_required') {
-        setReply({ content: 'Inicia sesión para analizar fotos.', actions: [] })
-        return
+      if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
+      if (!res.ok) {
+        if (completedRetryableFailure(res.status, data, photoRequest.id)) { photoRequestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'focusbar_photo') }
+        throw new Error(res.status === 401 ? 'Inicia sesión para analizar fotos.' : 'No pude analizar la foto. Vuelve a intentarlo.')
       }
-      if (data?.error === 'quota_exceeded') {
-        setReply({
-          content: data?.message || 'Llegaste al límite diario de fotos analizadas. Vuelve mañana.',
-          actions: [],
-        })
-        return
-      }
-
-      const extracted = Array.isArray(data?.events) ? data.events : []
-
-      if (extracted.length === 0) {
-        setReply({ content: novaSay('photo_no_events', readPreferenceSync('novaPersonality')), actions: [] })
-      } else {
-        const actions = []
-        for (const ev of extracted) {
-          const newEvent = {
-            id: `${Date.now()}-${Math.random()}`,
-            title: ev.title,
-            time: ev.time ?? '',
-            date: ev.date ?? null,
-            description: '',
-            section: 'focus',
-            icon: 'event',
-            dotColor: 'bg-secondary-container',
-            featured: false,
-          }
-          onAddEvent?.(newEvent)
-          actions.push({ type: 'add_event', event: newEvent })
-        }
-        const personality = readPreferenceSync('novaPersonality')
-        const summary = extracted.length === 1
-          ? novaSay('success_photo_one', personality, { title: extracted[0].title })
-          : novaSay('success_photo_count', personality, { n: extracted.length })
-        setReply({ content: summary, actions })
-      }
-    } catch {
-      setReply({ content: novaSay('error_connection', readPreferenceSync('novaPersonality')), actions: [] })
+      const extracted = Array.isArray(data.events) ? data.events : []
+      if (!extracted.length) { setReply({ content: novaSay('photo_no_events', readPreferenceSync('novaPersonality')), actions: [] }); return }
+      const prepared = prepareAssistantResponse({ mode: 'proposal', proposed_actions: extracted.map(event => ({ type: 'add_event', event })) }, sentContext, { requestId: photoRequest.id })
+      const outcome = prepared.ok ? enqueueAssistantReview(prepared.actions, onProposeActions) : prepared
+      setReply({ content: outcome.message, actions: [] })
+    } catch (error) {
+      if (mountedRef.current && liveRef.current.epoch === sentContext.epoch) setReply({ content: error.message || novaSay('error_connection', readPreferenceSync('novaPersonality')), actions: [] })
     } finally {
-      setIsAnalyzingPhoto(false)
+      busyRef.current = false
+      if (mountedRef.current) setIsAnalyzingPhoto(false)
     }
   }
 
@@ -796,27 +635,26 @@ export default function FocusBar({
   const hasText  = text.trim().length > 0
 
   // ── Inline mode (dentro del planner, tema claro) ──────────────────────────
+  const consentCard = (consentPendingMsg != null || consentPendingPhoto != null) && (
+    <AIConsentCard onAccept={() => {
+      grantAIConsent()
+      const file = consentPendingPhoto
+      const message = consentPendingMsg
+      setConsentPendingMsg(null); setConsentPendingPhoto(null)
+      if (file) handlePhoto(null, file, true)
+      else handleSend(message, true)
+    }} onCancel={() => {
+      if (consentPendingMsg) setText(consentPendingMsg)
+      setConsentPendingMsg(null); setConsentPendingPhoto(null)
+    }} />
+  )
+
   if (inline) {
     return (
       <div className="mb-8 space-y-2">
         {/* Consentimiento IA de primer uso — retiene el mensaje hasta aceptar */}
         <AnimatePresence>
-          {consentPendingMsg != null && (
-            <AIConsentCard
-              onAccept={() => {
-                grantAIConsent()
-                const msg = consentPendingMsg
-                setConsentPendingMsg(null)
-                handleSend(msg)
-              }}
-              onCancel={() => {
-                // Devolver el mensaje al input para no perder lo escrito
-                // (pudo venir de dictado, con el input ya vacío).
-                setText(consentPendingMsg)
-                setConsentPendingMsg(null)
-              }}
-            />
-          )}
+          {consentCard}
         </AnimatePresence>
 
         {/* Burbuja de respuesta IA */}
@@ -1041,6 +879,7 @@ export default function FocusBar({
       className="fixed left-0 right-0 z-30 flex flex-col items-center gap-3 px-5"
       style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 116px)' }}
     >
+      {consentCard}
       <AnimatePresence>
         {(isThinking || reply) && (
           <motion.div
@@ -1077,9 +916,7 @@ export default function FocusBar({
                             className="flex items-center gap-1 rounded-full bg-indigo-500/15 px-2.5 py-0.5 text-[11px] font-medium text-indigo-300"
                           >
                             <span className="material-symbols-outlined text-[12px]">check_circle</span>
-                            {a.type === 'add_event'    ? `Agregado: ${a.event?.title ?? ''}` :
-                             a.type === 'edit_event'   ? 'Evento actualizado' :
-                             a.type === 'delete_event' ? 'Evento eliminado' : a.type}
+                            {describeAction(a)}
                           </span>
                         ))}
                         {lastApplied && (

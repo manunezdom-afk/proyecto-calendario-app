@@ -1,107 +1,75 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { dataService } from '../services/dataService'
 import { logSignal } from '../services/signalsService'
 import { useAuth } from '../context/AuthContext'
+import { advanceAccountEpoch, commitCachedCollection } from '../utils/verifiedMutation.js'
 
-// ── useSuggestions ──────────────────────────────────────────────────────────
-// Gestiona la bandeja de sugerencias que Nova genera en "modo propuesta".
-// El usuario aprueba/rechaza antes de que la acción se aplique al calendario.
 export function useSuggestions() {
   const { user } = useAuth()
-
-  const [suggestions, setSuggestions] = useState(() =>
-    dataService.getCachedSuggestions()
-  )
+  const epochRef = useRef(null)
+  epochRef.current = advanceAccountEpoch(epochRef.current, user?.id)
+  const collectionEpochRef = useRef(epochRef.current)
+  const [suggestions, setSuggestionsState] = useState(() => dataService.getCachedSuggestions(user?.id))
+  const suggestionsRef = useRef(suggestions)
+  const versionRef = useRef(0)
+  const setSuggestions = next => {
+    suggestionsRef.current = next
+    versionRef.current += 1
+    setSuggestionsState(next)
+  }
+  const commit = next => collectionEpochRef.current === epochRef.current &&
+    commitCachedCollection(next, value => dataService.setCachedSuggestions(value, user?.id), setSuggestions)
 
   useEffect(() => {
+    const epoch = epochRef.current
+    collectionEpochRef.current = epoch
+    setSuggestions(dataService.getCachedSuggestions(user?.id))
     if (!user) return
-    dataService
-      .fetchSuggestions(user.id)
-      .then((cloud) => {
-        setSuggestions(cloud)
-        dataService.setCachedSuggestions(cloud)
-      })
-      .catch((err) => console.warn('[Focus] ⚠️ suggestions fetch', err))
+    let cancelled = false
+    const version = versionRef.current
+    dataService.fetchSuggestions(user.id).then(cloud => {
+      if (cancelled || epochRef.current !== epoch || versionRef.current !== version || !Array.isArray(cloud)) return
+      setSuggestions(cloud)
+      dataService.setCachedSuggestions(cloud, user.id)
+    }).catch(() => {})
+    return () => { cancelled = true }
   }, [user?.id])
 
-  useEffect(() => {
-    dataService.setCachedSuggestions(suggestions)
-  }, [suggestions])
+  const addSuggestion = useCallback(suggestion => {
+    const full = { id: suggestion.id || crypto.randomUUID(), status: 'pending', createdAt: new Date().toISOString(), resolvedAt: null, ...suggestion }
+    const existing = suggestionsRef.current.find(item => item.id === full.id)
+    if (existing) return existing
+    if (!commit([full, ...suggestionsRef.current])) return null
+    if (user) dataService.upsertSuggestion(full, user.id).catch(console.warn)
+    return full
+  }, [user?.id])
 
-  const pending = useMemo(
-    () => suggestions.filter((s) => s.status === 'pending'),
-    [suggestions]
-  )
+  const markResolved = useCallback((id, status) => {
+    const target = suggestionsRef.current.find(item => item.id === id)
+    if (!target) return false
+    const updated = { ...target, status, resolvedAt: new Date().toISOString() }
+    if (!commit(suggestionsRef.current.map(item => item.id === id ? updated : item))) return false
+    if (user) dataService.upsertSuggestion(updated, user.id).catch(console.warn)
+    logSignal(status === 'approved' ? 'suggestion_approved' : 'suggestion_rejected', { kind: target.kind || 'unknown' })
+    return true
+  }, [user?.id])
+  const approveSuggestion = useCallback(id => markResolved(id, 'approved'), [markResolved])
+  const rejectSuggestion = useCallback(id => markResolved(id, 'rejected'), [markResolved])
 
-  const pendingCount = pending.length
-
-  const addSuggestion = useCallback(
-    (suggestion) => {
-      const full = {
-        id: suggestion.id || `sug-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        resolvedAt: null,
-        ...suggestion,
-      }
-      setSuggestions((prev) => [full, ...prev])
-      if (user) dataService.upsertSuggestion(full, user.id).catch(console.warn)
-      return full
-    },
-    [user]
-  )
-
-  const markResolved = useCallback(
-    (id, status) => {
-      setSuggestions((prev) => {
-        const target = prev.find((s) => s.id === id)
-        const next = prev.map((s) =>
-          s.id === id ? { ...s, status, resolvedAt: new Date().toISOString() } : s
-        )
-        const updated = next.find((s) => s.id === id)
-        if (updated && user) dataService.upsertSuggestion(updated, user.id).catch(console.warn)
-        // Señal: qué tipo de sugerencia aprobó/rechazó — clave para que Nova aprenda
-        if (target) {
-          logSignal(
-            status === 'approved' ? 'suggestion_approved' : 'suggestion_rejected',
-            { kind: target.kind || 'unknown', reason: target.reason || null }
-          )
-        }
-        return next
-      })
-    },
-    [user]
-  )
-
-  const approveSuggestion = useCallback((id) => markResolved(id, 'approved'), [markResolved])
-  const rejectSuggestion = useCallback((id) => markResolved(id, 'rejected'), [markResolved])
-
-  const deleteSuggestion = useCallback(
-    (id) => {
-      setSuggestions((prev) => prev.filter((s) => s.id !== id))
-      if (user) dataService.deleteSuggestion(id, user.id).catch(console.warn)
-    },
-    [user]
-  )
-
+  const deleteSuggestion = useCallback(id => {
+    if (!suggestionsRef.current.some(item => item.id === id)) return false
+    if (!commit(suggestionsRef.current.filter(item => item.id !== id))) return false
+    if (user) dataService.deleteSuggestion(id, user.id).catch(console.warn)
+    return true
+  }, [user?.id])
   const clearResolved = useCallback(() => {
-    setSuggestions((prev) => {
-      const resolvedIds = prev.filter((s) => s.status !== 'pending').map((s) => s.id)
-      if (user) {
-        resolvedIds.forEach((id) => dataService.deleteSuggestion(id, user.id).catch(console.warn))
-      }
-      return prev.filter((s) => s.status === 'pending')
-    })
-  }, [user])
+    const ids = suggestionsRef.current.filter(item => item.status !== 'pending').map(item => item.id)
+    if (!commit(suggestionsRef.current.filter(item => item.status === 'pending'))) return false
+    if (user) ids.forEach(id => dataService.deleteSuggestion(id, user.id).catch(console.warn))
+    return true
+  }, [user?.id])
 
-  return {
-    suggestions,
-    pending,
-    pendingCount,
-    addSuggestion,
-    approveSuggestion,
-    rejectSuggestion,
-    deleteSuggestion,
-    clearResolved,
-  }
+  const visible = collectionEpochRef.current === epochRef.current ? suggestions : []
+  const pending = useMemo(() => visible.filter(item => item.status === 'pending'), [visible])
+  return { suggestions: visible, pending, pendingCount: pending.length, addSuggestion, approveSuggestion, rejectSuggestion, deleteSuggestion, clearResolved }
 }

@@ -1,205 +1,161 @@
 import { test, expect } from '@playwright/test'
 
-// Mock helpers — interceptan los endpoints de IA antes de que el cliente
-// llame a Anthropic. Cada test elige el comportamiento del mock (éxito,
-// error, timeout) y verifica el feedback loop de Nova en la UI.
-
+// Every provider request is mocked; unrelated external HTTP is blocked.
+// These tests verify UI receipts, not claims written by the simulated model.
+test.use({ serviceWorkers: 'block', screenshot: 'off', trace: 'off' })
 const TODAY = new Date().toISOString().slice(0, 10)
+const reply = (requestId, text) => ({ requestId, mode: 'chat_only', reply: text, actions: [], proposed_actions: [], confidence: 1 })
 
-async function skipOnboarding(page) {
-  // Setea localStorage ANTES del primer load para skip BootSplash/Welcome/
-  // FirstLaunchOnboarding y aterrizar directo en el planner.
-  await page.addInitScript(() => {
-    localStorage.setItem('focus_onboarding_completed_v1', '1')
-    localStorage.setItem('focus_welcome_last', new Date().toISOString().slice(0, 10))
-    localStorage.setItem('focus_hint_welcome-intro-v1', '1')
-    localStorage.setItem('focus_boot_splash_seen', '1')
+async function mockAssistant(page, respond) {
+  await page.route('**/api/focus-assistant', async route => {
+    const requestId = route.request().headers()['x-request-id']
+    const result = await respond({ requestId, body: route.request().postDataJSON() })
+    await route.fulfill({ status: result.status || 200, contentType: 'application/json', body: JSON.stringify(result.body) })
   })
 }
-
-async function mockNovaSuccess(page, replyText = 'Listo, te ayudo con eso.') {
-  await page.route('**/api/focus-assistant', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ reply: replyText, actions: [] }),
-    })
-  })
-}
-
-async function mockNovaError(page, status = 503, errorCode = 'upstream_overloaded') {
-  await page.route('**/api/focus-assistant', async (route) => {
-    await route.fulfill({
-      status,
-      contentType: 'application/json',
-      body: JSON.stringify({ error: errorCode, message: 'Servicio sobrecargado.' }),
-    })
-  })
-}
-
-async function mockNovaSlow(page, delayMs = 2000) {
-  await page.route('**/api/focus-assistant', async (route) => {
-    await new Promise((r) => setTimeout(r, delayMs))
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ reply: 'Tardé, pero llegué.', actions: [] }),
-    })
-  })
-}
-
-async function openNova(page) {
-  // NovaWidget solo monta en vistas no-planner (en planner Nova vive en
-  // FocusBar). Aterrizamos en calendar para tener el botón "Abrir Nova".
-  // El tap es un pointerdown→up rápido — Playwright .click() simula eso
-  // sin disparar el long-press de 500ms.
-  const pill = page.getByRole('button', { name: /abrir nova/i })
-  await expect(pill).toBeVisible({ timeout: 10_000 })
-  await pill.click()
-  await expect(page.getByPlaceholder(/escribe o habla/i)).toBeVisible({ timeout: 4_000 })
-}
-
-async function gotoCalendar(page) {
+async function openHilante(page, { consent = true } = {}) {
   await page.goto('/?view=calendar')
+  if (consent) await page.evaluate(() => localStorage.setItem('focus_ai_consent_v1', '1'))
+  const opener = page.getByRole('button', { name: 'Abrir Hilante', exact: true })
+  await expect(opener).toBeVisible({ timeout: 10_000 })
+  await opener.click()
+  await expect(page.getByPlaceholder('Escribe o habla…')).toBeVisible()
+}
+const input = page => page.getByPlaceholder('Escribe o habla…')
+const sendButton = page => page.getByRole('button', { name: 'Enviar mensaje', exact: true })
+async function send(page, message) {
+  await input(page).fill(message)
+  await expect(sendButton(page)).toBeEnabled()
+  await sendButton(page).click()
+}
+async function savedEvents(page) {
+  return page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('focus_events'))
+    .flatMap(key => { try { const value = JSON.parse(localStorage.getItem(key)); return Array.isArray(value) ? value : [] } catch { return [] } }))
 }
 
-test.describe('Nova — feedback loop', () => {
+test.describe('Hilante — consentimiento y resultado verificable', () => {
   test.beforeEach(async ({ page }) => {
-    await skipOnboarding(page)
-  })
-
-  test('mensaje del usuario aparece y respuesta llega; loading desaparece', async ({ page }) => {
-    await mockNovaSuccess(page, 'Te lo agendo para mañana.')
-    await gotoCalendar(page)
-    await openNova(page)
-
-    const input = page.getByPlaceholder(/escribe o habla/i)
-    await input.fill('Agenda gym mañana a las 7')
-
-    const sendBtn = page.getByRole('button', { name: /enviar mensaje/i })
-    await expect(sendBtn).toBeEnabled()
-    await sendBtn.click()
-
-    // El mensaje del usuario debe aparecer en el chat inmediatamente
-    await expect(page.getByText('Agenda gym mañana a las 7')).toBeVisible()
-
-    // Loading: la burbuja de dots o el texto del stream
-    // (no validamos directamente; solo que la respuesta termine apareciendo)
-
-    // Respuesta del assistant
-    await expect(page.getByText('Te lo agendo para mañana.')).toBeVisible({ timeout: 8_000 })
-
-    // Input se limpió
-    await expect(input).toHaveValue('')
-
-    // Send button se reactiva (vuelve a deshabilitarse porque input está vacío,
-    // pero no debe estar en loading): probamos escribiendo otra vez
-    await input.fill('otro mensaje')
-    await expect(sendBtn).toBeEnabled()
-  })
-
-  test('error de API muestra mensaje claro y libera el botón', async ({ page }) => {
-    await mockNovaError(page, 503, 'upstream_overloaded')
-    await gotoCalendar(page)
-    await openNova(page)
-
-    const input = page.getByPlaceholder(/escribe o habla/i)
-    await input.fill('Hola')
-
-    const sendBtn = page.getByRole('button', { name: /enviar mensaje/i })
-    await sendBtn.click()
-
-    // Mensaje de error en el chat (no spinner colgado para siempre)
-    await expect(page.getByText(/sobrecargado|disponible|error/i).first()).toBeVisible({ timeout: 8_000 })
-
-    // Input se reactiva tras el error
-    await input.fill('reintento')
-    await expect(sendBtn).toBeEnabled()
-  })
-
-  test('doble click en send no duplica el mensaje', async ({ page }) => {
-    let calls = 0
-    await page.route('**/api/focus-assistant', async (route) => {
-      calls++
-      await new Promise((r) => setTimeout(r, 800))
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ reply: `Respuesta ${calls}`, actions: [] }),
-      })
+    await page.route('**/*', route => {
+      const url = new URL(route.request().url())
+      return ['localhost', '127.0.0.1'].includes(url.hostname) ? route.continue() : route.abort()
     })
-    await gotoCalendar(page)
-    await openNova(page)
+    await page.addInitScript(() => {
+      localStorage.setItem('focus_onboarding_completed_v1', '1')
+      localStorage.setItem('focus_welcome_last', new Date().toISOString().slice(0, 10))
+      localStorage.setItem('focus_hint_welcome-intro-v1', '1')
+      localStorage.setItem('focus_hint_empty-day-v1', '1')
+      localStorage.setItem('focus_boot_splash_seen', '1')
+      localStorage.setItem('focus_install_dismissed', 'true')
+    })
+  })
 
-    const input = page.getByPlaceholder(/escribe o habla/i)
-    await input.fill('test doble submit')
-
-    const sendBtn = page.getByRole('button', { name: /enviar mensaje/i })
-    // Doble click rápido (race entre setIsLoading y disabled)
-    await sendBtn.click()
-    await sendBtn.click({ force: true }).catch(() => {})  // si está disabled, ignorar
-
-    // Esperar respuesta
-    await expect(page.getByText(/Respuesta 1/)).toBeVisible({ timeout: 8_000 })
-
-    // Solo una request al backend (el guard interno debe detener el segundo)
+  test('aceptar consentimiento precede al envío; cancelar conserva el texto', async ({ page }) => {
+    let calls = 0
+    await mockAssistant(page, ({ requestId }) => { calls++; return { body: reply(requestId, 'Podemos ordenar tus pendientes paso a paso.') } })
+    await openHilante(page, { consent: false })
+    await send(page, 'Ayúdame a ordenar mis pendientes')
+    const consent = page.getByRole('alertdialog', { name: 'Consentimiento para usar inteligencia artificial' })
+    await expect(consent).toBeVisible()
+    await expect(consent).toContainText('Anthropic, DeepSeek u OpenAI')
+    expect(calls).toBe(0)
+    await consent.getByRole('button', { name: 'Ahora no' }).click()
+    await expect(input(page)).toHaveValue('Ayúdame a ordenar mis pendientes')
+    expect(calls).toBe(0)
+    await sendButton(page).click()
+    await consent.getByRole('button', { name: 'Aceptar y enviar' }).click()
+    await expect(page.getByText('Podemos ordenar tus pendientes paso a paso.', { exact: true })).toBeVisible()
     expect(calls).toBe(1)
   })
 
-  test('botón send se deshabilita durante carga', async ({ page }) => {
-    await mockNovaSlow(page, 1500)
-    await gotoCalendar(page)
-    await openNova(page)
-
-    const input = page.getByPlaceholder(/escribe o habla/i)
-    await input.fill('mensaje lento')
-
-    const sendBtn = page.getByRole('button', { name: /enviar mensaje/i })
-    await sendBtn.click()
-
-    // Mientras carga, el send debe estar disabled. Validamos durante 500ms.
-    await expect(sendBtn).toBeDisabled()
-
-    // Y al final llega la respuesta y se libera
-    await expect(page.getByText('Tardé, pero llegué.')).toBeVisible({ timeout: 5_000 })
+  test('una acción válida confirma un recibo y queda guardada localmente', async ({ page }) => {
+    await mockAssistant(page, ({ requestId }) => ({ body: { requestId, mode: 'proposal', confidence: 1,
+      reply: 'Propuesta preparada.', actions: [], proposed_actions: [{ type: 'add_event', event: { title: 'Gym E2E', date: TODAY, time: '07:00' } }] } }))
+    await openHilante(page)
+    await send(page, 'Agenda Gym E2E hoy a las 7')
+    await expect(page.getByText('Agenda Gym E2E hoy a las 7', { exact: true })).toBeVisible()
+    await expect(page.getByText('Preparé una propuesta. Revisa los cambios en la bandeja antes de aplicarlos.', { exact: true })).toBeVisible()
+    expect((await savedEvents(page)).filter(event => event.title === 'Gym E2E')).toHaveLength(0)
+    await page.getByRole('button', { name: /Abrir bandeja/ }).click()
+    await expect(page.getByRole('heading', { name: 'Bandeja de Hilante', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: /Aprobar/ }).click()
+    await expect(page.getByText('Añadí «Gym E2E» en este dispositivo.', { exact: true }).first()).toBeVisible()
+    await expect.poll(async () => (await savedEvents(page)).filter(event => event.title === 'Gym E2E').length).toBe(1)
+    const stored = (await savedEvents(page)).find(event => event.title === 'Gym E2E')
+    expect(stored.date).toBe(TODAY)
+    await page.getByRole('button', { name: 'Cerrar bandeja', exact: true }).click()
+    await page.getByRole('button', { name: 'Abrir Hilante', exact: true }).click()
+    await expect(input(page)).toHaveValue('')
+    await input(page).fill('otro mensaje')
+    await expect(sendButton(page)).toBeEnabled()
   })
 
-  test('cerrar Nova durante loading no rompe la UI al reabrir', async ({ page }) => {
-    await mockNovaSlow(page, 1500)
-    await gotoCalendar(page)
-    await openNova(page)
-
-    const input = page.getByPlaceholder(/escribe o habla/i)
-    await input.fill('mensaje en background')
-    await page.getByRole('button', { name: /enviar mensaje/i }).click()
-
-    // Cerramos Nova mientras carga
-    await page.getByRole('button', { name: /cerrar nova/i }).click()
-
-    // Reabrimos
-    await page.getByRole('button', { name: /abrir nova/i }).click()
-
-    // El mensaje del usuario debe seguir en el chat (historyRef persiste)
-    await expect(page.getByText('mensaje en background')).toBeVisible({ timeout: 4_000 })
-    // Y la respuesta termina llegando
-    await expect(page.getByText('Tardé, pero llegué.')).toBeVisible({ timeout: 5_000 })
+  test('un texto que afirma guardar sin acciones se rechaza y no crea eventos', async ({ page }) => {
+    await mockAssistant(page, ({ requestId }) => ({ body: reply(requestId, 'Guardé Gym E2E para mañana.') }))
+    await openHilante(page)
+    await send(page, 'Agenda Gym E2E mañana')
+    await expect(page.getByText('No hay cambios guardados que confirmen esa respuesta. Repite la solicitud.', { exact: true })).toBeVisible()
+    await expect(page.getByText('Guardé Gym E2E para mañana.', { exact: true })).toHaveCount(0)
+    expect((await savedEvents(page)).filter(event => event.title === 'Gym E2E')).toHaveLength(0)
   })
 
-  test('input vacío con send disabled no envía', async ({ page }) => {
-    let called = false
-    await page.route('**/api/focus-assistant', async (route) => {
-      called = true
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"reply":"x","actions":[]}' })
+  test('error definitivo libera el envío y el reintento explícito usa otra identidad', async ({ page }) => {
+    const ids = []
+    await mockAssistant(page, ({ requestId }) => {
+      ids.push(requestId)
+      return ids.length === 1
+        ? { status: 503, body: { requestId, error: 'assistant_unavailable', message: 'Servicio temporalmente no disponible.', request_completed: true, request_retryable: true } }
+        : { body: reply(requestId, 'Ya podemos continuar.') }
     })
-    await gotoCalendar(page)
-    await openNova(page)
+    await openHilante(page)
+    await send(page, 'Hola Hilante')
+    await expect(page.getByText('Servicio temporalmente no disponible.', { exact: true })).toBeVisible()
+    await send(page, 'Hola Hilante')
+    await expect(page.getByText('Ya podemos continuar.', { exact: true })).toBeVisible()
+    expect(ids).toHaveLength(2)
+    expect(ids[0]).toBeTruthy()
+    expect(ids[1]).not.toBe(ids[0])
+  })
 
-    const sendBtn = page.getByRole('button', { name: /enviar mensaje/i })
-    await expect(sendBtn).toBeDisabled()
-    await sendBtn.click({ force: true }).catch(() => {})
+  test('doble click no duplica solicitud; el envío permanece bloqueado durante la espera', async ({ page }) => {
+    let calls = 0
+    let finish
+    const pending = new Promise(resolve => { finish = resolve })
+    await mockAssistant(page, async ({ requestId }) => { calls++; await pending; return { body: reply(requestId, 'Una sola respuesta.') } })
+    await openHilante(page)
+    await input(page).fill('test doble envío')
+    try {
+      await sendButton(page).click({ clickCount: 2 })
+      await expect.poll(() => calls).toBe(1)
+      await expect(sendButton(page)).toBeDisabled()
+      await expect(page.getByText('test doble envío', { exact: true })).toHaveCount(1)
+    } finally { finish() }
+    await expect(page.getByText('Una sola respuesta.', { exact: true })).toBeVisible()
+    expect(calls).toBe(1)
+  })
 
-    // Pequeña espera para asegurar que ningún request salió
-    await page.waitForTimeout(500)
-    expect(called).toBe(false)
+  test('cerrar y reabrir durante una respuesta conserva el historial', async ({ page }) => {
+    let finish
+    const pending = new Promise(resolve => { finish = resolve })
+    await mockAssistant(page, async ({ requestId }) => { await pending; return { body: reply(requestId, 'Podemos continuar cuando quieras.') } })
+    await openHilante(page)
+    try {
+      await send(page, 'mensaje en espera')
+      await expect(page.getByText('mensaje en espera', { exact: true })).toBeVisible()
+      await page.getByRole('button', { name: 'Cerrar Hilante', exact: true }).click()
+      await page.getByRole('button', { name: 'Abrir Hilante', exact: true }).click()
+      await expect(page.getByText('mensaje en espera', { exact: true })).toBeVisible()
+    } finally { finish() }
+    await expect(page.getByText('Podemos continuar cuando quieras.', { exact: true })).toBeVisible()
+  })
+
+  test('input vacío no permite enviar ni llama al modelo', async ({ page }) => {
+    let calls = 0
+    await mockAssistant(page, ({ requestId }) => { calls++; return { body: reply(requestId, 'No debe aparecer.') } })
+    await openHilante(page)
+    await expect(input(page)).toHaveValue('')
+    await expect(sendButton(page)).toBeDisabled()
+    await input(page).press('Enter')
+    await expect(page.getByRole('alertdialog', { name: 'Consentimiento para usar inteligencia artificial' })).toHaveCount(0)
+    expect(calls).toBe(0)
   })
 })

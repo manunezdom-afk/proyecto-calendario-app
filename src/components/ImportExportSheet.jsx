@@ -6,6 +6,9 @@ import { googleCalendarUrl }  from '../utils/googleCalendarUrl'
 import { apiFetch, apiUrl }    from '../lib/apiClient'
 import { supabase }           from '../lib/supabase'
 import { pushModal, popModal } from '../utils/modalStack'
+import { hasAIConsent, grantAIConsent } from '../lib/aiConsent'
+import AIConsentCard from './AIConsentCard'
+import { validCivilDate } from '../utils/assistantContract'
 
 // Tres tabs claras, sin jerga. Antes había 5 ("Por texto" y "Foto" eran
 // métodos de import disfrazados de tabs, "Suscripción" sonaba a billing).
@@ -787,11 +790,24 @@ function PhotoTab({ onImport }) {
   const [analyzing, setAnalyzing] = useState(false)
   const [imported, setImported]   = useState(false)
   const [error, setError]         = useState('')
+  const [showAIConsent, setShowAIConsent] = useState(false)
+  const missingPreviewDate = preview.some(event => !validCivilDate(event.date))
   const fileRef = useRef(null)
+  const activeRequestRef = useRef(null)
+  const analyzingRef = useRef(false)
+  const abortRef = useRef(null)
+  useEffect(() => () => { abortRef.current?.abort() }, [])
 
   function handlePhotos(e) {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
+    if (photos.length + files.length > 4) {
+      setError('Selecciona como máximo cuatro fotos por análisis.')
+      e.target.value = ''
+      return
+    }
+    activeRequestRef.current = null
+    setShowAIConsent(false)
     setPhotos((prev) => [...prev, ...files.map((f) => ({ url: URL.createObjectURL(f), file: f }))])
     setPreview([])
     setImported(false)
@@ -800,25 +816,30 @@ function PhotoTab({ onImport }) {
   }
 
   function removePhoto(idx) {
+    activeRequestRef.current = null
+    setShowAIConsent(false)
     setPhotos((prev) => { URL.revokeObjectURL(prev[idx].url); return prev.filter((_, i) => i !== idx) })
     setPreview([])
     setError('')
   }
 
   function resizeToBase64(file, maxPx = 1120) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const img = new Image()
       const url = URL.createObjectURL(file)
       img.onload = () => {
-        const ratio = Math.min(maxPx / img.width, maxPx / img.height, 1)
-        const canvas = document.createElement('canvas')
-        canvas.width  = Math.round(img.width  * ratio)
-        canvas.height = Math.round(img.height * ratio)
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
-        URL.revokeObjectURL(url)
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
-        resolve({ base64: dataUrl.split(',')[1], mediaType: 'image/jpeg' })
+        try {
+          const ratio = Math.min(maxPx / img.width, maxPx / img.height, 1)
+          const canvas = document.createElement('canvas')
+          canvas.width  = Math.round(img.width  * ratio)
+          canvas.height = Math.round(img.height * ratio)
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+          resolve({ base64: dataUrl.split(',')[1], mediaType: 'image/jpeg' })
+        } catch { reject(new Error('image_unreadable')) }
+        finally { URL.revokeObjectURL(url) }
       }
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image_unreadable')) }
       img.src = url
     })
   }
@@ -852,23 +873,39 @@ function PhotoTab({ onImport }) {
     }
   }
 
-  async function handleAnalyze() {
-    if (!photos.length) return
+  async function handleAnalyze(consentAccepted = false) {
+    if (!photos.length || analyzingRef.current) return
+    if (consentAccepted !== true && !hasAIConsent()) {
+      setShowAIConsent(true)
+      return
+    }
+    setShowAIConsent(false)
+    analyzingRef.current = true
     setAnalyzing(true)
     setError('')
     setPreview([])
 
     try {
-      const images = await Promise.all(photos.map((p) => resizeToBase64(p.file)))
+      const controller = new AbortController()
+      abortRef.current = controller
+      if (!activeRequestRef.current) {
+        const images = await Promise.all(photos.map((p) => resizeToBase64(p.file)))
+        if (controller.signal.aborted) return
+        activeRequestRef.current = { images, requestId: crypto.randomUUID(), clientNow: Date.now(),
+          clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' }
+      }
+      const request = activeRequestRef.current
 
       let res
       try {
         res = await apiFetch('/api/analyze-photo', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ images }),
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': request.requestId },
+          body: JSON.stringify(request),
+          signal: controller.signal,
         })
       } catch {
+        if (controller.signal.aborted) return
         setError('No se pudo conectar con el servidor. Verifica tu conexión a internet.')
         return
       }
@@ -877,7 +914,14 @@ function PhotoTab({ onImport }) {
       try {
         data = await res.json()
       } catch {
-        setError(`Error del servidor (${res.status}). El deploy puede estar en curso — espera un minuto y reintenta.`)
+        setError('No pude leer el resultado. Vuelve a intentarlo.')
+        return
+      }
+      if (controller.signal.aborted) return
+      if (res.status === 503 && data?.request_completed === true && data?.request_retryable === true
+          && data.requestId === request.requestId) activeRequestRef.current = null
+      if (data?.requestId && data.requestId !== request.requestId) {
+        setError('No pude comprobar a qué análisis pertenece la respuesta. Vuelve a intentarlo.')
         return
       }
 
@@ -898,8 +942,7 @@ function PhotoTab({ onImport }) {
       }
 
       if (!res.ok || data.error) {
-        const detail = data.detail ? ` (${data.detail})` : ''
-        setError(`Error al analizar: ${data.error ?? res.status}${detail}. Intenta de nuevo.`)
+        setError(data.message || 'No pude analizar las fotos. Vuelve a intentarlo o agrega las actividades manualmente.')
         return
       }
 
@@ -909,9 +952,11 @@ function PhotoTab({ onImport }) {
       }
 
       setPreview(data.events.map(aiToAppEvent))
-    } catch (err) {
-      setError(`Error inesperado: ${err?.message ?? 'desconocido'}`)
+    } catch {
+      setError('No pude leer alguna de las fotos. Prueba con una imagen JPEG, PNG o WebP más pequeña.')
     } finally {
+      analyzingRef.current = false
+      abortRef.current = null
       setAnalyzing(false)
     }
   }
@@ -921,10 +966,29 @@ function PhotoTab({ onImport }) {
   }
 
   function handleConfirm() {
-    preview.forEach((ev) => onImport(ev))
-    setImported(true)
-    setPreview([])
+    const remaining = []
+    if (preview.some(event => !validCivilDate(event.date))) {
+      setError('Elige una fecha válida para cada actividad antes de guardarla.')
+      return
+    }
+    for (const ev of preview) {
+      try {
+        const saved = onImport(ev)
+        if (!saved || typeof saved.then === 'function') remaining.push(ev)
+      } catch { remaining.push(ev) }
+    }
+    setPreview(remaining)
+    setImported(remaining.length === 0)
+    if (remaining.length) {
+      const savedCount = preview.length - remaining.length
+      setError(savedCount > 0
+        ? `Se guardaron ${savedCount} actividades. Quedan ${remaining.length} por guardar; vuelve a intentarlo.`
+        : 'No pude guardar las actividades en este dispositivo. Vuelve a intentarlo.')
+      return
+    }
+    setError('')
     setPhotos([])
+    activeRequestRef.current = null
   }
 
   // ── Pantalla principal: subir fotos + analizar ─────────────────────────────
@@ -979,9 +1043,15 @@ function PhotoTab({ onImport }) {
       )}
 
       {/* Analyze button */}
-      {photos.length > 0 && !analyzing && preview.length === 0 && !imported && (
+      {showAIConsent && (
+        <AIConsentCard
+          onAccept={() => { grantAIConsent(); void handleAnalyze(true) }}
+          onCancel={() => setShowAIConsent(false)}
+        />
+      )}
+      {photos.length > 0 && !analyzing && !showAIConsent && preview.length === 0 && !imported && (
         <button
-          onClick={handleAnalyze}
+          onClick={() => void handleAnalyze()}
           className="w-full py-4 rounded-2xl bg-primary text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
         >
           <span className="material-symbols-outlined text-[22px]">auto_awesome</span>
@@ -1019,12 +1089,36 @@ function PhotoTab({ onImport }) {
           </div>
           <div className="space-y-2 max-h-52 overflow-y-auto hide-scrollbar">
             {preview.map((ev) => (
-              <PreviewCard key={ev.id} ev={ev} onRemove={removeFromPreview} />
+              <div key={ev.id} className="space-y-2 rounded-xl border border-outline-variant/20 p-2">
+                <PreviewCard ev={ev} onRemove={removeFromPreview} />
+                <label htmlFor={`photo-date-${ev.id}`} className="block text-xs font-semibold text-on-surface-variant">
+                  Fecha de {ev.title}
+                </label>
+                <input
+                  id={`photo-date-${ev.id}`}
+                  type="date"
+                  required
+                  value={ev.date || ''}
+                  aria-invalid={!validCivilDate(ev.date)}
+                  onChange={(e) => {
+                    const date = e.target.value || null
+                    setPreview(items => items.map(item => item.id === ev.id ? { ...item, date } : item))
+                    setError('')
+                  }}
+                  className="min-h-11 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 text-sm text-on-surface"
+                />
+              </div>
             ))}
           </div>
+          {missingPreviewDate && (
+            <p className="text-sm text-on-surface-variant" role="status">
+              Falta una fecha clara. Elige el día de cada actividad o descártala antes de continuar.
+            </p>
+          )}
           <button
             onClick={handleConfirm}
-            className="w-full py-4 rounded-2xl bg-primary text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
+            disabled={missingPreviewDate}
+            className="w-full py-4 rounded-2xl bg-primary text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98] transition-all disabled:opacity-40"
           >
             <span className="material-symbols-outlined text-[20px]">add_circle</span>
             Añadir {preview.length} evento{preview.length !== 1 ? 's' : ''} al calendario

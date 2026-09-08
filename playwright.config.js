@@ -45,7 +45,8 @@ export default defineConfig({
     },
     {
       name: 'chromium-desktop',
-      use: { ...devices['Desktop Chrome'] },
+      // Optional existing Chrome, isolated by Playwright in a temporary profile.
+      use: { ...devices['Desktop Chrome'], ...(process.env.FOCUS_PLAYWRIGHT_CHANNEL === 'chrome' ? { channel: 'chrome' } : {}) },
     },
   ],
 
