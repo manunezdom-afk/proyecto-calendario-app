@@ -2,12 +2,12 @@
 // Four independent conversation fixtures. The six-turn scenario is verified in
 // the real client separately. Transport, replay, quota pacing and cleanup remain
 // owned by the existing remote benchmark; this wrapper never implements them.
-import { readFileSync, writeFileSync, mkdirSync, chmodSync, statSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
+import { readFileSync, statSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { parseEnv } from 'node:util'
-import { parseRemoteBenchmarkOptions, runRemoteBenchmark } from './ai-remote-benchmark.mjs'
+import { parseRemoteBenchmarkOptions, runRemoteBenchmark, writeAtomicBenchmarkReport } from './ai-remote-benchmark.mjs'
 import { validCivilDate } from '../api/_lib/novaContract.js'
 
 const root=fileURLToPath(new URL('../',import.meta.url))
@@ -119,7 +119,7 @@ export async function runConversationBenchmark(options,{runner=runRemoteBenchmar
     allFourMeasuredAndPassed:measured.length===4&&measured.every(result=>result.pass),
     solCoverage:week?.attempts?.some(attempt=>attempt.model==='gpt-5.6-sol')?'observed_in_remote_attempt':week?.attempted?'not_observed':'not_measured',
     humanConversationScore:null,clientPersistenceMeasured:false,continuityMeasured:false}
-  if(dependencies.writeReport!==false){mkdirSync(dirname(report.reportPath),{recursive:true});writeFileSync(report.reportPath,JSON.stringify(report,null,2)+'\n',{mode:0o600});chmodSync(report.reportPath,0o600)}
+  if(dependencies.writeReport!==false)writeAtomicBenchmarkReport(report.reportPath,report)
   return report
 }
 
