@@ -204,7 +204,8 @@ export async function executeNovaRequest({ admin, userId, requestId, body, plan,
     trackingOK = recorded?.ok === true && settled.status === 'settled'
     previousError = error ? errorCode(error) : result?.shouldAskUser ? 'resolvable_clarification' : 'none'
     if (!trackingOK) { response = unavailable(requestId); break }
-    if (result) response = { httpStatus: 200, body: result }
+    if (result) response = { httpStatus: 200, body: { ...result,
+      processing: { route: 'remote_ai', model: route.model, reason: route.routeReason } } }
     if (shouldEscalateNova({ error, result, route, nextRoute: routes[index+1], body }) && !premiumDenied) continue
     break
   }

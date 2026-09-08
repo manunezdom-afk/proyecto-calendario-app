@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { validateNovaPlan, activeIntentText, isNovaWirePlan } from '../api/_lib/novaContract.js'
-import { buildNovaSystemPrompt } from '../api/_lib/novaPrompt.js'
+import { buildNovaSystemPrompt, splitNovaSystemPrompt, NOVA_CONTEXT_MARKER } from '../api/_lib/novaPrompt.js'
+import { callOpenAINova } from '../api/_lib/openaiNova.js'
 import { prepareNovaRoute } from '../api/_lib/novaRuntime.js'
 import { novaTierRoute } from '../api/_lib/novaRouter.js'
 import { sanitizeNovaRequest } from '../api/_lib/novaSafety.js'
@@ -65,6 +66,56 @@ test('the prompt teaches a complete valid empty reminder clarification within Lu
  assert.equal(out.validation.ok,true);assert.equal(out.mode,'clarification');assert.deepEqual(out.actions,[])
  const body=sanitizeNovaRequest({message:'comprar pan',clientNow:Date.parse('2026-09-08T15:00Z'),clientTimezone:'America/Santiago'}).body
  const route=prepareNovaRoute(body,dateContext,novaTierRoute('luna'))
- assert.ok(route.inputTokens<=12000,`Prompt exceeds Luna cap: ${route.inputTokens}`)
+ assert.ok(route.inputTokens<=9500,`Static instructions crowd out Luna context: ${route.inputTokens}`)
  assert.equal(route.maxInputTokens,12000)
+})
+
+test('Luna retains twelve relevant context items and the entire 1000-byte intent in its actual request',async()=>{
+ const memories=['Juan es mi compañero de Focus.','Prefiero estudiar por la tarde.','Cata es mi polola.','Juego fútbol los miércoles.']
+ const titles=['Dentista','Clase de publicidad','Fútbol','Proyecto Focus','Reunión con Juan','Gimnasio']
+ const prefix='Qué recuerdas de mis preferencias y qué tengo mañana. '
+ const suffix='No cambies mi agenda ni guardes otra memoria.'
+ const message=prefix+'Detalle de mi consulta. '.repeat(45).slice(0,1000-Buffer.byteLength(prefix+suffix))+suffix
+ assert.equal(Buffer.byteLength(message),1000)
+ const body=sanitizeNovaRequest({message,clientNow:Date.parse('2026-09-08T15:00Z'),clientTimezone:'America/Santiago',
+  events:titles.map((title,i)=>({id:`event-${i}`,title,date:dateContext.tomorrow,time:`${String(8+i).padStart(2,'0')}:00`,endTime:`${String(9+i).padStart(2,'0')}:00`})),
+  tasks:[{id:'task-1',label:'Comprar pan',date:dateContext.tomorrow},{id:'task-2',label:'Estudiar economía',date:dateContext.tomorrow}],userMemories:memories,
+  history:[{role:'user',content:'Quiero revisar mi agenda.'},{role:'assistant',content:'¿Qué día quieres revisar?'}],
+ }).body
+ const route=prepareNovaRoute(body,dateContext,novaTierRoute('luna'))
+ const context=JSON.parse(splitNovaSystemPrompt(route.systemPrompt).context.slice(NOVA_CONTEXT_MARKER.length))
+ assert.deepEqual(context.events,body.events);assert.deepEqual(context.tasks,body.tasks)
+ assert.deepEqual([...context.memories].sort(),[...memories].sort())
+ assert.deepEqual(route.history,body.history);assert.ok(route.inputTokens<=12000)
+ const saved=globalThis.fetch;let sent
+ globalThis.fetch=async(_url,options)=>{sent=JSON.parse(options.body);return{ok:true,json:async()=>({status:'completed',output_text:'{}'})}}
+ try {await callOpenAINova({...route,message:body.message,apiKey:'offline-fixture'})}
+ finally {globalThis.fetch=saved}
+ assert.equal(sent.input.at(-1).content,message)
+ assert.match(sent.input.at(-1).content,/No cambies mi agenda ni guardes otra memoria\.$/)
+ assert.equal(JSON.parse(sent.input[1].content.slice(NOVA_CONTEXT_MARKER.length)).events.length,6)
+})
+
+test('short activity infinitives ver, ir and dar support undated or date-only tasks without invented time',()=>{
+ for(const [message,dateISO] of [
+  ['esta noche ver la serie con la polola',dateContext.todayISO],
+  ['mañana ir al gym',dateContext.tomorrow],
+  ['dar comida al gato',null],
+  ['no olvidar dar comida al gato',null],
+ ]){
+  const out=validate(wirePlan([wireAction({title:message,sourceText:message,dateISO})]),message)
+  assert.equal(out.validation.ok,true,JSON.stringify({message,validation:out.validation}))
+  assert.equal(out.actions[0].type,'add_task');assert.equal(out.actions[0].task.date,dateISO)
+  assert.equal(out.actions[0].task.time,undefined)
+ }
+})
+
+test('questions, speculation, negation and incidental mentions of short verbs authorize no task',()=>{
+ for(const message of ['¿Qué puedo ver esta noche?','¿Cuándo ir al gym?','¿Dónde dar comida a los gatos?',
+  'quizás mañana ir al gym','estaba pensando en ver la serie','no sé si ir al gym','no quiero ir al gym',
+  'no puedo dar comida al gato','me gusta ver series']) {
+  const out=validate(wirePlan([wireAction({title:message,sourceText:message})]),message)
+  assert.equal(out.validation.ok,false,JSON.stringify({message,output:out}))
+  assert.equal(out.actions.length+out.proposed_actions.length,0)
+ }
 })

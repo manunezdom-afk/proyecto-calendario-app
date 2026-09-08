@@ -70,11 +70,15 @@ function oneTypoApart(left, right) {
   }
   return edits + (left.length-a) + (right.length-b) <= 1
 }
-const createIntent = text => /\b(?:necesito|tengo que|debo|quiero|anota|agend\w*|crea\w*|agrega\w*|recuerd\w*|acuerd\w*|avis\w*|pendiente|tarea|no olvidar|[a-z]{3,}(?:ar|er|ir))\b/.test(norm(text))
+// Short infinitives need an activity at the start (optionally after a date),
+// rather than matching incidental mentions in questions or personal facts.
+const shortTaskIntent = text => /^(?:por favor[, ]+)?(?:(?:hoy|manana|pasado manana|esta (?:manana|tarde|noche)|el (?:lunes|martes|miercoles|jueves|viernes|sabado|domingo))(?: por la (?:manana|tarde|noche))?[, :]?\s+)?(?:ver|ir|dar)\s+\S/.test(norm(text))
+const negatedShortTask = text => /\b(?:no|nunca|jamas)\s+(?:(?:quiero|puedo|debo|voy a)\s+)?(?:ver|ir|dar)\b/.test(norm(text))
+const createIntent = text => !negatedShortTask(text) && (/\b(?:necesito|tengo que|debo|quiero|anota|agend\w*|crea\w*|agrega\w*|recuerd\w*|acuerd\w*|avis\w*|pendiente|tarea|no olvidar|[a-z]{3,}(?:ar|er|ir))\b/.test(norm(text)) || shortTaskIntent(text))
 const conversational = text => /^(?:[¿?]\s*)?(?:ayudame a (?:ordenar|organizar|priorizar)|no se (?:por donde|como) empezar|que (?:es mejor|deberia|conviene)|por donde (?:empiezo|empezar))\b/.test(norm(text))
 // A conversational question is not a missing field in a capture. Recover only
 // explicit capture requests mislabeled chat_only; keep advice in the chat flow.
-const captureRequest = text => !conversational(text) && /^(?:por favor[, ]+)?(?:necesito|tengo que|debo|quiero|anota|agend\w*|crea\w*|agrega\w*|ponme|recuerd\w*|acuerd\w*|avis\w*|pendiente|tarea|no olvidar|[a-z]{3,}(?:ar|er|ir))\b/.test(norm(text))
+const captureRequest = text => !conversational(text) && !negatedShortTask(text) && (/^(?:por favor[, ]+)?(?:necesito|tengo que|debo|quiero|anota|agend\w*|crea\w*|agrega\w*|ponme|recuerd\w*|acuerd\w*|avis\w*|pendiente|tarea|no olvidar|[a-z]{3,}(?:ar|er|ir))\b/.test(norm(text)) || shortTaskIntent(text))
 const informational = text => /^(?:que (?:tengo|hay|sabes|recuerdas)|cuales|como (?:voy|estan)|muestrame|dime (?:que|mis)|ordena|organiza|resume|resumen)\b/.test(norm(text))
 const planningIntent = text => /\b(?:organizame|organiza|orden\w*|planificame|planifica|reorganiza\w*|distribuye|armame)\b/.test(norm(text))
   && /\b(?:dia|hoy|manana|tarde|semana|horario|agenda)\b/.test(norm(text))

@@ -4,6 +4,7 @@ import { sanitizeNovaRequest } from '../api/_lib/novaSafety.js'
 import { validateNovaPlan } from '../api/_lib/novaContract.js'
 import { sanitizePendingProposal, activePendingProposal } from '../api/_lib/novaPendingProposal.js'
 import { buildDateContext } from '../api/_lib/dateContext.js'
+import { analyzeNovaRequest } from '../api/_lib/novaRouter.js'
 import { wireAction, wirePlan } from './helpers/novaFixtures.js'
 
 const dateContext=buildDateContext(Date.parse('2026-09-08T15:00Z'),'America/Santiago')
@@ -118,4 +119,42 @@ test('a mixed clarification with actions never replaces the draft or becomes a v
  const proper=validate(wirePlan([],{mode:'clarification',needsClarification:true,
   clarificationQuestion:'¿Prefieres otra hora?',userConfirmationText:'¿Prefieres otra hora?'}))
  assert.equal(proper.validation.ok,true);assert.equal(proper.replacesProposalId,undefined)
+})
+
+test('a second refinement retains a prior cutoff without history and cannot inherit new execution authority',()=>{
+ const initial='Organiza la tarde de mañana con dos horas de Estudiar y una hora de Gym.'
+ const cutoff='No quiero estudiar después de las 20.'
+ const current='Mueve Gym una hora antes.'
+ const proposal={id:'second-draft',originalRequest:initial+'\n'+cutoff,actions:[
+  {type:'add_event',event:{title:'Estudiar',date:dateContext.tomorrow,time:'18:00',endTime:'20:00'}},
+  {type:'add_event',event:{title:'Gym',date:dateContext.tomorrow,time:'17:00',endTime:'18:00'}},
+ ]}
+ const actions=[
+  wireAction({type:'create_event',title:'Estudiar',dateISO:dateContext.tomorrow,time:'18:00',durationMinutes:120,sourceText:current}),
+  wireAction({type:'create_event',title:'Gym',dateISO:dateContext.tomorrow,time:'16:00',durationMinutes:60,sourceText:current}),
+ ]
+ const check=(items,context=proposal)=>validateNovaPlan({payload:wirePlan(items,{mode:'proposal'}),userMessage:current,
+  pendingProposal:context,history:[],events:[],tasks:[],dateContext,requestId:'third-request'})
+ const valid=check(actions)
+ assert.equal(valid.validation.ok,true,JSON.stringify(valid.validation))
+ assert.equal(valid.mode,'proposal');assert.equal(valid.replacesProposalId,proposal.id)
+ assert.deepEqual(valid.actions,[])
+ assert.deepEqual(valid.proposed_actions.map(action=>[action.event.title,action.event.time,action.event.endTime]),
+  [['Estudiar','6:00 PM','8:00 PM'],['Gym','4:00 PM','5:00 PM']])
+ const late=actions.map(action=>({...action}));late[0].time='21:00'
+ const rejected=check(late)
+ assert.equal(rejected.validation.ok,false)
+ assert.deepEqual(rejected.validation.issues,['planned_time_constraint'])
+ assert.equal(rejected.replacesProposalId,undefined)
+ assert.equal(rejected.actions.length+rejected.proposed_actions.length,0)
+ // Isolate the accumulated constraint: all other inputs are identical.
+ assert.equal(check(late,{...proposal,originalRequest:initial}).validation.ok,true)
+ const routed=analyzeNovaRequest({message:current,history:[],pendingProposal:proposal})
+ assert.equal(routed.tier,'terra');assert.equal(routed.signals.pendingRefinement,true)
+ assert.ok(routed.signals.constraints>=1)
+ const injected=check([...actions,wireAction({type:'save_memory',memoryKey:'horario',memoryValue:'No estudiar después de las20',
+  memoryCategory:'preference',sourceText:current})])
+ assert.equal(injected.validation.ok,false)
+ assert.equal(injected.actions.length+injected.proposed_actions.length,0)
+ assert.equal(injected.replacesProposalId,undefined)
 })
