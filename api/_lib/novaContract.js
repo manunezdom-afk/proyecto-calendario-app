@@ -42,6 +42,8 @@ export const validCivilDate = value => {
 }
 export const validClockTime = value => typeof value === 'string' && /^(?:[01]?\d|2[0-3]):[0-5]\d$/.test(value)
 const norm = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+// Matching aliases never rewrite the user's visible title or create authority.
+const activityNorm = value => norm(value).replace(/\bgym\b/g, 'gimnasio')
 const detailAddsWords = (title, detail) => {
   const words = value => norm(value).match(/[\p{L}\p{N}]+/gu)?.join(' ') || ''
   const fragment = words(detail)
@@ -122,9 +124,39 @@ function clockMinutes(value) {
   if (match[3]) hour = hour % 12 + (match[3].toUpperCase() === 'PM' ? 12 : 0)
   return hour * 60 + Number(match[2] || 0)
 }
+function constraintClock(hourText, minuteText, period) {
+  let hour = Number(hourText)
+  if (period) {
+    if (hour < 1 || hour > 12) return null
+    hour = hour % 12 + (period === 'pm' ? 12 : 0)
+  } else if (hour > 23 || (hour < 13 && minuteText == null && !/^0\d$/.test(hourText))) return null
+  return hour * 60 + Number(minuteText || 0)
+}
+function explicitPlanningWindows(text) {
+  const weekdays = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado']
+  const weekday = `(?:${weekdays.join('|')})`
+  const clock = '(\\d{1,2})(?::([0-5]\\d))?\\s*(am|pm)?'
+  const free = [], sleep = []; let ambiguous = false
+  const freePattern = new RegExp(`\\b(?:deja\\w*|dej\\w*|manten\\w*)\\s+((?:(?:el|los)\\s+)?${weekday}(?:\\s*(?:,|y)\\s*(?:(?:el|los)\\s+)?${weekday})*)(?:\\s+por\\s+la\\s+(?:tarde|noche))?\\s+libres?\\s+desde\\s+(?:las?\\s+)?${clock}(?=[\\s.,;!?]|$)`, 'g')
+  for (const match of text.matchAll(freePattern)) {
+    if (/\bno\s*$/.test(text.slice(0, match.index))) continue
+    const from = constraintClock(match[2], match[3], match[4])
+    if (from === null) { ambiguous = true; continue }
+    free.push({ days: weekdays.flatMap((day,index) => match[1].includes(day) ? [index] : []), from })
+  }
+  const sleepPattern = new RegExp(`\\b(?:sueno|duermo|dormir)\\s+(?:de|desde)\\s+(?:las?\\s+)?${clock}\\s+(?:a|hasta)\\s+(?:las?\\s+)?${clock}(?=[\\s.,;!?]|$)`, 'g')
+  for (const match of text.matchAll(sleepPattern)) {
+    if (/\bno\s*$/.test(text.slice(0, match.index))) continue
+    const from = constraintClock(match[1], match[2], match[3]), to = constraintClock(match[4], match[5], match[6])
+    if (from === null || to === null || from === to) { ambiguous = true; continue }
+    sleep.push(...(from < to ? [{ from, to }] : [{ from, to: 1440 }, { from: 0, to }]))
+  }
+  return { free, sleep, ambiguous }
+}
 function planningIssues(schedules, events, scope, dateContext) {
   const issues = new Set()
-  const text = norm(scope)
+  const text = activityNorm(scope), windows = explicitPlanningWindows(text)
+  if (windows.ambiguous) issues.add('ambiguous_planned_constraint')
   const edited = new Set(schedules.map(item => item.id).filter(Boolean))
   const fixed = events.filter(event => !edited.has(event.id)).map(event => {
     const [start, rangeEnd] = String(event.time || '').split(/\s+-\s+/)
@@ -145,10 +177,15 @@ function planningIssues(schedules, events, scope, dateContext) {
       const specific = /\bestudi\w*\b/.test(match[1]) ? /\bestudi\w*\b/.test(norm(item.title)) : true
       if (specific && (match[2] === 'antes' ? from < bound : to > bound)) issues.add('planned_time_constraint')
     }
+    const weekday = new Date(`${item.date}T12:00Z`).getUTCDay()
+    const overlapsWindow = window => to === from ? from >= window.from && from < window.to : from < window.to && to > window.from
+    const explicitFree = windows.free.filter(window => window.days.includes(weekday))
+    if (explicitFree.some(window => overlapsWindow({ from: window.from, to: 1440 }))) issues.add('planned_free_period_conflict')
+    if (windows.sleep.some(overlapsWindow)) issues.add('planned_sleep_conflict')
     const freeNight = text.match(/(?:deja\w*|dej\w*)[^.;]{0,100}\bnoche\b[^.;]{0,20}\blibres?\b/)
-    if (freeNight && (from >= 18 * 60 || to > 18 * 60)) {
+    if (!explicitFree.length && freeNight && (from >= 18 * 60 || to > 18 * 60)) {
       const weekdays = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado']
-      if (freeNight[0].includes(weekdays[new Date(`${item.date}T12:00Z`).getUTCDay()])) issues.add('planned_free_period_conflict')
+      if (freeNight[0].includes(weekdays[weekday])) issues.add('planned_free_period_conflict')
     }
     const overlaps = other => other.date === item.date && (from === other.from
       || to > from && other.from >= from && other.from < to
@@ -166,10 +203,10 @@ function planningIssues(schedules, events, scope, dateContext) {
     const end = text.indexOf(',', match.index + match[0].length)
     const clause = text.slice(start, end < 0 ? text.length : end)
     const offset = match.index - start
-    const after = text.slice(match.index + match[0].length)
+    const after = text.slice(match.index + match[0].length).replace(/^\s+en\s+total\b/, '')
     const explicitSubject = after.match(/^\s+(?:con|de|para|en)\s+(.{1,60}?)(?=\s+y\s+|[.;,]|$)/)?.[1]?.trim()
     const subjectStem = explicitSubject?.match(/[a-z]{3,}/)?.[0]?.replace(/(?:ar|er|ir|io|o)$/, '')
-    const candidates = [...new Set(schedules.map(item => norm(item.title)))].map(title => {
+    const candidates = [...new Set(schedules.map(item => activityNorm(item.title)))].map(title => {
       const word = title.match(/[a-z]{4,}/)?.[0]?.replace(/(?:ar|er|ir|io|o)$/, '')
       const position = word ? clause.indexOf(word) : -1
       return { title, distance: subjectStem ? title.includes(subjectStem) ? 0 : Infinity
@@ -177,9 +214,17 @@ function planningIssues(schedules, events, scope, dateContext) {
     }).sort((a,b) => a.distance-b.distance)
     const candidate = candidates[0]
     if (subjectStem && (!candidate || !Number.isFinite(candidate.distance))) { issues.add('planned_missing_activity'); continue }
-    if (!candidate || candidate.distance > 60 || candidates[1]?.distance === candidate.distance) continue
-    const minutes = schedules.filter(item => norm(item.title) === candidate.title).reduce((sum,item) => sum+item.duration,0)
+    if (!candidate || candidate.distance > 60 || (!subjectStem && candidates[1]?.distance === candidate.distance)) continue
+    const matching = schedules.filter(item => subjectStem ? activityNorm(item.title).includes(subjectStem) : activityNorm(item.title) === candidate.title)
+    const minutes = matching.reduce((sum,item) => sum+item.duration,0)
     const prefix = text.slice(Math.max(start,match.index-30),match.index)
+    const sessions = prefix.match(/\b(\d{1,2}|una|un|dos|tres|cuatro|cinco|seis)\s+sesiones?\s+de\s*$/)
+    if (sessions) {
+      const count = numbers[sessions[1]] || Number(sessions[1])
+      if (matching.length !== count) issues.add('planned_session_count')
+      if (matching.some(item => item.duration !== required)) issues.add('planned_duration_constraint')
+      continue
+    }
     const minimum = /(?:minimo|al menos)\s*$/.test(prefix)
     const maximum = /(?:maximo|no mas de)\s*$/.test(prefix)
     if (maximum ? minutes > required : minimum ? minutes < required : minutes !== required) issues.add('planned_duration_constraint')
@@ -188,9 +233,8 @@ function planningIssues(schedules, events, scope, dateContext) {
 }
 function groundedTitle(title, source, memories) {
   const ignored = new Set(['para','con','sin','una','uno','las','los','del','que','por','hoy','manana','tarea','evento','recordatorio','reunion'])
-  const words = norm(title).match(/[a-z0-9]{3,}/g)?.filter(w => !ignored.has(w)) || []
-  const evidence = norm(source + ' ' + memories.map(m => typeof m === 'string' ? m : m?.content || '').join(' '))
-    .replace(/\bgym\b/g, 'gimnasio gym')
+  const words = activityNorm(title).match(/[a-z0-9]{3,}/g)?.filter(w => !ignored.has(w)) || []
+  const evidence = activityNorm(source + ' ' + memories.map(m => typeof m === 'string' ? m : m?.content || '').join(' '))
   return words.length > 0 ? words.some(word => evidence.includes(word)
     || evidence.split(/\W+/).some(candidate => oneTypoApart(word, candidate))) : evidence.includes(norm(title))
 }
@@ -199,7 +243,7 @@ function groundedTarget(id, items, scope, discussed) {
   if (!item) return false
   const title = norm(item.title || item.label)
   if (!title) return true // Transport fixtures may only supply an ID.
-  const sameName = items.filter(candidate => norm(candidate.title || candidate.label) === title)
+  const sameName = items.filter(candidate => activityNorm(candidate.title || candidate.label) === activityNorm(title))
   if (sameName.length > 1 && !scope.includes(id) && !(item.date && scope.includes(item.date))) return false
   if (groundedTitle(title, scope, [])) return true
   return /\b(?:eso|esa|ese|este|esta|anterior|ultimo|muevelo|cambialo|borralo|eliminalo|completalo)\b/.test(norm(scope))
