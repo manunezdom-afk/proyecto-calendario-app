@@ -793,7 +793,7 @@ function NovaWidget({
               ¿Qué necesitas?
             </p>
             <p className="text-[11.5px] text-slate-400 text-center max-w-[240px] leading-snug mb-4">
-              Te ayudo a agendar, mover o limpiar tu día. Siempre confirmas antes de aplicar.
+              Te ayudo a agendar y ordenar tu día. Revisa las propuestas antes de aplicarlas.
             </p>
             <div className="w-full max-w-[280px] space-y-1.5">
               {[
