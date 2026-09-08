@@ -21,6 +21,16 @@ import Foundation
 /// funciones puras de validación / sanitización.
 enum NovaActionNormalizer {
 
+    /// Remote semantic titles belong to the validated plan. Only trim framing
+    /// whitespace and omit an exactly repeated subtitle; never parse user text
+    /// again, strip proper names or manufacture a description at persistence.
+    static func semanticPresentation(title: String, subtitle: String?) -> (title: String, subtitle: String?) {
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detail = subtitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let duplicate = detail?.compare(title, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        return (title, detail?.isEmpty == false && !duplicate ? detail : nil)
+    }
+
     // MARK: - Triggers explícitos de recordatorio
 
     /// Triggers que, si aparecen en el `userText` original, fuerzan a que

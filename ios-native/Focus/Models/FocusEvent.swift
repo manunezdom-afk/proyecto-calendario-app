@@ -88,6 +88,8 @@ struct FocusEvent: Identifiable, Codable, Hashable {
     var externalCalendarId: String?
     /// ID del evento en el sistema externo (para detectar duplicados al sync).
     var externalEventId: String?
+    /// EventKit calendar color, local read metadata only. Old snapshots decode nil.
+    var externalCalendarColorHex: String? = nil
     /// URL asociada (ej. link de Meet/Zoom). Distinto de `location`.
     var url: String?
     /// Última vez que sincronizamos contra el servicio externo.
@@ -132,6 +134,33 @@ struct FocusEvent: Identifiable, Codable, Hashable {
     /// Origen efectivo del evento. Si `source` es nil (data legacy) lo
     /// tratamos como `.local`.
     var effectiveSource: EventSource { source ?? .local }
+
+    var accentColor: Color {
+        guard effectiveSource != .local, let hex = externalCalendarColorHex,
+              hex.count == 6, let value = UInt32(hex, radix: 16) else { return section.color }
+        // EventKit's color is an accent, never body text. Adapt its brightness
+        // for the current surface while preserving hue and keeping a label/icon.
+        return Color(uiColor: UIColor { traits in
+            var r = CGFloat((value >> 16) & 255) / 255
+            var g = CGFloat((value >> 8) & 255) / 255
+            var b = CGFloat(value & 255) / 255
+            func luminance(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> CGFloat {
+                func linear(_ x: CGFloat) -> CGFloat { x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4) }
+                return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+            }
+            let dark = traits.userInterfaceStyle == .dark
+            let background: CGFloat = dark ? luminance(25/255, 31/255, 47/255) : 1
+            let target: CGFloat = traits.accessibilityContrast == .high ? 4.5 : 3
+            for _ in 0..<30 {
+                let foreground = luminance(r, g, b)
+                if (max(foreground, background) + 0.05) / (min(foreground, background) + 0.05) >= target { break }
+                r = dark ? r + (1-r)*0.08 : r*0.92
+                g = dark ? g + (1-g)*0.08 : g*0.92
+                b = dark ? b + (1-b)*0.08 : b*0.92
+            }
+            return UIColor(red: r, green: g, blue: b, alpha: 1)
+        })
+    }
 
     /// True si la card debe mostrar solo la hora de inicio (sin "15:00–16:00").
     /// Es punto en el tiempo cuando es recordatorio O cuando la duración fue

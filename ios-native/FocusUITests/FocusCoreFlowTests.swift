@@ -249,4 +249,154 @@ final class FocusCoreFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Todavía no tengo nada guardado")).firstMatch.waitForExistence(timeout: 5))
         screenshot("Hilante memoria eliminada")
     }
+
+    func testHomeSwipeDeleteUndoAndRestart() {
+        tab("Agenda")
+        element("event.new").tap()
+        let title = app.textFields["event.title"]
+        XCTAssertTrue(app.navigationBars["Nuevo evento"].waitForExistence(timeout: 5))
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        // The medium sheet can expose its field while its presentation is
+        // settling. Retry focus only; never retry typing or saving a mutation.
+        if !app.keyboards.firstMatch.waitForExistence(timeout: 2) { title.tap() }
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), app.debugDescription)
+        title.typeText("Fútbol gesto QA")
+        XCTAssertEqual(title.value as? String, "Fútbol gesto QA")
+        element("event.save").tap()
+        tab("Hoy")
+        // The row identifier is inherited by its hour label and button.
+        // Swipe the containing native cell, not the first 49-point text child.
+        let row = app.cells.containing(.staticText, identifier: "Fútbol gesto QA").firstMatch
+        for _ in 0..<4 where !row.isHittable { app.swipeUp() }
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        screenshot("Agenda con color semántico")
+        let swipeStart = row.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
+        let swipeEnd = row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        swipeStart.press(forDuration: 0.1, thenDragTo: swipeEnd)
+        let delete = app.buttons["Eliminar"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 3))
+        screenshot("Swipe parcial con Eliminar")
+        delete.tap()
+        XCTAssertTrue(element("today.undoDelete").waitForExistence(timeout: 5))
+        screenshot("Borrado con Deshacer")
+        element("today.undoDelete").tap()
+        XCTAssertTrue(app.staticTexts["Fútbol gesto QA"].waitForExistence(timeout: 5))
+        let restored = app.cells.containing(.staticText, identifier: "Fútbol gesto QA").firstMatch
+        screenshot("Evento restaurado")
+        let fullSwipeStart = restored.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5))
+        let fullSwipeEnd = restored.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.5))
+        fullSwipeStart.press(forDuration: 0.1, thenDragTo: fullSwipeEnd)
+        XCTAssertTrue(element("today.undoDelete").waitForExistence(timeout: 5))
+        app.terminate(); app.launchArguments = ["--ui-testing"]; app.launch()
+        XCTAssertFalse(app.staticTexts["Fútbol gesto QA"].exists)
+        tab("Agenda")
+        XCTAssertFalse(app.staticTexts["Fútbol gesto QA"].exists)
+    }
+
+    func testCompactVoiceCanCancelPermissionsAndReturnToUnchangedDraft() {
+        let input = element("capture.input")
+        input.tap(); input.typeText("Borrador para conservar")
+        if app.buttons["Listo"].exists { app.buttons["Listo"].tap() }
+        element("capture.voice").tap()
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        if system.alerts.firstMatch.waitForExistence(timeout: 3) {
+            let deny = system.alerts.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'permitir' OR label CONTAINS[c] 'allow'")).firstMatch
+            if deny.exists { deny.tap() }
+        }
+        XCTAssertTrue(element("voice.cancel").waitForExistence(timeout: 5))
+        screenshot("Dictado compacto")
+        element("voice.cancel").tap()
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        XCTAssertEqual(input.value as? String, "Borrador para conservar")
+    }
+
+    func testManualCategoriesKeepTheirTypesAndColorsAfterRestart() {
+        let examples = [("Estudio QA", "Estudio"), ("Entrenamiento QA", "Entrenamiento"), ("Reunión QA", "Reunión")]
+        tab("Agenda")
+        for (name, category) in examples {
+            element("event.new").tap()
+            let title = app.textFields["event.title"]
+            XCTAssertTrue(title.waitForExistence(timeout: 5))
+            title.tap()
+            if !app.keyboards.firstMatch.waitForExistence(timeout: 2) { title.tap() }
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+            title.typeText(name)
+            if app.buttons["Listo"].exists { app.buttons["Listo"].tap() }
+            let type = element("event.section")
+            for _ in 0..<4 where !type.isHittable { app.swipeUp() }
+            XCTAssertTrue(type.isHittable)
+            type.tap()
+            let option = app.buttons[category].firstMatch
+            XCTAssertTrue(option.waitForExistence(timeout: 5))
+            option.tap()
+            XCTAssertTrue((type.value as? String) == category || type.label.contains(category))
+            element("event.save").tap()
+            XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 5))
+        }
+        tab("Hoy")
+        for (name, _) in examples { XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 5)) }
+        screenshot("Hoy con Estudio, Entrenamiento y Reunión")
+        tab("Agenda")
+        screenshot("Agenda con tres tipos explícitos")
+        app.terminate(); app.launchArguments = ["--ui-testing"]; app.launch()
+        XCTAssertTrue(element("capture.input").waitForExistence(timeout: 15))
+        tab("Hoy")
+        for (name, _) in examples { XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 5)) }
+        screenshot("Tres tipos conservados al reiniciar")
+        for (name, category) in examples {
+            app.staticTexts[name].tap()
+            XCTAssertTrue(app.navigationBars["Editar evento"].waitForExistence(timeout: 5))
+            let type = element("event.section")
+            for _ in 0..<4 where !type.isHittable { app.swipeUp() }
+            XCTAssertTrue((type.value as? String) == category || type.label.contains(category), "El tipo elegido debe persistir")
+            element("event.cancel").tap()
+        }
+    }
+
+}
+
+/// Opt-in by selecting this class on a physical device. It never inherits the
+/// synthetic fixture setup or accepts permissions, enters text, or sends chat.
+final class FocusPhysicalSmokeTests: XCTestCase {
+    func testExistingHomeAndDictationCanBeOpenedAndCancelledWithoutChangingDraft() throws {
+        #if targetEnvironment(simulator)
+        throw XCTSkip("Comprobación reservada al iPhone físico; no usa fixtures.")
+        #else
+        continueAfterFailure = false
+        let app = XCUIApplication(bundleIdentifier: "me.usefocus.app")
+        app.launchArguments = []
+        if app.state == .notRunning { app.launch() } else { app.activate() }
+        let today = app.tabBars.buttons["Hoy"]
+        guard today.waitForExistence(timeout: 15) else {
+            throw XCTSkip("Hoy no está disponible en la sesión actual; no se inicia sesión ni se cambia el modo de uso.")
+        }
+        today.tap()
+        let input = app.textFields["capture.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        let originalDraft = input.value as? String
+        let home = XCTAttachment(screenshot: app.screenshot())
+        home.name = "iPhone Home — evidencia privada"; home.lifetime = .keepAlways
+        add(home)
+        let voice = app.buttons["capture.voice"]
+        guard voice.isEnabled else { throw XCTSkip("Dictado no disponible mientras existe una operación en curso.") }
+        voice.tap()
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        if system.alerts.firstMatch.waitForExistence(timeout: 3) {
+            let cancel = system.alerts.buttons.matching(NSPredicate(format: "label == 'Cancelar' OR label == 'Cancel'")).firstMatch
+            if cancel.exists { cancel.tap() }
+            else { XCUIDevice.shared.press(.home) }
+            throw XCTSkip("Apareció un permiso del sistema: no se aceptó ni rechazó automáticamente; dictado real pendiente.")
+        }
+        let cancel = app.buttons["voice.cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        let sheet = XCTAttachment(screenshot: app.screenshot())
+        sheet.name = "iPhone dictado compacto — evidencia privada"; sheet.lifetime = .keepAlways
+        add(sheet)
+        cancel.tap()
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        // A failed assertion must not print the user's draft into test logs.
+        XCTAssertTrue((input.value as? String) == originalDraft, "Cancelar debe conservar el borrador previo.")
+        #endif
+    }
 }

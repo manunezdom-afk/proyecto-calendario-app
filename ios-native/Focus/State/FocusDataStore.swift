@@ -5847,7 +5847,7 @@ final class FocusDataStore: ObservableObject {
 
     @discardableResult
     func deleteEvent(_ id: UUID) -> Bool {
-        guard events.contains(where: { $0.id == id }) else { return false }
+        guard events.contains(where: { $0.id == id && $0.effectiveSource == .local }) else { return false }
         guard commitLocalMutation({
             events.removeAll { $0.id == id }
             enqueueSync(.event, id: id, operation: .delete)
@@ -5857,6 +5857,29 @@ final class FocusDataStore: ObservableObject {
         LocalNotificationService.shared.cancelReminder(eventId: id)
         resyncAllLocalNotifications()
         return true
+    }
+
+    struct EventDeletionReceipt: Identifiable {
+        let id = UUID()
+        let event: FocusEvent
+        let generation: UUID
+        let expiresAt: Date
+    }
+
+    func deleteEventWithUndo(_ id: UUID) -> EventDeletionReceipt? {
+        guard let event = events.first(where: { $0.id == id && $0.effectiveSource == .local }),
+              deleteEvent(id) else { return nil }
+        return EventDeletionReceipt(event: event, generation: accountGeneration,
+                                    expiresAt: Date().addingTimeInterval(10))
+    }
+
+    @discardableResult
+    func undoEventDeletion(_ receipt: EventDeletionReceipt) -> Bool {
+        guard receipt.generation == accountGeneration, Date() <= receipt.expiresAt,
+              !events.contains(where: { $0.id == receipt.event.id }) else { return false }
+        // Same ID and a newer outbox revision supersede a queued or in-flight
+        // delete. Supabase upsert clears its tombstone; replay cannot duplicate it.
+        return addEvent(receipt.event)
     }
 
     @discardableResult
@@ -6775,23 +6798,13 @@ final class FocusDataStore: ObservableObject {
         isMultiEventBatch: Bool = false,
         reviewedTiming: Bool = false
     ) -> FocusEvent? {
-        // PASO 1: Limpiar título via normalizer (centralizado).
-        // El backend puede devolver "Acuérdame buscar a Juan" sin limpiar
-        // — el normalizer quita reminder triggers, fillers, marcadores
-        // temporales sueltos, normaliza nombres propios, y simplifica
-        // "Ir a buscar X" → "Buscar a X".
-        //
-        // FALLBACK 2026-05-15: si el backend devolvió solo un verbo de
-        // movimiento ("Salir", "Ir"), re-extraemos del userText completo.
-        // Caso real reportado: "Tengo que salir al cumpleaños de Urrutia"
-        // → backend devolvía "Salir" → preferBetterTitle reextrae →
-        // "Cumpleaños de Urrutia".
-        let rawTitle = payload.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let backendCleaned = NovaActionNormalizer.cleanTitle(rawTitle)
-        let cleanedTitle = NovaActionNormalizer.preferBetterTitle(
-            backendCleaned: backendCleaned,
-            userText: userText
-        )
+        // The validated remote plan already contains semantic presentation.
+        // Never re-extract words/details from the utterance after that boundary.
+        let rawTitle = payload.title
+        let presentation = NovaActionNormalizer.semanticPresentation(title: rawTitle, subtitle: payload.subtitle)
+        let cleanedTitle = presentation.title
+        NovaRouteTrace.normalized(beforeTitle: rawTitle, afterTitle: cleanedTitle,
+            beforeSubtitle: payload.subtitle, afterSubtitle: presentation.subtitle)
         guard !cleanedTitle.isEmpty else { return nil }
 
         let cal = Calendar.current
@@ -6927,39 +6940,8 @@ final class FocusDataStore: ObservableObject {
             resolvedNotes = nil
         }
 
-        // Subtitle: dos fuentes posibles, en orden de prioridad:
-        //   1. Detalle trailing extraído del userText
-        //      (ej. "futbol a las 5 acordarme de llevar la pelota" →
-        //       subtitle "Llevar la pelota"). Esto cubre la mayoría
-        //       de los casos del user spec 2026-05-27.
-        //   2. Split del title si empieza con "reunión de X"
-        //      (ej. "Reunión de mindfulness con Cristina" → title
-        //       "Reunión", subtitle "Mindfulness con Cristina").
-        //
-        //   Si ambos aplican (raro pero posible), gana el detalle
-        //   trailing y se descarta el split (porque el detalle es
-        //   más específico — viene del propio texto del usuario).
-        //   `trailingDetail` ya se computó arriba (antes de PASO 2).
-        let (finalTitle, finalSubtitle): (String, String?) = {
-            // Subtítulo explícito del backend (Claude) gana sobre la extracción local.
-            if let s = payload.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty {
-                return (cleanedTitle, s)
-            }
-            // En batch multi-evento NO usamos el detalle trailing del
-            // userText completo: pertenece a UN solo segmento y se filtraba
-            // como subtítulo de TODOS los eventos del lote (mismo guard que
-            // isMultiIntent en el path local). El backend es responsable de
-            // mandar el subtitle por-evento en ese caso.
-            if let detail = trailingDetail, !isMultiEventBatch {
-                // Si el cleanedTitle es solo "Reunión" tras strip del detalle,
-                // mantenemos como tal. El detalle gana como subtítulo.
-                return (cleanedTitle, detail)
-            }
-            if let split = NovaActionNormalizer.splitTitleSubtitle(cleanedTitle) {
-                return (split.title, split.subtitle)
-            }
-            return (cleanedTitle, nil)
-        }()
+        let finalTitle = cleanedTitle
+        let finalSubtitle = presentation.subtitle
 
         return FocusEvent(
             title: finalTitle,
@@ -7296,7 +7278,7 @@ final class FocusDataStore: ObservableObject {
         else if cal.isDateInTomorrow(event.startTime) { dayLabel = "mañana" }
         else { dayLabel = "el \(DateFormatters.weekdayDay.string(from: event.startTime).lowercased())" }
         let timeLabel = DateFormatters.hourMinute.string(from: event.startTime)
-        return "Listo. Te dejé «\(event.title)» \(dayLabel) a las \(timeLabel)."
+        return "Listo, \(event.title) \(dayLabel) a las \(timeLabel)."
     }
 
     /// Parsea un `id` string del backend a UUID. Si no es UUID válido,
@@ -7447,6 +7429,11 @@ final class FocusDataStore: ObservableObject {
             appendNovaReply("Esta propuesta se puede aplicar o descartar. Para pedir otra, descártala primero.")
             return
         }
+        if let pending = pendingProposalContext,
+           NovaService.PendingProposal.appending(trimmed, to: pending.originalRequest) == nil {
+            failNova("La propuesta llegó al límite de ajustes. La conservé sin aplicar; descártala y pide una planificación nueva con todos tus requisitos.", input: trimmed)
+            return
+        }
         if !retrying, let last = lastNovaSubmission, last.text == trimmed,
            Date().timeIntervalSince(last.timestamp) < 0.8 { return }
         lastNovaSubmission = (trimmed, Date())
@@ -7507,8 +7494,23 @@ final class FocusDataStore: ObservableObject {
             failNova("Necesitas conexión y una sesión para ajustar esta propuesta. La conservé sin aplicar.", input: trimmed)
             return
         }
-        if syncCredentials == nil || (pendingProposalContext == nil && !intents.isEmpty && intents.allSatisfy(shouldShortCircuitLocally)) {
+        let localDecision = NovaLocalRoutingPolicy.decide(trimmed,
+            hasPendingClarification: novaContext.pendingIsActive)
+        let exactDeletion: Bool = {
+            guard intents.count == 1, case .deleteEventByActivity(let activity) = intents[0] else { return false }
+            let matches = events.filter { $0.title.compare(activity, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
+            return matches.count == 1 && trimmed.range(of: #"(?i)^(?:borra|elimina)\s+(?:lo de\s+)?"# + NSRegularExpression.escapedPattern(for: activity) + #"$"#, options: .regularExpression) != nil
+        }()
+        let canExecuteLocally = pendingProposalContext == nil && (localDecision.permitsLocalMutation || exactDeletion)
+            && intents.count == 1
+        NovaRouteTrace.selected(canExecuteLocally ? localDecision
+            : .init(route: .remoteAI, reason: "semantic_interpretation_required"))
+        if canExecuteLocally {
             executeLocalNovaIntents(intents, userText: trimmed)
+            return
+        }
+        guard syncCredentials != nil else {
+            failNova("Para entender bien esta frase necesito la IA. Inicia sesión y vuelve a enviarla; también puedes crear el pendiente manualmente.", input: trimmed)
             return
         }
         if let first = intents.first, case .clarify(let reason) = first,
@@ -7576,14 +7578,9 @@ final class FocusDataStore: ObservableObject {
                     // A fresh paid attempt still requires the user's retry tap.
                     FocusLocalStore.clear(.novaPendingRequest)
                 }
-                if pendingProposalContext == nil, let error = error as? NovaServiceError, case .offline = error {
-                    self.executeLocalNovaIntents(intents, userText: trimmed)
-                    self.appendNovaReply("Sin conexión. Los cambios guardados en este iPhone se sincronizarán cuando vuelvas a conectarte.")
-                } else {
-                    let message = (error as? NovaServiceError)?.errorDescription
-                        ?? "No pude terminar la solicitud. Vuelve a intentarlo."
-                    self.failNova(message, input: trimmed)
-                }
+                let message = (error as? NovaServiceError)?.errorDescription
+                    ?? "No pude terminar la solicitud. Vuelve a intentarlo."
+                self.failNova(message, input: trimmed)
             }
         }
     }
@@ -7668,10 +7665,18 @@ final class FocusDataStore: ObservableObject {
             || actions.contains(where: NovaActionValidator.isDestructive)
             || NovaActionValidator.isEmotionalOrContextual(userText)
         if requiresReview {
+            let proposalRequest: String
+            if let replacedProposal {
+                guard let combined = NovaService.PendingProposal.appending(userText, to: replacedProposal.userText) else {
+                    failNova("La propuesta llegó al límite de ajustes. La conservé sin aplicar; descártala y pide una planificación nueva con todos tus requisitos.", input: userText)
+                    return
+                }
+                proposalRequest = combined
+            } else { proposalRequest = userText }
             novaPendingProposal = NovaPendingProposal(
                 summary: "Revisa estos cambios antes de aplicarlos.",
                 actionLabels: actions.map(novaActionLabel), actions: actions,
-                localIntents: [], userText: replacedProposal?.userText ?? userText, generation: accountGeneration,
+                localIntents: [], userText: proposalRequest, generation: accountGeneration,
                 reviewedEvents: reviewedEvents(for: actions), reviewedTasks: reviewedTasks(for: actions),
                 actionIDs: actionIDs,
                 reviewedMemories: actions.contains(where: { if case .forgetMemory = $0 { return true }; return false }) ? NovaMemoryStore.shared.activeMemories : nil

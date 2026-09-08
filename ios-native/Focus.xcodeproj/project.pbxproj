@@ -56,6 +56,7 @@
 		FA00000000000000000000E9 /* FocusWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000E8 /* FocusWidgetBundle.swift */; };
 		FA00000000000000000000EB /* FocusWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000EA /* FocusWidget.swift */; };
 		FA00000000000000000000F7 /* FocusWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000E7 /* FocusWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		FAA000000000000000000102 /* NovaLocalRoutingPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA000000000000000000101 /* NovaLocalRoutingPolicy.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -151,6 +152,7 @@
 		FA00000000000000000000EA /* FocusWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusWidget.swift; sourceTree = "<group>"; };
 		FA00000000000000000000EC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		FA00000000000000000000ED /* FocusWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FocusWidget.entitlements; sourceTree = "<group>"; };
+		FAA000000000000000000101 /* NovaLocalRoutingPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovaLocalRoutingPolicy.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -309,6 +311,7 @@
 				FA0000000000000000000077 /* AuthService.swift */,
 				FA00000000000000000000A1 /* AuthService+GoogleNative.swift */,
 				FA000000000000000000007B /* SupabaseSyncService.swift */,
+				FAA000000000000000000101 /* NovaLocalRoutingPolicy.swift */,
 				FA000000000000000000007C /* NovaService.swift */,
 				FA00000000000000000000E3 /* SystemCalendarService.swift */,
 				FA00000000000000000000E5 /* PushRegistrationService.swift */,
@@ -535,6 +538,7 @@
 				FA0000000000000000000087 /* AuthService.swift in Sources */,
 				FA00000000000000000000A2 /* AuthService+GoogleNative.swift in Sources */,
 				FA0000000000000000000091 /* SupabaseSyncService.swift in Sources */,
+				FAA000000000000000000102 /* NovaLocalRoutingPolicy.swift in Sources */,
 				FA0000000000000000000092 /* NovaService.swift in Sources */,
 				FA00000000000000000000E2 /* SystemCalendarService.swift in Sources */,
 				FA00000000000000000000E4 /* PushRegistrationService.swift in Sources */,
@@ -794,7 +798,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Focus/Focus.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = D8UM897B2T;
 				ENABLE_PREVIEWS = YES;
@@ -820,7 +824,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Focus/Focus.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = D8UM897B2T;
 				ENABLE_PREVIEWS = YES;
@@ -844,7 +848,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FocusWidget/FocusWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = D8UM897B2T;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FocusWidget/Info.plist;
@@ -869,7 +873,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FocusWidget/FocusWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = D8UM897B2T;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FocusWidget/Info.plist;

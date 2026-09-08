@@ -179,6 +179,8 @@ struct NovaCaptureField: View {
     var onSend: () -> Void
     @FocusState private var focused: Bool
     @State private var showVoice = false
+    @State private var sendAfterDictation = false
+    @State private var reviewAfterDictation = false
     @State private var showConsent = false
     @State private var pendingText: String?
 
@@ -210,9 +212,20 @@ struct NovaCaptureField: View {
                     .font(.caption).foregroundStyle(Theme.Colors.danger)
             }
         }
-        .sheet(isPresented: $showVoice) {
-            VoiceDictationSheet { transcript in text = transcript }
-                .presentationDetents([.large])
+        .sheet(isPresented: $showVoice, onDismiss: {
+            if sendAfterDictation {
+                sendAfterDictation = false
+                submit()
+            } else if reviewAfterDictation {
+                reviewAfterDictation = false
+                focused = true
+            }
+        }) {
+            VoiceDictationSheet(initialText: text, onTranscript: { transcript in
+                text = transcript; reviewAfterDictation = true
+            }, onSend: { transcript in
+                text = transcript; sendAfterDictation = true
+            })
         }
         .sheet(isPresented: $showConsent, onDismiss: { pendingText = nil }) {
             NovaAIConsentSheet {
@@ -228,7 +241,7 @@ struct NovaCaptureField: View {
 
     private var controls: some View {
         HStack(spacing: 8) {
-            Button { focused = false; showVoice = true } label: {
+            Button { focused = false; sendAfterDictation = false; reviewAfterDictation = false; showVoice = true } label: {
                 Label("Dictar", systemImage: "mic")
                     .font(.subheadline.weight(.medium))
                     .frame(minWidth: 44, minHeight: 44)

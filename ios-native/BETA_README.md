@@ -1,5 +1,9 @@
 # Focus — Beta cerrada (TestFlight)
 
+> ARCHIVADO: instrucciones del build 25. Sus pantallas, proveedores y comportamientos son históricos. Para la versión actual y la migración de chat a OpenAI, ver [RELEASE.md](../docs/focus-2/RELEASE.md).
+
+> Validación actual, 8 de septiembre de 2026: **95/95 XCTest**, gestos de borrado/Deshacer en claro y oscuro y build de desarrollo **1.0 (34)** firmado e instalado sin borrar datos. Su lanzamiento está pendiente de desbloquear el iPhone. Esto no anuncia TestFlight ni certifica dictado hablado en el dispositivo. Ver [pasada de UX](../docs/focus-2/UX_INTELLIGENCE_PASS.md). No seguir el procedimiento histórico de «Borrar todo» para cambiar de cuenta.
+
 Build **1.0 (25)** — beta cerrada. 2–5 testers.
 
 ---

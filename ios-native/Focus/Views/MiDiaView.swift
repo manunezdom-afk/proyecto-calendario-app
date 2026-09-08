@@ -15,6 +15,8 @@ struct MiDiaView: View {
     @State private var editingTask: FocusTask?
     @State private var editingEvent: FocusEvent?
     @State private var lastCompletedTask: UUID?
+    @State private var deletedEvent: FocusDataStore.EventDeletionReceipt?
+    @State private var externalDeletionNotice = false
 
     private var dateLabel: String {
         let value = Date().formatted(.dateTime.weekday(.wide).day().month(.wide))
@@ -52,8 +54,8 @@ struct MiDiaView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
+            List {
+                Group {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(dateLabel)
                             .font(.subheadline.weight(.medium))
@@ -118,13 +120,13 @@ struct MiDiaView: View {
                         }
 
                         if !overdueReminders.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
+                            Group {
                                 sectionTitle("Avisos por atender", count: overdueReminders.count)
                                 ForEach(overdueReminders.prefix(5)) { event in eventRow(event, overdue: true) }
                             }
                         }
 
-                        VStack(alignment: .leading, spacing: 16) {
+                        Group {
                             HStack {
                                 sectionTitle("Tu agenda", count: dayEvents.count)
                                 Spacer()
@@ -157,8 +159,13 @@ struct MiDiaView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 24)
+                .listRowInsets(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: dayEvents.map(\.id))
             .background { FocusAmbientBackground(intensity: 0.85) }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Hoy")
@@ -182,6 +189,30 @@ struct MiDiaView: View {
                     } label: { Image(systemName: "plus") }
                     .accessibilityLabel("Crear").accessibilityIdentifier("today.new")
                 }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if let receipt = deletedEvent, receipt.generation == store.accountGeneration {
+                    HStack {
+                        Text("Evento eliminado").font(.subheadline)
+                        Spacer()
+                        Button("Deshacer") {
+                            if store.undoEventDeletion(receipt) { deletedEvent = nil }
+                            else { toast.show(.warning("No pude restaurarlo. Inténtalo de nuevo.")) }
+                        }.font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+                            .accessibilityIdentifier("today.undoDelete")
+                    }
+                    .padding(.horizontal, 16).background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.horizontal, 20)
+                    .task(id: receipt.id) {
+                        try? await Task.sleep(nanoseconds: 10_000_000_000)
+                        if !Task.isCancelled, deletedEvent?.id == receipt.id { deletedEvent = nil }
+                    }
+                }
+            }
+            .alert("Evento del calendario del iPhone", isPresented: $externalDeletionNotice) {
+                Button("Entendido", role: .cancel) { }
+            } message: {
+                Text("Focus consulta este calendario. Para eliminar el evento, ábrelo en Calendario y comprueba los permisos de esa cuenta.")
             }
             .refreshable { await store.fetchRemoteAndMerge(); store.refreshSystemEvents() }
             .sheet(isPresented: $showNewTask) {
@@ -331,11 +362,13 @@ struct MiDiaView: View {
             : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
         return layout {
             VStack(alignment: .leading, spacing: 4) {
-                Text(event.startTime, format: .dateTime.hour().minute()).font(.subheadline.weight(.semibold).monospacedDigit())
+                Text(event.startTime, format: .dateTime.hour().minute())
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .lineLimit(1).minimumScaleFactor(0.8)
                 if overdue { Text(event.startTime, format: .dateTime.day().month(.abbreviated)).font(.caption).foregroundStyle(Theme.Colors.danger) }
             }.frame(width: accessible ? nil : 62, alignment: .leading)
             if !accessible {
-                RoundedRectangle(cornerRadius: 2).fill(event.section.color).frame(width: 3)
+                RoundedRectangle(cornerRadius: 2).fill(event.accentColor).frame(width: 3)
                     .accessibilityHidden(true)
             }
             Button {
@@ -343,7 +376,11 @@ struct MiDiaView: View {
                 else if let url = URL(string: "calshow:\(event.startTime.timeIntervalSinceReferenceDate)") { openURL(url) }
             } label: {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(event.title).font(.body.weight(.medium)).foregroundStyle(.primary)
+                    HStack(spacing: 6) {
+                        Image(systemName: event.effectiveSource == .local ? event.section.symbol : "calendar")
+                            .font(.caption).foregroundStyle(event.accentColor).accessibilityHidden(true)
+                        Text(event.title).font(.body.weight(.medium)).foregroundStyle(.primary)
+                    }
                     if let subtitle = event.subtitle, !subtitle.isEmpty {
                         Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
                     }
@@ -365,6 +402,22 @@ struct MiDiaView: View {
                 } label: { Image(systemName: "checkmark.circle").font(.title2).frame(width: 44, height: 44) }
                 .accessibilityLabel("Completar recordatorio \(event.title)")
             }
-        }.fixedSize(horizontal: false, vertical: true).focusSurface(radius: 20, padding: 16).accessibilityIdentifier("today.event.\(event.id.uuidString)")
+        }.fixedSize(horizontal: false, vertical: true).focusSurface(radius: 20, padding: 16)
+        .accessibilityIdentifier("today.event.\(event.id.uuidString)")
+        .swipeActions(edge: .trailing, allowsFullSwipe: event.effectiveSource == .local) {
+            if event.effectiveSource == .local {
+                Button(role: .destructive) {
+                    if let receipt = store.deleteEventWithUndo(event.id) { deletedEvent = receipt }
+                    else if store.events.contains(where: { $0.id == event.id }) {
+                        toast.show(.warning("No pude guardar el borrado. Inténtalo de nuevo."))
+                    }
+                } label: { Label("Eliminar", systemImage: "trash") }.tint(.red)
+            } else {
+                Button { externalDeletionNotice = true } label: { Label("Eliminar", systemImage: "trash") }.tint(.red)
+                Button {
+                    if let url = URL(string: "calshow:\(event.startTime.timeIntervalSinceReferenceDate)") { openURL(url) }
+                } label: { Label("Calendario", systemImage: "calendar") }
+            }
+        }
     }
 }

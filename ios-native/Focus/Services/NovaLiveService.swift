@@ -38,6 +38,9 @@ final class NovaLiveService: ObservableObject {
     /// del tap, normalizado a partir del RMS en dB. La UI usa este valor
     /// para waveform/barras animadas que dan feedback "estoy oyéndote".
     @Published private(set) var audioLevel: Float = 0
+    @Published private(set) var audioSamples: [Float] = Array(repeating: 0, count: 24)
+    @Published private(set) var isPausedForSilence = false
+    @Published private(set) var notice: String?
     /// `true` cuando hay habla actualmente (energía por encima del piso de
     /// ruido). Calculado en el mismo loop del tap. Sirve para distinguir
     /// "pausa para pensar" vs "terminé de hablar":
@@ -77,6 +80,10 @@ final class NovaLiveService: ObservableObject {
     private var audioEngine: AVAudioEngine?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private var finishTask: Task<Void, Never>?
+    private var audioObservers: [NSObjectProtocol] = []
+    private var inputTapInstalled = false
+    private var captureStartedAt: TimeInterval?
 
     /// Locale efectivo que usamos (para diagnóstico/UI). Resuelto en init.
     let activeLocaleIdentifier: String
@@ -92,8 +99,8 @@ final class NovaLiveService: ObservableObject {
     /// sostenido (gateado por `lowEnergyHoldSeconds`), porque a veces el
     /// recognizer demora en emitir texto aunque el usuario esté hablando
     /// — usar solo timer de transcript causaba cortes prematuros.
-    private static let silenceShortSeconds: Double = 2.0
-    private static let silenceLongSeconds: Double = 3.5
+    private static let silenceShortSeconds: Double = 6.0
+    private static let silenceLongSeconds: Double = 4.0
     private static let lowEnergyHoldSeconds: Double = 0.6
     /// Umbral de energía debajo del cual consideramos "silencio". 0.05 en
     /// el rango 0…1 (-46dB aprox post-normalize). Más bajo = más
@@ -102,10 +109,10 @@ final class NovaLiveService: ObservableObject {
 
     /// Timer monotónico para detectar silencio. Lo reseteamos cada vez que
     /// llega texto nuevo del reconocedor o el audio level pasa el umbral.
-    private var lastSpeechAt: Date?
+    private var lastSpeechAt: TimeInterval?
     /// Última vez que el audio level estuvo por encima del threshold.
     /// Usado por el VAD para evitar corte mientras hay energía.
-    private var lastHighEnergyAt: Date?
+    private var lastHighEnergyAt: TimeInterval?
     private var silenceCheckTask: Task<Void, Never>?
     /// Smoothing factor (low-pass) para el audioLevel publicado — sin
     /// esto la UI parpadea demasiado. 0.0 = solo histórico, 1.0 = solo
@@ -126,6 +133,7 @@ final class NovaLiveService: ObservableObject {
         let chosen = preferred ?? fallbackES ?? any
         self.recognizer = chosen
         self.activeLocaleIdentifier = chosen?.locale.identifier ?? "unavailable"
+        observeAudioSession()
     }
 
     // MARK: - Permission flow
@@ -167,6 +175,7 @@ final class NovaLiveService: ObservableObject {
         guard !Task.isCancelled else { return }
         tearDown()
         let generation = sessionGeneration
+        state = .requestingPermissions
         let status = await currentAuthorizationStatus()
         guard continueSession(generation) else { return }
         if status == .denied {
@@ -222,6 +231,7 @@ final class NovaLiveService: ObservableObject {
     private func startCapture(for generation: UUID) {
         guard continueSession(generation) else { return }
         transcript = ""
+        notice = nil
         audioLevel = 0
         isSpeaking = false
         lastHighEnergyAt = nil
@@ -260,7 +270,11 @@ final class NovaLiveService: ObservableObject {
 
         let inputNode = engine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
-        inputNode.removeTap(onBus: 0)  // por las dudas, evitar dobles taps
+        guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
+            tearDown()
+            state = .error("No hay un micrófono disponible. Revisa la conexión e intenta otra vez.")
+            return
+        }
         // Each tap owns its request: a queued buffer from an old engine must
         // never be appended to a newer recording's recognition request.
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
@@ -272,10 +286,11 @@ final class NovaLiveService: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self, self.sessionGeneration == generation,
                       self.state == .listening else { return }
-                self.updateAudioLevel(level)
+                self.receiveAudioLevel(level, generation: generation)
             }
         }
 
+        inputTapInstalled = true
         self.audioEngine = engine
         self.recognitionRequest = request
         engine.prepare()
@@ -287,8 +302,6 @@ final class NovaLiveService: ObservableObject {
             return
         }
 
-        self.lastSpeechAt = Date()
-
         self.recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             let text = result?.bestTranscription.formattedString
             let isFinal = result?.isFinal ?? false
@@ -299,7 +312,7 @@ final class NovaLiveService: ObservableObject {
             }
         }
 
-        state = .listening
+        beginListening(at: ProcessInfo.processInfo.systemUptime)
         startSilenceWatchdog(generation: generation)
     }
 
@@ -312,13 +325,16 @@ final class NovaLiveService: ObservableObject {
         state = .processing
         // Pedirle al request que termine de procesar el audio acumulado.
         recognitionRequest?.endAudio()
-        audioEngine?.inputNode.removeTap(onBus: 0)
+        removeInputTap()
         audioEngine?.stop()
+        isSpeaking = false
+        isPausedForSilence = false
         // No tearDown inmediato — esperamos al `isFinal` del recognizer.
         // Si el recognizer no llega a final (raro), forzamos teardown a los
         // 2 segundos.
         let generation = sessionGeneration
-        Task { @MainActor [weak self] in
+        finishTask?.cancel()
+        finishTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled, let self, self.sessionGeneration == generation else { return }
             if self.state == .processing {
@@ -333,7 +349,50 @@ final class NovaLiveService: ObservableObject {
     func cancel() {
         tearDown()
         transcript = ""
+        notice = nil
         state = .idle
+    }
+
+    enum Interruption {
+        case background, audioSession, routeChanged, mediaServicesReset
+    }
+
+    /// Keep recognized words but never reactivate the microphone automatically.
+    func pauseForInterruption(_ reason: Interruption) {
+        guard state == .listening || state == .processing || state == .requestingPermissions else { return }
+        tearDown()
+        switch reason {
+        case .background: notice = "Dictado en pausa. Tu texto sigue aquí."
+        case .audioSession: notice = "El dictado se interrumpió. Puedes revisar el texto o volver a dictar."
+        case .routeChanged: notice = "Cambió el micrófono. Tu texto sigue aquí; toca Dictar para continuar."
+        case .mediaServicesReset: notice = "El audio se reinició. Tu texto sigue aquí; toca Dictar para continuar."
+        }
+        state = .idle
+    }
+
+    func handleRouteChange(reason: UInt) {
+        guard [AVAudioSession.RouteChangeReason.newDeviceAvailable.rawValue,
+               AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue,
+               AVAudioSession.RouteChangeReason.noSuitableRouteForCategory.rawValue,
+               AVAudioSession.RouteChangeReason.routeConfigurationChange.rawValue].contains(reason) else { return }
+        pauseForInterruption(.routeChanged)
+    }
+
+    private func observeAudioSession() {
+        let center = NotificationCenter.default
+        audioObservers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] notification in
+            let began = (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt) == AVAudioSession.InterruptionType.began.rawValue
+            if began { Task { @MainActor [weak self] in self?.pauseForInterruption(.audioSession) } }
+        })
+        audioObservers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] notification in
+            let reason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
+            Task { @MainActor [weak self] in self?.handleRouteChange(reason: reason) }
+        })
+        for name in [AVAudioSession.mediaServicesWereResetNotification, AVAudioSession.mediaServicesWereLostNotification] {
+            audioObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.pauseForInterruption(.mediaServicesReset) }
+            })
+        }
     }
 
     /// Cleanup defensivo cuando el service se desinstancia (ej. logout
@@ -343,8 +402,11 @@ final class NovaLiveService: ObservableObject {
     deinit {
         // No podemos usar @MainActor desde deinit; las propiedades que
         // tocamos son thread-safe (audioEngine sync) o solo metadata.
+        finishTask?.cancel()
+        silenceCheckTask?.cancel()
+        audioObservers.forEach { NotificationCenter.default.removeObserver($0) }
         recognitionTask?.cancel()
-        audioEngine?.inputNode.removeTap(onBus: 0)
+        if inputTapInstalled { audioEngine?.inputNode.removeTap(onBus: 0) }
         audioEngine?.stop()
         if audioSessionIsActive {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -355,14 +417,25 @@ final class NovaLiveService: ObservableObject {
 
     private func finalizeListening() {
         tearDown()
+        if transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            notice = "No escuché ninguna palabra. Puedes volver a dictar o escribir."
+        }
         state = .idle
+    }
+
+    private func removeInputTap() {
+        guard inputTapInstalled else { return }
+        audioEngine?.inputNode.removeTap(onBus: 0)
+        inputTapInstalled = false
     }
 
     private func tearDown() {
         sessionGeneration = UUID()
+        finishTask?.cancel()
+        finishTask = nil
         silenceCheckTask?.cancel()
         silenceCheckTask = nil
-        audioEngine?.inputNode.removeTap(onBus: 0)
+        removeInputTap()
         audioEngine?.stop()
         audioEngine = nil
         recognitionRequest?.endAudio()
@@ -371,7 +444,10 @@ final class NovaLiveService: ObservableObject {
         recognitionTask = nil
         lastSpeechAt = nil
         lastHighEnergyAt = nil
+        captureStartedAt = nil
         audioLevel = 0
+        audioSamples = Array(repeating: 0, count: 24)
+        isPausedForSilence = false
         isSpeaking = false
         bufferTickCounter = 0
         // Liberar la sesión para que no se quede activa bloqueando otros
@@ -397,8 +473,8 @@ final class NovaLiveService: ObservableObject {
         guard sessionGeneration == generation,
               state == .listening || state == .processing else { return }
         if let text {
+            if text != transcript { lastSpeechAt = ProcessInfo.processInfo.systemUptime }
             transcript = text
-            lastSpeechAt = Date()
             if isFinal {
                 finalizeListening()
                 return
@@ -412,55 +488,36 @@ final class NovaLiveService: ObservableObject {
         }
     }
 
-    /// VAD inteligente: distingue **pausa para pensar** vs **fin de habla**
-    /// usando dos señales en combinación:
-    /// 1. **Tiempo sin transcripción nueva** del recognizer (`lastSpeechAt`).
-    /// 2. **Energía de audio sostenida baja** (`lastHighEnergyAt`).
-    ///
-    /// La diferencia con la versión anterior (timeout fijo de 8s sin
-    /// distinción) es:
-    /// - Si el usuario aún no dijo nada (transcript vacío) → corte rápido
-    ///   en `silenceShortSeconds` (2s). No le hacemos esperar si no piensa
-    ///   hablar.
-    /// - Si ya hay transcript → `silenceLongSeconds` (3.5s). Esto permite
-    ///   pausas naturales para pensar entre frases.
-    /// - Pero NUNCA cortamos si la energía de audio sigue alta — eso
-    ///   significa que el usuario sigue hablando (o murmurando) aunque el
-    ///   recognizer aún no haya emitido texto. Solo cortamos cuando
-    ///   `lastHighEnergyAt` también pasó `lowEnergyHoldSeconds` (0.6s).
+    /// Monotonic lifecycle clocks are testable without recording audio.
+    func beginListening(at uptime: TimeInterval) {
+        captureStartedAt = uptime
+        lastSpeechAt = uptime
+        lastHighEnergyAt = nil
+        notice = nil
+        isPausedForSilence = false
+        state = .listening
+    }
+
+    func checkSilence(at uptime: TimeInterval) {
+        guard state == .listening, let started = captureStartedAt else { return }
+        let speechIdle = uptime - (lastSpeechAt ?? started)
+        let energyIdle = uptime - (lastHighEnergyAt ?? started)
+        isPausedForSilence = energyIdle >= 0.8 && speechIdle >= 0.8
+        let timeout = transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? Self.silenceShortSeconds : Self.silenceLongSeconds
+        if uptime - started >= 60 || (speechIdle >= timeout && energyIdle >= Self.lowEnergyHoldSeconds) {
+            stop()
+        }
+    }
+
     private func startSilenceWatchdog(generation: UUID) {
         silenceCheckTask?.cancel()
         silenceCheckTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                // Check cada 200ms — más responsive para VAD que 1s.
                 try? await Task.sleep(nanoseconds: 200_000_000)
                 guard !Task.isCancelled, let self, self.sessionGeneration == generation,
                       self.state == .listening else { return }
-
-                let now = Date()
-                let hasContent = !self.transcript.isEmpty
-                let silenceTimeout = hasContent
-                    ? Self.silenceLongSeconds
-                    : Self.silenceShortSeconds
-
-                let timeSinceSpeech = self.lastSpeechAt.map {
-                    now.timeIntervalSince($0)
-                } ?? now.timeIntervalSince(Date(timeIntervalSinceNow: -100))
-
-                let timeSinceHighEnergy = self.lastHighEnergyAt.map {
-                    now.timeIntervalSince($0)
-                } ?? Self.lowEnergyHoldSeconds + 1
-
-                // Ambas condiciones deben cumplirse: timer de transcripción
-                // pasó Y energía baja sostenida. Si el usuario sigue
-                // hablando aunque el recognizer aún no haya emitido, la
-                // energía mantiene viva la sesión.
-                let transcriptIdle = timeSinceSpeech >= silenceTimeout
-                let energyIdle = timeSinceHighEnergy >= Self.lowEnergyHoldSeconds
-                if transcriptIdle && energyIdle {
-                    self.stop()
-                    return
-                }
+                self.checkSilence(at: ProcessInfo.processInfo.systemUptime)
             }
         }
     }
@@ -471,7 +528,7 @@ final class NovaLiveService: ObservableObject {
     /// convierte a dB y normaliza a un rango 0..1 con piso en -55dB
     /// (silencio) y techo en -5dB (habla fuerte). Resultado: el usuario
     /// hablando normal mueve la barra en ~0.4-0.7, silencio queda en ~0.
-    private static func bufferLevel(_ buffer: AVAudioPCMBuffer) -> Float {
+    nonisolated static func bufferLevel(_ buffer: AVAudioPCMBuffer) -> Float {
         guard let channelData = buffer.floatChannelData else { return 0 }
         let channel = channelData.pointee
         let length = Int(buffer.frameLength)
@@ -489,30 +546,19 @@ final class NovaLiveService: ObservableObject {
         return min(max(normalized, 0), 1)
     }
 
-    /// Aplicado en MainActor (porque @Published muta state observable).
-    /// Hace smoothing exponencial para que la UI no parpadee y throttling
-    /// para no spamear publishes. Además resetea `lastHighEnergyAt` para
-    /// el VAD.
-    private func updateAudioLevel(_ newLevel: Float) {
-        // Smoothing exponencial: nuevoValor = α·raw + (1-α)·anterior
-        let smoothed = Self.audioLevelSmoothing * newLevel
-            + (1 - Self.audioLevelSmoothing) * audioLevel
-
+    /// Publish a small amplitude history at ~14 Hz; SwiftUI interpolates its
+    /// geometry on the display clock. No synthetic oscillator or display timer.
+    func receiveAudioLevel(_ rawLevel: Float, generation: UUID, uptime: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+        guard sessionGeneration == generation, state == .listening else { return }
+        let level = rawLevel.isFinite ? min(max(rawLevel, 0), 1) : 0
+        let smoothed = Self.audioLevelSmoothing * level + (1 - Self.audioLevelSmoothing) * audioLevel
         bufferTickCounter += 1
-        // Throttle publish — cada 3 ticks (~14fps), suficiente para
-        // animación fluida sin spamear @Published.
         if bufferTickCounter % 3 == 0 {
             audioLevel = smoothed
+            audioSamples = Array(audioSamples.dropFirst()) + [smoothed]
         }
-
-        // VAD: track energía alta para el watchdog. Threshold inferior
-        // pequeño para captar voz suave también.
-        let speaking = newLevel >= Self.speechEnergyThreshold
-        if speaking {
-            lastHighEnergyAt = Date()
-        }
-        if speaking != isSpeaking {
-            isSpeaking = speaking
-        }
+        if level >= Self.speechEnergyThreshold { lastHighEnergyAt = uptime }
+        isSpeaking = lastHighEnergyAt.map { uptime - $0 < 0.2 } ?? false
+        if isSpeaking { isPausedForSilence = false }
     }
 }

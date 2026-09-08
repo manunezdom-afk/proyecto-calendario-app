@@ -373,7 +373,7 @@ private struct CalendarEventCard: View {
         layout {
             HStack(alignment: .top, spacing: 10) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(event.section.color)
+                    .fill(event.accentColor)
                     .frame(width: 3, height: 34)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 5) {

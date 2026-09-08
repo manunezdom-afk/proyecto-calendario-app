@@ -98,9 +98,14 @@ enum NovaService {
         let originalRequest: String
         let actions: [PendingCalendarAction]
 
+        static func appending(_ message: String, to originalRequest: String) -> String? {
+            let combined = originalRequest + "\n" + message
+            return combined.utf16.count <= 4000 ? combined : nil
+        }
+
         init?(id: String, originalRequest: String, actions: [BackendAction]) {
             guard !id.isEmpty, id.count <= 128, !originalRequest.isEmpty,
-                  originalRequest.count <= 4000, !actions.isEmpty, actions.count <= 12 else { return nil }
+                  originalRequest.utf16.count <= 4000, !actions.isEmpty, actions.count <= 12 else { return nil }
             let encoded = actions.compactMap(PendingCalendarAction.init)
             guard encoded.count == actions.count else { return nil }
             self.id = id; self.originalRequest = originalRequest; self.actions = encoded
@@ -247,6 +252,12 @@ enum NovaService {
         case 200:
             do {
                 let decoded = try jsonDecoder.decode(BackendResponsePayload.self, from: data)
+                #if DEBUG
+                if let trace = decoded.processing, trace.route == "remote_ai",
+                   ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"].contains(trace.model) {
+                    debugLog("[NovaRoute] route=remote_ai model=\(trace.model) reason=\(trace.reason)")
+                }
+                #endif
                 if let returnedID = decoded.requestId, returnedID.lowercased() != requestID.uuidString.lowercased() {
                     throw NovaServiceError.invalidResponse
                 }
@@ -621,6 +632,8 @@ private struct BackendTaskDTO: Encodable {
 // MARK: - DTOs response
 
 private struct BackendResponsePayload: Decodable {
+    struct Processing: Decodable { let route: String; let model: String; let reason: String }
+    let processing: Processing?
     let reply: String
     let actions: [BackendAction]
     let proposedActions: [BackendAction]
@@ -634,6 +647,7 @@ private struct BackendResponsePayload: Decodable {
     let replacesProposalId: String?
 
     enum CodingKeys: String, CodingKey {
+        case processing
         case reply
         case actions
         case proposedActions = "proposed_actions"
@@ -649,6 +663,7 @@ private struct BackendResponsePayload: Decodable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.processing = try c.decodeIfPresent(Processing.self, forKey: .processing)
         self.reply = try c.decodeIfPresent(String.self, forKey: .reply) ?? ""
         self.smartActionsBlocked = try c.decodeIfPresent(Bool.self, forKey: .smartActionsBlocked)
         self.smartActionsMessage = try c.decodeIfPresent(String.self, forKey: .smartActionsMessage)

@@ -225,20 +225,15 @@ final class NovaExecutionTests: XCTestCase {
         XCTAssertNil(store.tasks.first?.dueTime)
     }
 
-    func testLocalMixedTaskAndEventCreatesBoth() {
-        let store = store()
-        store.sendNovaMessage("mañana dentista a las 11 y comprar pan")
-        XCTAssertEqual(store.events.count, 1, store.novaMessages.last?.content ?? "")
-        XCTAssertEqual(store.tasks.count, 1, store.novaMessages.last?.content ?? "")
-        XCTAssertTrue(store.tasks.first?.title.localizedCaseInsensitiveContains("pan") == true)
-        XCTAssertNil(store.tasks.first?.dueTime)
-    }
-
-    func testLocalReminderOffsetBelongsToItsEvent() {
-        let store = store()
-        store.sendNovaMessage("mañana dentista a las 11, avísame 30 minutos antes")
-        XCTAssertEqual(store.events.count, 1, store.novaMessages.last?.content ?? "")
-        XCTAssertEqual(store.events.first?.reminderOffsets, [30])
+    func testMultipleGoalsAndReminderOffsetsRequireRemoteInterpretation() {
+        for message in ["mañana dentista a las 11 y comprar pan", "mañana dentista a las 11, avísame 30 minutos antes"] {
+            let store = store()
+            store.sendNovaMessage(message)
+            XCTAssertTrue(store.events.isEmpty)
+            XCTAssertTrue(store.tasks.isEmpty)
+            XCTAssertNotNil(store.novaErrorMessage)
+            XCTAssertFalse(NovaLocalRoutingPolicy.decide(message).permitsLocalMutation)
+        }
     }
 
     func testLocalTimeClarificationCompletesOriginalEvent() {
@@ -1185,6 +1180,75 @@ extension NovaExecutionTests {
         XCTAssertTrue(store.events.isEmpty)
     }
 
+    func testTwoRefinementsCarryAcceptedConstraintsOnceAndKeepThemOutOfSavedEvents() async throws {
+        let called = expectation(description: "third turn carries both accepted refinements")
+        var sent: NovaService.Request?
+        let store = FocusDataStore(syncTransport: noNetwork, restoreAccount: false, schedulesNotifications: false, novaTransport: { request in
+            sent = request; called.fulfill()
+            return NovaService.Result(reply: "La propuesta sigue pendiente.", actions: [], smartActionsBlocked: false,
+                smartActionsMessage: nil, confidence: 1, shouldAskUser: false, mode: .chatOnly,
+                proposedActions: [], requestId: request.requestID.uuidString)
+        })
+        store.settings.novaMemoryEnabled = false
+        let goal = "Organiza mi tarde con estudio y Gym"
+        let cutoff = "No quiero estudiar después de las 20"
+        let gym = "Mueve Gym a las 17"
+        store.receiveNovaResult(response([], mode: .proposal, proposed: [event("Estudiar")]), userText: goal)
+        let firstID = try XCTUnwrap(store.novaPendingProposal?.id)
+        var first = response([], mode: .proposal, proposed: [event("Estudiar")])
+        first.replacesProposalId = firstID.uuidString
+        store.receiveNovaResult(first, userText: cutoff)
+        let secondID = try XCTUnwrap(store.novaPendingProposal?.id)
+        // The server can replay a completed result; it must not append twice.
+        store.receiveNovaResult(first, userText: cutoff)
+        XCTAssertEqual(store.novaPendingProposal?.id, secondID)
+        store.receiveNovaResult(response([], mode: .clarification, reply: "¿A qué hora quieres Gym?"), userText: "Una aclaración no aceptada")
+        var second = response([], mode: .proposal, proposed: [event("Estudiar")])
+        second.replacesProposalId = secondID.uuidString
+        store.receiveNovaResult(second, userText: gym)
+        store.syncCredentials = .init(accessToken: "test-only", userId: UUID())
+        NovaAIConsent.grant()
+        defer { store.syncCredentials = nil; store.cancelNovaRequest(); NovaAIConsent.revoke() }
+        store.sendNovaMessage("Muéstrame la propuesta")
+        await fulfillment(of: [called], timeout: 3)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(sent?.pendingProposal?.originalRequest, goal + "\n" + cutoff + "\n" + gym)
+        XCTAssertTrue(sent?.events.isEmpty == true)
+        XCTAssertTrue(store.events.isEmpty)
+        XCTAssertNotNil(store.novaPendingProposal)
+    }
+
+    func testPendingConstraintCapUsesUTF16AndStopsBeforeNetworkWithoutDiscardingPlan() async throws {
+        var calls = 0
+        let store = FocusDataStore(syncTransport: noNetwork, restoreAccount: false, schedulesNotifications: false, novaTransport: { _ in
+            calls += 1
+            throw NovaServiceError.offline
+        })
+        store.settings.novaMemoryEnabled = false
+        let goal = "Organiza " + String(repeating: "😀", count: 1990)
+        XCTAssertLessThan(goal.count, 4000)
+        XCTAssertLessThan(goal.utf16.count, 4000)
+        store.receiveNovaResult(response([], mode: .proposal, proposed: [event("Estudiar")]), userText: goal)
+        let id = try XCTUnwrap(store.novaPendingProposal?.id)
+        store.syncCredentials = .init(accessToken: "test-only", userId: UUID())
+        NovaAIConsent.grant()
+        defer { store.syncCredentials = nil; store.cancelNovaRequest(); NovaAIConsent.revoke() }
+        store.sendNovaMessage("No quiero estudiar después de las 20")
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(calls, 0)
+        XCTAssertEqual(store.novaPendingProposal?.id, id)
+        XCTAssertTrue(store.novaErrorMessage?.contains("límite de ajustes") == true)
+        XCTAssertTrue(store.events.isEmpty)
+        XCTAssertNil(NovaService.PendingProposal(id: id.uuidString, originalRequest: String(repeating: "😀", count: 2001), actions: [event()]))
+        XCTAssertEqual(NovaService.PendingProposal.appending("x", to: String(repeating: "a", count: 3998))?.utf16.count, 4000)
+        XCTAssertNil(NovaService.PendingProposal.appending("😀", to: String(repeating: "a", count: 3998)))
+        // A direct/late response is checked too, even if preflight was skipped.
+        var late = response([], mode: .proposal, proposed: [event("Otro")])
+        late.replacesProposalId = id.uuidString
+        store.receiveNovaResult(late, userText: "No quiero estudiar después de las 20")
+        XCTAssertEqual(store.novaPendingProposal?.id, id)
+    }
+
     private func capabilitySession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [NovaCapabilityURLProtocol.self]
@@ -1250,4 +1314,96 @@ private final class NovaCapabilityURLProtocol: URLProtocol, @unchecked Sendable 
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}
+}
+
+
+@MainActor
+final class FocusExperienceRefinementTests: XCTestCase {
+    private var directory: URL!
+    override func setUp() async throws {
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent("FocusExperience-" + UUID().uuidString)
+        FocusLocalStore.useTestingDirectory(directory)
+    }
+    override func tearDown() async throws {
+        FocusLocalStore.flush()
+        try? FileManager.default.removeItem(at: directory)
+    }
+    func testColloquialVariantsCannotBeCapturedByLocalParserEvenWithPendingContext() {
+        let variants = ["salgo a la casa de un amigo en 20", "en 20 minutos me voy donde un amigo",
+            "en un rato tengo que ir donde el mati", "tipo 8 voy a la casa de la fran",
+            "mañana después de almuerzo voy donde un amigo", "a las 9 salgo pa donde la vale",
+            "en media hora me voy a fútbol", "en 15 tengo que salir al dentista"]
+        for message in variants {
+            XCTAssertFalse(NovaLocalRoutingPolicy.decide(message).permitsLocalMutation, message)
+            XCTAssertFalse(NovaLocalRoutingPolicy.decide(message, hasPendingClarification: true).permitsLocalMutation, message)
+        }
+        XCTAssertTrue(NovaLocalRoutingPolicy.decide("gym mañana 18:00").permitsLocalMutation)
+        XCTAssertFalse(NovaLocalRoutingPolicy.decide("quizás gym mañana 18:00").permitsLocalMutation)
+        let store = FocusDataStore()
+        store.sendNovaMessage(variants[0])
+        XCTAssertTrue(store.events.isEmpty)
+        XCTAssertNotNil(store.novaErrorMessage)
+    }
+    func testSemanticPresentationPreservesProperNamesAndDoesNotInventDescription() {
+        let result = NovaActionNormalizer.semanticPresentation(title: " Ir a casa de Fran ", subtitle: nil)
+        XCTAssertEqual(result.title, "Ir a casa de Fran"); XCTAssertNil(result.subtitle)
+        XCTAssertNil(NovaActionNormalizer.semanticPresentation(title: "Dentista", subtitle: " dentista ").subtitle)
+        XCTAssertEqual(NovaActionNormalizer.semanticPresentation(title: "Fútbol", subtitle: "Llevar la camiseta").subtitle, "Llevar la camiseta")
+        XCTAssertEqual(NovaActionNormalizer.semanticPresentation(title: "Como agua para chocolate", subtitle: nil).title, "Como agua para chocolate")
+    }
+    func testSwipeDeletionUndoAndRelaunchHaveOneDurableIdentity() throws {
+        let store = FocusDataStore()
+        let event = FocusEvent(title: "Fútbol QA", startTime: Date().addingTimeInterval(7200), section: .entrenamiento)
+        XCTAssertTrue(store.addEvent(event))
+        let receipt = try XCTUnwrap(store.deleteEventWithUndo(event.id))
+        XCTAssertNil(store.deleteEventWithUndo(event.id))
+        XCTAssertFalse(FocusDataStore().events.contains { $0.id == event.id })
+        XCTAssertTrue(store.undoEventDeletion(receipt)); XCTAssertFalse(store.undoEventDeletion(receipt))
+        XCTAssertEqual(FocusDataStore().events.filter { $0.id == event.id }.count, 1)
+        let snapshot = try XCTUnwrap(FocusLocalStore.load(FocusSyncSnapshot.self, forKey: .syncSnapshot))
+        XCTAssertTrue(snapshot.outbox.mutations.isEmpty, "Guest writes persist locally without a cloud owner")
+    }
+    func testExternalCalendarCannotBeDeletedThroughLocalMutation() {
+        let store = FocusDataStore()
+        let event = FocusEvent(title: "Calendario externo QA", startTime: Date(), source: .apple)
+        XCTAssertTrue(store.addEvent(event))
+        XCTAssertFalse(store.deleteEvent(event.id)); XCTAssertNil(store.deleteEventWithUndo(event.id))
+        XCTAssertTrue(store.events.contains { $0.id == event.id })
+    }
+    func testCalendarColorMetadataSurvivesSerializationAndInvalidColorFallsBack() throws {
+        var event = FocusEvent(title: "Agenda QA", startTime: Date(), section: .estudio, source: .apple)
+        event.externalCalendarColorHex = "D58A38"
+        let restored = try JSONDecoder().decode(FocusEvent.self, from: JSONEncoder().encode(event))
+        XCTAssertEqual(restored.externalCalendarColorHex, event.externalCalendarColorHex)
+        XCTAssertEqual(restored.section, .estudio)
+        event.externalCalendarColorHex = "invalid"
+        XCTAssertEqual(event.accentColor, event.section.color)
+    }
+    func testRealAmplitudeHistoryAndInterruptionKeepWordsWithoutRestartingMic() {
+        let service = NovaLiveService()
+        let uptime = ProcessInfo.processInfo.systemUptime
+        service.beginListening(at: uptime)
+        let generation = service.sessionGeneration
+        service.receiveRecognitionUpdate(text: "En veinte minutos", isFinal: false, error: nil, generation: generation)
+        for _ in 0..<9 { service.receiveAudioLevel(0.8, generation: generation, uptime: uptime + 0.1) }
+        XCTAssertTrue(service.audioSamples.contains { $0 > 0 })
+        service.pauseForInterruption(.audioSession)
+        XCTAssertEqual(service.transcript, "En veinte minutos"); XCTAssertEqual(service.state, .idle)
+        service.receiveRecognitionUpdate(text: "Tardío", isFinal: true, error: nil, generation: generation)
+        XCTAssertEqual(service.transcript, "En veinte minutos")
+        service.cancel(); XCTAssertTrue(service.transcript.isEmpty)
+        XCTAssertTrue(service.audioSamples.allSatisfy { $0 == 0 })
+    }
+    func testSilenceAndBackgroundCannotLeaveRecordingActive() {
+        let service = NovaLiveService()
+        service.beginListening(at: 100)
+        service.checkSilence(at: 101)
+        XCTAssertTrue(service.isPausedForSilence)
+        service.checkSilence(at: 107)
+        XCTAssertEqual(service.state, .processing)
+        service.pauseForInterruption(.background)
+        XCTAssertEqual(service.state, .idle)
+        XCTAssertNotNil(service.notice)
+        service.cancel()
+    }
 }

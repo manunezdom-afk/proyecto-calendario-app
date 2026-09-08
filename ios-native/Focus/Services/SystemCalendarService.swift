@@ -1,6 +1,7 @@
 import Foundation
 import EventKit
 import CryptoKit
+import UIKit
 
 /// Lector del calendario del sistema (EventKit). **READ-ONLY por diseño**:
 /// Focus muestra los eventos del iPhone (iCloud, Google, Outlook — cualquier
@@ -82,7 +83,7 @@ final class SystemCalendarService {
         let title = (ek.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return nil }
 
-        return FocusEvent(
+        var mapped = FocusEvent(
             // UUID determinístico: mismo evento (misma ocurrencia) → mismo id
             // entre fetches. Sin esto, cada refresh regeneraría ids random y
             // SwiftUI re-animaría todas las filas. Las ocurrencias de un
@@ -101,6 +102,13 @@ final class SystemCalendarService {
             externalCalendarId: ek.calendar?.calendarIdentifier,
             externalEventId: ek.eventIdentifier
         )
+        if let color = ek.calendar?.cgColor {
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            if UIColor(cgColor: color).getRed(&r, green: &g, blue: &b, alpha: &a), a > 0.1 {
+                mapped.externalCalendarColorHex = String(format: "%02X%02X%02X", Int(r*255), Int(g*255), Int(b*255))
+            }
+        }
+        return mapped
     }
 
     /// SHA256 del seed → primeros 16 bytes como UUID estable.

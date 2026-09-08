@@ -47,11 +47,11 @@ enum Theme {
         static let infoSoft = focusAccentSoft
 
         static let sectionFoco = focusAccent
-        static let sectionReunion = Color(uiColor: .systemIndigo)
-        static let sectionPersonal = Color(uiColor: .systemTeal)
-        static let sectionEstudio = Color(uiColor: .systemIndigo)
-        static let sectionDescanso = Color(uiColor: .systemTeal)
-        static let sectionEntrenamiento = Color(uiColor: .systemGreen)
+        static let sectionReunion = adaptive(light: 0x746039, dark: 0xD8BC89)
+        static let sectionPersonal = adaptive(light: 0x9B526F, dark: 0xE8ACC4)
+        static let sectionEstudio = adaptive(light: 0x7653A4, dark: 0xC6ADF0)
+        static let sectionDescanso = adaptive(light: 0x536D7A, dark: 0xADCBD6)
+        static let sectionEntrenamiento = adaptive(light: 0x26715B, dark: 0x8DD9B8)
         static let sectionReminder = warning
         static let priorityHigh = danger
         static let priorityMedium = textSecondary
