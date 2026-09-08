@@ -1,6 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validateNovaPlan, activeIntentText } from '../api/_lib/novaContract.js'
+import { validateNovaPlan, activeIntentText, isNovaWirePlan } from '../api/_lib/novaContract.js'
+import { buildNovaSystemPrompt } from '../api/_lib/novaPrompt.js'
+import { prepareNovaRoute } from '../api/_lib/novaRuntime.js'
+import { novaTierRoute } from '../api/_lib/novaRouter.js'
+import { sanitizeNovaRequest } from '../api/_lib/novaSafety.js'
 import { buildDateContext } from '../api/_lib/dateContext.js'
 import { wireAction, wirePlan } from './helpers/novaFixtures.js'
 const dateContext=buildDateContext(Date.parse('2026-09-08T15:00Z'),'America/Santiago')
@@ -51,4 +55,16 @@ test('standalone timed reminders must use their reminder type, preserving notifi
  assert.equal(wrong.validation.ok,false);assert.ok(wrong.validation.issues.includes('reminder_type_conflict'))
  const correct=validate(wirePlan([event({type:'create_reminder',title:'Tomar agua',sourceText:message,time:'12:20',category:'salud'})]),message)
  assert.equal(correct.validation.ok,true);assert.equal(correct.actions[0].event.icon,'alarm');assert.equal(correct.actions[0].event.endTime,null)
+})
+
+test('the prompt teaches a complete valid empty reminder clarification within Luna input budget',()=>{
+ const prompt=buildNovaSystemPrompt(dateContext)
+ const example=JSON.parse(prompt.match(/AVISO SIN HORA[^\n]+\n(\{[^\n]+\})/)[1])
+ assert.equal(isNovaWirePlan(example),true);assert.deepEqual(example.actions,[])
+ const out=validate(example,'recuérdame llamar a mi mamá mañana')
+ assert.equal(out.validation.ok,true);assert.equal(out.mode,'clarification');assert.deepEqual(out.actions,[])
+ const body=sanitizeNovaRequest({message:'comprar pan',clientNow:Date.parse('2026-09-08T15:00Z'),clientTimezone:'America/Santiago'}).body
+ const route=prepareNovaRoute(body,dateContext,novaTierRoute('luna'))
+ assert.ok(route.inputTokens<=12000,`Prompt exceeds Luna cap: ${route.inputTokens}`)
+ assert.equal(route.maxInputTokens,12000)
 })
