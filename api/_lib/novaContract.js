@@ -50,7 +50,16 @@ const negativeMutation = text => /\b(?:no|nunca|jamas)\s+(?:lo\s+|la\s+|me\s+)?(
 const speculative = text => /\b(?:quizas|tal vez|podriamos|creo que deberia|si pudiera|a lo mejor|estaba pensando|pensaba en|algun dia)\b/.test(norm(text))
 const memoryIntent = text => /\b(?:recuerda que|recuerda:|guarda (?:que|esto|mi)|aprende que|prefiero|me gusta|no me gusta|mi \w+ (?:se llama|es)|\w+ es mi \w+|cuando diga|tengo un[ao]? \w+ llamad[oa])\b/.test(norm(text))
 const forgetIntent = text => /\b(?:olvida|olvidate|borra|elimina)\b/.test(norm(text)) && !negativeMutation(text)
-const anyTimeSignal = text => /\b(?:[012]?\d:[0-5]\d|a las? \w+|de \d{1,2} a \d{1,2}|tipo \w+|en (?:\d+|un[ao]?|dos|tres|media) (?:min\w*|hora\w*)|mediodia|medianoche|\d{1,2}\s*(?:am|pm)|(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo|manana|hoy)\s+\d{1,2})\b/.test(norm(text))
+// Spanish departure shorthand supplies minutes only in a motion utterance;
+// quantities such as "en 20 cuotas" are not clock evidence.
+export function relativeMotionMinutes(text) {
+  const value = norm(text)
+  if (!/\b(?:salgo|voy|salir|irme)\b/.test(value)) return null
+  const match = value.match(/\ben\s+(\d{1,3})(?=\s+(?:me\s+voy|voy|salgo|tengo\s+que\s+(?:ir|salir))\b|[.!]?$)/)
+  const minutes = match ? Number(match[1]) : 0
+  return minutes > 0 && minutes <= 180 ? minutes : null
+}
+const anyTimeSignal = text => relativeMotionMinutes(text) !== null || /\b(?:[012]?\d:[0-5]\d|a las? \w+|de \d{1,2} a \d{1,2}|tipo \w+|en (?:\d+|un[ao]?|dos|tres|media) (?:min\w*|hora\w*)|mediodia|medianoche|\d{1,2}\s*(?:am|pm)|(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo|manana|hoy)\s+\d{1,2})\b/.test(norm(text))
 const hasLocationTrigger = text => /\bcuando (?:llegue|llegues|salga|salgas|este|estes)\b/.test(norm(text))
 function negatedAction(text, type) {
   const verbs = type.startsWith('delete_') ? 'borr|elimin|cancel|quit|desagend'

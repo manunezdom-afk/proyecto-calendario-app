@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validateNovaPlan, activeIntentText, isNovaWirePlan } from '../api/_lib/novaContract.js'
+import { validateNovaPlan, activeIntentText, isNovaWirePlan, relativeMotionMinutes } from '../api/_lib/novaContract.js'
 import { buildNovaSystemPrompt, splitNovaSystemPrompt, NOVA_CONTEXT_MARKER } from '../api/_lib/novaPrompt.js'
 import { callOpenAINova } from '../api/_lib/openaiNova.js'
 import { prepareNovaRoute } from '../api/_lib/novaRuntime.js'
@@ -118,4 +118,15 @@ test('questions, speculation, negation and incidental mentions of short verbs au
   assert.equal(out.validation.ok,false,JSON.stringify({message,output:out}))
   assert.equal(out.actions.length+out.proposed_actions.length,0)
  }
+})
+
+
+test('departure shorthand supplies relative minutes without accepting other numeric quantities',()=>{
+ for(const [message,minutes] of [['salgo a ver a una amiga en 20',20],['en 15 tengo que salir al dentista',15],['en 30 me voy al gimnasio',30]]) {
+  assert.equal(relativeMotionMinutes(message),minutes)
+  const time='12:'+String(minutes).padStart(2,'0')
+  const out=validate(wirePlan([event({title:message.includes('dentista')?'Dentista':message.includes('gimnasio')?'Gimnasio':'Ver a una amiga',sourceText:message,time})]),message)
+  assert.equal(out.validation.ok,true,JSON.stringify(out.validation))
+ }
+ for(const text of ['voy a pagarlo en 20 cuotas','quizás lo pago en 20 cuotas','comprar 20 cosas','en 15 páginas dice salir','salgo en 0','salgo en 999'])assert.equal(relativeMotionMinutes(text),null,text)
 })
