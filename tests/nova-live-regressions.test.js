@@ -172,3 +172,32 @@ test('hints never invent a relative for vague time, negation, questions, quantit
   assert.ok(out.validation.issues.includes('negated_activity'));assert.equal(out.actions.length,0)
  }
 })
+
+test('date-only departure captures need an interpretation, never a hollow saved claim or invented hour',()=>{
+ for(const message of ['mañana después de almuerzo voy donde un amigo','hoy por la tarde salgo al parque']){
+  const title=message.includes('amigo')?'Ir donde un amigo':'Ir al parque'
+  const day=message.startsWith('mañana')?dateContext.tomorrow:dateContext.todayISO
+  const empty=validate(wirePlan([],{userConfirmationText:'Listo, lo agendé.'}),message)
+  assert.deepEqual(empty.validation.issues,['capture_without_action']);assert.equal(empty.actions.length,0)
+  const task=validate(wirePlan([wireAction({title,sourceText:message,dateISO:day})]),message)
+  assert.equal(task.validation.ok,true);assert.equal(task.actions[0].task.date,day)
+  const clarification=validate(wirePlan([],{mode:'clarification',needsClarification:true,clarificationQuestion:'¿A qué hora?',userConfirmationText:'¿A qué hora?'}),message)
+  assert.equal(clarification.validation.ok,true)
+ }
+ for(const message of ['quizás mañana voy donde un amigo','¿mañana voy donde un amigo?','no voy donde un amigo']){
+  const out=validate(wirePlan([],{userConfirmationText:'Podemos verlo después.'}),message)
+  assert.equal(out.validation.ok,true);assert.equal(out.actions.length,0)
+ }
+})
+
+test('event details omit only complete word fragments already present in the semantic title',()=>{
+ for(const [title,subtitle,expected] of [
+  ['Salir al dentista','Dentista',undefined],['Fútbol','Fútbol',undefined],
+  ['Fútbol','Llevar la camiseta','Llevar la camiseta'],['Reunión con Ana','Análisis de resultados','Análisis de resultados'],
+ ]){
+  const message=`hoy ${title} a las 18:00${expected?` y ${subtitle}`:''}`
+  const out=validate(wirePlan([event({title,subtitle,sourceText:message,time:'18:00'})]),message)
+  assert.equal(out.validation.ok,true,JSON.stringify(out.validation))
+  assert.equal(out.actions[0].event.subtitle,expected)
+ }
+})

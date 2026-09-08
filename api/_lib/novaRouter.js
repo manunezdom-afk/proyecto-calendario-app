@@ -82,7 +82,7 @@ export function selectNovaRoutes(body = {}) {
 }
 
 const structural = new Set(['invalid_json', 'invalid_schema', 'incomplete_output', 'empty_output', 'output_too_large'])
-const repairable = new Set(['invalid_schema', 'low_confidence', 'missing_intent_evidence', 'task_with_invented_time', 'timed_departure_as_task', 'relative_time_conflict'])
+const repairable = new Set(['invalid_schema', 'low_confidence', 'missing_intent_evidence', 'task_with_invented_time', 'timed_departure_as_task', 'relative_time_conflict', 'capture_without_action'])
 /** Missing data, negation, unknown IDs and civil-date errors stay clarifications. */
 export function shouldEscalateNova({ error, result, route, nextRoute, body }) {
   if (!nextRoute) return false

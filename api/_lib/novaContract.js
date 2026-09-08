@@ -42,6 +42,11 @@ export const validCivilDate = value => {
 }
 export const validClockTime = value => typeof value === 'string' && /^(?:[01]?\d|2[0-3]):[0-5]\d$/.test(value)
 const norm = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+const detailAddsWords = (title, detail) => {
+  const words = value => norm(value).match(/[\p{L}\p{N}]+/gu)?.join(' ') || ''
+  const fragment = words(detail)
+  return fragment.length > 0 && !(` ${words(title)} `).includes(` ${fragment} `)
+}
 const plainObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const bounded = (value, max, allowEmpty = false) => typeof value === 'string' && value.length <= max && (allowEmpty || value.trim().length > 0)
 const pastClaim = /\b(?:guard[eé]|agend[eé]|cre[eé]|borr[eé]|elimin[eé]|mov[ií]|actualic[eé]|registr[eé]|complet[eé]|he (?:creado|guardado|borrado)|te (?:lo )?recordar[eé]|te (?:voy a |lo voy a )?recordar|te avisar[eé]|voy a avisarte)\b/i
@@ -97,7 +102,11 @@ function oneTypoApart(left, right) {
 // rather than matching incidental mentions in questions or personal facts.
 const shortTaskIntent = text => /^(?:por favor[, ]+)?(?:(?:hoy|manana|pasado manana|esta (?:manana|tarde|noche)|el (?:lunes|martes|miercoles|jueves|viernes|sabado|domingo))(?: por la (?:manana|tarde|noche))?[, :]?\s+)?(?:ver|ir|dar)\s+\S/.test(norm(text))
 const negatedShortTask = text => /\b(?:no|nunca|jamas)\s+(?:(?:quiero|puedo|debo|voy a)\s+)?(?:ver|ir|dar)\b/.test(norm(text))
-const createIntent = text => !negatedShortTask(text) && (/\b(?:necesito|tengo que|debo|quiero|anota|agend\w*|crea\w*|agrega\w*|recuerd\w*|acuerd\w*|avis\w*|pendiente|tarea|no olvidar|[a-z]{3,}(?:ar|er|ir))\b/.test(norm(text)) || shortTaskIntent(text))
+// First-person departures are captures in the composer. This authorizes the
+// model's interpretation only; it supplies neither a title nor a missing hour.
+const motionCaptureIntent = text => !speculative(text) && !/[?¿]|\b(?:no|nunca|jamas)\b/.test(norm(text))
+  && /^(?:(?:hoy|manana|pasado manana|esta (?:tarde|noche))\s+)?(?:(?:despues (?:de|del) (?:almuerzo|comer)|por la (?:manana|tarde|noche))\s+)?(?:me voy|voy|salgo)\s+(?:a|al|pa|para|donde)\b/.test(norm(text))
+const createIntent = text => !negatedShortTask(text) && (/\b(?:necesito|tengo que|debo|quiero|anota|agend\w*|crea\w*|agrega\w*|recuerd\w*|acuerd\w*|avis\w*|pendiente|tarea|no olvidar|[a-z]{3,}(?:ar|er|ir))\b/.test(norm(text)) || shortTaskIntent(text) || motionCaptureIntent(text))
 const conversational = text => /^(?:[¿?]\s*)?(?:ayudame a (?:ordenar|organizar|priorizar)|no se (?:por donde|como) empezar|que (?:es mejor|deberia|conviene)|por donde (?:empiezo|empezar))\b/.test(norm(text))
 // A conversational question is not a missing field in a capture. Recover only
 // explicit capture requests mislabeled chat_only; keep advice in the chat flow.
@@ -462,7 +471,7 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
           endTime: !reminder && a.durationMinutes > 0 && durationAllowed ? endAt(a.time, a.durationMinutes) : null,
           section: ['reunion', 'estudio', 'universidad'].includes(a.category) ? 'focus' : 'evening',
           icon: reminder ? 'alarm' : ({ salud: 'local_hospital', reunion: 'groups', estudio: 'menu_book', universidad: 'menu_book' }[a.category] || 'event') }
-        if (a.subtitle?.trim()) event.subtitle = a.subtitle.trim()
+        if (a.subtitle?.trim() && detailAddsWords(a.title, a.subtitle)) event.subtitle = a.subtitle.trim()
         if (a.reminderOffsetMinutes != null) event.reminderOffsets = [a.reminderOffsetMinutes]
         action = { type: 'add_event', event }
         if (planning) plannedSchedules.push({ title: a.title, date: a.dateISO, time: a.time, duration: a.durationMinutes })
@@ -487,6 +496,9 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
   const implicitQuestion = actions.length === 0 && captureRequest(userMessage)
     ? payload.userConfirmationText?.match(/¿[^?]{1,398}\?/)?.[0] : null
   const needsClarification = payload.needsClarification === true || questions.length > 0 || !!implicitQuestion
+  if (!actions.length && !needsClarification && motionCaptureIntent(userMessage)) {
+    reject('capture_without_action'); return empty()
+  }
   const question = payload.clarificationQuestion || questions[0] || implicitQuestion || null
   if (needsClarification && !bounded(question, 400)) { reject('missing_clarification'); return empty() }
   if (mode === 'clarification' && actions.length) { reject('mode_action_conflict'); return empty() }
