@@ -6,8 +6,9 @@
 
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { wirePlan, wireAction } from './helpers/novaFixtures.js'
 
-import { __selectDeepSeekModel as selectDeepSeekModel } from '../api/focus-assistant.js'
+import { __selectDeepSeekModel as selectDeepSeekModel } from './helpers/legacyNovaRouting.js'
 import {
   estimateDeepSeekCostUSD,
   normalizeDeepSeekPayload,
@@ -83,21 +84,21 @@ test('normalizeModelName reconoce la familia deepseek-v4', () => {
 
 test('calculateAICost usa precios configurados para deepseek (no fallback)', () => {
   const flash = calculateAICost({ model: 'deepseek-v4-flash', input_tokens: 1_000_000, output_tokens: 1_000_000 })
-  assert.equal(flash.cost_usd, 0.42) // 0.14 + 0.28
+  assert.equal(flash.cost_usd, 1.76) // 0.44 + 1.32
   assert.equal(flash.pricing_source, 'configured')
 
   const pro = calculateAICost({ model: 'deepseek-v4-pro', input_tokens: 1_000_000, output_tokens: 0 })
-  assert.equal(pro.cost_usd, 0.435)
+  assert.equal(pro.cost_usd, 1.32)
   assert.equal(pro.pricing_source, 'configured')
 })
 
-test('estimateDeepSeekCostUSD: cache hit cuesta ~50× menos que miss', () => {
+test('estimateDeepSeekCostUSD: cache hit reduces billed input at verified current rates', () => {
   // 7000 input todos miss + 700 output
   const allMiss = estimateDeepSeekCostUSD('deepseek-v4-flash', {
     prompt_tokens: 7000, prompt_cache_hit_tokens: 0, prompt_cache_miss_tokens: 7000, completion_tokens: 700,
   })
   // 7000×0.14/1M + 700×0.28/1M = 0.00098 + 0.000196
-  assert.equal(allMiss, 0.001176)
+  assert.equal(allMiss, 0.004004)
 
   // 5000 hit + 2000 miss + 700 output — el prompt cacheado casi no cuesta
   const mostlyHit = estimateDeepSeekCostUSD('deepseek-v4-flash', {
@@ -117,39 +118,22 @@ test('estimateDeepSeekCostUSD: cache hit cuesta ~50× menos que miss', () => {
 
 // ─── Normalización del payload (JSON mode sin schema estricto) ───────────────
 
-test('normalizeDeepSeekPayload rellena TODOS los campos faltantes de una action', () => {
-  const out = normalizeDeepSeekPayload({
-    actions: [{ type: 'create_event', title: 'Fútbol', time: '17:00' }],
-    userConfirmationText: 'Listo',
-  })
-  const a = out.actions[0]
-  assert.equal(a.type, 'create_event')
-  assert.equal(a.title, 'Fútbol')
-  assert.equal(a.time, '17:00')
-  assert.equal(a.subtitle, null)
-  assert.equal(a.dateISO, null)
-  assert.equal(a.durationMinutes, 0)
-  assert.equal(a.linkedToPreviousEvent, false)
-  assert.equal(a.targetEventId, null)
-  assert.equal(a.memoryKey, null)
-  assert.equal(out.needsClarification, false)
-  assert.equal(out.clarificationQuestion, null)
+test('DeepSeek preserves a complete valid wire plan without inventing fields', () => {
+  const plan = wirePlan([wireAction()])
+  assert.deepEqual(normalizeDeepSeekPayload(plan), plan)
 })
-
-test('normalizeDeepSeekPayload tolera basura: payload vacío, actions no-array, duration string', () => {
-  assert.deepEqual(normalizeDeepSeekPayload(null).actions, [])
-  assert.deepEqual(normalizeDeepSeekPayload({ actions: 'nope' }).actions, [])
-  const out = normalizeDeepSeekPayload({ actions: [{ type: 'create_event', title: 'X', durationMinutes: '45' }, null, 'basura'] })
-  assert.equal(out.actions.length, 1)
-  assert.equal(out.actions[0].durationMinutes, 45)
+test('DeepSeek rejects missing fields, invalid arrays and null actions without partial execution', () => {
+  for (const input of [null, {}, { actions: 'nope' }, { actions: [{ type: 'create_event', title: 'X', durationMinutes: '45' }] }, wirePlan([wireAction(), null])]) {
+    assert.throws(() => normalizeDeepSeekPayload(input), /invalid_schema/)
+  }
 })
-
-test('extractDeepSeekText: quita fences markdown y lanza con contenido vacío', () => {
-  const wrap = (content) => ({ choices: [{ message: { content } }] })
+test('DeepSeek extraction preserves raw text for strict JSON parsing and rejects truncated output', () => {
+  const wrap = content => ({ choices: [{ message: { content } }] })
   assert.equal(extractDeepSeekText(wrap('{"a":1}')), '{"a":1}')
-  assert.equal(extractDeepSeekText(wrap('```json\n{"a":1}\n```')), '{"a":1}')
-  assert.throws(() => extractDeepSeekText(wrap('')), /empty content/)
-  assert.throws(() => extractDeepSeekText({}), /empty content/)
+  assert.throws(() => JSON.parse(extractDeepSeekText(wrap('```json\n{"a":1}\n```'))))
+  assert.throws(() => extractDeepSeekText(wrap('')), /empty_output/)
+  assert.throws(() => extractDeepSeekText({}), /empty_output/)
+  assert.throws(() => extractDeepSeekText({ choices: [{ finish_reason: 'length', message: { content: '{}' } }] }), /incomplete_output/)
 })
 
 test('callDeepSeekNova manda thinking DISABLED por defecto (bug prod 2026-07-24: content vacío)', async (t) => {
@@ -182,6 +166,6 @@ test('buildDeepSeekJsonAppendix cumple los requisitos de JSON mode (palabra json
   const appendix = buildDeepSeekJsonAppendix('2026-07-13')
   assert.ok(/json/i.test(appendix))
   assert.ok(appendix.includes('"actions"'))
-  assert.ok(appendix.includes('2026-07-13')) // ejemplo anclado a hoy
+  assert.ok(appendix.includes('additionalProperties')) // schema exacto compartido
   assert.ok(appendix.includes('userConfirmationText'))
 })

@@ -12,6 +12,8 @@ export function getSupabaseAdmin() {
   if (!url || !key) return null
   _admin = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: (input, options = {}) => fetch(input, { ...options,
+      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(6000)]) : AbortSignal.timeout(6000) }) },
   })
   return _admin
 }
@@ -28,6 +30,7 @@ export async function getUserFromAuth(req) {
   const authHeader = req.headers?.authorization || req.headers?.Authorization
   if (!authHeader?.startsWith('Bearer ')) return null
   const token = authHeader.slice(7)
+  if (!token || token.length > 8192) return null
   const admin = getSupabaseAdmin()
   if (!admin) return null
   try {

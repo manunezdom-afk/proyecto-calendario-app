@@ -1,145 +1,181 @@
-// Precios de modelos Anthropic centralizados.
-//
-// Última revisión manual: 2026-05-07.
-// Fuente oficial: https://www.anthropic.com/pricing
-//
-// IMPORTANTE: Anthropic puede cambiar precios en cualquier momento. Revisar
-// este archivo cuando:
-//   * Se anuncie un cambio de pricing.
-//   * Se introduzca un modelo nuevo en focus-assistant/analyze-photo.
-//   * Cambie el routing Haiku ↔ Sonnet del proyecto.
-//
-// Por qué un solo archivo y no una tabla en DB:
-//   * Cambios de precio son raros (cuando ocurren) y deben quedar en git
-//     para auditoría histórica.
-//   * Editar precios en producción sin review es peligroso (un cero de más
-//     y los cálculos quedan rotos para siempre).
-//   * Si en el futuro queremos UI de admin para editarlo, migrarlo a tabla
-//     con lectura cacheada es directo: la API de getModelPricing() encapsula.
-//
-// Notación: precio por MILLÓN de tokens, en USD.
+// Tarifas de API directa, USD/1M tokens, verificadas el 2026-09-08.
+// Evidencia y condiciones: docs/focus-2/AI_MODEL_RESEARCH.md.
+// No habilitar modelos a partir de normalizeModelName: es solo contabilidad.
+// Admisión: getModelPricing(model, { conservative: true, requireCurrent: true }).
+
+export const PRICING_VERIFIED_AT = '2026-09-08T00:00:00.000Z'
+// Revisión interna obligatoria; no es una fecha de vencimiento del proveedor.
+export const PRICING_REVIEW_UNTIL = '2026-12-01T00:00:00.000Z'
+const GEMINI_PRICE_CHANGE_AT = '2027-01-01T00:00:00.000Z'
+const DEEPSEEK_PRICE_CHANGE_AT = '2026-08-16T16:00:00.000Z'
+const CLAUDE_SOURCE = 'https://platform.claude.com/docs/en/about-claude/pricing'
+const DEEPSEEK_SOURCE = 'https://api-docs.deepseek.com/quick_start/pricing/'
+const GEMINI_SOURCE = 'https://ai.google.dev/gemini-api/docs/pricing'
+
+function rates(provider, input, cachedInput, output, source, extra = {}) {
+  return Object.freeze({ provider, input, cachedInput, output, source, ...extra })
+}
+function claude(input, output, extra = {}) {
+  return rates('anthropic', input, input * 0.1, output, CLAUDE_SOURCE, {
+    cacheWrite5m: input * 1.25, cacheWrite1h: input * 2, ...extra,
+  })
+}
+function openai(model, input, cachedInput, output, extra = {}) {
+  return rates('openai', input, cachedInput, output,
+    `https://developers.openai.com/api/docs/models/${model}`, extra)
+}
 
 const PRICING_PER_MILLION = Object.freeze({
-  // Haiku 4.5 — modelo principal de Focus (focus-assistant + analyze-photo)
-  'claude-haiku-4-5':  { input: 1.00, output: 5.00 },
-  // Haiku 3.5 (legacy, por si rollback) — más barato pero peor JSON
-  'claude-haiku-3-5':  { input: 0.80, output: 4.00 },
-  // Sonnet 4.5 — para escalar acciones complejas (no usado todavía)
-  'claude-sonnet-4-5': { input: 3.00, output: 15.00 },
-  // Sonnet 4.6 — variante más reciente
-  'claude-sonnet-4-6': { input: 3.00, output: 15.00 },
-  // Opus 4.7 — top tier (improbable en Focus por costo)
-  'claude-opus-4-7':   { input: 15.00, output: 75.00 },
-
-  // OpenAI (Responses API) — Nova chat con router por tiers. Precios en USD
-  // por 1M tokens, tomados de developers.openai.com/api/docs/pricing el
-  // 2026-07-01. RE-VERIFICAR si OpenAI cambia precios o se agrega un tier.
-  'gpt-5.4-nano': { input: 0.20, output: 1.25 },   // tier simple (default barato)
-  'gpt-5.4-mini': { input: 0.75, output: 4.50 },   // tier complejo
-  'gpt-5.4':      { input: 2.50, output: 15.00 },  // por si se usa el full
-  'gpt-5.5':      { input: 5.00, output: 30.00 },  // tier "difícil" (caro, uso escaso)
-
-  // DeepSeek — proveedor principal de Nova desde 2026-07-13. Precios de
-  // api-docs.deepseek.com/quick_start/pricing (tarifa CACHE MISS, la
-  // conservadora). El path DeepSeek pasa un cost_override_usd cache-aware
-  // (hit $0.0028/1M) calculado en deepseekNova.js; esta tabla es fallback.
-  'deepseek-v4-flash': { input: 0.14, output: 0.28 },
-  'deepseek-v4-pro':   { input: 0.435, output: 0.87 },
+  'gpt-5.6-luna': openai('gpt-5.6-luna', 0.20, 0.02, 1.20, { cacheWrite: 0.25, longContextThreshold: 272_000 }),
+  'gpt-5.6-terra': openai('gpt-5.6-terra', 2.00, 0.20, 12.00, { cacheWrite: 2.50, longContextThreshold: 272_000 }),
+  'claude-haiku-4-5': claude(1.00, 5.00),
+  'claude-sonnet-5': claude(2.00, 10.00),
+  'deepseek-v4-flash': rates('deepseek', 0.44, 0.014, 1.32, DEEPSEEK_SOURCE, { effectiveFrom: DEEPSEEK_PRICE_CHANGE_AT }),
+  'deepseek-v4-pro': rates('deepseek', 1.32, 0.044, 3.96, DEEPSEEK_SOURCE, { effectiveFrom: DEEPSEEK_PRICE_CHANGE_AT }),
+  'gemini-3.5-flash-lite': rates('google', 0.30, 0.03, 2.50, GEMINI_SOURCE, { cacheStoragePerMillionHour: 1.00 }),
+  'gemini-3.8-flash': rates('google', 0.75, 0.075, 3.75, GEMINI_SOURCE, {
+    cacheStoragePerMillionHour: 0.50,
+    nextPriceAt: GEMINI_PRICE_CHANGE_AT,
+    nextPrice: Object.freeze({ input: 1.50, cachedInput: 0.15, output: 7.50, cacheStoragePerMillionHour: 1.00 }),
+  }),
+  // Modelos ya presentes en el repo: conservar contabilidad y rollback.
+  // Haiku 3.5 está retirado de la API directa y no sirve para admisión nueva.
+  'claude-haiku-3-5': claude(0.80, 4.00, { retired: true }),
+  'claude-sonnet-4-5': claude(3.00, 15.00),
+  'claude-sonnet-4-6': claude(3.00, 15.00),
+  'claude-opus-4-7': claude(5.00, 25.00),
+  'gpt-5.4-nano': openai('gpt-5.4-nano', 0.20, 0.02, 1.25),
+  'gpt-5.4-mini': openai('gpt-5.4-mini', 0.75, 0.075, 4.50),
+  'gpt-5.4': openai('gpt-5.4', 2.50, 0.25, 15.00, { longContextThreshold: 272_000 }),
+  'gpt-5.5': openai('gpt-5.5', 5.00, 0.50, 30.00, { longContextThreshold: 272_000 }),
 })
 
-// Fallback conservador: si llega un modelo desconocido, asumimos un precio
-// "razonablemente alto" (Sonnet) para que el costo no quede subestimado.
-// Esto previene un escenario donde un modelo nuevo y caro llega sin pricing
-// y los reportes lo muestran como gratis.
-const FALLBACK_PRICING = Object.freeze({ input: 3.00, output: 15.00 })
+// Compatibilidad para reportes sin tarifa: NO es un máximo garantizado y
+// nunca se usa para admitir/reservar llamadas. getModelPricing retorna null.
+const FALLBACK_PRICING = Object.freeze({ input: 3.00, cachedInput: 3.00, output: 15.00 })
 
-/**
- * Normaliza el id de modelo de Anthropic, quitando el sufijo de fecha.
- *
- *   'claude-haiku-4-5-20251001' → 'claude-haiku-4-5'
- *   'claude-sonnet-4-6-20251022' → 'claude-sonnet-4-6'
- *   'gpt-4o' → null (no es Anthropic)
- *   '' / null / undefined → null
- *
- * Devolvemos null cuando no podemos parsear; el caller decide si usar
- * fallback o registrar el evento como 'unknown'.
+/** Normaliza únicamente un modelo registrado o un sufijo de snapshot fechado.
+ * No confunde luna con gpt-5.6 ni acepta variantes como flash-vision-exp.
+ * Reconocer la familia tarifaria de un snapshot no certifica su disponibilidad.
  */
 export function normalizeModelName(modelId) {
-  if (!modelId || typeof modelId !== 'string') return null
-  const lower = modelId.toLowerCase().trim()
-  // OpenAI (Nova chat): 'gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5',
-  // tolerando el sufijo de snapshot que OpenAI puede añadir
-  // ('gpt-5.4-mini-2026-03-17' → 'gpt-5.4-mini'). Solo reconocemos la familia
-  // gpt-5.x que SÍ tiene precio configurado; cualquier otro gpt (ej. gpt-4o)
-  // devuelve null → el caller usa fallback conservador, igual que antes.
-  if (lower.startsWith('gpt-')) {
-    const g = lower.match(/^(gpt-5\.\d+(?:-(?:nano|mini))?)/)
-    return g ? g[1] : null
-  }
-  // DeepSeek: 'deepseek-v4-flash', 'deepseek-v4-pro', tolerando sufijo de
-  // snapshot. IDs legacy ('deepseek-chat'/'deepseek-reasoner', deprecados
-  // 2026-07-24) devuelven null → fallback conservador.
-  if (lower.startsWith('deepseek-')) {
-    const d = lower.match(/^(deepseek-v\d+(?:\.\d+)?-(?:flash|pro))/)
-    return d ? d[1] : null
-  }
-  if (!lower.startsWith('claude-')) return null
-  // Familia: claude-(haiku|sonnet|opus)-(major)-(minor)
-  const m = lower.match(/^(claude-(?:haiku|sonnet|opus)-\d+-\d+)/)
-  return m ? m[1] : null
+  if (typeof modelId !== 'string' || !modelId.trim()) return null
+  const name = modelId.trim().toLowerCase()
+  if (Object.hasOwn(PRICING_PER_MILLION, name)) return name
+  const base = name.replace(/-(?:\d{8}|\d{4}-\d{2}-\d{2})$/, '')
+  return base !== name && Object.hasOwn(PRICING_PER_MILLION, base) ? base : null
+}
+
+function parsedDate(value) {
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isFinite(date.getTime()) ? date : null
+}
+function tokens(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0
+}
+function isDeepSeekPeak(date) {
+  const day = date.getUTCDay()
+  const hour = date.getUTCHours()
+  return day >= 1 && day <= 5 && ((hour >= 1 && hour < 4) || (hour >= 6 && hour < 10))
 }
 
 /**
- * Devuelve la config de pricing del modelo o null si no está reconocido.
- * Útil para checks ("este modelo está soportado?") sin caer al fallback.
+ * at: fecha de la llamada (UTC); conservative reserva al máximo documentado.
+ * requireCurrent bloquea tarifas no revisadas/retiradas, nunca usa fallback.
+ * inputTokens permite aplicar el tramo >272K de OpenAI. Focus limita mucho más.
  */
-export function getModelPricing(modelId) {
-  const normalized = normalizeModelName(modelId)
-  if (!normalized) return null
-  return PRICING_PER_MILLION[normalized] || null
-}
-
-/**
- * Calcula el costo USD estimado de una llamada al modelo.
- *
- * Args:
- *   model: id de modelo (puede traer sufijo de fecha)
- *   input_tokens, output_tokens: del usage de Anthropic
- *
- * Devuelve:
- *   { cost_usd, pricing_source, pricing_model }
- *     pricing_source: 'configured' | 'fallback' | 'zero'
- *     pricing_model: nombre normalizado o 'unknown'
- *
- * El costo se redondea a 6 decimales (la columna `estimated_cost_usd` es
- * NUMERIC(12,6)).
- */
-export function calculateAICost({ model, input_tokens = 0, output_tokens = 0 }) {
-  const inTokens  = Math.max(0, Math.floor(Number(input_tokens)  || 0))
-  const outTokens = Math.max(0, Math.floor(Number(output_tokens) || 0))
-
-  if (inTokens === 0 && outTokens === 0) {
-    return {
-      cost_usd: 0,
-      pricing_source: 'zero',
-      pricing_model: normalizeModelName(model) || 'unknown',
+export function getModelPricing(modelId, {
+  at = new Date(), conservative = true, requireCurrent = false, inputTokens = 0,
+} = {}) {
+  const model = normalizeModelName(modelId)
+  const base = model && PRICING_PER_MILLION[model]
+  const date = parsedDate(at)
+  if (!base || !date) return null
+  const timestamp = date.getTime()
+  const stale = timestamp < Date.parse(PRICING_VERIFIED_AT) || timestamp >= Date.parse(PRICING_REVIEW_UNTIL)
+  const beforeEffective = base.effectiveFrom && timestamp < Date.parse(base.effectiveFrom)
+  if (beforeEffective || (requireCurrent && (stale || base.retired))) return null
+  let selected = { ...base }
+  let period = 'standard'
+  if (base.provider === 'deepseek') {
+    period = conservative || isDeepSeekPeak(date) ? 'peak' : 'off_peak'
+    if (period === 'off_peak') {
+      selected.input /= 2
+      selected.cachedInput /= 2
+      selected.output /= 2
     }
   }
+  if (base.nextPriceAt) {
+    // No presupuestar la promoción al reservar: la llamada puede cruzar cutoff.
+    if (conservative || timestamp >= Date.parse(base.nextPriceAt)) {
+      selected = { ...selected, ...base.nextPrice }
+      period = timestamp >= Date.parse(base.nextPriceAt) ? 'standard_2027' : 'future_rate_reserve'
+    } else {
+      period = 'introductory_2026'
+    }
+  }
+  const longContext = !!base.longContextThreshold && tokens(inputTokens) > base.longContextThreshold
+  if (longContext) {
+    selected.input *= 2
+    selected.cachedInput *= 2
+    if (selected.cacheWrite != null) selected.cacheWrite *= 2
+    selected.output *= 1.5
+  }
+  return Object.freeze({ ...selected, model, verifiedAt: PRICING_VERIFIED_AT,
+    reviewUntil: PRICING_REVIEW_UNTIL, stale, period, longContext })
+}
 
-  const normalized = normalizeModelName(model)
-  const configured = normalized ? PRICING_PER_MILLION[normalized] : null
+/**
+ * Costo estimado compatible con los callers anteriores.
+ * - Anthropic input_tokens EXCLUYE lecturas/escrituras: se suman aparte.
+ * - OpenAI/DeepSeek/Google input_tokens INCLUYE caché: se resta antes de sumar.
+ * input_tokens_include_cache permite normalizar explícitamente otros formatos.
+ * cache_creation_input_tokens es total de escrituras; el desglose 5m/1h no se
+ * vuelve a sumar. TTL desconocido usa la tarifa mayor documentada.
+ * output_tokens debe incluir razonamiento facturable, sin sumarlo dos veces.
+ * No incluye almacenamiento de caché Gemini ni herramientas alojadas.
+ */
+export function calculateAICost({
+  model, input_tokens = 0, output_tokens = 0,
+  cached_input_tokens, cache_read_input_tokens = 0,
+  cache_creation_input_tokens = 0,
+  cache_creation_5m_input_tokens = 0, cache_creation_1h_input_tokens = 0,
+  input_tokens_include_cache, at = new Date(), conservative = true,
+}) {
+  const input = tokens(input_tokens)
+  const output = tokens(output_tokens)
+  const cacheRead = tokens(cached_input_tokens ?? cache_read_input_tokens)
+  const write5m = tokens(cache_creation_5m_input_tokens)
+  const write1h = tokens(cache_creation_1h_input_tokens)
+  const cacheWrite = Math.max(tokens(cache_creation_input_tokens), write5m + write1h)
+  const configured = getModelPricing(model, { at, conservative, inputTokens: input })
   const pricing = configured || FALLBACK_PRICING
-
-  const inputCost  = (inTokens  * pricing.input)  / 1_000_000
-  const outputCost = (outTokens * pricing.output) / 1_000_000
-  const total = inputCost + outputCost
-
+  const includesCache = input_tokens_include_cache ?? (configured?.provider !== 'anthropic')
+  // Desgloses inconsistentes no pueden borrar input no contado: cobrar la
+  // mayor cantidad reportada y marcarlo para revisión sin inventar un descuento.
+  const inconsistent = includesCache && cacheRead + cacheWrite > input
+  const normalInput = includesCache && !inconsistent ? input - cacheRead - cacheWrite : input
+  const unknownWrite = Math.max(0, cacheWrite - write5m - write1h)
+  const unknownWriteRate = Math.max(pricing.cacheWrite || pricing.input,
+    pricing.cacheWrite5m || pricing.input, pricing.cacheWrite1h || pricing.input)
+  const total = (
+    normalInput * pricing.input + cacheRead * pricing.cachedInput +
+    write5m * (pricing.cacheWrite5m ?? unknownWriteRate) +
+    write1h * (pricing.cacheWrite1h ?? unknownWriteRate) +
+    unknownWrite * unknownWriteRate + output * pricing.output
+  ) / 1_000_000
+  const normalized = normalizeModelName(model)
   return {
     cost_usd: Number(total.toFixed(6)),
-    pricing_source: configured ? 'configured' : 'fallback',
+    cost_usd_unrounded: total,
+    pricing_source: total === 0 ? 'zero' : configured ? 'configured' : 'fallback',
     pricing_model: normalized || 'unknown',
+    pricing_verified_at: configured?.verifiedAt || null,
+    pricing_stale: configured?.stale ?? true,
+    pricing_period: configured?.period || 'unknown',
+    usage_inconsistent: inconsistent,
   }
 }
 
-// Para tests
-export const __test__ = Object.freeze({ PRICING_PER_MILLION, FALLBACK_PRICING })
+export const __test__ = Object.freeze({ PRICING_PER_MILLION, FALLBACK_PRICING, isDeepSeekPeak })

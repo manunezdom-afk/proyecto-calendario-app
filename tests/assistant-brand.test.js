@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { wirePlan, wireAction } from './helpers/novaFixtures.js'
 import { buildSystemPrompt } from '../api/_lib/systemPrompt.js'
 import { buildOpenAISystemPrompt, callOpenAINova, convertOpenAIToBackendResponse } from '../api/_lib/openaiNova.js'
 import { callDeepSeekNova } from '../api/_lib/deepseekNova.js'
@@ -26,7 +27,7 @@ test('both system prompts identify Hilante while preserving Nova in user context
     buildOpenAISystemPrompt({ ...dateContext, memories: [memory], ...context }),
   ]
   for (const prompt of prompts) {
-    assert.match(prompt, /Eres Hilante, la asistente/)
+    assert.match(prompt, /Eres Hilante, (?:la )?asistente/)
     assert.doesNotMatch(prompt, /Eres Nova,|Nova es una asistente/)
     for (const text of ['Reunión Proyecto Nova', 'Presentar Nova 2', 'Revisar presupuesto Nova', memory]) {
       assert.ok(prompt.includes(text), `user content must remain literal: ${text}`)
@@ -77,18 +78,16 @@ for (const [provider, call, messagesKey] of [
   })
 }
 
-test('action conversion preserves a user task containing Nova and the literal confirmation', () => {
+test('action conversion preserves Nova in user titles and replaces unverified save claims', () => {
   const reply = 'Guardé Revisar Proyecto Nova para mañana.'
   const result = convertOpenAIToBackendResponse({
     userMessage: 'Revisar Proyecto Nova mañana',
-    openaiPayload: {
-      actions: [{ type: 'create_task', title: 'Revisar Proyecto Nova', confidence: 'high',
-        sourceText: 'Revisar Proyecto Nova mañana', dateISO: '2026-09-08' }],
-      userConfirmationText: reply,
-    },
+    openaiPayload: wirePlan([wireAction({ title: 'Revisar Proyecto Nova',
+      sourceText: 'Revisar Proyecto Nova mañana', dateISO: '2026-09-08' })], { userConfirmationText: reply }),
   })
   assert.equal(result.actions[0].task.label, 'Revisar Proyecto Nova')
-  assert.equal(result.reply, reply)
+  assert.doesNotMatch(result.reply, /Guardé/i)
+  assert.equal(result.execution_pending, true)
 })
 
 test('human quota copy uses Hilante while stored Nova action keys remain compatible', () => {

@@ -11,6 +11,7 @@
 
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { wirePlan, wireAction } from './helpers/novaFixtures.js'
 
 import {
   convertOpenAIToBackendResponse,
@@ -21,7 +22,7 @@ import {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function fakeOpenAIPayload({ actions = [], needsClarification = false, clarificationQuestion = null, userConfirmationText = '' }) {
-  return { actions, needsClarification, clarificationQuestion, userConfirmationText }
+  return wirePlan(actions.map(item => wireAction(item)), { needsClarification, clarificationQuestion, userConfirmationText })
 }
 
 function event({ title, dateText = 'hoy', dateISO = '2026-05-19', time = null, durationMinutes = 60, category = 'otro', reminderOffsetMinutes = null, confidence = 'high', sourceText }) {
@@ -163,7 +164,7 @@ test('caso 3-defensa: si el modelo emite título "Horas", el adapter lo descarta
     reqId: 'r3b',
   })
   assert.equal(out.actions.length, 0)
-  assert.ok(out._dropped[0].includes('basura'))
+  assert.ok(out._dropped.includes('invalid_title'))
 })
 
 // ─── QA case 4: "mañana tengo doctor a las 5 y recuérdame llevar exámenes" ──
@@ -180,8 +181,8 @@ test('caso 4: doctor + recordatorio → 2 actions, NUNCA una', () => {
           category: 'salud',
           sourceText: 'doctor a las 5',
         }),
-        reminder({
-          title: 'Llevar los exámenes',
+        wireAction({
+          type: 'create_task', title: 'Llevar los exámenes',
           dateText: 'mañana',
           dateISO: '2026-05-20',
           time: null,
@@ -199,10 +200,9 @@ test('caso 4: doctor + recordatorio → 2 actions, NUNCA una', () => {
   assert.equal(out.actions[0].event.time, '5:00 PM')
   assert.equal(out.actions[0].event.icon, 'local_hospital')
   // Recordatorio
-  assert.equal(out.actions[1].event.title, 'Llevar los exámenes')
-  assert.equal(out.actions[1].event.time, null)
-  assert.equal(out.actions[1].event.icon, 'alarm')
-  assert.equal(out.actions[1].event.date, '2026-05-20')
+  assert.equal(out.actions[1].task.label, 'Llevar los exámenes')
+  assert.equal(out.actions[1].task.time, undefined)
+  assert.equal(out.actions[1].task.date, '2026-05-20')
 })
 
 // ─── QA case 5: "hoy a las 5 gimnasio y a las 8 estudiar" ──────────────────
@@ -253,7 +253,7 @@ test('caso 6-defensa: "Reunión" pelado se descarta SOLO si el usuario no lo dij
     reqId: 'r6b',
   })
   assert.equal(hallucinated.actions.length, 0)
-  assert.ok(hallucinated._dropped[0].includes('genérico sin contexto'))
+  assert.ok(hallucinated._dropped.includes('missing_intent_evidence'))
 
   // FIX QA-closure 2026-06-10: si el usuario SÍ dijo "reunión" literalmente
   // ("mañana reunión a las 10"), el evento se crea — antes se descartaba y
@@ -276,7 +276,7 @@ test('caso 7: reminder con hora + tarea mañana → 2 actions', () => {
     openaiPayload: fakeOpenAIPayload({
       actions: [
         reminder({ title: 'Llamar a mi mamá', dateText: 'hoy', dateISO: '2026-05-19', time: '18:00', sourceText: 'llamar a mi mamá a las 6' }),
-        reminder({ title: 'Comprar cuaderno', dateText: 'mañana', dateISO: '2026-05-20', time: null, sourceText: 'comprar cuaderno mañana' }),
+        wireAction({ type: 'create_task', title: 'Comprar cuaderno', dateText: 'mañana', dateISO: '2026-05-20', time: null, sourceText: 'comprar cuaderno mañana' }),
       ],
     }),
     userMessage: 'recuérdame llamar a mi mamá a las 6 y comprar cuaderno mañana',
@@ -291,16 +291,16 @@ test('caso 7: reminder con hora + tarea mañana → 2 actions', () => {
   // ubicarlo en el día. endTime sigue null (punto, sin duración).
   assert.equal(out.actions[0].event.time, '6:00 PM')
   assert.equal(out.actions[0].event.endTime, null)
-  assert.equal(out.actions[1].event.title, 'Comprar cuaderno')
-  assert.equal(out.actions[1].event.date, '2026-05-20')
+  assert.equal(out.actions[1].task.label, 'Comprar cuaderno')
+  assert.equal(out.actions[1].task.date, '2026-05-20')
 })
 
 // ─── QA case 8: "hoy tengo que entregar trabajo del Master" (sin hora) ─────
 
-test('caso 8: entrega sin hora → 1 event hoy con time:null, NO inventa hora', () => {
+test('caso 8: entrega sin hora → tarea con fecha civil, NO inventa hora', () => {
   const out = convertOpenAIToBackendResponse({
     openaiPayload: fakeOpenAIPayload({
-      actions: [event({
+      actions: [wireAction({
         title: 'Entregar trabajo del Master',
         dateText: 'hoy',
         dateISO: '2026-05-19',
@@ -313,9 +313,9 @@ test('caso 8: entrega sin hora → 1 event hoy con time:null, NO inventa hora', 
     reqId: 'r8',
   })
   assert.equal(out.actions.length, 1)
-  assert.equal(out.actions[0].event.title, 'Entregar trabajo del Master')
-  assert.equal(out.actions[0].event.time, null)
-  assert.equal(out.actions[0].event.date, '2026-05-19')
+  assert.equal(out.actions[0].task.label, 'Entregar trabajo del Master')
+  assert.equal(out.actions[0].task.time, undefined)
+  assert.equal(out.actions[0].task.date, '2026-05-19')
 })
 
 // ─── Anti-contaminación: "entregar trabajo" → NO se transforma en "Reunión con Cristina"
@@ -336,7 +336,7 @@ test('contaminación: título "Reunión con Cristina" cuando el input no la menc
   })
   assert.equal(out.actions.length, 0)
   assert.ok(
-    out._dropped.some(r => r.includes('contaminación')),
+    out._dropped.includes('missing_intent_evidence'),
     `dropped: ${JSON.stringify(out._dropped)}`,
   )
 })
@@ -378,8 +378,8 @@ test('mixed: una acción clara + un clarify → emite la clara, agrega pregunta 
   assert.equal(out.actions.length, 1)
   assert.equal(out.actions[0].event.title, 'Doctor')
   assert.equal(out.shouldAskUser, false) // hubo acción ejecutable
-  assert.ok(out.reply.includes('Doctor'))
-  assert.ok(out.reply.includes('¿A qué hora'))
+  assert.equal(out.follow_up_question, '¿A qué hora es la otra cosa?')
+  assert.doesNotMatch(out.reply, /Agregué|guardé/i)
 })
 
 // ─── Endpoint shape: payload tiene los campos que iOS espera ────────────────
@@ -433,9 +433,9 @@ test('duration: SIN duración explícita el guard anula durationMinutes del mode
 test('duration: reminder no calcula endTime (siempre null)', () => {
   const out = convertOpenAIToBackendResponse({
     openaiPayload: fakeOpenAIPayload({
-      actions: [reminder({ title: 'Llamar a Marcia', time: null })],
+      actions: [reminder({ title: 'Llamar a Marcia', time: '18:00' })],
     }),
-    userMessage: 'recuérdame llamar a Marcia',
+    userMessage: 'recuérdame llamar a Marcia a las 6',
     reqId: 'rdur2',
   })
   assert.equal(out.actions[0].event.endTime, null)
@@ -443,24 +443,11 @@ test('duration: reminder no calcula endTime (siempre null)', () => {
 
 // ─── Reglas nuevas Bug1+Bug2: verificación system prompt ────────────────────
 
-test('system prompt contiene regla "ocho 30" con ejemplo concreto de título limpio', () => {
-  const p = buildOpenAISystemPrompt({
-    tz: 'America/Santiago', todayISO: '2026-05-19', tomorrow: '2026-05-20',
-    currentTime24: '09:00', weekDates: {},
-  })
-  // Regla 3 debe mencionar el patrón explícito "ocho 30" → 08:30
-  assert.ok(p.includes('ocho 30'), 'debe mencionar "ocho 30" como patrón')
-  // Regla 4 debe incluir strip de temporal + ejemplo con "30 del Master"
-  assert.ok(p.includes('30 del Master') || p.includes('ocho 30 del Master'), 'debe mostrar ejemplo con "30 del Master" en el contexto del título')
-  // Regla 3 debe mencionar secuencia PM
-  assert.ok(p.includes('SECUENCIA AM/PM') || p.includes('secuencia'), 'debe tener regla de secuencia PM')
-})
-
-test('system prompt contiene ejemplo de secuencia: 5 gimnasio y 8 estudiar → 17:00 y 20:00', () => {
-  const p = buildOpenAISystemPrompt({
-    tz: 'America/Santiago', todayISO: '2026-05-19', tomorrow: '2026-05-20',
-    currentTime24: '09:00', weekDates: {},
-  })
-  // Debe tener el ejemplo concreto de gimnasio/estudiar con horas PM
-  assert.ok(p.includes('gimnasio') && p.includes('20:00'), 'debe tener ejemplo gimnasio+estudiar con 20:00')
+test('shared prompt distinguishes exact time, date-only tasks and independent clarifications', () => {
+  const prompt = buildOpenAISystemPrompt({ tz: 'America/Santiago', todayISO: '2026-09-08' })
+  assert.match(prompt, /create_task/)
+  assert.match(prompt, /nunca inventes 09:00/)
+  assert.match(prompt, /No inventes duración/)
+  assert.match(prompt, /sourceText/)
+  assert.match(prompt, /nunca mueve silenciosamente/)
 })

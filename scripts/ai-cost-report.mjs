@@ -8,12 +8,14 @@
 //   node scripts/ai-cost-report.mjs 30         → últimos 30 días
 //
 // Env requeridas (mismas que el backend): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
-// Opcional: CLP_PER_USD (default 940, dólar aproximado 2026-07).
+// Opcional: CLP_PER_USD (tipo de cambio proporcionado por el operador).
 
 import { createClient } from '@supabase/supabase-js'
+import { summarizeAIMetrics } from './ai-metrics.mjs'
+import { ASSISTANT_NAME } from '../api/_lib/assistantBrand.js'
 
 const DAYS = Math.max(1, Number(process.argv[2]) || 7)
-const CLP_PER_USD = Number(process.env.CLP_PER_USD) || 940
+const CLP_PER_USD = Number(process.env.CLP_PER_USD) > 0 ? Number(process.env.CLP_PER_USD) : null
 
 const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -49,7 +51,7 @@ if (rows.length === 0) {
 }
 
 const usd = n => `$${n.toFixed(4)}`
-const clp = n => `${Math.round(n * CLP_PER_USD).toLocaleString('es-CL')} CLP`
+const clp = n => CLP_PER_USD ? `${Math.round(n * CLP_PER_USD).toLocaleString('es-CL')} CLP` : 'CLP sin tipo de cambio configurado'
 const pct = (a, b) => b ? `${((100 * a) / b).toFixed(1)}%` : '0%'
 
 const groupSum = (keyFn) => {
@@ -69,16 +71,17 @@ const groupSum = (keyFn) => {
 const total = rows.reduce((s, r) => s + Number(r.estimated_cost_usd || 0), 0)
 const chatRows = rows.filter(r => r.action_type === 'nova_message' || r.action_type === 'nova_premium_message')
 const premiumRows = rows.filter(r =>
-  r.action_type === 'nova_premium_message' || r.metadata?.tier === 'hard')
+  r.action_type === 'nova_premium_message' || ['hard','premium'].includes(r.metadata?.tier))
 
 console.log(`\n══ Costo de IA — últimos ${DAYS} días (${rows.length} llamadas) ══`)
-console.log(`Total: ${usd(total)} USD ≈ ${clp(total)}  (dólar ${CLP_PER_USD} CLP)`)
+console.log(`Total: ${usd(total)} USD; ${clp(total)}`)
 console.log(`Promedio por llamada: ${usd(total / rows.length)}`)
 if (chatRows.length) {
   const chatCost = chatRows.reduce((s, r) => s + Number(r.estimated_cost_usd || 0), 0)
-  console.log(`Mensajes Nova: ${chatRows.length} — costo promedio por mensaje: ${usd(chatCost / chatRows.length)} ≈ ${clp(chatCost / chatRows.length)}`)
+  console.log(`Intentos de ${ASSISTANT_NAME}: ${chatRows.length} — costo promedio por intento: ${usd(chatCost / chatRows.length)}; ${clp(chatCost / chatRows.length)}`)
 }
-console.log(`Fallback premium (gpt-5.5 / Sonnet): ${premiumRows.length} llamadas = ${pct(premiumRows.length, rows.length)} del total`)
+console.log(`Intentos premium: ${premiumRows.length} llamadas = ${pct(premiumRows.length, rows.length)} del total`)
+console.log(JSON.stringify(summarizeAIMetrics(rows), null, 2))
 
 console.log('\n── Por día ──')
 for (const [day, g] of groupSum(r => String(r.created_at).slice(0, 10)).sort((a, b) => a[0].localeCompare(b[0]))) {

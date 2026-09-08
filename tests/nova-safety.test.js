@@ -1,23 +1,24 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { wirePlan, wireAction } from './helpers/novaFixtures.js'
 import { sanitizeNovaRequest, novaRequestId, providerFallbackEnabled, runNovaAttempt, novaOutputTokenLimit } from '../api/_lib/novaSafety.js'
 import { convertOpenAIToBackendResponse, callOpenAINova } from '../api/_lib/openaiNova.js'
 
-const action = (changes = {}) => ({
+const action = (changes = {}) => wireAction({
   type: 'create_task', title: 'Comprar pan', confidence: 'high', sourceText: 'comprar pan',
   dateISO: '2026-09-10', ...changes,
 })
 const convert = (actions, text = 'comprar pan antes del jueves') => convertOpenAIToBackendResponse({
-  openaiPayload: { actions, userConfirmationText: 'Listo, lo guardé.' }, userMessage: text,
+  openaiPayload: wirePlan(actions, { userConfirmationText: 'Listo, lo guardé.' }), userMessage: text,
 })
 
 test('Nova request rejects malformed input and bounds every model context collection', () => {
   assert.equal(sanitizeNovaRequest({ message: {} }).error, 'no_message')
   assert.equal(sanitizeNovaRequest({ message: 'x'.repeat(4001) }).error, 'message_too_long')
   const request = sanitizeNovaRequest({ message: 'hola',
-    history: Array.from({ length: 100 }, () => ({ role: 'user', content: 'x'.repeat(10000) })),
-    events: Array.from({ length: 200 }, () => ({ title: 'x'.repeat(10000) })),
-    userMemories: Array(100).fill('x'.repeat(10000)),
+    history: Array.from({ length: 20 }, () => ({ role: 'user', content: 'x'.repeat(1200) })),
+    events: Array.from({ length: 90 }, () => ({ title: 'x'.repeat(130) })),
+    userMemories: Array(22).fill('x'.repeat(210)),
     contacts: [{ name: 'private', email: 'private@example.invalid' }],
   }).body
   assert.equal(request.history.length, 12)
@@ -105,8 +106,8 @@ test('one structurally invalid action blocks the entire batch', () => {
 
 test('an independent question survives alongside verified actions', () => {
   const result = convertOpenAIToBackendResponse({
-    openaiPayload: { actions: [action(), { type: 'clarify', title: '¿A qué hora es el gimnasio?' }],
-      needsClarification: true, clarificationQuestion: '¿A qué hora es el gimnasio?' },
+    openaiPayload: wirePlan([action(), wireAction({ type: 'clarify', title: '¿A qué hora es el gimnasio?' })],
+      { needsClarification: true, clarificationQuestion: '¿A qué hora es el gimnasio?' }),
     userMessage: 'comprar pan y luego gimnasio',
   })
   assert.equal(result.actions.length, 1)
@@ -121,4 +122,28 @@ test('output token budget remains bounded under invalid environment configuratio
   assert.equal(novaOutputTokenLimit('1'), 256)
   assert.equal(novaOutputTokenLimit('Infinity', 900), 900)
   assert.equal(novaOutputTokenLimit('-1', 900), 900)
+})
+
+test('oversized aggregate payload and invalid dates are rejected before prompt construction', () => {
+  assert.equal(sanitizeNovaRequest({ message: 'hola', history: [{role:'user',content:'x'.repeat(90_000)}] }).error, 'request_too_large')
+  assert.equal(sanitizeNovaRequest({ message: 'hola', clientNow: 1e100 }).error, 'invalid_client_time')
+  assert.equal(sanitizeNovaRequest({ message: 'hola', clientTimezone: 'Mars/Private' }).error, 'invalid_timezone')
+})
+
+test('every text adapter refuses an oversized fixed input before any network request', async () => {
+  const { callDeepSeekNova } = await import('../api/_lib/deepseekNova.js')
+  const { callAnthropicNova } = await import('../api/_lib/anthropicNova.js')
+  const saved = globalThis.fetch; let networkCalls = 0
+  globalThis.fetch = async () => { networkCalls++; throw new Error('must not send') }
+  try {
+    for (const call of [callOpenAINova, callDeepSeekNova, callAnthropicNova]) {
+      await assert.rejects(call({ message: 'hola', systemPrompt: 'x'.repeat(13000), apiKey: 'offline-test' }), /input_budget_exceeded/)
+    }
+    assert.equal(networkCalls, 0)
+  } finally { globalThis.fetch = saved }
+})
+test('a valid JSON prefix does not turn an incomplete or refused Responses output into actions', async () => {
+  const { extractResponsesText } = await import('../api/_lib/openaiNova.js')
+  assert.throws(() => extractResponsesText({status:'incomplete',output_text:'{}'}), /incomplete_output/)
+  assert.throws(() => extractResponsesText({status:'completed',output:[{content:[{type:'refusal',refusal:'private'}]}]}), /provider_refusal/)
 })

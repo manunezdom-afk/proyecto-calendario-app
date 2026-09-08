@@ -14,6 +14,7 @@ import {
   calculateAICost,
   getModelPricing,
   normalizeModelName,
+  PRICING_REVIEW_UNTIL,
   __test__ as pricingInternals,
 } from '../api/_lib/aiPricing.js'
 
@@ -75,7 +76,7 @@ test('Sonnet 4.6: $3 input / $15 output por M', () => {
   assert.equal(r.pricing_source, 'configured')
 })
 
-test('Modelo desconocido cae a fallback (Sonnet pricing)', () => {
+test('Modelo desconocido conserva estimación legacy, pero no habilita admisión', () => {
   const r = calculateAICost({
     model: 'claude-haiku-9-9-future',
     input_tokens: 1_000_000,
@@ -84,6 +85,7 @@ test('Modelo desconocido cae a fallback (Sonnet pricing)', () => {
   assert.equal(r.pricing_source, 'fallback')
   // Fallback es Sonnet pricing → 1M input * $3 = $3
   assert.equal(r.cost_usd, 3)
+  assert.equal(getModelPricing('claude-haiku-9-9-future', { requireCurrent: true }), null)
 })
 
 test('cost_usd con 0 tokens devuelve 0', () => {
@@ -125,6 +127,113 @@ test('PRICING_PER_MILLION cubre los modelos esperados', () => {
   for (const m of expected) {
     assert.ok(pricingInternals.PRICING_PER_MILLION[m], `falta pricing para ${m}`)
   }
+})
+
+// Tarifas y categorías actuales. Fechas fijadas: estas pruebas no dependen de
+// la hora de ejecución ni reactivan modelos cuando venza la revisión manual.
+const verifiedDate = '2026-09-08T12:00:00.000Z'
+
+test('IDs nuevos no se confunden con familias o variantes sin precio', () => {
+  assert.equal(normalizeModelName('GPT-5.6-LUNA'), 'gpt-5.6-luna')
+  assert.equal(normalizeModelName('claude-sonnet-5'), 'claude-sonnet-5')
+  assert.equal(normalizeModelName('gemini-3.8-flash'), 'gemini-3.8-flash')
+  for (const unknown of ['gpt-5.6', 'gpt-5.6-luna-free', 'gpt-5.4-pro',
+    'deepseek-v4-flash-vision-exp', 'claude-sonnet-5-future', 'gemini-3.8-flash-preview']) {
+    assert.equal(getModelPricing(unknown), null, unknown)
+  }
+})
+
+test('admisión falla cerrada si venció revisión, fecha inválida o modelo retirado', () => {
+  assert.ok(getModelPricing('gpt-5.6-luna', { at: verifiedDate, requireCurrent: true }))
+  assert.equal(getModelPricing('gpt-5.6-luna', { at: PRICING_REVIEW_UNTIL, requireCurrent: true }), null)
+  assert.equal(getModelPricing('gpt-5.6-luna', { at: 'fecha inválida', requireCurrent: true }), null)
+  assert.equal(getModelPricing('claude-haiku-3-5', { at: verifiedDate, requireCurrent: true }), null)
+  assert.equal(getModelPricing('gpt-5.6-luna', { at: PRICING_REVIEW_UNTIL }).stale, true)
+})
+
+test('OpenAI cache reads/writes no se cobran dos veces como input ordinario', () => {
+  const result = calculateAICost({ model: 'gpt-5.6-luna', at: verifiedDate,
+    input_tokens: 15_000, cached_input_tokens: 12_000, cache_creation_input_tokens: 3_000,
+    output_tokens: 1_000 })
+  // 12k * .02 + 3k * .25 + 1k * 1.2, por millón.
+  assert.equal(result.cost_usd, 0.00219)
+  assert.equal(result.usage_inconsistent, false)
+})
+
+test('Anthropic input ya excluye caché y desglose TTL no duplica creación total', () => {
+  const result = calculateAICost({ model: 'claude-haiku-4-5-20251001', at: verifiedDate,
+    input_tokens: 1_000, cache_read_input_tokens: 10_000,
+    cache_creation_input_tokens: 3_000,
+    cache_creation_5m_input_tokens: 2_000, cache_creation_1h_input_tokens: 1_000,
+    output_tokens: 500 })
+  // .001 input + .001 read + .0025 write5m + .002 write1h + .0025 output.
+  assert.equal(result.cost_usd, 0.009)
+  assert.equal(result.usage_inconsistent, false)
+})
+
+test('creación Anthropic con TTL ausente se estima con la tarifa mayor', () => {
+  const result = calculateAICost({ model: 'claude-haiku-4-5', at: verifiedDate,
+    input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 1_000 })
+  assert.equal(result.cost_usd, 0.002)
+  assert.equal(result.pricing_source, 'configured')
+})
+
+test('caché incoherente no genera descuento falso ni coste negativo', () => {
+  const result = calculateAICost({ model: 'gpt-5.6-luna', at: verifiedDate,
+    input_tokens: 1_000, cached_input_tokens: 1_001 })
+  assert.equal(result.usage_inconsistent, true)
+  assert.ok(result.cost_usd_unrounded >= 1_000 * 0.20 / 1_000_000)
+})
+
+test('OpenAI aplica tramo largo solamente después de 272000 tokens', () => {
+  const normal = getModelPricing('gpt-5.6-terra', { at: verifiedDate, inputTokens: 272_000 })
+  const long = getModelPricing('gpt-5.6-terra', { at: verifiedDate, inputTokens: 272_001 })
+  assert.equal(normal.input, 2)
+  assert.equal(long.input, 4)
+  assert.equal(long.cachedInput, 0.4)
+  assert.equal(long.cacheWrite, 5)
+  assert.equal(long.output, 18)
+})
+
+test('DeepSeek usa límites UTC exactos y reserva a pico incluso durante valle', () => {
+  const actual = at => getModelPricing('deepseek-v4-flash', { at, conservative: false })
+  assert.equal(actual('2026-09-08T00:59:59Z').input, 0.22)
+  assert.equal(actual('2026-09-08T01:00:00Z').input, 0.44)
+  assert.equal(actual('2026-09-08T04:00:00Z').input, 0.22)
+  assert.equal(actual('2026-09-08T06:00:00Z').input, 0.44)
+  assert.equal(actual('2026-09-08T10:00:00Z').input, 0.22)
+  assert.equal(actual('2026-09-12T02:00:00Z').input, 0.22)
+  assert.equal(getModelPricing('deepseek-v4-flash', { at: verifiedDate }).input, 0.44)
+  assert.equal(actual('2026-08-16T15:59:59Z'), null)
+})
+
+test('DeepSeek cache-aware sigue tarifa documentada y no duplica el prompt', () => {
+  const result = calculateAICost({ model: 'deepseek-v4-pro', at: verifiedDate,
+    input_tokens: 1_000_000, cached_input_tokens: 800_000, output_tokens: 10_000 })
+  assert.equal(result.cost_usd, 0.3388)
+})
+
+test('Gemini cambia precio al cutoff y la reserva evita depender de promoción', () => {
+  const actual = at => getModelPricing('gemini-3.8-flash', { at, conservative: false })
+  assert.equal(actual('2026-12-31T23:59:59.999Z').input, 0.75)
+  assert.equal(actual('2027-01-01T00:00:00.000Z').input, 1.5)
+  assert.equal(actual('2027-01-01T00:00:00.000Z').output, 7.5)
+  assert.equal(actual('2027-01-01T00:00:00.000Z').cacheStoragePerMillionHour, 1)
+  assert.equal(getModelPricing('gemini-3.8-flash', { at: verifiedDate }).input, 1.5)
+  assert.equal(getModelPricing('gemini-3.8-flash', {
+    at: '2027-01-01T00:00:00Z', requireCurrent: true }), null)
+})
+
+test('Sonnet 5 conserva precio estándar y Opus 4.7 corrige tarifa antigua', () => {
+  assert.equal(getModelPricing('claude-sonnet-5', { at: verifiedDate }).output, 10)
+  assert.equal(getModelPricing('claude-opus-4-7', { at: verifiedDate }).input, 5)
+})
+
+test('acumulación de presupuesto dispone de precisión sin redondeo por llamada', () => {
+  const result = calculateAICost({ model: 'gpt-5.6-luna', at: verifiedDate, input_tokens: 1 })
+  assert.ok(Math.abs(result.cost_usd_unrounded - 0.0000002) < 1e-20)
+  assert.ok(Number.isFinite(calculateAICost({ model: 'gpt-5.6-luna',
+    at: verifiedDate, input_tokens: Infinity, output_tokens: NaN }).cost_usd))
 })
 
 // ─── extractAnthropicUsage ──────────────────────────────────────────────────

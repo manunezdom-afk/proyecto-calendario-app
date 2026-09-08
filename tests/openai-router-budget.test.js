@@ -11,7 +11,7 @@ import {
   __selectOpenAIModel as selectOpenAIModel,
   __detectVeryComplexInput as detectVeryComplex,
   __escalateOpenAITier as escalateOpenAITier,
-} from '../api/focus-assistant.js'
+} from './helpers/legacyNovaRouting.js'
 import {
   calculateAICost,
   normalizeModelName,
