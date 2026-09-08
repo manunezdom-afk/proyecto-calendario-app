@@ -28,6 +28,9 @@ function openai(model, input, cachedInput, output, extra = {}) {
 const PRICING_PER_MILLION = Object.freeze({
   'gpt-5.6-luna': openai('gpt-5.6-luna', 0.20, 0.02, 1.20, { cacheWrite: 0.25, longContextThreshold: 272_000 }),
   'gpt-5.6-terra': openai('gpt-5.6-terra', 2.00, 0.20, 12.00, { cacheWrite: 2.50, longContextThreshold: 272_000 }),
+  // Promotional price guaranteed through Nov 21; stop new admission a day
+  // earlier until pricing is reviewed. Historical reports retain this rate.
+  'gpt-5.6-sol': openai('gpt-5.6-sol', 4.00, 0.40, 20.00, { cacheWrite: 5.00, longContextThreshold: 272_000, reviewUntil: '2026-11-20T00:00:00.000Z' }),
   'claude-haiku-4-5': claude(1.00, 5.00),
   'claude-sonnet-5': claude(2.00, 10.00),
   'deepseek-v4-flash': rates('deepseek', 0.44, 0.014, 1.32, DEEPSEEK_SOURCE, { effectiveFrom: DEEPSEEK_PRICE_CHANGE_AT }),
@@ -93,7 +96,8 @@ export function getModelPricing(modelId, {
   const date = parsedDate(at)
   if (!base || !date) return null
   const timestamp = date.getTime()
-  const stale = timestamp < Date.parse(PRICING_VERIFIED_AT) || timestamp >= Date.parse(PRICING_REVIEW_UNTIL)
+  const reviewUntil = base.reviewUntil || PRICING_REVIEW_UNTIL
+  const stale = timestamp < Date.parse(PRICING_VERIFIED_AT) || timestamp >= Date.parse(reviewUntil)
   const beforeEffective = base.effectiveFrom && timestamp < Date.parse(base.effectiveFrom)
   if (beforeEffective || (requireCurrent && (stale || base.retired))) return null
   let selected = { ...base }
@@ -123,7 +127,7 @@ export function getModelPricing(modelId, {
     selected.output *= 1.5
   }
   return Object.freeze({ ...selected, model, verifiedAt: PRICING_VERIFIED_AT,
-    reviewUntil: PRICING_REVIEW_UNTIL, stale, period, longContext })
+    reviewUntil, stale, period, longContext })
 }
 
 /**

@@ -1,0 +1,40 @@
+{
+  "purpose": "Additional human conversation review; separate from the unchanged 211-case objective grader",
+  "reviewer": null,
+  "reviewedAt": null,
+  "providerMeasured": false,
+  "rubric": ["Uses only known context", "Maintains references across turns", "Brief and natural Spanish", "Asks only for genuinely missing information", "Distinguishes proposed plans from saved actions", "Respects fixed events and time constraints"],
+  "conversations": [
+    {
+      "id": "continuity",
+      "turns": ["pon gym mañana a las 10 AM", "mejor a las 11 AM", "y recuérdame llevar agua", "qué más tengo mañana", "organízame la tarde", "no quiero estudiar después de las 8 PM"],
+      "review": "Apply and verify the real client receipt between turns. Changing the hour must edit the same event. A reminder lacking an alert time must not invent one. Planning respects the final cutoff.",
+      "scores": null
+    },
+    {
+      "id": "overloaded",
+      "turns": ["ando con mil cosas", "no sé qué hacer primero"],
+      "context": "Run once with an empty agenda and once with actual synthetic pending tasks and deadlines.",
+      "review": "Acknowledge briefly and help choose a concrete next step using available context. Do not invent obligations or turn emotional disclosure into a task.",
+      "scores": null
+    },
+    {
+      "id": "available-time",
+      "turns": ["tengo dos horas libres", "quiero avanzar con Focus pero también ir al gym"],
+      "review": "Offer an achievable division as a proposal. Identify missing commute/duration assumptions instead of asserting a saved schedule.",
+      "scores": null
+    },
+    {
+      "id": "day-with-constraints",
+      "turns": ["Hilante, mañana quiero avanzar tres horas con Focus, ir al gym y tengo fútbol a las 8 PM. Organízame el día pero no quiero levantarme antes de las 9 AM."],
+      "review": "Consult supplied agenda, preserve football at 20:00, allocate three hours to Focus, schedule nothing before 09:00 and propose uncertain durations for review. Never claim persisted changes until a receipt exists.",
+      "scores": null
+    },
+    {
+      "id": "weekly-constraints",
+      "turns": ["Organízame toda la semana considerando universidad, gimnasio, Focus, mis pendientes, horas de sueño y que quiero dejar viernes y sábado por la noche libres. Si ves que no alcanza el tiempo, prioriza por importancia y explícame qué moverías."],
+      "review": "Use relevant synthetic events and preferences, protect Friday/Saturday evenings including overlapping blocks, preserve fixed commitments and explain any assumptions or unsatisfied goals. A higher tier does not confer permission to invent commitments.",
+      "scores": null
+    }
+  ]
+}

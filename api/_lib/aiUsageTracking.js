@@ -7,8 +7,8 @@
 //     `ai_usage_events`, con tokens y costo. Para reportes y futuros caps
 //     basados en gasto.
 //
-// Ambos coexisten: el handler chequea cuota con usageLimits.js, y si llama
-// al modelo, registra el evento granular acá.
+// La admisión atómica consume las cuotas del producto. Este registro describe
+// el intento pagado y nunca autoriza una llamada ni sustituye su reserva SQL.
 //
 // PRIVACIDAD: la metadata NO incluye prompts, respuestas, mensajes, emails,
 // títulos de eventos, ni ningún dato del usuario. Solo flags neutrales:
@@ -96,6 +96,18 @@ const ALLOWED_METADATA_KEYS = new Set([
   'output_token_limit',
   'cost_basis',
   'escalation_reason',
+  'routing_reason',
+  'reasoning_effort',
+  'reasoning_tokens',
+  'output_reasoning_tokens',
+  'service_tier',
+  'escalated',
+  'cached_input_tokens',
+  'cache_write_tokens',
+  'cache_hit',
+  'cache_savings_usd',
+  'cache_read_savings_usd',
+  'cache_write_premium_usd',
   'complexity',
   'clarification',
   'validation_ok',
@@ -111,8 +123,8 @@ const ALLOWED_METADATA_KEYS = new Set([
   'action_types',
   'limit_status',
   'retry_attempt',
-  // Router de OpenAI: tier elegido ('nano'|'mini'|'hard'|'forced') y proveedor
-  // ('openai'|'anthropic'). Permiten cortar costo por tier/proveedor en los
+  // Router de OpenAI: tier elegido ('luna'|'terra'|'sol') y proveedor.
+  // Permiten cortar costo por tier/proveedor en los
   // reportes de `ai_usage_events`. Neutrales (no identifican al usuario).
   'tier',
   'provider',
@@ -184,7 +196,7 @@ export async function trackAIUsageEvent({
       success,
       error_type: error_type || null,
       duration_ms: duration_ms != null ? Math.max(0, Math.floor(duration_ms)) : null,
-      cache_read_tokens: extracted.cache_read_input_tokens,
+      cache_read_tokens: extracted.cached_input_tokens ?? extracted.cache_read_input_tokens,
       cache_creation_tokens: extracted.cache_creation_input_tokens,
       ...metadata,
     })

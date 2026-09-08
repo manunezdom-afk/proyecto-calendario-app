@@ -76,14 +76,14 @@ export async function runNovaAttempt({ call, transform, record }) {
 }
 
 
-export function novaOutputTokenLimit(value, fallback = 1024) {
+export function novaOutputTokenLimit(value, fallback = 1024, ceiling = 2048) {
   const parsed = Number(value)
-  return Number.isFinite(parsed) && parsed > 0 ? Math.max(256, Math.min(2048, Math.floor(parsed))) : fallback
+  return Number.isFinite(parsed) && parsed > 0 ? Math.max(256, Math.min(ceiling, Math.floor(parsed))) : fallback
 }
 
-export function novaInputTokenLimit() {
+export function novaInputTokenLimit(fallback = 12000) {
   const parsed = Number(process.env.AI_MAX_TOKENS_PER_REQUEST)
-  return Number.isFinite(parsed) && parsed > 0 ? Math.max(512, Math.min(12_000, Math.floor(parsed))) : 12_000
+  return Number.isFinite(parsed) && parsed > 0 ? Math.max(512, Math.min(24_000, Math.floor(parsed))) : fallback
 }
 
 // UTF-8 bytes provide a deliberately conservative token bound for budget

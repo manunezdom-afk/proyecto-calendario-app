@@ -1,17 +1,8 @@
-// Tests del router de modelos OpenAI por complejidad, el corta-circuito de
-// presupuesto global, y el pricing de los modelos gpt-5.x (Fase 0 del plan de
-// lanzamiento). Todo determinista — no llama a ninguna API.
-//
-// Runner: node --test (mismo que el resto de tests/).
-
+// Historical usage reporting and read-only budget helper regressions.
+// Active OpenAI routing is tested in nova-router and nova-runtime.
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import {
-  __selectOpenAIModel as selectOpenAIModel,
-  __detectVeryComplexInput as detectVeryComplex,
-  __escalateOpenAITier as escalateOpenAITier,
-} from './helpers/legacyNovaRouting.js'
 import {
   calculateAICost,
   normalizeModelName,
@@ -20,80 +11,6 @@ import {
   checkGlobalBudget,
   __resetBudgetCache,
 } from '../api/_lib/usageLimits.js'
-
-// ─── Router: selección de tier ──────────────────────────────────────────────
-
-test('router: mensaje simple → nano (barato, effort low, tope 800)', () => {
-  const r = selectOpenAIModel('gym a las 5', [])
-  assert.equal(r.tier, 'nano')
-  assert.equal(r.model, 'gpt-5.4-nano')
-  assert.equal(r.effort, 'low')
-  assert.equal(r.maxOutputTokens, 800)
-})
-
-test('router: conversacional/emocional → mini', () => {
-  const r = selectOpenAIModel('estoy colapsado, ayúdame a ordenar el día', [])
-  assert.equal(r.tier, 'mini')
-  assert.equal(r.model, 'gpt-5.4-mini')
-})
-
-test('router: respuesta a clarificación → mini', () => {
-  const history = [{ role: 'assistant', content: '¿A qué hora?' }]
-  const r = selectOpenAIModel('a las 6', history)
-  assert.equal(r.tier, 'mini')
-})
-
-test('router: ≥3 marcas de hora + premium habilitado → hard (gpt-5.5)', () => {
-  process.env.AI_ENABLE_PREMIUM_FALLBACK = 'true'
-  try {
-    const r = selectOpenAIModel('mañana clase a las 10, trabajo a las 3 y cena a las 9', [])
-    assert.equal(r.tier, 'hard')
-    assert.equal(r.model, 'gpt-5.5')
-    assert.equal(r.maxOutputTokens, 1280)
-  } finally {
-    delete process.env.AI_ENABLE_PREMIUM_FALLBACK
-  }
-})
-
-test('router: premium APAGADO por defecto → lo muy complejo va a mini, nunca gpt-5.5', () => {
-  delete process.env.AI_ENABLE_PREMIUM_FALLBACK
-  const r = selectOpenAIModel('mañana clase a las 10, trabajo a las 3 y cena a las 9', [])
-  assert.equal(r.tier, 'mini')
-  assert.equal(r.model, 'gpt-5.4-mini')
-})
-
-test('escalada: nano→mini siempre; mini→hard solo con premium habilitado', () => {
-  delete process.env.AI_ENABLE_PREMIUM_FALLBACK
-  assert.equal(escalateOpenAITier({ tier: 'nano' }).tier, 'mini')
-  assert.equal(escalateOpenAITier({ tier: 'mini' }), null) // apagado → cae a Claude
-  process.env.AI_ENABLE_PREMIUM_FALLBACK = 'true'
-  try {
-    assert.equal(escalateOpenAITier({ tier: 'mini' }).tier, 'hard')
-  } finally {
-    delete process.env.AI_ENABLE_PREMIUM_FALLBACK
-  }
-})
-
-test('router: 2 eventos (no muy complejo) → mini, no hard', () => {
-  const r = selectOpenAIModel('reunión con Juan a las 9 y gym a las 7', [])
-  assert.equal(r.tier, 'mini')
-})
-
-test('router: OPENAI_NOVA_MODEL fuerza modelo único (tier forced)', () => {
-  process.env.OPENAI_NOVA_MODEL = 'gpt-5.5'
-  try {
-    const r = selectOpenAIModel('gym a las 5', [])
-    assert.equal(r.tier, 'forced')
-    assert.equal(r.model, 'gpt-5.5')
-  } finally {
-    delete process.env.OPENAI_NOVA_MODEL
-  }
-})
-
-test('detectVeryComplexInput: texto muy largo dispara hard', () => {
-  assert.equal(detectVeryComplex('x'.repeat(210)), true)
-  assert.equal(detectVeryComplex('gym a las 5'), false)
-})
 
 // ─── Pricing OpenAI (antes caía a tarifa Sonnet, sobreestimando) ─────────────
 

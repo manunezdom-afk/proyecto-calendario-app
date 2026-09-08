@@ -1,0 +1,22 @@
+# Only the web/backend sources belong in the Vercel upload.
+.git
+.claude
+.codex
+.env*
+node_modules
+dist
+ios-native
+ios
+mobile
+legacy-*
+docs
+supabase
+tests
+test-results
+playwright-report
+.playwright-cache
+stream
+*.md
+*.log
+scripts/*
+!scripts/stamp-sw-version.mjs

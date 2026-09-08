@@ -75,6 +75,80 @@ const conversational = text => /^(?:[¿?]\s*)?(?:ayudame a (?:ordenar|organizar|
 // explicit capture requests mislabeled chat_only; keep advice in the chat flow.
 const captureRequest = text => !conversational(text) && /^(?:por favor[, ]+)?(?:necesito|tengo que|debo|quiero|anota|agend\w*|crea\w*|agrega\w*|ponme|recuerd\w*|acuerd\w*|avis\w*|pendiente|tarea|no olvidar|[a-z]{3,}(?:ar|er|ir))\b/.test(norm(text))
 const informational = text => /^(?:que (?:tengo|hay|sabes|recuerdas)|cuales|como (?:voy|estan)|muestrame|dime (?:que|mis)|ordena|organiza|resume|resumen)\b/.test(norm(text))
+const planningIntent = text => /\b(?:organizame|organiza|orden\w*|planificame|planifica|reorganiza\w*|distribuye|armame)\b/.test(norm(text))
+  && /\b(?:dia|hoy|manana|tarde|semana|horario|agenda)\b/.test(norm(text))
+  && !/\bno (?:quiero que |me )?(?:organiz\w*|orden\w*|planifi\w*)\b/.test(norm(text))
+function clockMinutes(value) {
+  const match = String(value || '').trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i)
+  if (!match) return null
+  let hour = Number(match[1])
+  if (match[3]) hour = hour % 12 + (match[3].toUpperCase() === 'PM' ? 12 : 0)
+  return hour * 60 + Number(match[2] || 0)
+}
+function planningIssues(schedules, events, scope, dateContext) {
+  const issues = new Set()
+  const text = norm(scope)
+  const edited = new Set(schedules.map(item => item.id).filter(Boolean))
+  const fixed = events.filter(event => !edited.has(event.id)).map(event => {
+    const [start, rangeEnd] = String(event.time || '').split(/\s+-\s+/)
+    const from = clockMinutes(start), to = clockMinutes(event.endTime || rangeEnd)
+    return { date: event.date, from, to: to != null && to > from ? to : from, title: event.title }
+  }).filter(event => event.from != null)
+  const intervals = []
+  const day = !/\bsemana\b/.test(text) ? expectedCivilDate(text, dateContext) : null
+  for (const item of schedules) {
+    const from = clockMinutes(item.time), to = from + item.duration
+    if (from == null || to > 1440) { issues.add('invalid_planned_interval'); continue }
+    if (day && item.date !== day) issues.add('planned_date_conflict')
+    for (const match of text.matchAll(/\bno\s+([^.;,]{0,80}?)\b(antes|despues) de (?:las?\s*)?(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?/g)) {
+      let hour = Number(match[3])
+      if (match[5]) hour = hour % 12 + (match[5] === 'pm' ? 12 : 0)
+      else if (match[2] === 'despues' && hour < 12) hour += 12
+      const bound = hour * 60 + Number(match[4] || 0)
+      const specific = /\bestudi\w*\b/.test(match[1]) ? /\bestudi\w*\b/.test(norm(item.title)) : true
+      if (specific && (match[2] === 'antes' ? from < bound : to > bound)) issues.add('planned_time_constraint')
+    }
+    const freeNight = text.match(/(?:deja\w*|dej\w*)[^.;]{0,100}\bnoche\b[^.;]{0,20}\blibres?\b/)
+    if (freeNight && (from >= 18 * 60 || to > 18 * 60)) {
+      const weekdays = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado']
+      if (freeNight[0].includes(weekdays[new Date(`${item.date}T12:00Z`).getUTCDay()])) issues.add('planned_free_period_conflict')
+    }
+    const overlaps = other => other.date === item.date && (from === other.from
+      || to > from && other.from >= from && other.from < to
+      || other.to > other.from && from >= other.from && from < other.to)
+    if (fixed.some(overlaps) || intervals.some(overlaps)) issues.add('planned_schedule_conflict')
+    intervals.push({ date: item.date, from, to, title: item.title })
+  }
+  // Enforce a stated work block when its activity is explicitly nearby. This
+  // does not infer a duration for an unnamed activity or convert a vague wish.
+  const numbers = { una: 1, un: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6 }
+  if (!schedules.length) return [...issues]
+  for (const match of text.matchAll(/\b(\d{1,2}|una|un|dos|tres|cuatro|cinco|seis) horas?\b/g)) {
+    const required = (numbers[match[1]] || Number(match[1])) * 60
+    const start = Math.max(text.lastIndexOf(',', match.index), text.lastIndexOf(';', match.index), 0)
+    const end = text.indexOf(',', match.index + match[0].length)
+    const clause = text.slice(start, end < 0 ? text.length : end)
+    const offset = match.index - start
+    const after = text.slice(match.index + match[0].length)
+    const explicitSubject = after.match(/^\s+(?:con|de|para|en)\s+(.{1,60}?)(?=\s+y\s+|[.;,]|$)/)?.[1]?.trim()
+    const subjectStem = explicitSubject?.match(/[a-z]{3,}/)?.[0]?.replace(/(?:ar|er|ir|io|o)$/, '')
+    const candidates = [...new Set(schedules.map(item => norm(item.title)))].map(title => {
+      const word = title.match(/[a-z]{4,}/)?.[0]?.replace(/(?:ar|er|ir|io|o)$/, '')
+      const position = word ? clause.indexOf(word) : -1
+      return { title, distance: subjectStem ? title.includes(subjectStem) ? 0 : Infinity
+        : position < 0 ? Infinity : Math.abs(position - offset) }
+    }).sort((a,b) => a.distance-b.distance)
+    const candidate = candidates[0]
+    if (subjectStem && (!candidate || !Number.isFinite(candidate.distance))) { issues.add('planned_missing_activity'); continue }
+    if (!candidate || candidate.distance > 60 || candidates[1]?.distance === candidate.distance) continue
+    const minutes = schedules.filter(item => norm(item.title) === candidate.title).reduce((sum,item) => sum+item.duration,0)
+    const prefix = text.slice(Math.max(start,match.index-30),match.index)
+    const minimum = /(?:minimo|al menos)\s*$/.test(prefix)
+    const maximum = /(?:maximo|no mas de)\s*$/.test(prefix)
+    if (maximum ? minutes > required : minimum ? minutes < required : minutes !== required) issues.add('planned_duration_constraint')
+  }
+  return [...issues]
+}
 function groundedTitle(title, source, memories) {
   const ignored = new Set(['para','con','sin','una','uno','las','los','del','que','por','hoy','manana','tarea','evento','recordatorio','reunion'])
   const words = norm(title).match(/[a-z0-9]{3,}/g)?.filter(w => !ignored.has(w)) || []
@@ -186,7 +260,8 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
   if (!bounded(payload.userConfirmationText ?? '', 2000, true)) { reject('invalid_reply'); return empty() }
   const scope = activeIntentText(userMessage, history)
   const scopeNorm = norm(scope)
-  const durationAllowed = userMentionedExplicitDuration(scope) || userAskedToBlockTime(scope)
+  const planning = planningIntent(scope)
+  const durationAllowed = planning || userMentionedExplicitDuration(scope) || userAskedToBlockTime(scope)
   const eventIds = new Set(events.map(event => event?.id).filter(Boolean))
   const taskIds = new Set(tasks.map(task => task?.id).filter(Boolean))
   const actions = []
@@ -194,6 +269,7 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
   let destructive = false
   let pastOrAmbiguousTime = false
   const fingerprints = new Set()
+  const plannedSchedules = []
   for (const [index, a] of incoming.entries()) {
     if (!plainObject(a) || !NOVA_ACTION_TYPES.includes(a.type)) { reject('invalid_action'); continue }
     if (!['high', 'medium', 'low'].includes(a.confidence)) { reject('invalid_confidence'); continue }
@@ -233,14 +309,17 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
     const targetTask = a.targetTaskId
     if (['edit_event', 'delete_event'].includes(a.type)) {
       if (!eventIds.has(targetId)) { reject('unknown_event'); continue }
-      if (!groundedTarget(targetId, events, scope, discussedEventIds)) { reject('ambiguous_event'); continue }
+      if ((!planning || a.type === 'delete_event') && !groundedTarget(targetId, events, scope, discussedEventIds)) { reject('ambiguous_event'); continue }
       if (a.type === 'delete_event') {
         if (!hasExplicitDeleteIntent(scope)) { reject('missing_delete_intent'); continue }
         destructive = true
         action = { type: 'delete_event', id: targetId }
       } else {
+        const original = events.find(event => event.id === targetId)
+        if (planning && scopeNorm.split(/[.;,]/).some(part => part.includes(norm(original.title))
+          && /\b(?:fij[oa]|inamovible|sin mover|no (?:quiero )?mover)\b/.test(part))) { reject('planned_fixed_event'); continue }
         const requestedReminder = a.reminderOffsetMinutes != null && /\b(?:avis\w*|recuerd\w*|acuerd\w*)\b/.test(scopeNorm)
-        if (!hasExplicitEditIntent(scope) && !requestedReminder) { reject('missing_edit_intent'); continue }
+        if (!planning && !hasExplicitEditIntent(scope) && !requestedReminder) { reject('missing_edit_intent'); continue }
         const updates = {}
         if (a.time) updates.time = to12h(a.time)
         if (a.dateISO) updates.date = a.dateISO
@@ -249,6 +328,14 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
         if (a.time && a.durationMinutes > 0 && durationAllowed) updates.endTime = endAt(a.time, a.durationMinutes)
         if (!Object.keys(updates).length) { reject('empty_update'); continue }
         action = { type: 'edit_event', id: targetId, updates }
+        if (planning) {
+          const [originalTime, originalRangeEnd] = String(original.time || '').split(/\s+-\s+/)
+          const originalStart = clockMinutes(originalTime), originalEnd = clockMinutes(original.endTime || originalRangeEnd)
+          const duration = a.durationMinutes || (originalStart != null && originalEnd != null && originalEnd > originalStart ? originalEnd-originalStart : 0)
+          if (a.time && duration) updates.endTime = endAt(a.time,duration)
+          plannedSchedules.push({ id: targetId, title: original.title, date: a.dateISO || original.date,
+            time: a.time || originalTime, duration })
+        }
       }
     } else if (['edit_task', 'complete_task', 'delete_task'].includes(a.type)) {
       if (!taskIds.has(targetTask)) { reject('unknown_task'); continue }
@@ -291,8 +378,10 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
       if (!bounded(a.title, 120) || /^(?:evento|recordatorio|tarea|horas?|hoy|ma[nñ]ana|\d{1,2}(?::\d{2})?)$/i.test(a.title.trim())) {
         reject('invalid_title'); continue
       }
-      if (informational(scope) || conversational(scope) || !groundedTitle(a.title, scope, memories)) { reject('unrequested_creation'); continue }
+      const evidence = planning && a.type !== 'create_task' ? `${scope}\n${tasks.map(task => task.label).join('\n')}` : scope
+      if ((!planning && (informational(scope) || conversational(scope))) || !groundedTitle(a.title, evidence, planning ? [] : memories)) { reject('unrequested_creation'); continue }
       if (a.type === 'create_task') {
+        if (informational(scope) || conversational(scope)) { reject('unrequested_creation'); continue }
         if (!createIntent(scope)) { reject('missing_create_intent'); continue }
         if (a.time) { reject('task_with_invented_time'); continue }
         const reminderScope = incoming.length === 1 ? scopeNorm : source
@@ -305,7 +394,7 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
           linkedEventId: null, parentTaskId: null, date: a.dateISO || null } }
       } else {
         if (!a.dateISO || !a.time) { reject('missing_event_schedule'); continue }
-        if (hasLocationTrigger(scope) || !anyTimeSignal(scope.replace(/\balas?\s*(?=\d)/gi, 'a las '))) { reject('missing_exact_time'); continue }
+        if (hasLocationTrigger(scope) || (!planning && !anyTimeSignal(scope.replace(/\balas?\s*(?=\d)/gi, 'a las ')))) { reject('missing_exact_time'); continue }
         const reminder = a.type === 'create_reminder'
         const event = { title: a.title.trim(), date: a.dateISO, time: to12h(a.time),
           endTime: !reminder && a.durationMinutes > 0 && durationAllowed ? endAt(a.time, a.durationMinutes) : null,
@@ -314,6 +403,7 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
         if (a.subtitle?.trim()) event.subtitle = a.subtitle.trim()
         if (a.reminderOffsetMinutes != null) event.reminderOffsets = [a.reminderOffsetMinutes]
         action = { type: 'add_event', event }
+        if (planning) plannedSchedules.push({ title: a.title, date: a.dateISO, time: a.time, duration: a.durationMinutes })
       }
     }
     const fingerprint = createHash('sha256').update(JSON.stringify(action)).digest('hex')
@@ -322,6 +412,7 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
     if (id) action.actionId = `${id}:${index}`
     actions.push(action)
   }
+  if (planning) planningIssues(plannedSchedules, events, scope, dateContext).forEach(reject)
   if (issues.includes('reminder_needs_time')) return empty('¿A qué hora quieres que te avise?')
   if (issues.length) return empty(bounded(payload.clarificationQuestion, 400) && /\?/.test(payload.clarificationQuestion)
     && !pastClaim.test(norm(payload.clarificationQuestion)) ? payload.clarificationQuestion : defaultQuestion)
@@ -330,12 +421,13 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
   const needsClarification = payload.needsClarification === true || questions.length > 0 || !!implicitQuestion
   const question = payload.clarificationQuestion || questions[0] || implicitQuestion || null
   if (needsClarification && !bounded(question, 400)) { reject('missing_clarification'); return empty() }
-  const proposed = destructive || pastOrAmbiguousTime || speculative(userMessage) || ['proposal', 'confirmation'].includes(mode) || (payload.proposed_actions?.length || 0) > 0
+  const proposed = planning || destructive || pastOrAmbiguousTime || speculative(userMessage) || ['proposal', 'confirmation'].includes(mode) || (payload.proposed_actions?.length || 0) > 0
   if (mode === 'clarification' && actions.length) { reject('mode_action_conflict'); return empty() }
   if (needsClarification && actions.length && !/[,;\n]|\by\b/.test(scope)) { reject('ambiguous_partial_execution'); return empty() }
   const finalMode = actions.length ? (proposed ? 'proposal' : 'chat_with_action') : (needsClarification ? 'clarification' : 'chat_only')
   let reply = String(payload.userConfirmationText || '').trim()
-  if (actions.length) reply = proposed ? 'Revisa estos cambios antes de aplicarlos.' : 'Preparé estos cambios para guardarlos en Focus.'
+  if (actions.length) reply = planning ? 'Te propongo este horario. Revisa los bloques y sus duraciones antes de guardarlo.'
+    : proposed ? 'Revisa estos cambios antes de aplicarlos.' : 'Preparé estos cambios para guardarlos en Focus.'
   else if (needsClarification) reply = question
   else if (!reply || pastClaim.test(norm(reply)) || /^listo[.!]?$/i.test(reply)) reply = 'No hice cambios. Cuéntame qué necesitas.'
   return { reply, actions: proposed ? [] : actions, proposed_actions: proposed ? actions : [],

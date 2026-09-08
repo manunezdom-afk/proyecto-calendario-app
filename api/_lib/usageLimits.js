@@ -44,7 +44,7 @@ export const VALID_PLANS = new Set(Object.values(PLANS))
 export const ACTION_TYPES = Object.freeze({
   NOVA_MESSAGE:         'nova_message',          // 1 turno de chat con Nova (focus-assistant)
   NOVA_SMART_ACTION:    'nova_smart_action',     // turno donde Nova devuelve actions[] (crear/editar)
-  NOVA_PREMIUM_MESSAGE: 'nova_premium_message',  // escalación a Sonnet cuando Haiku falla o emite acciones riesgosas
+  NOVA_PREMIUM_MESSAGE: 'nova_premium_message',  // cuota de escalación presupuestada a un tier superior de OpenAI
   ORGANIZE_DAY:         'organize_day',          // futuro: reorganizar Mi Día con IA
   WEEKLY_PLANNING:      'weekly_planning',       // futuro: planificación semanal con IA
   VOICE_AI:             'voice_ai',              // futuro: transcripción/dictado con IA backend

@@ -1,14 +1,9 @@
-// Tests del path DeepSeek (proveedor principal de Nova, 2026-07-13):
-// router flash/pro, pricing cache-aware, normalización del payload JSON-mode
-// y extracción defensiva. Todo determinista — no llama a ninguna API.
-//
-// Runner: node --test (mismo que el resto de tests/).
-
+// Dormant DeepSeek adapter and historical billing only.
+// Production chat uses OpenAI exclusively; no DeepSeek router remains.
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { wirePlan, wireAction } from './helpers/novaFixtures.js'
 
-import { __selectDeepSeekModel as selectDeepSeekModel } from './helpers/legacyNovaRouting.js'
 import {
   estimateDeepSeekCostUSD,
   normalizeDeepSeekPayload,
@@ -17,60 +12,6 @@ import {
   callDeepSeekNova,
 } from '../api/_lib/deepseekNova.js'
 import { calculateAICost, normalizeModelName } from '../api/_lib/aiPricing.js'
-
-// ─── Router: selección de tier ──────────────────────────────────────────────
-
-test('deepseek router: mensaje simple → flash (cheap)', () => {
-  const r = selectDeepSeekModel('gym a las 5', [])
-  assert.equal(r.tier, 'cheap')
-  assert.equal(r.model, 'deepseek-v4-flash')
-  assert.equal(r.maxOutputTokens, 800)
-})
-
-test('deepseek router: mensaje normal (sin señales complejas) → flash igual', () => {
-  const r = selectDeepSeekModel('mañana a las 8 reunión con Juan Pablo', [])
-  assert.equal(r.tier, 'cheap')
-  assert.equal(r.model, 'deepseek-v4-flash')
-})
-
-test('deepseek router: complejo/emocional → pro', () => {
-  const r = selectDeepSeekModel('estoy colapsado, ayúdame a ordenar el día', [])
-  assert.equal(r.tier, 'pro')
-  assert.equal(r.model, 'deepseek-v4-pro')
-})
-
-test('deepseek router: multi-evento pesado → pro (nunca GPT)', () => {
-  const r = selectDeepSeekModel('mañana clase a las 10, trabajo a las 3 y cena a las 9', [])
-  assert.equal(r.tier, 'pro')
-  assert.equal(r.model, 'deepseek-v4-pro')
-})
-
-test('deepseek router: respuesta a clarificación → pro', () => {
-  const history = [{ role: 'assistant', content: '¿A qué hora?' }]
-  const r = selectDeepSeekModel('a las 6', history)
-  assert.equal(r.tier, 'pro')
-})
-
-test('deepseek router: DEEPSEEK_NOVA_MODEL fuerza modelo único (forced)', () => {
-  process.env.DEEPSEEK_NOVA_MODEL = 'deepseek-v4-pro'
-  try {
-    const r = selectDeepSeekModel('gym a las 5', [])
-    assert.equal(r.tier, 'forced')
-    assert.equal(r.model, 'deepseek-v4-pro')
-  } finally {
-    delete process.env.DEEPSEEK_NOVA_MODEL
-  }
-})
-
-test('deepseek router: AI_MAX_OUTPUT_TOKENS acota la salida de todos los tiers', () => {
-  process.env.AI_MAX_OUTPUT_TOKENS = '600'
-  try {
-    assert.equal(selectDeepSeekModel('gym a las 5', []).maxOutputTokens, 600)
-    assert.equal(selectDeepSeekModel('estoy colapsado, ayúdame', []).maxOutputTokens, 600)
-  } finally {
-    delete process.env.AI_MAX_OUTPUT_TOKENS
-  }
-})
 
 // ─── Pricing ─────────────────────────────────────────────────────────────────
 
