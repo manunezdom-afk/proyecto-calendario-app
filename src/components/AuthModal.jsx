@@ -559,11 +559,12 @@ export default function AuthModal({ isOpen, onClose }) {
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={handleClose}
           />
+          <div className="fixed inset-0 z-[81] flex items-end justify-center sm:items-center pointer-events-none">
           <motion.div
             role="dialog"
             aria-modal="true"
             aria-label="Iniciar sesión"
-            className="fixed inset-x-0 bottom-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 bg-white rounded-t-3xl sm:rounded-3xl z-[81] w-full sm:w-[420px] sm:max-w-[92vw] max-h-[92vh] overflow-y-auto shadow-2xl kb-aware"
+            className="relative bg-white rounded-t-3xl sm:rounded-3xl w-full sm:w-[420px] sm:max-w-[92vw] max-h-[92vh] overflow-y-auto shadow-2xl kb-aware pointer-events-auto"
             style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.25rem + var(--keyboard-height, 0px))' }}
             initial={{ y: '100%', opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -1481,6 +1482,7 @@ export default function AuthModal({ isOpen, onClose }) {
               )}
             </div>
           </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>

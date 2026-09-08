@@ -235,7 +235,7 @@ function SlideIllustrationNova() {
         transition={{ delay: 1.2, duration: 0.5 }}
         className="absolute bottom-1 left-0 right-0 text-center text-[10.5px] font-medium uppercase tracking-[0.14em] text-white/40"
       >
-        Nunca mueve nada sin tu confirmación
+        Revisa las propuestas antes de aplicarlas
       </motion.div>
     </div>
   )
@@ -282,7 +282,7 @@ const SLIDES = [
     illustration: <SlideIllustrationHero />,
     eyebrow: 'Bienvenido',
     title: 'Focus es tu día, con una IA a tu lado.',
-    body: 'Hilante ve tu calendario, te ayuda a organizarlo y crea al momento. Cualquier cambio lo puedes deshacer en un toque.',
+    body: 'Dile qué necesitas. Hilante crea o edita tus eventos y tareas cuando tu petición es clara.',
   },
   {
     id: 'planner',
@@ -303,7 +303,7 @@ const SLIDES = [
     illustration: <SlideIllustrationNova />,
     eyebrow: 'Hilante',
     title: 'Actúa rápido. Tú siempre mandas.',
-    body: 'Hilante crea eventos, tareas y bloques al instante. Cada acción trae un "Deshacer" visible y puedes editarlo después sin perder ritmo.',
+    body: 'Las peticiones claras se aplican al momento. Las propuestas y los borrados pasan por tu revisión antes de aplicarse.',
   },
   {
     id: 'start',
