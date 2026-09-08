@@ -10,7 +10,7 @@ const cases=Array.from({length:3},(_,i)=>({id:'T'+i,cat:'tasks',input:'comprar p
 const options=(extra=[])=>parseRemoteBenchmarkOptions(['--live','--base-url',origin,'--limit','3','--users','1',...extra])
 const reply=(data,status=200)=>new Response(JSON.stringify(data),{status})
 
-function fake({cost=.01,uncertain=false,legacy=false,ownerMismatch=false,extraReplay=false}={}) {
+function fake({cost=.01,uncertain=false,legacy=false,ownerMismatch=false,extraReplay=false,terminalFailure=false}={}) {
  const users=new Map(),ledger=new Map(),attempts=[],events=[],calls=[];let paid=0
  const fetchImpl=async(url,request={})=>{
   const u=new URL(url),path=u.pathname,body=request.body?JSON.parse(request.body):{},method=request.method||'GET'
@@ -22,13 +22,13 @@ function fake({cost=.01,uncertain=false,legacy=false,ownerMismatch=false,extraRe
    const id=request.headers['X-Request-Id'],userId=request.headers.Authorization.replace('Bearer private-token-','')
    let row=[...ledger.values()].find(r=>r.request_id===id)
    if(!row){
-    paid++;row={id:randomUUID(),request_id:id,lease_id:randomUUID(),user_id:userId,state:uncertain?'in_progress':'completed',actual_usd:uncertain?null:cost,reserved_usd:.25,fingerprint:'synthetic'}
-    row.response={requestId:id,reply:'Pendiente para guardar.',mode:'chat_with_action',actions:[{type:'add_task',task:{label:'Comprar pan'}}],proposed_actions:[],validation:{ok:true,issues:[]}};ledger.set(row.id,row)
+    paid++;row={id:randomUUID(),request_id:id,lease_id:randomUUID(),user_id:userId,state:uncertain?'in_progress':terminalFailure?'failed':'completed',actual_usd:uncertain?null:cost,reserved_usd:.25,fingerprint:'synthetic'}
+    row.response={requestId:id,reply:'Pendiente para guardar.',mode:'chat_with_action',actions:[{type:'add_task',task:{label:'Comprar pan'}}],proposed_actions:[],validation:{ok:true,issues:[]}};if(terminalFailure)row.response={requestId:id,error:'assistant_unavailable',request_completed:true,request_retryable:true,actions:[],proposed_actions:[]};ledger.set(row.id,row)
     attempts.push({request_row_id:row.id,model:'gpt-5.6-luna',attempt_index:0,state:uncertain?'started':'settled',actual_usd:row.actual_usd,reserved_usd:.25})
     if(!uncertain)events.push({user_id:userId,action_type:'nova_message',model_used:'gpt-5.6-luna',input_tokens:1000,output_tokens:200,estimated_cost_usd:cost,metadata:{request_id:id,admission_lease_id:row.lease_id,cost_basis:'provider_usage',usage_source:'openai_usage'}})
     if(uncertain)throw new Error('private-token unknown transport')
    }else if(extraReplay){paid++;attempts.push({request_row_id:row.id,model:'gpt-5.6-terra',attempt_index:1,state:'settled',actual_usd:.02});row.actual_usd+=.02}
-   return reply(row.response)
+   return reply(row.response,terminalFailure?503:200)
   }
   assert.equal(u.origin,EXPECTED_SUPABASE_URL)
   assert.equal(request.headers['x-vercel-protection-bypass'],undefined)
@@ -118,4 +118,12 @@ test('all 211 cases fit bounded evidence reads and 24 isolated accounts',async()
  assert.equal(report.summary.replayChecks,211);assert.equal(report.cleanup.verified,24);assert.equal(server.users.size,0)
  assert.equal(report.summary.providerAttempts,211);assert.ok(report.runnerSourceHashes['scripts/ai-remote-benchmark.mjs'])
  assert.ok(report.summary.recordedRunChargeUSD < 1)
+})
+
+test('durable failed requests replay without paying again and remain failed benchmark cases',async()=>{
+ const server=fake({terminalFailure:true}),report=await run(server)
+ assert.equal(report.status,'completed',report.errorCode);assert.equal(report.summary.objectivePass,0)
+ assert.equal(report.summary.attempted,3);assert.equal(report.summary.replayChecks,3);assert.equal(server.paid,3)
+ assert.ok(report.rows.every(row=>row.verdict.fails.includes('runtime_http_503')))
+ assert.equal(report.cleanup.verified,1);assert.equal(server.users.size,0)
 })

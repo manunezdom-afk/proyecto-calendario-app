@@ -165,8 +165,9 @@ export async function runRemoteBenchmark(options,{env=process.env,fetchImpl=fetc
       let ledger=await ownedLedger(),observed=await evidence(ledger),requestRow=ledger.find(r=>r.user_id===user.id&&r.request_id===requestId)
       row.attempts=observed.attempts.filter(a=>a.request_row_id===requestRow?.id)
       if(output.httpStatus===200||output.body.request_completed===true) {
-        check(requestRow?.state==='completed','durable_request_missing')
+        check(output.httpStatus===200 ? requestRow?.state==='completed' : ['completed','failed'].includes(requestRow?.state),'durable_request_missing')
         const count=row.attempts.length,{latencyMs:replayLatencyMs,...replay}=await http('/api/focus-assistant',{method:'POST',body:{requestId,payload},token:user.token})
+        row.replayObservation={...replay,latencyMs:replayLatencyMs}
         ledger=await ownedLedger();observed=await evidence(ledger)
         row.attempts=observed.attempts.filter(a=>a.request_row_id===requestRow.id)
         row.replayVerified=verifyBenchmarkReplay(output,replay,count,row.attempts.length)
@@ -175,7 +176,7 @@ export async function runRemoteBenchmark(options,{env=process.env,fetchImpl=fetc
       checkpoint()
       onProgress({phase:'case',caseId:c.id,httpStatus:row.httpStatus,objectivePass:row.verdict.pass,latencyMs:row.latencyMs,
         providerAttempts:row.attempts.length,recordedRunChargeUSD:recordedCost})
-      if(output.httpStatus!==200){report.stopped='non_successful_http';break}
+      if(output.httpStatus!==200 && output.body.request_completed!==true){report.stopped='non_successful_http';break}
     }
     report.status=report.rows.length===selected.length&&!report.stopped?'completed':'stopped'
   } catch(error){report.status='failed';report.errorCode=error instanceof BenchError?error.code:'remote_benchmark_failed'}
