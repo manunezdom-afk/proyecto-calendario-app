@@ -1,0 +1,1263 @@
+{
+  "version": 1,
+  "mode": "live-provider",
+  "runAt": "2026-09-08T15:19:29.329Z",
+  "fixedNow": "2026-09-08T15:00:00.000Z",
+  "timezone": "America/Santiago",
+  "provider": "anthropic",
+  "model": "claude-haiku-4-5-20251001",
+  "budgetUSD": 0.08,
+  "maxOutputTokens": 1024,
+  "pricingDate": "2026-09-08T00:00:00.000Z",
+  "pricing": {
+    "provider": "anthropic",
+    "input": 1,
+    "cachedInput": 0.1,
+    "output": 5,
+    "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "cacheWrite5m": 1.25,
+    "cacheWrite1h": 2,
+    "model": "claude-haiku-4-5",
+    "verifiedAt": "2026-09-08T00:00:00.000Z",
+    "reviewUntil": "2026-12-01T00:00:00.000Z",
+    "stale": false,
+    "period": "standard",
+    "longContext": false
+  },
+  "sourceHashes": {
+    "api/_lib/novaPrompt.js": "dec6d32f0c945c8b1bab34530561aebd800213d5a9326db0121529a2fcc4c60d",
+    "api/_lib/novaContract.js": "8f115307571b3b0a4a8f8e51bc73f0735e752ec6fd9be63e08160223d8744c99",
+    "api/_lib/aiPricing.js": "d9ae677e72df0974dc3203e4deb268261fad37eb9e2b2a287d2431eedd07466a",
+    "tests/nova-battery/cases.json": "ee5b1a9aa4462a2f0727fdc3d858515fefdf76be8e2734d4773de1044e494229"
+  },
+  "selectionPolicy": "category-round-robin",
+  "sourceCases": 211,
+  "selectedCases": [
+    "D31",
+    "X151",
+    "C22",
+    "J92",
+    "L112",
+    "X192",
+    "X178",
+    "H74",
+    "K104",
+    "N134",
+    "O144",
+    "X174",
+    "X189",
+    "X199"
+  ],
+  "stopped": "budget_cap",
+  "summary": {
+    "attempted": 12,
+    "objectivePass": 10,
+    "objectivePassRate": 0.8333333333333334,
+    "clarifications": 5,
+    "permittedClarifications": 3,
+    "providerErrors": 0,
+    "modelJsonValid": 12,
+    "costMeasuredRequests": 12,
+    "totalCostUSD": 0.056017,
+    "conservativeSpendUSD": 0.056017,
+    "meanCostUSD": 0.004668083333333333,
+    "p50Ms": 3812,
+    "p95Ms": 12886,
+    "retries": 0,
+    "humanConversationScore": null,
+    "weightedScore": null,
+    "categories": {
+      "duraciones": {
+        "attempted": 1,
+        "pass": 1
+      },
+      "extra_eventos": {
+        "attempted": 1,
+        "pass": 1
+      },
+      "recordatorios": {
+        "attempted": 1,
+        "pass": 1
+      },
+      "no_crear": {
+        "attempted": 1,
+        "pass": 1
+      },
+      "typos": {
+        "attempted": 1,
+        "pass": 1
+      },
+      "extra_typos": {
+        "attempted": 1,
+        "pass": 1
+      },
+      "extra_multi": {
+        "attempted": 1,
+        "pass": 1
+      },
+      "contexto": {
+        "attempted": 1,
+        "pass": 0
+      },
+      "informal": {
+        "attempted": 1,
+        "pass": 1
+      },
+      "confirmaciones": {
+        "attempted": 1,
+        "pass": 1
+      },
+      "cancelacion": {
+        "attempted": 1,
+        "pass": 1
+      },
+      "extra_franjas": {
+        "attempted": 1,
+        "pass": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "id": "D31",
+      "category": "duraciones",
+      "input": "estudiar publicidad a las 7 por 30 minutos",
+      "expect": {
+        "kind": "event",
+        "timeAnyOf": [
+          "7:00 PM"
+        ],
+        "durationMinutes": 30
+      },
+      "attempted": true,
+      "inputTokenCeiling": 11082,
+      "reservedUSD": 0.027284,
+      "memoryCharacters": 0,
+      "promptCharacters": 8544,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "mode": "chat_with_action",
+        "actions": [
+          {
+            "type": "create_event",
+            "title": "Estudiar",
+            "subtitle": "Publicidad",
+            "dateText": "hoy",
+            "dateISO": "2026-09-08",
+            "time": "19:00",
+            "durationMinutes": 30,
+            "category": "estudio",
+            "reminderOffsetMinutes": null,
+            "linkedToPreviousEvent": false,
+            "confidence": "high",
+            "sourceText": "estudiar publicidad a las 7 por 30 minutos",
+            "targetEventId": null,
+            "targetTaskId": null,
+            "done": null,
+            "priority": null,
+            "memoryKey": null,
+            "memoryValue": null,
+            "memoryCategory": null
+          }
+        ],
+        "needsClarification": false,
+        "clarificationQuestion": null,
+        "userConfirmationText": "Listo, te he anotado Estudiar Publicidad hoy a las 19:00 por 30 minutos."
+      },
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Estudiar",
+              "date": "2026-09-08",
+              "time": "7:00 PM",
+              "endTime": "7:30 PM",
+              "section": "focus",
+              "icon": "menu_book",
+              "subtitle": "Publicidad"
+            },
+            "actionId": "2c837ef8-a70a-41be-bfb4-2fd21e2cc68c:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "2c837ef8-a70a-41be-bfb4-2fd21e2cc68c",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "latencyMs": 7071,
+      "tokens": {
+        "input": 3846,
+        "output": 201,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "billing": {
+        "cost_usd": 0.004851,
+        "cost_usd_unrounded": 0.004851,
+        "pricing_source": "configured",
+        "pricing_model": "claude-haiku-4-5",
+        "pricing_verified_at": "2026-09-08T00:00:00.000Z",
+        "pricing_stale": false,
+        "pricing_period": "standard",
+        "usage_inconsistent": false
+      },
+      "costUSD": 0.004851
+    },
+    {
+      "id": "X151",
+      "category": "extra_eventos",
+      "input": "ponme estudiar a las 8",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "estudiar"
+        ],
+        "timeAnyOf": [
+          "8:00 PM"
+        ],
+        "allowClarify": true
+      },
+      "attempted": true,
+      "inputTokenCeiling": 11062,
+      "reservedUSD": 0.027244,
+      "memoryCharacters": 0,
+      "promptCharacters": 8544,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "mode": "chat_with_action",
+        "actions": [
+          {
+            "type": "create_event",
+            "title": "Estudiar",
+            "subtitle": null,
+            "dateText": "hoy",
+            "dateISO": "2026-09-08",
+            "time": "20:00",
+            "durationMinutes": 0,
+            "category": "estudio",
+            "reminderOffsetMinutes": null,
+            "linkedToPreviousEvent": false,
+            "confidence": "high",
+            "sourceText": "estudiar a las 8",
+            "targetEventId": null,
+            "targetTaskId": null,
+            "done": null,
+            "priority": null,
+            "memoryKey": null,
+            "memoryValue": null,
+            "memoryCategory": null
+          }
+        ],
+        "needsClarification": false,
+        "clarificationQuestion": null,
+        "userConfirmationText": "Listo, estudiar hoy a las 20:00."
+      },
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Estudiar",
+              "date": "2026-09-08",
+              "time": "8:00 PM",
+              "endTime": null,
+              "section": "focus",
+              "icon": "menu_book"
+            },
+            "actionId": "66625339-08c0-48cb-ae48-0b413bdd93a2:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "66625339-08c0-48cb-ae48-0b413bdd93a2",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "latencyMs": 2498,
+      "tokens": {
+        "input": 3839,
+        "output": 174,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "billing": {
+        "cost_usd": 0.004709,
+        "cost_usd_unrounded": 0.004709,
+        "pricing_source": "configured",
+        "pricing_model": "claude-haiku-4-5",
+        "pricing_verified_at": "2026-09-08T00:00:00.000Z",
+        "pricing_stale": false,
+        "pricing_period": "standard",
+        "usage_inconsistent": false
+      },
+      "costUSD": 0.004709
+    },
+    {
+      "id": "C22",
+      "category": "recordatorios",
+      "input": "recuérdame llamar a mi mamá mañana",
+      "expect": {
+        "kind": "reminder",
+        "titleIncludes": [
+          "mama"
+        ],
+        "date": "tomorrow",
+        "endTimeNull": true,
+        "allowClarify": true
+      },
+      "attempted": true,
+      "inputTokenCeiling": 11077,
+      "reservedUSD": 0.027274,
+      "memoryCharacters": 0,
+      "promptCharacters": 8544,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "mode": "clarification",
+        "actions": [],
+        "needsClarification": true,
+        "clarificationQuestion": "¿A qué hora quieres que te recuerde llamar a tu mamá mañana?",
+        "userConfirmationText": "Entendido, necesito saber la hora exacta para configurar el recordatorio."
+      },
+      "output": {
+        "reply": "¿A qué hora quieres que te recuerde llamar a tu mamá mañana?",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "clarification",
+        "shouldAskUser": true,
+        "confidence": 0.9,
+        "requestId": "2aebbed8-f1bc-444f-a1fc-a7ef1efc758e",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "latencyMs": 3522,
+      "tokens": {
+        "input": 3845,
+        "output": 76,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "billing": {
+        "cost_usd": 0.004225,
+        "cost_usd_unrounded": 0.004225,
+        "pricing_source": "configured",
+        "pricing_model": "claude-haiku-4-5",
+        "pricing_verified_at": "2026-09-08T00:00:00.000Z",
+        "pricing_stale": false,
+        "pricing_period": "standard",
+        "usage_inconsistent": false
+      },
+      "costUSD": 0.004225
+    },
+    {
+      "id": "J92",
+      "category": "no_crear",
+      "input": "estaba pensando en estudiar a las 7",
+      "expect": {
+        "kindAnyOf": [
+          "chat",
+          "clarify"
+        ],
+        "allowClarify": true
+      },
+      "attempted": true,
+      "inputTokenCeiling": 11075,
+      "reservedUSD": 0.02727,
+      "memoryCharacters": 0,
+      "promptCharacters": 8544,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "mode": "chat_only",
+        "actions": [],
+        "needsClarification": false,
+        "clarificationQuestion": null,
+        "userConfirmationText": "Entendido, estabas pensando en estudiar a las 7. ¿Es algo que quieras agendar para hoy o para otro día, o solo lo tenías en mente?"
+      },
+      "output": {
+        "reply": "¿Es algo que quieras agendar para hoy o para otro día, o solo lo tenías en mente?",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "clarification",
+        "shouldAskUser": true,
+        "confidence": 0.9,
+        "requestId": "2df1d9bf-3723-4d46-a03b-afa3693f7ea2",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "latencyMs": 2591,
+      "tokens": {
+        "input": 3842,
+        "output": 81,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "billing": {
+        "cost_usd": 0.004247,
+        "cost_usd_unrounded": 0.004247,
+        "pricing_source": "configured",
+        "pricing_model": "claude-haiku-4-5",
+        "pricing_verified_at": "2026-09-08T00:00:00.000Z",
+        "pricing_stale": false,
+        "pricing_period": "standard",
+        "usage_inconsistent": false
+      },
+      "costUSD": 0.004247
+    },
+    {
+      "id": "L112",
+      "category": "typos",
+      "input": "futbol alas 5 llevar pelota",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "futbol"
+        ],
+        "timeAnyOf": [
+          "5:00 PM"
+        ],
+        "subtitleIncludes": [
+          "pelota"
+        ]
+      },
+      "attempted": true,
+      "inputTokenCeiling": 11067,
+      "reservedUSD": 0.027254,
+      "memoryCharacters": 0,
+      "promptCharacters": 8544,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "mode": "chat_with_action",
+        "actions": [
+          {
+            "type": "create_event",
+            "title": "Fútbol",
+            "subtitle": "Llevar pelota",
+            "dateText": "hoy",
+            "dateISO": "2026-09-08",
+            "time": "17:00",
+            "durationMinutes": 0,
+            "category": "otro",
+            "reminderOffsetMinutes": null,
+            "linkedToPreviousEvent": false,
+            "confidence": "high",
+            "sourceText": "futbol alas 5 llevar pelota",
+            "targetEventId": null,
+            "targetTaskId": null,
+            "done": null,
+            "priority": null,
+            "memoryKey": null,
+            "memoryValue": null,
+            "memoryCategory": null
+          }
+        ],
+        "needsClarification": false,
+        "clarificationQuestion": null,
+        "userConfirmationText": "Listo, fútbol hoy a las 5 de la tarde. Llevas la pelota. ⚽"
+      },
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Fútbol",
+              "date": "2026-09-08",
+              "time": "5:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event",
+              "subtitle": "Llevar pelota"
+            },
+            "actionId": "2383e1e8-67b8-47db-81d9-fcc5252dc699:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "2383e1e8-67b8-47db-81d9-fcc5252dc699",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "latencyMs": 6496,
+      "tokens": {
+        "input": 3842,
+        "output": 197,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "billing": {
+        "cost_usd": 0.004827,
+        "cost_usd_unrounded": 0.004827,
+        "pricing_source": "configured",
+        "pricing_model": "claude-haiku-4-5",
+        "pricing_verified_at": "2026-09-08T00:00:00.000Z",
+        "pricing_stale": false,
+        "pricing_period": "standard",
+        "usage_inconsistent": false
+      },
+      "costUSD": 0.004827
+    },
+    {
+      "id": "X192",
+      "category": "extra_typos",
+      "input": "futbo hoy alas 17",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "futbo"
+        ],
+        "timeAnyOf": [
+          "5:00 PM"
+        ],
+        "date": "today"
+      },
+      "attempted": true,
+      "inputTokenCeiling": 11057,
+      "reservedUSD": 0.027234,
+      "memoryCharacters": 0,
+      "promptCharacters": 8544,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "mode": "chat_with_action",
+        "actions": [
+          {
+            "type": "create_event",
+            "title": "Futbol",
+            "subtitle": null,
+            "dateText": "hoy",
+            "dateISO": "2026-09-08",
+            "time": "17:00",
+            "durationMinutes": 0,
+            "category": "otro",
+            "reminderOffsetMinutes": null,
+            "linkedToPreviousEvent": false,
+            "confidence": "high",
+            "sourceText": "futbo hoy alas 17",
+            "targetEventId": null,
+            "targetTaskId": null,
+            "done": null,
+            "priority": null,
+            "memoryKey": null,
+            "memoryValue": null,
+            "memoryCategory": null
+          }
+        ],
+        "needsClarification": false,
+        "clarificationQuestion": null,
+        "userConfirmationText": "Listo, fútbol hoy a las 17:00."
+      },
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Futbol",
+              "date": "2026-09-08",
+              "time": "5:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "ce7f6cdd-57a4-42a4-9362-c3e28b864cca:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "ce7f6cdd-57a4-42a4-9362-c3e28b864cca",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "latencyMs": 6135,
+      "tokens": {
+        "input": 3839,
+        "output": 176,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "billing": {
+        "cost_usd": 0.004719,
+        "cost_usd_unrounded": 0.004719,
+        "pricing_source": "configured",
+        "pricing_model": "claude-haiku-4-5",
+        "pricing_verified_at": "2026-09-08T00:00:00.000Z",
+        "pricing_stale": false,
+        "pricing_period": "standard",
+        "usage_inconsistent": false
+      },
+      "costUSD": 0.004719
+    },
+    {
+      "id": "X178",
+      "category": "extra_multi",
+      "input": "hoy: llamar a Juan a las 3, mandar el correo a las 4 y gym a las 6",
+      "expect": {
+        "minActions": 3
+      },
+      "attempted": true,
+      "inputTokenCeiling": 11106,
+      "reservedUSD": 0.027332,
+      "memoryCharacters": 0,
+      "promptCharacters": 8544,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "mode": "chat_with_action",
+        "actions": [
+          {
+            "type": "create_reminder",
+            "title": "Llamar a Juan",
+            "subtitle": null,
+            "dateText": "hoy",
+            "dateISO": "2026-09-08",
+            "time": "15:00",
+            "durationMinutes": 0,
+            "category": "otro",
+            "reminderOffsetMinutes": null,
+            "linkedToPreviousEvent": false,
+            "confidence": "high",
+            "sourceText": "llamar a Juan a las 3",
+            "targetEventId": null,
+            "targetTaskId": null,
+            "done": null,
+            "priority": null,
+            "memoryKey": null,
+            "memoryValue": null,
+            "memoryCategory": null
+          },
+          {
+            "type": "create_reminder",
+            "title": "Mandar el correo",
+            "subtitle": null,
+            "dateText": "hoy",
+            "dateISO": "2026-09-08",
+            "time": "16:00",
+            "durationMinutes": 0,
+            "category": "otro",
+            "reminderOffsetMinutes": null,
+            "linkedToPreviousEvent": false,
+            "confidence": "high",
+            "sourceText": "mandar el correo a las 4",
+            "targetEventId": null,
+            "targetTaskId": null,
+            "done": null,
+            "priority": null,
+            "memoryKey": null,
+            "memoryValue": null,
+            "memoryCategory": null
+          },
+          {
+            "type": "create_event",
+            "title": "Gym",
+            "subtitle": null,
+            "dateText": "hoy",
+            "dateISO": "2026-09-08",
+            "time": "18:00",
+            "durationMinutes": 0,
+            "category": "otro",
+            "reminderOffsetMinutes": null,
+            "linkedToPreviousEvent": false,
+            "confidence": "high",
+            "sourceText": "gym a las 6",
+            "targetEventId": null,
+            "targetTaskId": null,
+            "done": null,
+            "priority": null,
+            "memoryKey": null,
+            "memoryValue": null,
+            "memoryCategory": null
+          }
+        ],
+        "needsClarification": false,
+        "clarificationQuestion": null,
+        "userConfirmationText": "Listo: llamada a Juan a las 3, correo a las 4 y gym a las 6 para hoy. ¿Algo más?"
+      },
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Llamar a Juan",
+              "date": "2026-09-08",
+              "time": "3:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "alarm"
+            },
+            "actionId": "67d08e49-a2f6-4167-bd43-813cb910cdb0:0"
+          },
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Mandar el correo",
+              "date": "2026-09-08",
+              "time": "4:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "alarm"
+            },
+            "actionId": "67d08e49-a2f6-4167-bd43-813cb910cdb0:1"
+          },
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Gym",
+              "date": "2026-09-08",
+              "time": "6:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "67d08e49-a2f6-4167-bd43-813cb910cdb0:2"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "67d08e49-a2f6-4167-bd43-813cb910cdb0",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "latencyMs": 12886,
+      "tokens": {
+        "input": 3859,
+        "output": 457,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "billing": {
+        "cost_usd": 0.006144,
+        "cost_usd_unrounded": 0.006144,
+        "pricing_source": "configured",
+        "pricing_model": "claude-haiku-4-5",
+        "pricing_verified_at": "2026-09-08T00:00:00.000Z",
+        "pricing_stale": false,
+        "pricing_period": "standard",
+        "usage_inconsistent": false
+      },
+      "costUSD": 0.006144
+    },
+    {
+      "id": "H74",
+      "category": "contexto",
+      "input": "mañana en la mañana",
+      "expect": {
+        "kind": "reminder",
+        "titleIncludes": [
+          "juan"
+        ],
+        "date": "tomorrow"
+      },
+      "attempted": true,
+      "inputTokenCeiling": 11185,
+      "reservedUSD": 0.02749,
+      "memoryCharacters": 0,
+      "promptCharacters": 8544,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "mode": "clarification",
+        "actions": [],
+        "needsClarification": true,
+        "clarificationQuestion": "¿A qué hora mañana en la mañana? Por ejemplo, a las 9 o a las 10",
+        "userConfirmationText": "Perfecto, solo me falta la hora exacta para configurar el recordatorio."
+      },
+      "output": {
+        "reply": "¿A qué hora mañana en la mañana? Por ejemplo, a las 9 o a las 10",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "clarification",
+        "shouldAskUser": true,
+        "confidence": 0.9,
+        "requestId": "2aaa2745-7e02-4dfd-bb18-2bd525bdb9b0",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "kind: esperaba reminder, obtuve [clarify]",
+          "title no contiene [\"juan\"]",
+          "date: esperaba 2026-09-09, obtuve (ninguna)"
+        ],
+        "note": ""
+      },
+      "latencyMs": 3631,
+      "tokens": {
+        "input": 3871,
+        "output": 80,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "billing": {
+        "cost_usd": 0.004271,
+        "cost_usd_unrounded": 0.004271,
+        "pricing_source": "configured",
+        "pricing_model": "claude-haiku-4-5",
+        "pricing_verified_at": "2026-09-08T00:00:00.000Z",
+        "pricing_stale": false,
+        "pricing_period": "standard",
+        "usage_inconsistent": false
+      },
+      "costUSD": 0.004271
+    },
+    {
+      "id": "K104",
+      "category": "informal",
+      "input": "tengo que mandar una wea de la u",
+      "expect": {
+        "kindAnyOf": [
+          "task",
+          "clarify"
+        ],
+        "allowClarify": true
+      },
+      "attempted": true,
+      "inputTokenCeiling": 11072,
+      "reservedUSD": 0.027264,
+      "memoryCharacters": 0,
+      "promptCharacters": 8544,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "mode": "clarification",
+        "actions": [],
+        "needsClarification": true,
+        "clarificationQuestion": "¿Qué es lo que tienes que mandar de la u? ¿Es un trabajo, un formulario, un correo? ¿Para cuándo?",
+        "userConfirmationText": "Cuéntame más para ayudarte a organizarlo."
+      },
+      "output": {
+        "reply": "¿Qué es lo que tienes que mandar de la u? ¿Es un trabajo, un formulario, un correo? ¿Para cuándo?",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "clarification",
+        "shouldAskUser": true,
+        "confidence": 0.9,
+        "requestId": "f4081714-773d-48fb-afce-83b354cdaea1",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "latencyMs": 3812,
+      "tokens": {
+        "input": 3842,
+        "output": 86,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "billing": {
+        "cost_usd": 0.004272,
+        "cost_usd_unrounded": 0.004272,
+        "pricing_source": "configured",
+        "pricing_model": "claude-haiku-4-5",
+        "pricing_verified_at": "2026-09-08T00:00:00.000Z",
+        "pricing_stale": false,
+        "pricing_period": "standard",
+        "usage_inconsistent": false
+      },
+      "costUSD": 0.004272
+    },
+    {
+      "id": "N134",
+      "category": "confirmaciones",
+      "input": "mejor mañana",
+      "expect": {
+        "kindAnyOf": [
+          "event",
+          "edit"
+        ],
+        "date": "tomorrow"
+      },
+      "attempted": true,
+      "inputTokenCeiling": 11158,
+      "reservedUSD": 0.027436,
+      "memoryCharacters": 0,
+      "promptCharacters": 8544,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "mode": "chat_with_action",
+        "actions": [
+          {
+            "type": "create_event",
+            "title": "Fútbol",
+            "subtitle": null,
+            "dateText": "mañana",
+            "dateISO": "2026-09-09",
+            "time": "17:00",
+            "durationMinutes": 0,
+            "category": "otro",
+            "reminderOffsetMinutes": null,
+            "linkedToPreviousEvent": false,
+            "confidence": "high",
+            "sourceText": "mejor mañana",
+            "targetEventId": null,
+            "targetTaskId": null,
+            "done": null,
+            "priority": null,
+            "memoryKey": null,
+            "memoryValue": null,
+            "memoryCategory": null
+          }
+        ],
+        "needsClarification": false,
+        "clarificationQuestion": null,
+        "userConfirmationText": "Fútbol mañana a las 5 PM."
+      },
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Fútbol",
+              "date": "2026-09-09",
+              "time": "5:00 PM",
+              "endTime": null,
+              "section": "evening",
+              "icon": "event"
+            },
+            "actionId": "6c778591-b0da-4464-925f-0e4858f13115:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "6c778591-b0da-4464-925f-0e4858f13115",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "latencyMs": 6114,
+      "tokens": {
+        "input": 3865,
+        "output": 172,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "billing": {
+        "cost_usd": 0.004725,
+        "cost_usd_unrounded": 0.004725,
+        "pricing_source": "configured",
+        "pricing_model": "claude-haiku-4-5",
+        "pricing_verified_at": "2026-09-08T00:00:00.000Z",
+        "pricing_stale": false,
+        "pricing_period": "standard",
+        "usage_inconsistent": false
+      },
+      "costUSD": 0.004725
+    },
+    {
+      "id": "O144",
+      "category": "cancelacion",
+      "input": "cámbialo a las 6",
+      "expect": {
+        "kind": "edit",
+        "targetId": "ev-futbol",
+        "updateTime": "6:00 PM"
+      },
+      "attempted": true,
+      "inputTokenCeiling": 11141,
+      "reservedUSD": 0.027402,
+      "memoryCharacters": 0,
+      "promptCharacters": 8627,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "mode": "chat_with_action",
+        "actions": [
+          {
+            "type": "edit_event",
+            "title": "",
+            "subtitle": null,
+            "dateText": "",
+            "dateISO": null,
+            "time": "18:00",
+            "durationMinutes": 0,
+            "category": "otro",
+            "reminderOffsetMinutes": null,
+            "linkedToPreviousEvent": false,
+            "confidence": "high",
+            "sourceText": "a las 6",
+            "targetEventId": "ev-futbol",
+            "targetTaskId": null,
+            "done": null,
+            "priority": null,
+            "memoryKey": null,
+            "memoryValue": null,
+            "memoryCategory": null
+          }
+        ],
+        "needsClarification": false,
+        "clarificationQuestion": null,
+        "userConfirmationText": "Listo, cambié tu Fútbol de las 5 a las 6 de la tarde."
+      },
+      "output": {
+        "reply": "Preparé estos cambios para guardarlos en Focus.",
+        "actions": [
+          {
+            "type": "edit_event",
+            "id": "ev-futbol",
+            "updates": {
+              "time": "6:00 PM"
+            },
+            "actionId": "67f807f2-68d0-4b35-aa6b-5fb1c14001e0:0"
+          }
+        ],
+        "proposed_actions": [],
+        "mode": "chat_with_action",
+        "shouldAskUser": false,
+        "confidence": 0.9,
+        "requestId": "67f807f2-68d0-4b35-aa6b-5fb1c14001e0",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": true,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "latencyMs": 7925,
+      "tokens": {
+        "input": 3877,
+        "output": 174,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "billing": {
+        "cost_usd": 0.004747,
+        "cost_usd_unrounded": 0.004747,
+        "pricing_source": "configured",
+        "pricing_model": "claude-haiku-4-5",
+        "pricing_verified_at": "2026-09-08T00:00:00.000Z",
+        "pricing_stale": false,
+        "pricing_period": "standard",
+        "usage_inconsistent": false
+      },
+      "costUSD": 0.004747
+    },
+    {
+      "id": "X174",
+      "category": "extra_franjas",
+      "input": "a medianoche tomar el remedio",
+      "expect": {
+        "kindAnyOf": [
+          "reminder",
+          "event"
+        ],
+        "timeAnyOf": [
+          "12:00 AM"
+        ]
+      },
+      "attempted": true,
+      "inputTokenCeiling": 11069,
+      "reservedUSD": 0.027258,
+      "memoryCharacters": 0,
+      "promptCharacters": 8544,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "mode": "clarification",
+        "actions": [],
+        "needsClarification": true,
+        "clarificationQuestion": "¿A medianoche de hoy o de mañana? ¿Y quieres que te avise o prefieres una tarea de recordatorio?",
+        "userConfirmationText": "Entendido, necesito saber cuándo exactamente para guardarlo bien."
+      },
+      "output": {
+        "reply": "¿A medianoche de hoy o de mañana? ¿Y quieres que te avise o prefieres una tarea de recordatorio?",
+        "actions": [],
+        "proposed_actions": [],
+        "mode": "clarification",
+        "shouldAskUser": true,
+        "confidence": 0.9,
+        "requestId": "c05f3a62-cb74-4cee-8c5f-89979e7ed7b0",
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "follow_up_question": null,
+        "execution_pending": false,
+        "validation": {
+          "ok": true,
+          "issues": []
+        },
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "kind: esperaba reminder|event, obtuve [clarify]",
+          "time: esperaba 12:00 AM, obtuve (sin hora)"
+        ],
+        "note": ""
+      },
+      "latencyMs": 2289,
+      "tokens": {
+        "input": 3840,
+        "output": 88,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "billing": {
+        "cost_usd": 0.00428,
+        "cost_usd_unrounded": 0.00428,
+        "pricing_source": "configured",
+        "pricing_model": "claude-haiku-4-5",
+        "pricing_verified_at": "2026-09-08T00:00:00.000Z",
+        "pricing_stale": false,
+        "pricing_period": "standard",
+        "usage_inconsistent": false
+      },
+      "costUSD": 0.00428
+    }
+  ]
+}

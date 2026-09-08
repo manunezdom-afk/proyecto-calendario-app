@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "mode": "live-provider",
+  "runAt": "2026-09-08T14:26:23.780Z",
+  "fixedNow": "2026-09-08T15:00:00.000Z",
+  "timezone": "America/Santiago",
+  "provider": "openai",
+  "model": "gpt-5.6-luna",
+  "budgetUSD": 0.1,
+  "maxOutputTokens": 1024,
+  "pricingDate": "2026-09-08",
+  "pricesPerMillion": [
+    0.2,
+    1.2,
+    0.02
+  ],
+  "selectionPolicy": "category-round-robin",
+  "sourceCases": 211,
+  "selectedCases": [
+    "A1",
+    "B11",
+    "C21"
+  ],
+  "stopped": "provider_http_401",
+  "summary": {
+    "attempted": 1,
+    "objectivePass": 0,
+    "objectivePassRate": 0,
+    "clarifications": 0,
+    "modelJsonValid": 0,
+    "costMeasuredRequests": 0,
+    "totalCostUSD": 0,
+    "conservativeSpendUSD": 0.005525,
+    "meanCostUSD": null,
+    "p50Ms": null,
+    "p95Ms": null,
+    "retries": 0,
+    "humanConversationScore": null,
+    "weightedScore": null
+  },
+  "rows": [
+    {
+      "id": "A1",
+      "category": "eventos_simples",
+      "input": "fútbol a las 5",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "futbol"
+        ],
+        "timeAnyOf": [
+          "5:00 PM"
+        ],
+        "date": "today",
+        "endTimeNull": true
+      },
+      "attempted": true,
+      "inputTokenCeiling": 21481,
+      "reservedUSD": 0.005525,
+      "memoryCharacters": 0,
+      "promptCharacters": 16731,
+      "httpStatus": 401,
+      "errorCode": "invalid_api_key",
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "invalid_api_key"
+        ]
+      },
+      "latencyMs": 697,
+      "costUSD": null,
+      "usageUnknown": true
+    }
+  ],
+  "summaryCorrection": "Exclude HTTP authentication rejection latency from model inference percentiles; preserve original per-attempt transport timing."
+}

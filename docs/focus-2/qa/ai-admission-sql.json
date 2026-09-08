@@ -1,0 +1,29 @@
+{
+  "engine": "PGlite / PostgreSQL WASM",
+  "runAt": "2026-09-08T15:09:09.149Z",
+  "passed": 21,
+  "checks": [
+    "migration applies and reapplies in PostgreSQL",
+    "first request reserves and consumes one message",
+    "same pending ID does not admit or consume twice",
+    "same ID with changed content conflicts",
+    "two leases allowed and third rejected",
+    "forged lease cannot settle or clear reservation",
+    "replay survives completion and repeated finish cannot lower recorded cost",
+    "premium quota consumption is idempotent per request",
+    "unknown billing settles at full reservation",
+    "quota includes admitted requests atomically",
+    "per-user rate is durable across requests",
+    "global budget includes reservations and cannot overshoot",
+    "75 percent enters alert and 90 percent enters economy",
+    "usage telemetry for same request does not double-charge budget",
+    "expired lease counts as money spent and never reruns same ID",
+    "expired replay is scrubbed and remains a no-recharge tombstone",
+    "service purge removes expired content and preserves active replay and cost",
+    "a colliding client ID cannot conceal a legacy provider charge",
+    "anonymous clients cannot invoke service RPC or read cache",
+    "deleting an account scrubs replay while retaining anonymous cost",
+    "missing policy and unknown limits fail closed"
+  ],
+  "limitation": "Single database connection: execution, privileges and sequential invariants verified; multi-process advisory lock contention requires staging PostgreSQL."
+}

@@ -1,0 +1,1584 @@
+{
+  "mode": "offline-revalidation",
+  "runAt": "2026-09-08T15:19:00.080Z",
+  "source": "docs/focus-2/qa/ai-haiku-100-v2.json",
+  "validatorSHA256": "8f115307571b3b0a4a8f8e51bc73f0735e752ec6fd9be63e08160223d8744c99",
+  "attempted": 100,
+  "objectivePass": 87,
+  "improvements": [
+    "C22",
+    "L112",
+    "X192",
+    "K104",
+    "N134"
+  ],
+  "regressions": [
+    "I82",
+    "X177",
+    "I83",
+    "I84"
+  ],
+  "limitation": "Recorded model outputs only. No new provider quality, token, cost or latency measurement. Prompt changes have not been applied to these recorded outputs.",
+  "rows": [
+    {
+      "id": "A1",
+      "category": "eventos_simples",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "B11",
+      "category": "subtitulos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "C21",
+      "category": "recordatorios",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "D31",
+      "category": "duraciones",
+      "originalPass": false,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "time: esperaba 7:00 PM, obtuve 7:00 AM"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "E41",
+      "category": "fechas",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "F51",
+      "category": "horas_ambiguas",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "G61",
+      "category": "multi",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "H71",
+      "category": "contexto",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "I81",
+      "category": "conversacion",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_only"
+    },
+    {
+      "id": "J91",
+      "category": "no_crear",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_only"
+    },
+    {
+      "id": "K101",
+      "category": "informal",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "L111",
+      "category": "typos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "M121",
+      "category": "complejos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "N131",
+      "category": "confirmaciones",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "O141",
+      "category": "cancelacion",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_only"
+    },
+    {
+      "id": "X151",
+      "category": "extra_eventos",
+      "originalPass": false,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "time: esperaba 8:00 PM, obtuve 8:00 AM"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "X161",
+      "category": "extra_subtitulos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X166",
+      "category": "extra_duraciones",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X171",
+      "category": "extra_franjas",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "missing_create_intent"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "X176",
+      "category": "extra_multi",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X181",
+      "category": "extra_no_crear",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_only"
+    },
+    {
+      "id": "X186",
+      "category": "extra_recordatorios",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X191",
+      "category": "extra_typos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "X196",
+      "category": "extra_contexto",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X201",
+      "category": "extra_criticos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "A2",
+      "category": "eventos_simples",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "B12",
+      "category": "subtitulos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "C22",
+      "category": "recordatorios",
+      "originalPass": false,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "reminder_needs_time"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "D32",
+      "category": "duraciones",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "E42",
+      "category": "fechas",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "F52",
+      "category": "horas_ambiguas",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "G62",
+      "category": "multi",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "H72",
+      "category": "contexto",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "I82",
+      "category": "conversacion",
+      "originalPass": true,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "kind: esperaba chat, obtuve [clarify]"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "J92",
+      "category": "no_crear",
+      "originalPass": false,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "kind: esperaba chat|clarify, obtuve [event]"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "K102",
+      "category": "informal",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "L112",
+      "category": "typos",
+      "originalPass": false,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "M122",
+      "category": "complejos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "N132",
+      "category": "confirmaciones",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "missing_exact_time"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "O142",
+      "category": "cancelacion",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "X152",
+      "category": "extra_eventos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X162",
+      "category": "extra_subtitulos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X167",
+      "category": "extra_duraciones",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X172",
+      "category": "extra_franjas",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "missing_exact_time"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "X177",
+      "category": "extra_multi",
+      "originalPass": true,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "minActions: 0 < 2"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "reminder_needs_time"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "X182",
+      "category": "extra_no_crear",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_only"
+    },
+    {
+      "id": "X187",
+      "category": "extra_recordatorios",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X192",
+      "category": "extra_typos",
+      "originalPass": false,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X197",
+      "category": "extra_contexto",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X202",
+      "category": "extra_criticos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "A3",
+      "category": "eventos_simples",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "B13",
+      "category": "subtitulos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "C23",
+      "category": "recordatorios",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "D33",
+      "category": "duraciones",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "E43",
+      "category": "fechas",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "F53",
+      "category": "horas_ambiguas",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "G63",
+      "category": "multi",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "H73",
+      "category": "contexto",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "missing_intent_evidence"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "I83",
+      "category": "conversacion",
+      "originalPass": true,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "kind: esperaba chat, obtuve [clarify]"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "J93",
+      "category": "no_crear",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_only"
+    },
+    {
+      "id": "K103",
+      "category": "informal",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "L113",
+      "category": "typos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "M123",
+      "category": "complejos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "missing_exact_time"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "N133",
+      "category": "confirmaciones",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_only"
+    },
+    {
+      "id": "O143",
+      "category": "cancelacion",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_only"
+    },
+    {
+      "id": "X153",
+      "category": "extra_eventos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X163",
+      "category": "extra_subtitulos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X168",
+      "category": "extra_duraciones",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X173",
+      "category": "extra_franjas",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X178",
+      "category": "extra_multi",
+      "originalPass": false,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "minActions: 0 < 3"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "task_with_invented_time"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "X183",
+      "category": "extra_no_crear",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_only"
+    },
+    {
+      "id": "X188",
+      "category": "extra_recordatorios",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X193",
+      "category": "extra_typos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X198",
+      "category": "extra_contexto",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "X203",
+      "category": "extra_criticos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "A4",
+      "category": "eventos_simples",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "B14",
+      "category": "subtitulos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "C24",
+      "category": "recordatorios",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "D34",
+      "category": "duraciones",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "E44",
+      "category": "fechas",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "F54",
+      "category": "horas_ambiguas",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "proposal"
+    },
+    {
+      "id": "G64",
+      "category": "multi",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "H74",
+      "category": "contexto",
+      "originalPass": false,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "kind: esperaba reminder, obtuve [clarify]",
+          "title no contiene [\"juan\"]",
+          "date: esperaba 2026-09-09, obtuve (ninguna)"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "reminder_needs_time"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "I84",
+      "category": "conversacion",
+      "originalPass": true,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "kind: esperaba chat, obtuve [clarify]"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "J94",
+      "category": "no_crear",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "K104",
+      "category": "informal",
+      "originalPass": false,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "L114",
+      "category": "typos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "unrequested_creation"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "M124",
+      "category": "complejos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "missing_exact_time"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "N134",
+      "category": "confirmaciones",
+      "originalPass": false,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "O144",
+      "category": "cancelacion",
+      "originalPass": false,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "kind: esperaba edit, obtuve [clarify]",
+          "targetId: esperaba ev-futbol",
+          "updates.time: esperaba 6:00 PM"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "X154",
+      "category": "extra_eventos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X164",
+      "category": "extra_subtitulos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X169",
+      "category": "extra_duraciones",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X174",
+      "category": "extra_franjas",
+      "originalPass": false,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "kind: esperaba reminder|event, obtuve [clarify]",
+          "time: esperaba 12:00 AM, obtuve (sin hora)"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "X179",
+      "category": "extra_multi",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "X184",
+      "category": "extra_no_crear",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_only"
+    },
+    {
+      "id": "X189",
+      "category": "extra_recordatorios",
+      "originalPass": false,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "kind: esperaba reminder, obtuve [clarify]",
+          "title no contiene [\"basura\"]",
+          "date: esperaba 2026-09-09, obtuve (ninguna)"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "reminder_needs_time"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "X194",
+      "category": "extra_typos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    },
+    {
+      "id": "X199",
+      "category": "extra_contexto",
+      "originalPass": false,
+      "verdict": {
+        "pass": false,
+        "fails": [
+          "kind: esperaba edit|reminder|task, obtuve [clarify]",
+          "title/subtitle no contiene [\"lentes\"]"
+        ],
+        "note": ""
+      },
+      "validation": {
+        "ok": false,
+        "issues": [
+          "invalid_memory_intent"
+        ]
+      },
+      "mode": "clarification"
+    },
+    {
+      "id": "X204",
+      "category": "extra_criticos",
+      "originalPass": true,
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "validation": {
+        "ok": true,
+        "issues": []
+      },
+      "mode": "chat_with_action"
+    }
+  ]
+}

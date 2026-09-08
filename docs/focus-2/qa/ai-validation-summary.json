@@ -1,0 +1,72 @@
+{
+  "checkedAt": "2026-09-08T15:36:38.936517+00:00",
+  "native": {
+    "unitTests": 78,
+    "unitFailures": 0,
+    "uiFlows": 4,
+    "uiFailuresInCompletedSuite": 0,
+    "memoryRecheckPassed": true,
+    "simulator": "Focus 2.0 QA / iOS 26.4",
+    "build": 28,
+    "signedDeviceBuild": "passed",
+    "installedOnIPhone": true,
+    "deviceLaunch": "blocked_by_device_lock"
+  },
+  "javascript": {
+    "tests": 386,
+    "failures": 0,
+    "includesGoogleOfflineAdapter": true
+  },
+  "webBuild": "passed",
+  "sql": {
+    "engine": "PGlite / PostgreSQL WASM",
+    "checks": 21,
+    "failures": 0,
+    "concurrentProcessesTested": false
+  },
+  "benchmark": {
+    "lastFullLive": "ai-haiku-100-v2.json",
+    "liveSuccesses": 86,
+    "liveCases": 100,
+    "meanCostUSD": 0.00448466,
+    "p50Ms": 5883,
+    "p95Ms": 6819,
+    "targetedLive": "ai-haiku-targeted-v3.json",
+    "targetedSuccesses": 10,
+    "targetedCases": 12,
+    "finalOfflineValidation": "ai-haiku-v4-revalidation.json",
+    "offlineSuccesses": 90,
+    "offlineCases": 100,
+    "humanScore": null,
+    "demonstrated99Percent": false
+  },
+  "activation": {
+    "supabaseMigrationApplied": false,
+    "vercelDeployed": false,
+    "gitPushed": false,
+    "openaiCredential": "rejected_401",
+    "deepseekCredential": "unavailable_in_local_environment",
+    "googleCredential": "unavailable_in_local_environment",
+    "googleLiveAdapter": "blocked_pending_combined_output_cap_verification",
+    "additionalFullBenchmark": "awaiting_explicit_approval_for_up_to_USD_0.60"
+  },
+  "limitations": [
+    "Provider benchmark measures synthetic plans, not real user agenda persistence.",
+    "SQL execution and privileges verified with one connection, not multi-process lock contention.",
+    "Paid requests without provider usage retain a conservative reservation, not a claimed measured cost.",
+    "iPhone installation verified; actual phone conversation requires unlock and appropriate deployed backend."
+  ],
+  "webE2E": {
+    "passed": 7,
+    "failed": 0,
+    "durationSeconds": 47,
+    "browser": "Installed Google Chrome / temporary profile",
+    "externalHTTP": "blocked",
+    "provider": "mocked"
+  },
+  "localImplementationCommits": [
+    "035f10d",
+    "f7a2695",
+    "13df261"
+  ]
+}

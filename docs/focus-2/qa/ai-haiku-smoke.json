@@ -1,0 +1,308 @@
+{
+  "version": 1,
+  "mode": "live-provider",
+  "runAt": "2026-09-08T14:27:02.093Z",
+  "fixedNow": "2026-09-08T15:00:00.000Z",
+  "timezone": "America/Santiago",
+  "provider": "anthropic",
+  "model": "claude-haiku-4-5-20251001",
+  "budgetUSD": 0.1,
+  "maxOutputTokens": 1024,
+  "pricingDate": "2026-09-08",
+  "pricesPerMillion": [
+    1,
+    5,
+    0.1
+  ],
+  "selectionPolicy": "category-round-robin",
+  "sourceCases": 211,
+  "selectedCases": [
+    "A1",
+    "B11",
+    "C21"
+  ],
+  "stopped": null,
+  "summary": {
+    "attempted": 3,
+    "objectivePass": 3,
+    "objectivePassRate": 1,
+    "clarifications": 1,
+    "modelJsonValid": 3,
+    "costMeasuredRequests": 3,
+    "totalCostUSD": 0.023563,
+    "conservativeSpendUSD": 0.023563,
+    "meanCostUSD": 0.007854333333333333,
+    "p50Ms": 6054,
+    "p95Ms": 12404,
+    "retries": 0,
+    "humanConversationScore": null,
+    "weightedScore": null
+  },
+  "rows": [
+    {
+      "id": "A1",
+      "category": "eventos_simples",
+      "input": "fútbol a las 5",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "futbol"
+        ],
+        "timeAnyOf": [
+          "5:00 PM"
+        ],
+        "date": "today",
+        "endTimeNull": true
+      },
+      "attempted": true,
+      "inputTokenCeiling": 21481,
+      "reservedUSD": 0.026601,
+      "memoryCharacters": 0,
+      "promptCharacters": 16731,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "actions": [
+          {
+            "type": "create_event",
+            "title": "Fútbol",
+            "subtitle": null,
+            "dateText": "hoy",
+            "dateISO": "2026-09-08",
+            "time": "17:00",
+            "durationMinutes": 0,
+            "category": "otro",
+            "reminderOffsetMinutes": null,
+            "linkedToPreviousEvent": false,
+            "confidence": "high",
+            "sourceText": "fútbol a las 5",
+            "targetEventId": null,
+            "memoryKey": null,
+            "memoryValue": null,
+            "memoryCategory": null
+          }
+        ],
+        "needsClarification": false,
+        "clarificationQuestion": null,
+        "userConfirmationText": "Listo, dejé Fútbol hoy a las 5."
+      },
+      "output": {
+        "reply": "Listo, dejé Fútbol hoy a las 5.",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Fútbol",
+              "time": "5:00 PM",
+              "endTime": null,
+              "date": "2026-09-08",
+              "section": "evening",
+              "icon": "event"
+            },
+            "_meta": {
+              "provider": "openai",
+              "sourceText": "fútbol a las 5",
+              "confidence": "high",
+              "reqId": "d379ca76-6915-4c35-b6d2-8ddb8ab45849"
+            }
+          }
+        ],
+        "proposed_actions": [],
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "confidence": 0.9,
+        "shouldAskUser": false,
+        "mode": "chat_with_action",
+        "requestId": "d379ca76-6915-4c35-b6d2-8ddb8ab45849",
+        "follow_up_question": null,
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "latencyMs": 12404,
+      "tokens": {
+        "input": 6964,
+        "output": 155,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "costUSD": 0.007739
+    },
+    {
+      "id": "B11",
+      "category": "subtitulos",
+      "input": "reunión a las 8 de mindfulness",
+      "expect": {
+        "kind": "event",
+        "titleIncludes": [
+          "reunion"
+        ],
+        "subtitleIncludes": [
+          "mindfulness"
+        ],
+        "timeAnyOf": [
+          "8:00 PM",
+          "8:00 AM"
+        ],
+        "allowClarify": true
+      },
+      "attempted": true,
+      "inputTokenCeiling": 21497,
+      "reservedUSD": 0.026617,
+      "memoryCharacters": 0,
+      "promptCharacters": 16731,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "actions": [
+          {
+            "type": "create_event",
+            "title": "Reunión",
+            "subtitle": "Mindfulness",
+            "dateText": "hoy",
+            "dateISO": "2026-09-08",
+            "time": "08:00",
+            "durationMinutes": 0,
+            "category": "reunion",
+            "reminderOffsetMinutes": null,
+            "linkedToPreviousEvent": false,
+            "confidence": "medium",
+            "sourceText": "reunión a las 8 de mindfulness",
+            "targetEventId": null,
+            "memoryKey": null,
+            "memoryValue": null,
+            "memoryCategory": null
+          }
+        ],
+        "needsClarification": false,
+        "clarificationQuestion": null,
+        "userConfirmationText": "Dejé la reunión de Mindfulness hoy a las 8. (Interpreté la mañana — si es en la noche, avísame y la muevo a las 20:00.)"
+      },
+      "output": {
+        "reply": "Dejé la reunión de Mindfulness hoy a las 8. (Interpreté la mañana — si es en la noche, avísame y la muevo a las 20:00.)",
+        "actions": [
+          {
+            "type": "add_event",
+            "event": {
+              "title": "Reunión",
+              "time": "8:00 AM",
+              "endTime": null,
+              "date": "2026-09-08",
+              "section": "focus",
+              "icon": "groups",
+              "subtitle": "Mindfulness"
+            },
+            "_meta": {
+              "provider": "openai",
+              "sourceText": "reunión a las 8 de mindfulness",
+              "confidence": "medium",
+              "reqId": "1598cf01-da3b-4c17-a784-aef2d3343f96"
+            }
+          }
+        ],
+        "proposed_actions": [],
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "confidence": 0.65,
+        "shouldAskUser": false,
+        "mode": "chat_with_action",
+        "requestId": "1598cf01-da3b-4c17-a784-aef2d3343f96",
+        "follow_up_question": null,
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": ""
+      },
+      "latencyMs": 6054,
+      "tokens": {
+        "input": 6967,
+        "output": 189,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "costUSD": 0.007912
+    },
+    {
+      "id": "C21",
+      "category": "recordatorios",
+      "input": "acuérdame llevar la pelota",
+      "expect": {
+        "kindAnyOf": [
+          "reminder",
+          "task",
+          "clarify"
+        ],
+        "titleIncludes": [
+          "pelota"
+        ],
+        "allowClarify": true
+      },
+      "attempted": true,
+      "inputTokenCeiling": 21493,
+      "reservedUSD": 0.026613,
+      "memoryCharacters": 0,
+      "promptCharacters": 16731,
+      "httpStatus": 200,
+      "stopReason": "end_turn",
+      "jsonValid": true,
+      "rawParsed": {
+        "actions": [
+          {
+            "type": "clarify",
+            "title": "",
+            "subtitle": null,
+            "dateText": "",
+            "dateISO": null,
+            "time": null,
+            "durationMinutes": 0,
+            "category": "otro",
+            "reminderOffsetMinutes": null,
+            "linkedToPreviousEvent": false,
+            "confidence": "low",
+            "sourceText": "acuérdame llevar la pelota",
+            "targetEventId": null,
+            "memoryKey": null,
+            "memoryValue": null,
+            "memoryCategory": null
+          }
+        ],
+        "needsClarification": true,
+        "clarificationQuestion": "¿Para cuándo necesitas llevar la pelota? ¿Es para el fútbol de hoy a las 5, o para otro momento?",
+        "userConfirmationText": "Entendido, voy a anotar que lleves la pelota. Solo necesito saber cuándo."
+      },
+      "output": {
+        "reply": "Entendido, voy a anotar que lleves la pelota. Solo necesito saber cuándo.\n\n¿Para cuándo necesitas llevar la pelota? ¿Es para el fútbol de hoy a las 5, o para otro momento?",
+        "actions": [],
+        "proposed_actions": [],
+        "smart_actions_blocked": false,
+        "smart_actions_message": null,
+        "confidence": 1,
+        "shouldAskUser": true,
+        "mode": "clarification",
+        "requestId": "ee2a1d8c-5d0e-4141-94c8-835421bf2a72",
+        "follow_up_question": null,
+        "_dropped": []
+      },
+      "verdict": {
+        "pass": true,
+        "fails": [],
+        "note": "clarify aceptado"
+      },
+      "latencyMs": 3729,
+      "tokens": {
+        "input": 6967,
+        "output": 189,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "costUSD": 0.007912
+    }
+  ]
+}

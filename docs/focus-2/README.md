@@ -35,7 +35,7 @@ Xcode 26.6, iOS mínimo 17, runtime QA iOS 26.4.1. Proyecto: `ios-native/Focus.x
 
 Se usa un simulador separado llamado **Focus 2.0 QA**, sin cuentas reales. Los targets XCTest/UITest y evidencia visual viven junto al proyecto. El registro de pruebas distingue pruebas automatizadas, inspección visual y recorridos que requieren cuentas/servicios reales.
 
-Resultados y comandos reproducibles: [QA.md](QA.md). Condiciones para distribución: [RELEASE.md](RELEASE.md). Pipeline y límites de IA: [NOVA_PIPELINE.md](../../NOVA_PIPELINE.md).
+Resultados y comandos reproducibles: [QA.md](QA.md). Condiciones para distribución: [RELEASE.md](RELEASE.md). Reconstrucción actual, benchmark y activación de IA: [AI_REBUILD.md](AI_REBUILD.md). El [pipeline anterior](../../NOVA_PIPELINE.md) conserva el contexto histórico.
 
 **Base verificada:** `fc09049`; compilación Debug correcta y 223 pruebas JavaScript aprobadas antes de modificar. `focus-os-dev` avanzó desde `7ff1d3d` a `fc09049` sin merge/rebase ni pérdida de cambios. Cachés y carpetas legacy preexistentes no forman parte de los commits de reconstrucción.
 
@@ -44,3 +44,5 @@ No se despliega ni se publica en App Store en esta ejecución. La disponibilidad
 Checkpoints locales: `ac59589` (contratos/costos Nova), `62e2cdf` (eliminación de cuenta y política), `93563cc` (reconstrucción iOS y pruebas). Las mejoras del servidor y la política todavía no están en producción. Cachés locales preexistentes y carpetas legacy se conservaron fuera de estos commits.
 
 Investigación del rediseño visual: [asistentes — Gemini, Claude y Perplexity](VISUAL_RESEARCH_ASSISTANTS.md), [productividad — Things, Todoist, Structured y Notion Calendar](VISUAL_RESEARCH_PRODUCTIVITY.md). Validación del cambio de diseño: [VISUAL_QA.md](VISUAL_QA.md).
+
+Revisión del cerebro y fixtures de Hilante: [AI_NATIVE_QA.md](AI_NATIVE_QA.md). Distingue XCTest aprobado, validación pendiente y recorridos de UI.

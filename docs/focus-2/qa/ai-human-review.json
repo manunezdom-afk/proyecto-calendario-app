@@ -1,0 +1,291 @@
+{
+  "reviewer": null,
+  "reviewedAt": null,
+  "benchmark": "docs/focus-2/qa/ai-haiku-100-v2.json",
+  "instructions": "Score each criterion 0–4. Assess the plan and reply, not unverified persistence. necessaryClarification: 4 = asks only when needed; 0 = needless or missing clarification. Actual client execution is tested separately. Preserve null until reviewed.",
+  "reviews": [
+    {
+      "id": "H71",
+      "input": "a las 11",
+      "reply": "Preparé estos cambios para guardarlos en Focus.",
+      "mode": "chat_with_action",
+      "actions": [
+        {
+          "type": "add_event",
+          "event": {
+            "title": "Dentista",
+            "date": "2026-09-09",
+            "time": "11:00 AM",
+            "endTime": null,
+            "section": "evening",
+            "icon": "local_hospital"
+          },
+          "actionId": "945d5588-349b-43df-b15e-4d993ef873c8:0"
+        }
+      ],
+      "understood": null,
+      "correctPlan": null,
+      "natural": null,
+      "concise": null,
+      "necessaryClarification": null,
+      "note": ""
+    },
+    {
+      "id": "I81",
+      "input": "qué hago si estoy cansado",
+      "reply": "Si estás cansado, algunas cosas que puedes probar:\n\n• **Descansa un poco** – una siesta corta (15-20 min) o recostarte un rato puede recargar energías\n• **Muévete** – paradójicamente, un paseo o estiramientos a veces ayudan más que quedarse quieto\n• **Hidratación y comida** – a veces el cansancio viene del hambre o deshidratación\n• **Respira hondo** – unos minutos de respiración lenta calman y oxigenan\n• **Aléjate de pantallas** – si llevas horas mirando, descansa la vista\n• **Cambia de ambiente** – un poco de aire fresco o luz natural revitaliza\n\n¿Es un cansancio puntual o te pasa frecuentemente? Si hay algo que quieras programar o pausar (estudiar mañana, posponer algo), me avisa y lo organizamos 😊",
+      "mode": "chat_only",
+      "actions": [],
+      "understood": null,
+      "correctPlan": null,
+      "natural": null,
+      "concise": null,
+      "necessaryClarification": null,
+      "note": ""
+    },
+    {
+      "id": "K101",
+      "input": "ponme futbol a las 5 porfa",
+      "reply": "Preparé estos cambios para guardarlos en Focus.",
+      "mode": "chat_with_action",
+      "actions": [
+        {
+          "type": "add_event",
+          "event": {
+            "title": "Fútbol",
+            "date": "2026-09-08",
+            "time": "5:00 PM",
+            "endTime": null,
+            "section": "evening",
+            "icon": "event"
+          },
+          "actionId": "4dd1dbe4-f28c-4e04-86ed-c841af5e3691:0"
+        }
+      ],
+      "understood": null,
+      "correctPlan": null,
+      "natural": null,
+      "concise": null,
+      "necessaryClarification": null,
+      "note": ""
+    },
+    {
+      "id": "M121",
+      "input": "organízame mañana: gym temprano, universidad a las 10, psicólogo a las 12 y estudiar en la tarde",
+      "reply": "Revisa estos cambios antes de aplicarlos.",
+      "mode": "proposal",
+      "actions": [
+        {
+          "type": "add_event",
+          "event": {
+            "title": "Gym",
+            "date": "2026-09-09",
+            "time": "6:00 AM",
+            "endTime": null,
+            "section": "evening",
+            "icon": "event"
+          },
+          "actionId": "6aea29a5-297e-4dcf-a9d5-d8721722857a:0"
+        },
+        {
+          "type": "add_event",
+          "event": {
+            "title": "Universidad",
+            "date": "2026-09-09",
+            "time": "10:00 AM",
+            "endTime": null,
+            "section": "focus",
+            "icon": "menu_book"
+          },
+          "actionId": "6aea29a5-297e-4dcf-a9d5-d8721722857a:1"
+        },
+        {
+          "type": "add_event",
+          "event": {
+            "title": "Psicólogo",
+            "date": "2026-09-09",
+            "time": "12:00 PM",
+            "endTime": null,
+            "section": "evening",
+            "icon": "local_hospital"
+          },
+          "actionId": "6aea29a5-297e-4dcf-a9d5-d8721722857a:2"
+        },
+        {
+          "type": "add_task",
+          "task": {
+            "label": "Estudiar",
+            "priority": "Media",
+            "category": "hoy",
+            "linkedEventId": null,
+            "parentTaskId": null,
+            "date": "2026-09-09"
+          },
+          "actionId": "6aea29a5-297e-4dcf-a9d5-d8721722857a:3"
+        }
+      ],
+      "understood": null,
+      "correctPlan": null,
+      "natural": null,
+      "concise": null,
+      "necessaryClarification": null,
+      "note": ""
+    },
+    {
+      "id": "H72",
+      "input": "a las 5",
+      "reply": "Preparé estos cambios para guardarlos en Focus.",
+      "mode": "chat_with_action",
+      "actions": [
+        {
+          "type": "add_event",
+          "event": {
+            "title": "Fútbol",
+            "date": "2026-09-08",
+            "time": "5:00 PM",
+            "endTime": null,
+            "section": "evening",
+            "icon": "event"
+          },
+          "actionId": "af630b90-6f17-4a98-bb0a-ffdc5b918a53:0"
+        }
+      ],
+      "understood": null,
+      "correctPlan": null,
+      "natural": null,
+      "concise": null,
+      "necessaryClarification": null,
+      "note": ""
+    },
+    {
+      "id": "I82",
+      "input": "ayúdame a ordenar mi día",
+      "reply": "Claro, te ayudo a organizar tu día. Para hacerlo bien, necesito saber qué tienes en mente:\n\n¿Qué actividades, compromisos o tareas quieres que hagamos con tu día de hoy? Cuéntame lo que tienes pendiente, sin orden: clases, trabajo, gym, estudiar, algo personal... lo que sea. Así veo qué hay y te propongo un orden que tenga sentido.",
+      "mode": "chat_only",
+      "actions": [],
+      "understood": null,
+      "correctPlan": null,
+      "natural": null,
+      "concise": null,
+      "necessaryClarification": null,
+      "note": ""
+    },
+    {
+      "id": "K102",
+      "input": "mañana tengo doc a las 11",
+      "reply": "Preparé estos cambios para guardarlos en Focus.",
+      "mode": "chat_with_action",
+      "actions": [
+        {
+          "type": "add_event",
+          "event": {
+            "title": "Doc",
+            "date": "2026-09-09",
+            "time": "11:00 AM",
+            "endTime": null,
+            "section": "evening",
+            "icon": "local_hospital"
+          },
+          "actionId": "1504d622-d8aa-4012-8950-c2b943e25fa0:0"
+        }
+      ],
+      "understood": null,
+      "correctPlan": null,
+      "natural": null,
+      "concise": null,
+      "necessaryClarification": null,
+      "note": ""
+    },
+    {
+      "id": "M122",
+      "input": "mañana tengo muchas cosas, parte por poner dentista a las 11",
+      "reply": "Preparé estos cambios para guardarlos en Focus.",
+      "mode": "chat_with_action",
+      "actions": [
+        {
+          "type": "add_event",
+          "event": {
+            "title": "Dentista",
+            "date": "2026-09-09",
+            "time": "11:00 AM",
+            "endTime": null,
+            "section": "evening",
+            "icon": "local_hospital"
+          },
+          "actionId": "b4ff717f-1e91-4fd6-8854-fae0b86d2978:0"
+        }
+      ],
+      "understood": null,
+      "correctPlan": null,
+      "natural": null,
+      "concise": null,
+      "necessaryClarification": null,
+      "note": ""
+    },
+    {
+      "id": "H73",
+      "input": "a las 8 de mindfulness",
+      "reply": "No pude preparar ese cambio con seguridad. ¿Me das un poco más de detalle?",
+      "mode": "clarification",
+      "actions": [],
+      "understood": null,
+      "correctPlan": null,
+      "natural": null,
+      "concise": null,
+      "necessaryClarification": null,
+      "note": ""
+    },
+    {
+      "id": "I83",
+      "input": "no sé por dónde empezar",
+      "reply": "Te entiendo, a veces la mente está llena y no sabés por dónde agarrar. Podemos hacerlo juntos.\n\n¿Qué es lo que más te presiona en este momento? Puede ser algo urgente hoy, una preocupación que viene dando vueltas, o simplemente algo que querés sacar de la cabeza. Contame sin filtro—no importa si es grande o pequeño.",
+      "mode": "chat_only",
+      "actions": [],
+      "understood": null,
+      "correctPlan": null,
+      "natural": null,
+      "concise": null,
+      "necessaryClarification": null,
+      "note": ""
+    },
+    {
+      "id": "K103",
+      "input": "acuérdame la pelota pal partido",
+      "reply": "Preparé estos cambios para guardarlos en Focus.",
+      "mode": "chat_with_action",
+      "actions": [
+        {
+          "type": "add_task",
+          "task": {
+            "label": "Llevar la pelota",
+            "priority": "Media",
+            "category": "hoy",
+            "linkedEventId": null,
+            "parentTaskId": null,
+            "date": "2026-09-08"
+          },
+          "actionId": "817eca6a-046d-4c64-8990-6b52d14dc148:0"
+        }
+      ],
+      "understood": null,
+      "correctPlan": null,
+      "natural": null,
+      "concise": null,
+      "necessaryClarification": null,
+      "note": ""
+    },
+    {
+      "id": "M123",
+      "input": "hoy quiero estudiar Focus 2 horas y después descansar",
+      "reply": "No pude preparar ese cambio con seguridad. ¿Me das un poco más de detalle?",
+      "mode": "clarification",
+      "actions": [],
+      "understood": null,
+      "correctPlan": null,
+      "natural": null,
+      "concise": null,
+      "necessaryClarification": null,
+      "note": ""
+    }
+  ]
+}
