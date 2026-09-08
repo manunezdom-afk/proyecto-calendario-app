@@ -31,7 +31,7 @@ export function verifyBenchmarkReplay(original, replay, attemptsBefore, attempts
 }
 
 export function benchmarkSourceHashes(root, sqlMigrations = []) {
-  const paths = ['api/_lib/novaRuntime.js','api/_lib/novaRouter.js','api/_lib/openaiNova.js','api/_lib/novaPrompt.js',
+  const paths = ['api/_lib/novaRuntime.js','api/_lib/novaRouter.js','api/_lib/openaiNova.js','api/_lib/novaPrompt.js','api/_lib/novaPendingProposal.js',
     'api/_lib/novaContract.js','api/_lib/novaAdmission.js','api/_lib/novaSafety.js','api/_lib/aiPricing.js',
     'api/_lib/aiUsageTracking.js','api/_lib/dateContext.js','api/_lib/usageLimits.js','api/_lib/assistantBrand.js',
     'scripts/ai-router-benchmark.mjs','scripts/lib/ephemeral-ai-database.mjs','scripts/ai-benchmark-grade.mjs',

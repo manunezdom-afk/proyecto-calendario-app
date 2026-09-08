@@ -1,8 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
-import { readFileSync,writeFileSync,statSync,existsSync } from 'node:fs'
-import { parseRemoteBenchmarkOptions,runRemoteBenchmark,vercelFocusFetch,mayStartRemoteRequest } from '../scripts/ai-remote-benchmark.mjs'
+import { readFileSync,writeFileSync,statSync,existsSync,mkdtempSync,rmSync,readdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { parseRemoteBenchmarkOptions,runRemoteBenchmark,vercelFocusFetch,mayStartRemoteRequest,writeAtomicBenchmarkReport } from '../scripts/ai-remote-benchmark.mjs'
 import { EXPECTED_SUPABASE_URL } from '../scripts/ai-remote-check.mjs'
 const origin='https://focus-app-test-manunezdom-9658s-projects.vercel.app'
 const env={SUPABASE_URL:EXPECTED_SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY:'private-service',SUPABASE_ANON_KEY:'private-anon',FOCUS_VERCEL_BYPASS:'private-bypass'}
@@ -55,6 +57,29 @@ const run=(server,opts=options())=>runRemoteBenchmark(opts,{env,fetchImpl:server
 test('offline runner does no network or credential validation',async()=>{
  const report=await runRemoteBenchmark(parseRemoteBenchmarkOptions([]),{env:{},fetchImpl:()=>{throw new Error('network forbidden')},writeReport:false,cases})
  assert.equal(report.status,'not_executed');assert.equal(report.summary.attempted,0);assert.equal(report.summary.totalObservedCostUSD,null)
+})
+test('HTTP pacing is explicit and cannot bypass the minimum interval',()=>{
+ assert.equal(parseRemoteBenchmarkOptions(['--http-interval-ms','4500']).httpIntervalMs,4500)
+ for(const value of ['0','2499','10001','invalid'])assert.throws(()=>parseRemoteBenchmarkOptions(['--http-interval-ms',value]))
+})
+test('disk full preserves the previous complete checkpoint and removes the partial temporary file',()=>{
+ const directory=mkdtempSync(join(tmpdir(),'focus-atomic-report-')),path=join(directory,'report.json')
+ try {
+  writeAtomicBenchmarkReport(path,{previous:true})
+  assert.throws(()=>writeAtomicBenchmarkReport(path,{next:true},{write:(file)=>{writeFileSync(file,'partial');throw Object.assign(new Error('disk full'),{code:'ENOSPC'})}}),/disk full/)
+  assert.deepEqual(JSON.parse(readFileSync(path,'utf8')),{previous:true})
+  assert.deepEqual(readdirSync(directory),['report.json']);assert.equal(statSync(path).mode&0o777,0o600)
+ } finally {rmSync(directory,{recursive:true})}
+})
+test('persistent checkpoint failure stops payment and still cleans every owned account',async()=>{
+ const server=fake();let failed=false
+ const report=await runRemoteBenchmark(options(['--users','3']),{env,fetchImpl:server.fetchImpl,sleep:async()=>{},cases,writeSnapshot:(_path,snapshot)=>{
+  if(snapshot.rows.some(row=>row.replayVerified))failed=true
+  if(failed)throw Object.assign(new Error('disk full'),{code:'ENOSPC'})
+ }})
+ assert.equal(report.status,'failed');assert.equal(report.errorCode,'checkpoint_write_failed')
+ assert.equal(server.paid,1);assert.equal(report.cleanup.verified,3);assert.equal(server.users.size,0)
+ assert.equal(report.cleanup.pendingSyntheticUserIds.length,0);assert.equal(report.summary.recordedRunChargeUSD,.01)
 })
 test('host, user capacity and conservative per-run bounds fail closed',()=>{
  for(const args of [['--live'],['--base-url','https://evil.invalid'],['--users','1'],['--budget','.1'],['--budget','1.1'],['--limit','212'],['--users','25'],['--limit','211','--users','23']])assert.throws(()=>parseRemoteBenchmarkOptions(args))

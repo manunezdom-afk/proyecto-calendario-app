@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Offline by default. Live uses only synthetic accounts against an operator-
 // verified Focus deployment whose per-request server cap is at most US$0.25.
-import { readFileSync, writeFileSync, mkdirSync, chmodSync, mkdtempSync, rmSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, chmodSync, mkdtempSync, rmSync, statSync, renameSync, unlinkSync } from 'node:fs'
 import { randomUUID, randomBytes, createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { resolve, dirname, join } from 'node:path'
@@ -24,19 +24,29 @@ const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms))
 const valueNumber=value=>value!=null && Number.isFinite(Number(value)) && Number(value)>=0?Number(value):null
 const percentile=(values,p)=>values.length?[...values].sort((a,b)=>a-b)[Math.max(0,Math.ceil(values.length*p)-1)]:null
 
+// A failed write (including ENOSPC) must leave the last recovery checkpoint
+// intact. Rename only after the complete private snapshot has been written.
+export function writeAtomicBenchmarkReport(path,report,{write=writeFileSync,rename=renameSync,remove=unlinkSync}={}) {
+  mkdirSync(dirname(path),{recursive:true})
+  const temporary=path+'.'+randomUUID()+'.tmp'
+  try {write(temporary,JSON.stringify(report,null,2)+'\n',{mode:0o600,flag:'wx'});rename(temporary,path)}
+  finally {try{remove(temporary)}catch(error){if(error.code!=='ENOENT')throw error}}
+}
+
 export function parseRemoteBenchmarkOptions(args=[]) {
-  const out={live:false,vercelCLI:false,baseURL:null,limit:100,budget:1,users:12,reportPath:null,envFile:null,now:'2026-09-08T15:00:00.000Z'}
-  const values={'--base-url':'baseURL','--limit':'limit','--budget':'budget','--users':'users','--report':'reportPath','--env-file':'envFile','--now':'now'}
+  const out={live:false,vercelCLI:false,baseURL:null,limit:100,budget:1,users:12,httpIntervalMs:2500,reportPath:null,envFile:null,now:'2026-09-08T15:00:00.000Z'}
+  const values={'--base-url':'baseURL','--limit':'limit','--budget':'budget','--users':'users','--report':'reportPath','--env-file':'envFile','--now':'now','--http-interval-ms':'httpIntervalMs'}
   for(let i=0;i<args.length;i++) {
     if(args[i]==='--live')out.live=true
     else if(args[i]==='--vercel-cli')out.vercelCLI=true
     else {const key=values[args[i]];check(key && args[i+1] && !args[i+1].startsWith('--'),'invalid_option');out[key]=args[++i]}
   }
-  for(const key of ['limit','users','budget'])out[key]=Number(out[key])
+  for(const key of ['limit','users','budget','httpIntervalMs'])out[key]=Number(out[key])
   if(!args.includes('--users'))out.users=Math.ceil(out.limit/9)
   check(Number.isInteger(out.limit)&&out.limit>=1&&out.limit<=211,'invalid_limit')
   check(Number.isInteger(out.users)&&out.users>=1&&out.users<=24&&out.limit<=out.users*9,'invalid_users')
   check(out.budget>=MAX_REQUEST_USD&&out.budget<=1,'invalid_budget')
+  check(Number.isInteger(out.httpIntervalMs)&&out.httpIntervalMs>=2500&&out.httpIntervalMs<=10000,'invalid_http_interval')
   check(Number.isFinite(Date.parse(out.now)),'invalid_clock')
   if(out.baseURL) {out.baseURL=allowedChatOrigin(out.baseURL);check(out.baseURL,'deployment_not_allowed')}
   check(!out.live || out.baseURL,'explicit_deployment_required')
@@ -74,14 +84,15 @@ export function vercelFocusFetch(origin,{execImpl=exec}={}) {
   }
 }
 
-export async function runRemoteBenchmark(options,{env=process.env,fetchImpl=fetch,focusFetch=null,sleep=wait,writeReport=true,cases=null,onProgress=()=>{}}={}) {
+export async function runRemoteBenchmark(options,{env=process.env,fetchImpl=fetch,focusFetch=null,sleep=wait,writeReport=true,writeSnapshot=writeAtomicBenchmarkReport,cases=null,onProgress=()=>{}}={}) {
   const source=cases||JSON.parse(readFileSync(resolve(root,'tests/nova-battery/cases.json'))).cases
   const groups=[...new Set(source.map(c=>c.cat))].map(cat=>source.filter(c=>c.cat===cat)),selected=[]
   for(let i=0;groups.some(g=>g[i]);i++)for(const group of groups)if(group[i])selected.push(group[i])
   selected.splice(options.limit)
   const runId=randomUUID(),reportPath=resolve(options.reportPath||join(tmpdir(),`focus-ai-remote-benchmark-${runId}.json`))
   const report={version:1,mode:options.live?'remote-http-real-sql':'offline-remote-inventory',status:'not_executed',runId,reportPath,
-    deployment:options.baseURL,budgetUSD:options.budget,requestReservationBoundUSD:MAX_REQUEST_USD,
+    deployment:options.baseURL,transport:options.live?(options.vercelCLI?'vercel_cli':'direct_https'):null,httpIntervalMs:options.httpIntervalMs,
+    budgetUSD:options.budget,requestReservationBoundUSD:MAX_REQUEST_USD,
     boundEvidence:'Operator must verify this deployment enforces at most US$0.25 per logical request; no global budget or quota is changed by this runner.',
     fixedNow:options.now,sourceHashes:benchmarkSourceHashes(root),
     runnerSourceHashes:Object.fromEntries(['scripts/ai-remote-benchmark.mjs','scripts/ai-remote-check.mjs','api/focus-assistant.js','api/_lib/aiCapabilities.js','vercel.json'].map(path=>[path,createHash('sha256').update(readFileSync(resolve(root,path))).digest('hex')])),
@@ -89,20 +100,23 @@ export async function runRemoteBenchmark(options,{env=process.env,fetchImpl=fetc
     measurementScope:'Remote Focus HTTP and existing remote SQL ledgers; synthetic accounts and fixture context only. Local SQL hashes are expected sources, not proof of remote bytes. No client persistence or human conversation quality is measured.',
     selectedCases:selected.map(c=>c.id),plannedUsers:options.users,rows:[],cleanup:{pendingSyntheticUserIds:[],deleted:0,verified:0},summary:null}
   const telemetry=[],created=[];let lastHTTP=0,recordedCost=0,anonymizedCost=0
-  function checkpoint() {
+  function checkpoint(required=true) {
     const rows=report.rows,attempted=rows.filter(r=>r.attempted),latencies=attempted.filter(r=>r.httpStatus===200).map(r=>r.latencyMs)
     report.summary={selected:selected.length,attempted:attempted.length,objectivePass:attempted.filter(r=>r.verdict?.pass).length,
       objectivePassRate:attempted.length?attempted.filter(r=>r.verdict?.pass).length/attempted.length:null,
       ...summarizeBenchmarkCosts(rows,telemetry),recordedRunChargeUSD:options.live?recordedCost:null,latencyPopulation:'successful_http_200',p50Ms:percentile(latencies,.5),p95Ms:percentile(latencies,.95),
       replayChecks:rows.filter(r=>r.replayVerified).length,providerAttempts:rows.reduce((n,r)=>n+r.attempts.length,0),humanConversationScore:null,metrics:summarizeAIMetrics(telemetry)}
-    if(writeReport){mkdirSync(dirname(reportPath),{recursive:true});writeFileSync(reportPath,JSON.stringify(report,null,2)+'\n',{mode:0o600});chmodSync(reportPath,0o600)}
+    if(writeReport)try {writeSnapshot(reportPath,report)}catch {
+      report.checkpointWriteFailed=true
+      if(required)throw new BenchError('checkpoint_write_failed')
+    }
   }
   checkpoint();if(!options.live)return report
   const config=remoteConfiguration(env),request=remoteTransport(config,fetchImpl)
   check(allowedChatOrigin(options.baseURL)===options.baseURL,'deployment_not_allowed')
   const focus=focusFetch||(options.vercelCLI?vercelFocusFetch(options.baseURL):fetchImpl)
   async function http(path,{method='GET',body,token}={}) {
-    const remaining=2500-(Date.now()-lastHTTP);if(remaining>0)await sleep(remaining)
+    const remaining=(options.httpIntervalMs??2500)-(Date.now()-lastHTTP);if(remaining>0)await sleep(remaining)
     lastHTTP=Date.now()
     const headers={'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})}
     if(env.FOCUS_VERCEL_BYPASS)headers['x-vercel-protection-bypass']=env.FOCUS_VERCEL_BYPASS
@@ -140,7 +154,8 @@ export async function runRemoteBenchmark(options,{env=process.env,fetchImpl=fetc
     check(control.ok&&control.data?.status==='ok'&&control.data.paid_enabled===true,'remote_paid_control_closed')
     for(let i=0;i<options.users;i++) {
       const id=randomUUID(),email=`focus-bench-${runId}-${i}@example.invalid`,password=randomBytes(36).toString('base64url')
-      const entry={id,email,count:0,premium:0};created.push(entry);report.cleanup.pendingSyntheticUserIds.push(id);checkpoint()
+      const entry={id,email,count:0,premium:0,creationRequested:false};created.push(entry);report.cleanup.pendingSyntheticUserIds.push(id);checkpoint()
+      entry.creationRequested=true
       const made=await request('/auth/v1/admin/users',{method:'POST',body:{id,email,password,email_confirm:true,user_metadata:{focus_ai_benchmark_run:runId}}})
       check(made.ok&&(made.data?.id||made.data?.user?.id)===id,'synthetic_create_failed')
       const signed=await request('/auth/v1/token?grant_type=password',{method:'POST',key:config.anonKey,token:config.anonKey,body:{email,password}})
@@ -189,6 +204,7 @@ export async function runRemoteBenchmark(options,{env=process.env,fetchImpl=fetc
     // Never finalize unknown paid requests at zero. Deletion keeps their
     // conservative charge and scrubs replay through the real SQL trigger.
     for(const user of created)try {
+      if(!user.creationRequested){report.cleanup.pendingSyntheticUserIds=report.cleanup.pendingSyntheticUserIds.filter(id=>id!==user.id);continue}
       const owned=await request(`/auth/v1/admin/users/${user.id}`),details=owned.data?.user||owned.data
       check(owned.ok&&details?.id===user.id&&details.email===user.email&&details.user_metadata?.focus_ai_benchmark_run===runId,'cleanup_ownership_unconfirmed')
       const ledger=await ownedLedger(),rows=ledger.filter(r=>r.user_id===user.id)
@@ -199,10 +215,11 @@ export async function runRemoteBenchmark(options,{env=process.env,fetchImpl=fetc
         check(verified.ok&&verified.data.length===1&&after.user_id===null&&after.response===null&&after.fingerprint===''&&after.request_id===after.id
           &&Number(after.actual_usd??after.reserved_usd)===Number(row.actual_usd??row.reserved_usd),'cleanup_anonymous_charge_failed')
       }
-      report.cleanup.verified++;report.cleanup.pendingSyntheticUserIds=report.cleanup.pendingSyntheticUserIds.filter(id=>id!==user.id);checkpoint()
-    }catch(error){report.cleanup.errorCodes=[...(report.cleanup.errorCodes||[]),error instanceof BenchError?error.code:'cleanup_failed'];checkpoint()}
+      report.cleanup.verified++;report.cleanup.pendingSyntheticUserIds=report.cleanup.pendingSyntheticUserIds.filter(id=>id!==user.id);checkpoint(false)
+    }catch(error){report.cleanup.errorCodes=[...(report.cleanup.errorCodes||[]),error instanceof BenchError?error.code:'cleanup_failed'];checkpoint(false)}
     if(report.cleanup.pendingSyntheticUserIds.length){report.status='failed'}
-    report.finishedAt=new Date().toISOString();checkpoint()
+    report.finishedAt=new Date().toISOString();checkpoint(false)
+    if(report.checkpointWriteFailed){report.status='failed';report.errorCode||='checkpoint_write_failed';checkpoint(false)}
   }
   return report
 }
