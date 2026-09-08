@@ -16,7 +16,14 @@ enum FocusLocalStore {
         case pendingDeleteEvents = "focus.v1.pendingDeleteEvents"
         case pendingDeleteTasks = "focus.v1.pendingDeleteTasks"
         case syncSnapshot = "focus.v2.syncSnapshot"
+        case novaPendingRequest = "focus.v2.novaPendingRequest"
+        case novaMemories = "focus.v2.novaMemories"
     }
+
+    #if DEBUG
+    /// Deterministic failure injection, restricted to isolated tests.
+    static var testRejectSynchronousWrite: ((Key) -> Bool)?
+    #endif
 
     private static let queue = DispatchQueue(label: "me.usefocus.app.localstore.persist", qos: .utility)
     private static var namespace = "guest"
@@ -64,6 +71,9 @@ enum FocusLocalStore {
     @discardableResult
     static func saveSync<T: Encodable>(_ value: T, forKey key: Key) -> Bool {
         queue.sync {
+            #if DEBUG
+            if testRejectSynchronousWrite?(key) == true { return false }
+            #endif
             do { try write(value, to: fileURL(key)); return true }
             catch { debugLog("[FocusLocalStore] save failed: \(error)"); return false }
         }
@@ -125,7 +135,7 @@ enum FocusLocalStore {
     #if DEBUG
     /// An isolated directory makes persistence tests independent of real data.
     static func useTestingDirectory(_ url: URL) {
-        queue.sync { storageRoot = url; namespace = "guest" }
+        queue.sync { storageRoot = url; namespace = "guest"; testRejectSynchronousWrite = nil }
     }
     #endif
 }
@@ -163,4 +173,5 @@ struct FocusSyncSnapshot: Codable {
     var outbox: FocusSyncOutbox
     var recoveryEventIDs: [UUID: UUID]? = nil
     var recoveryTaskIDs: [UUID: UUID]? = nil
+    var novaAppliedActionIDs: Set<String>? = nil
 }

@@ -90,6 +90,34 @@ enum NovaService {
         var followUpQuestion: String? = nil
     }
 
+    struct Request {
+        let message: String
+        let events: [FocusEvent]
+        let tasks: [FocusTask]
+        let history: [HistoryEntry]
+        let accessToken: String
+        let personality: Personality
+        let surface: Surface
+        let discussedEventIds: [UUID]
+        let userMemories: [String]
+        let requestID: UUID
+    }
+
+    static func send(_ request: Request) async throws -> Result {
+        try await send(message: request.message, events: request.events, tasks: request.tasks,
+                       history: request.history, accessToken: request.accessToken,
+                       personality: request.personality, surface: request.surface,
+                       discussedEventIds: request.discussedEventIds, userMemories: request.userMemories,
+                       requestID: request.requestID)
+    }
+
+    /// Prospective model text cannot act as an execution receipt. Reject an
+    /// unsupported claim; never rewrite user text or existing conversation.
+    static func claimsExecutedMutation(_ reply: String) -> Bool {
+        reply.range(of: #"(?im)(?:^|[.!?]\s+)(?:listo[,.!]?\s*|ya\s+|hecho[,.!]?\s*|te\s+|lo\s+|la\s+)*(?:he\s+)?(?:cre[eé]|guard[eé]|agend[eé]|program[eé]|borr[eé]|elimin[eé]|actualic[eé]|complet[eé]|marqu[eé]|mov[ií]|a[nñ]ad[ií]|anot[eé]|dej[eé]|creado|guardado|agendado|eliminado|actualizado)\b"#,
+                    options: .regularExpression) != nil
+    }
+
     /// Llama al backend. Lanza `NovaServiceError` para que el caller
     /// decida si cae al parser local.
     static func send(
@@ -103,7 +131,8 @@ enum NovaService {
         timezone: TimeZone = .current,
         now: Date = Date(),
         discussedEventIds: [UUID] = [],
-        userMemories: [String] = []
+        userMemories: [String] = [],
+        requestID: UUID = UUID()
     ) async throws -> Result {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw NovaServiceError.emptyMessage }
@@ -116,7 +145,7 @@ enum NovaService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Request-Id")
+        request.setValue(requestID.uuidString, forHTTPHeaderField: "X-Request-Id")
         // FASE 3 QA — bypass Vercel SSO para Preview. nil en prod.
         if let bypass = FocusConfig.vercelBypassToken {
             request.setValue(bypass, forHTTPHeaderField: "x-vercel-protection-bypass")
@@ -160,6 +189,9 @@ enum NovaService {
         case 200:
             do {
                 let decoded = try jsonDecoder.decode(BackendResponsePayload.self, from: data)
+                if let returnedID = decoded.requestId, returnedID.lowercased() != requestID.uuidString.lowercased() {
+                    throw NovaServiceError.invalidResponse
+                }
                 let shouldAsk = decoded.shouldAskUser ?? false
                 let modeRaw = decoded.mode
                 let resolvedMode: Mode = {
@@ -183,7 +215,7 @@ enum NovaService {
                     shouldAskUser: shouldAsk,
                     mode: resolvedMode,
                     proposedActions: decoded.proposedActions,
-                    requestId: decoded.requestId,
+                    requestId: requestID.uuidString,
                     followUpQuestion: decoded.followUpQuestion
                 )
             } catch {
@@ -195,7 +227,9 @@ enum NovaService {
             throw rateLimitError(from: data)
         case 502:
             throw NovaServiceError.badLLMOutput
-        case 503, 504:
+        case 503:
+            throw unavailableError(from: data, requestID: requestID)
+        case 504:
             throw NovaServiceError.serviceUnavailable
         default:
             throw NovaServiceError.server(status: http.statusCode)
@@ -218,6 +252,24 @@ enum NovaService {
         let payload = try? jsonDecoder.decode(BackendErrorPayload.self, from: data)
         guard payload?.error == "quota_exceeded" else { return .rateLimited }
         return .quotaExceeded(message: payload?.message, details: payload?.quotaDetails)
+    }
+
+    /// A terminal failure can start a fresh logical request only after the
+    /// server confirms completion for this exact identity. All other failures
+    /// keep the original identity so an uncertain request cannot run twice.
+    static func unavailableError(from data: Data, requestID: UUID) -> NovaServiceError {
+        struct Completion: Decodable {
+            let error: String?
+            let requestId: UUID?
+            let request_completed: Bool?
+            let request_retryable: Bool?
+        }
+        guard let payload = try? jsonDecoder.decode(Completion.self, from: data),
+              payload.error == "assistant_unavailable", payload.requestId == requestID,
+              payload.request_completed == true, payload.request_retryable == true else {
+            return .serviceUnavailable
+        }
+        return .completedRetryableRequest(requestID: requestID)
     }
 
     // MARK: - Internal coders
@@ -280,6 +332,7 @@ enum NovaServiceError: Error, LocalizedError {
     case rateLimited
     case badLLMOutput           // 502 (parser falló en backend)
     case serviceUnavailable     // 503/504 (modelo / red upstream)
+    case completedRetryableRequest(requestID: UUID)
     case offline
     case timeout
     case network(Error)
@@ -322,7 +375,7 @@ enum NovaServiceError: Error, LocalizedError {
         case .quotaExceeded(_, let details): return (details ?? .unspecified).displayMessage()
         case .rateLimited:         return "Hay demasiadas solicitudes en este momento. Espera un poco y vuelve a intentarlo."
         case .badLLMOutput:        return "No pude entender bien lo que respondió \(AssistantBrand.displayName). Repite el mensaje, por favor."
-        case .serviceUnavailable:  return "\(AssistantBrand.displayName) no está disponible en este momento. Vuelve a intentarlo en un rato."
+        case .serviceUnavailable, .completedRetryableRequest: return "\(AssistantBrand.displayName) no está disponible en este momento. Vuelve a intentarlo en un rato."
         case .offline:             return "Sin conexión. Tus cambios quedan en este iPhone hasta que vuelvas a tener internet."
         case .timeout:             return "\(AssistantBrand.displayName) tardó más de lo esperado. Vuelve a intentarlo."
         case .network:             return "Hubo un problema con la conexión. Vuelve a intentarlo."
@@ -350,7 +403,7 @@ enum NovaServiceError: Error, LocalizedError {
             return "Sin conexión — lo resolví en este iPhone con el modo local. Se sincronizará con \(AssistantBrand.displayName) cuando vuelvas a tener internet."
         case .timeout:
             return "\(AssistantBrand.displayName) (IA) tardó demasiado — usé el modo local de respaldo. Vuelve a intentarlo en un momento."
-        case .serviceUnavailable:
+        case .serviceUnavailable, .completedRetryableRequest:
             return "\(AssistantBrand.displayName) (IA) no está disponible — usé el modo local de respaldo. Vuelve a intentarlo en un rato."
         case .network:
             return "Falló la conexión con \(AssistantBrand.displayName) — usé el modo local de respaldo. Revisa tu internet y vuelve a intentarlo."
@@ -372,6 +425,7 @@ enum NovaServiceError: Error, LocalizedError {
         case .rateLimited:         return "rateLimited(429)"
         case .badLLMOutput:        return "badLLMOutput(502)"
         case .serviceUnavailable:  return "serviceUnavailable(503/504)"
+        case .completedRetryableRequest: return "completedRetryableRequest(503)"
         case .offline:             return "offline"
         case .timeout:             return "timeout"
         case .network:             return "network"
@@ -568,6 +622,8 @@ enum BackendAction {
     case addTask(BackendTaskCreate)
     /// Toggle de tarea (marca/desmarca como hecha).
     case toggleTask(id: String)
+    case completeTask(id: String, done: Bool)
+    case editTask(id: String, updates: BackendTaskUpdates)
     /// Borrar tarea.
     case deleteTask(id: String)
     /// Memoria sobre el usuario — V1 (legacy): no se persiste, solo se loguea.
@@ -632,6 +688,36 @@ struct BackendTaskCreate {
     var dateString: String? = nil
 }
 
+/// Explicit null date/time removes that field; omitted fields remain unchanged.
+struct BackendTaskUpdates: Decodable {
+    var label: String? = nil
+    var date: String? = nil
+    var time: String? = nil
+    var priority: String? = nil
+    var done: Bool? = nil
+    var clearsDate = false
+    var clearsTime = false
+
+    init(label: String? = nil, date: String? = nil, time: String? = nil,
+         priority: String? = nil, done: Bool? = nil, clearsDate: Bool = false, clearsTime: Bool = false) {
+        self.label = label; self.date = date; self.time = time
+        self.priority = priority; self.done = done
+        self.clearsDate = clearsDate; self.clearsTime = clearsTime
+    }
+
+    private enum CodingKeys: String, CodingKey { case label, date, time, priority, done }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        label = try c.decodeIfPresent(String.self, forKey: .label)
+        date = try c.decodeIfPresent(String.self, forKey: .date)
+        time = try c.decodeIfPresent(String.self, forKey: .time)
+        priority = try c.decodeIfPresent(String.self, forKey: .priority)
+        done = try c.decodeIfPresent(Bool.self, forKey: .done)
+        clearsDate = try c.contains(.date) && c.decodeNil(forKey: .date)
+        clearsTime = try c.contains(.time) && c.decodeNil(forKey: .time)
+    }
+}
+
 // MARK: - Action decoding
 
 /// Decodificador resiliente: lee `type` primero y dispatch al case que
@@ -648,6 +734,7 @@ private struct RawAction: Decodable {
         case updates
         case recurrence
         case memory
+        case done
     }
 
     init(from decoder: Decoder) throws {
@@ -693,6 +780,16 @@ private struct RawAction: Decodable {
             } else {
                 self.decoded = .unsupported(typeName: rawType)
             }
+        case "complete_task":
+            if let id = try? c.decode(String.self, forKey: .id), !id.isEmpty,
+               let done = try? c.decode(Bool.self, forKey: .done) {
+                self.decoded = .completeTask(id: id, done: done)
+            } else { self.decoded = .unsupported(typeName: rawType) }
+        case "edit_task":
+            if let id = try? c.decode(String.self, forKey: .id), !id.isEmpty,
+               let updates = try? c.decode(BackendTaskUpdates.self, forKey: .updates) {
+                self.decoded = .editTask(id: id, updates: updates)
+            } else { self.decoded = .unsupported(typeName: rawType) }
         case "toggle_task":
             if let id = try? c.decode(String.self, forKey: .id), !id.isEmpty {
                 self.decoded = .toggleTask(id: id)
@@ -874,16 +971,45 @@ enum NovaTimeFormatter {
     ///   fuerza al call site a tratar el evento como needsClarification
     ///   y preguntar al usuario.
     /// - Si ambos null, retorna nil.
-    static func resolveDate(dateString: String?, timeString: String?) -> Date? {
-        let cal = Calendar.current
-        let now = Date()
-        let baseDay = parseISODate(dateString) ?? cal.startOfDay(for: now)
-        guard let (hour, minute) = parseHourMinute(timeString) else {
-            // Antes: asignaba 9:00 AM si había fecha — eso inventaba hora.
-            // Ahora: retornar nil para que el caller pida aclaración.
-            return nil
+    static func calendar(timezone: TimeZone = .current) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "en_US_POSIX")
+        calendar.timeZone = timezone
+        return calendar
+    }
+
+    /// A civil time must exist exactly once. A DST gap must never move an
+    /// appointment silently, and a repeated hour needs an explicit offset.
+    static func civilDate(on day: Date, hour: Int, minute: Int, calendar: Calendar) -> Date? {
+        guard (0..<24).contains(hour), (0..<60).contains(minute) else { return nil }
+        var components = calendar.dateComponents([.year, .month, .day], from: day)
+        components.hour = hour
+        components.minute = minute
+        components.second = 0
+        let beforeDay = calendar.startOfDay(for: day).addingTimeInterval(-1)
+        guard let first = calendar.nextDate(after: beforeDay, matching: components,
+                    matchingPolicy: .strict, repeatedTimePolicy: .first, direction: .forward),
+              let last = calendar.nextDate(after: beforeDay, matching: components,
+                    matchingPolicy: .strict, repeatedTimePolicy: .last, direction: .forward),
+              first == last,
+              calendar.dateComponents([.year, .month, .day, .hour, .minute], from: first)
+                == calendar.dateComponents([.year, .month, .day, .hour, .minute], from: calendar.date(from: components) ?? .distantPast)
+        else { return nil }
+        return first
+    }
+
+    static func resolveDate(dateString: String?, timeString: String?,
+                            now: Date = Date(), timezone: TimeZone = .current) -> Date? {
+        let cal = calendar(timezone: timezone)
+        let baseDay: Date
+        if let dateString {
+            guard let parsed = parseISODate(dateString, timezone: timezone) else { return nil }
+            baseDay = parsed
+        } else {
+            baseDay = cal.startOfDay(for: now)
         }
-        return cal.date(bySettingHour: hour, minute: minute, second: 0, of: baseDay)
+        guard let (hour, minute) = parseHourMinute(timeString) else { return nil }
+        return civilDate(on: baseDay, hour: hour, minute: minute, calendar: cal)
     }
 
     /// "20:00" / "8:00 PM" / "8 PM" / "8am" → (hour, minute).
@@ -937,7 +1063,7 @@ enum NovaTimeFormatter {
     }
 
     /// "YYYY-MM-DD" → Date (medianoche local).
-    static func parseISODate(_ raw: String?) -> Date? {
+    static func parseISODate(_ raw: String?, timezone: TimeZone = .current) -> Date? {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
               raw.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else { return nil }
         let parts = raw.split(separator: "-")
@@ -949,7 +1075,7 @@ enum NovaTimeFormatter {
         comps.year = y
         comps.month = m
         comps.day = d
-        let calendar = Calendar.current
+        let calendar = calendar(timezone: timezone)
         guard let date = calendar.date(from: comps) else { return nil }
         let roundTrip = calendar.dateComponents([.year, .month, .day], from: date)
         guard roundTrip.year == y, roundTrip.month == m, roundTrip.day == d else { return nil }

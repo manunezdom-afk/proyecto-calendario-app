@@ -21,6 +21,12 @@ final class FocusCoreFlowTests: XCTestCase {
         let button = app.tabBars.buttons[title]
         XCTAssertTrue(button.waitForExistence(timeout: 5), "Falta tab \(title)")
         button.tap()
+        // A cold simulator can miss the first navigation tap while the native
+        // tab bar is settling. Verify selection before interacting with content;
+        // this retries navigation only, never a mutation or message submission.
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: button)
+        if XCTWaiter.wait(for: [selected], timeout: 3) != .completed { button.tap() }
+        XCTAssertTrue(button.isSelected, "No se abrió la pestaña \(title)")
     }
 
     private func taskRow(_ title: String) -> XCUIElement {
@@ -172,5 +178,75 @@ final class FocusCoreFlowTests: XCTestCase {
         screenshot("Ajustes")
         element("settings.close").tap()
         XCTAssertTrue(element("capture.input").waitForExistence(timeout: 5))
+    }
+
+    private func say(_ message: String) {
+        let input = element("nova.input")
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        input.tap(); input.typeText(message)
+        element("nova.send").tap()
+        XCTAssertTrue(app.staticTexts[message].waitForExistence(timeout: 5))
+        XCTAssertTrue(element("nova.send").waitForExistence(timeout: 5))
+    }
+
+    func testHilanteLocalConversationCreatesReviewsDeletesAndKeepsHistoryAfterRestart() {
+        tab("Hilante")
+        say("Dentista hoy a las 11")
+        tab("Agenda")
+        XCTAssertTrue(app.staticTexts["Dentista"].waitForExistence(timeout: 5))
+        tab("Hilante")
+        say("Borra lo de dentista")
+        XCTAssertTrue(element("nova.confirm").waitForExistence(timeout: 5))
+        screenshot("Hilante revisión antes de eliminar")
+        // Proposed deletion cannot change the agenda before explicit confirmation.
+        tab("Agenda")
+        XCTAssertTrue(app.staticTexts["Dentista"].exists)
+        tab("Hilante")
+        element("nova.confirm").tap()
+        XCTAssertFalse(element("nova.confirm").exists)
+        tab("Agenda")
+        XCTAssertFalse(app.staticTexts["Dentista"].exists)
+        app.terminate(); app.launchArguments = ["--ui-testing"]; app.launch()
+        tab("Agenda")
+        XCTAssertFalse(app.staticTexts["Dentista"].exists)
+        tab("Hilante")
+        XCTAssertTrue(app.staticTexts["Borra lo de dentista"].waitForExistence(timeout: 5))
+        screenshot("Hilante conversación persistida")
+    }
+
+    func testHilanteClarificationKeepsTitleAcrossTurnsAndDuplicateCaptureCreatesOnce() {
+        tab("Hilante")
+        say("Ponme dentista")
+        tab("Agenda")
+        XCTAssertFalse(app.staticTexts["Dentista"].exists)
+        tab("Hilante")
+        say("Hoy a las 11 de la mañana")
+        tab("Agenda")
+        XCTAssertTrue(app.staticTexts["Dentista"].waitForExistence(timeout: 5))
+        tab("Hilante")
+        say("Dentista hoy a las 11 de la mañana")
+        tab("Agenda")
+        XCTAssertEqual(app.staticTexts.matching(identifier: "Dentista").count, 1)
+        screenshot("Hilante aclaración sin duplicado")
+    }
+
+    func testHilanteMemoryCanBeReadAfterRestartAndForgotten() {
+        tab("Hilante")
+        say("Cata es mi polola")
+        say("Qué recuerdas")
+        let memory = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "Esto es lo que recuerdo", "Cata")).firstMatch
+        XCTAssertTrue(memory.waitForExistence(timeout: 5))
+        screenshot("Hilante memoria consultable")
+        app.terminate(); app.launchArguments = ["--ui-testing"]; app.launch()
+        tab("Hilante")
+        say("Qué sabes de mí")
+        XCTAssertTrue(memory.waitForExistence(timeout: 5))
+        say("Olvida todo")
+        XCTAssertTrue(element("nova.confirm").waitForExistence(timeout: 5))
+        element("nova.confirm").tap()
+        XCTAssertTrue(app.staticTexts["Listo, borré todas las memorias."].waitForExistence(timeout: 5))
+        say("Qué tienes en memoria")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Todavía no tengo nada guardado")).firstMatch.waitForExistence(timeout: 5))
+        screenshot("Hilante memoria eliminada")
     }
 }

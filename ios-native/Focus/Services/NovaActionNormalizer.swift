@@ -1279,8 +1279,8 @@ enum NovaActionNormalizer {
         let lower = text.lowercased()
         let patterns: [String] = [
             // "de X a Y" / "de las X a las Y" / "X a Y" con horas
-            #"\bde\s+(?:la?s?\s+)?\d{1,2}(?::\d{2})?\s+a\s+(?:la?s?\s+)?\d{1,2}(?::\d{2})?\b"#,
-            #"\b\d{1,2}(?::\d{2})?\s+a\s+(?:la?s?\s+)?\d{1,2}(?::\d{2})?\s*(?:de\s+la\s+(?:tarde|mañana|manana|noche))?\b"#,
+            #"\bde\s+(?:la?s?\s+)?\d{1,2}(?::\d{2})?\s*(?:[ap]\.?\s*m\.?)?\s+a\s+(?:la?s?\s+)?\d{1,2}(?::\d{2})?\b"#,
+            #"\b\d{1,2}(?::\d{2})?\s*(?:[ap]\.?\s*m\.?)?\s+a\s+(?:la?s?\s+)?\d{1,2}(?::\d{2})?\s*(?:de\s+la\s+(?:tarde|mañana|manana|noche))?\b"#,
             // "hasta las X" / "hasta X"
             #"\bhasta\s+(?:la?s?\s+)?\d{1,2}(?::\d{2})?\b"#,
             // "por N horas" / "durante N min"

@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import Foundation
 import WidgetKit
+import CryptoKit
 
 /// Quick action que el usuario puede tocar en la pestaña Acciones de Nova.
 /// Cubre el ciclo del día (planificar / agregar / revisar / cerrar) más el
@@ -442,6 +443,7 @@ enum NovaResponder {
     /// suites en la tarde flipaba horas a PM y las volvía flaky. Fijar este
     /// reloj a una hora de mañana las hace deterministas. Resetear tras usar.
     nonisolated(unsafe) static var testReferenceDate: Date?
+    nonisolated(unsafe) static var testTimeZone: TimeZone?
     #endif
 
     /// Hora "ahora" para toda resolución de fecha/hora del parser. En
@@ -453,6 +455,14 @@ enum NovaResponder {
         return testReferenceDate ?? Date()
         #else
         return Date()
+        #endif
+    }
+
+    static var referenceCalendar: Calendar {
+        #if DEBUG
+        return NovaTimeFormatter.calendar(timezone: testTimeZone ?? .current)
+        #else
+        return NovaTimeFormatter.calendar()
         #endif
     }
 
@@ -1128,28 +1138,8 @@ enum NovaResponder {
             return [injectSegmentReminder(parse(only, context: context), segment: only, groupOffset: groupOffset)]
         }
 
-        // Detectar marcador temporal global del texto completo.
-        let fullLower = trimmed.lowercased()
-        let inheritedDayMarker: String? = {
-            if fullLower.contains("pasado mañana") || fullLower.contains("pasado manana") {
-                return "pasado mañana"
-            }
-            if fullLower.range(of: #"\bmañana\b|\bmanana\b"#, options: .regularExpression) != nil {
-                return "mañana"
-            }
-            if fullLower.range(of: #"\bhoy\b"#, options: .regularExpression) != nil {
-                return "hoy"
-            }
-            // Días de la semana son más raros como global pero los soportamos.
-            let weekdays = ["lunes", "martes", "miércoles", "miercoles", "jueves", "viernes", "sábado", "sabado", "domingo"]
-            for w in weekdays {
-                if fullLower.range(of: "\\bel \(w)\\b", options: .regularExpression) != nil {
-                    return "el \(w)"
-                }
-            }
-            return nil
-        }()
-
+        var inheritedDayMarker: String? = nil
+        let fullLower = (segments.first ?? "").lowercased()
         // Marcador de recurrencia global ("todos los lunes" / "todos los días"
         // / "de lunes a viernes"). Si el primer segmento lo tiene y los demás
         // no, lo herendan. Sin esto, "todos los lunes a las 5 lenguaje, a las
@@ -1177,15 +1167,13 @@ enum NovaResponder {
         var intents: [NovaIntent] = []
         for (i, seg) in segments.enumerated() {
             var workingSeg = seg
+            if let ownDay = dayMarker(in: seg.lowercased()) { inheritedDayMarker = ownDay }
             // Si el segmento 2+ no tiene su propio marcador de día pero
             // el texto global sí, lo prependemos. Sin esto, "tipo 8" en
             // el segmento 2 perdería el "mañana" del segmento 1.
             if i > 0, let day = inheritedDayMarker {
                 let segLower = workingSeg.lowercased()
-                let hasOwnDay = segLower.contains("mañana") || segLower.contains("manana")
-                    || segLower.contains("hoy")
-                    || segLower.range(of: #"\b(lunes|martes|mi(é|e)rcoles|jueves|viernes|s(á|a)bado|domingo)\b"#,
-                                       options: .regularExpression) != nil
+                let hasOwnDay = dayMarker(in: segLower) != nil
                 if !hasOwnDay {
                     workingSeg = "\(day) \(workingSeg)"
                 }
@@ -1606,6 +1594,7 @@ enum NovaResponder {
     static func parse(_ text: String, context: NovaContext = NovaContext()) -> NovaIntent {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = trimmed.lowercased()
+        if invalidTemporalInput(lower) { return .clarify(reason: .unclear) }
 
         // ──────────────────────────────────────────────────────────────
         // -2. Confirmación de plan de acción pendiente. Si el turno
@@ -4053,12 +4042,66 @@ enum NovaResponder {
         )
     }
 
+    /// A morning period is not the relative day "tomorrow".
+    private static func dayMarker(in text: String) -> String? {
+        let stripped = text.replacingOccurrences(of: #"\b(?:esta|en la|por la|de la) ma(?:ñ|n)ana\b"#,
+                                                   with: "", options: .regularExpression)
+        for pattern in [#"\bpasado ma(?:ñ|n)ana\b"#, #"\bma(?:ñ|n)ana\b"#,
+                        #"\bhoy\b"#, #"\b(?:el )?(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b"#,
+                        #"\b\d{4}-\d{1,2}-\d{1,2}\b"#, #"\b\d{1,2}/\d{1,2}(?:/\d{4})?\b"#,
+                        #"\b\d{1,2} de [a-z]+(?: de \d{4})?\b"#] {
+            if let range = stripped.range(of: pattern, options: .regularExpression) { return String(stripped[range]) }
+        }
+        return nil
+    }
+
+    private static func explicitCivilDay(in text: String, calendar: Calendar, now: Date) -> (mentioned: Bool, date: Date?) {
+        let patterns = [#"\b(\d{4})-(\d{1,2})-(\d{1,2})\b"#,
+                        #"\b(\d{1,2})/(\d{1,2})(?:/(\d{4}))?\b"#,
+                        #"\b(\d{1,2}) de (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)(?: de (\d{4}))?\b"#]
+        let months = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+        for (index, pattern) in patterns.enumerated() {
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { continue }
+            let ns = text as NSString
+            func capture(_ n: Int) -> String? {
+                let range = match.range(at: n)
+                return range.location == NSNotFound ? nil : ns.substring(with: range)
+            }
+            let year = index == 0 ? Int(capture(1) ?? "") : (Int(capture(3) ?? "") ?? calendar.component(.year, from: now))
+            let month = index == 2 ? months.firstIndex(of: capture(2) ?? "").map { $0 + 1 } : Int(capture(2) ?? "")
+            let day = Int(capture(index == 0 ? 3 : 1) ?? "")
+            guard let year, let month, let day else { return (true, nil) }
+            let iso = String(format: "%04d-%02d-%02d", year, month, day)
+            return (true, NovaTimeFormatter.parseISODate(iso, timezone: calendar.timeZone))
+        }
+        return (false, nil)
+    }
+
+    static func invalidTemporalInput(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        let explicit = explicitCivilDay(in: lower, calendar: referenceCalendar, now: referenceNow)
+        if explicit.mentioned && explicit.date == nil { return true }
+        if let regex = try? NSRegularExpression(pattern: #"\b(\d{1,2}):(\d{2})\b"#) {
+            let ns = lower as NSString
+            for match in regex.matches(in: lower, range: NSRange(location: 0, length: ns.length)) {
+                let hour = Int(ns.substring(with: match.range(at: 1))) ?? 24
+                let minute = Int(ns.substring(with: match.range(at: 2))) ?? 60
+                if hour >= 24 || minute >= 60 { return true }
+            }
+        }
+        if lower.range(of: #"\b(?:0|00|1[3-9]|2\d)(?::\d{2})?\s*(?:am|pm)\b"#, options: .regularExpression) != nil { return true }
+        // Reject nonexistent or repeated civil hours instead of normalizing them.
+        if extractHourMinute(from: lower) != nil && extractDateTime(from: lower) == nil { return true }
+        return false
+    }
+
     /// Devuelve fecha+hora si el texto incluye marcador temporal. Si solo hay
     /// hora sin día, asume hoy (o mañana si la hora ya pasó). Si solo hay día
     /// sin hora, asume 9:00 (lo usamos como flag de "necesita hora").
     private static func extractDateTime(from lower: String) -> Date? {
-        let cal = Calendar.current
-        let now = referenceNow  // test seam: Date() en producción
+        let cal = referenceCalendar
+        let now = referenceNow
 
         // Offset relativo a "ahora". Tres patrones, en orden:
         //   "en N minutos" / "en N min"  → +N minutos (explícito)
@@ -4091,24 +4134,21 @@ enum NovaResponder {
             return cal.date(byAdding: .minute, value: mins, to: now)
         }
 
-        var dayBase: Date? = nil
-
-        if lower.range(of: #"\bpasado ma(ñ|n)ana\b"#, options: .regularExpression) != nil {
-            dayBase = cal.date(byAdding: .day, value: 2, to: now)
-        } else if lower.range(of: #"\bma(ñ|n)ana\b"#, options: .regularExpression) != nil {
-            dayBase = cal.date(byAdding: .day, value: 1, to: now)
-        } else if lower.contains("hoy")
-            || lower.contains("esta tarde") || lower.contains("esta noche")
-            || lower.contains("esta mañana") || lower.contains("esta manana")
-            || lower.contains("al mediodía") || lower.contains("al mediodia")
-            || lower.contains("en la tarde") || lower.contains("en la noche")
-            || lower.contains("en la mañana") || lower.contains("en la manana")
-            || lower.contains("después de almuerzo") || lower.contains("despues de almuerzo")
-            || lower.contains("después del trabajo") || lower.contains("despues del trabajo")
-            || lower.contains("al final del día") || lower.contains("al final del dia") {
-            dayBase = now
-        } else if let target = nextWeekday(in: lower, calendar: cal, from: now) {
-            dayBase = target
+        let explicit = explicitCivilDay(in: lower, calendar: cal, now: now)
+        if explicit.mentioned && explicit.date == nil { return nil }
+        var dayBase = explicit.date
+        let marker = dayMarker(in: lower) ?? ""
+        if dayBase == nil {
+            if marker.hasPrefix("pasado ") {
+                dayBase = cal.date(byAdding: .day, value: 2, to: now)
+            } else if marker == "mañana" || marker == "manana" {
+                dayBase = cal.date(byAdding: .day, value: 1, to: now)
+            } else if let target = nextWeekday(in: lower, calendar: cal, from: now) {
+                dayBase = target
+            } else if marker == "hoy" || lower.range(of: #"\b(?:esta|en la|por la|de la) (?:ma[ñn]ana|tarde|noche)\b"#, options: .regularExpression) != nil
+                        || defaultHourForTimeframe(in: lower) != nil {
+                dayBase = now
+            }
         }
 
         // Hora explícita
@@ -4119,7 +4159,8 @@ enum NovaResponder {
         var base = dayBase ?? now
         if let (h, m) = hm {
             let start = cal.startOfDay(for: base)
-            base = cal.date(bySettingHour: h, minute: m, second: 0, of: start) ?? start
+            guard let resolved = NovaTimeFormatter.civilDate(on: start, hour: h, minute: m, calendar: cal) else { return nil }
+            base = resolved
             // Política Mi Día (user spec 2026-05-27): si NO se dio día
             // explícito, mantenemos HOY aunque la hora ya haya pasado.
             // "dentista a las 9" a las 17:00 → hoy 09:00 (en pasado),
@@ -4138,12 +4179,12 @@ enum NovaResponder {
         // a 09:00 (mañana) — al revés de lo que dijo el usuario.
         if let (h, m) = defaultHourForTimeframe(in: lower) {
             let start = cal.startOfDay(for: base)
-            return cal.date(bySettingHour: h, minute: m, second: 0, of: start) ?? start
+            return NovaTimeFormatter.civilDate(on: start, hour: h, minute: m, calendar: cal)
         }
         // Día sin franja → 9:00 (placeholder; el caller debería detectarlo
         // como "necesita hora" vía `isAtDayDefault`).
         let start = cal.startOfDay(for: base)
-        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: start)
+        return NovaTimeFormatter.civilDate(on: start, hour: 9, minute: 0, calendar: cal)
     }
 
     /// Default hour para franjas horarias coloquiales cuando el usuario NO
@@ -4764,6 +4805,9 @@ enum NovaResponder {
 
         // 2. Confirmación afirmativa.
         if isPendingConfirm(lower) {
+            if pending.missingFields.contains(.date) {
+                return .smallTalk(reply: pending.questionAsked ?? "¿Para qué día lo quieres?")
+            }
             return completePendingAsEvent(
                 pending: pending,
                 when: pending.proposedDate,
@@ -4822,7 +4866,7 @@ enum NovaResponder {
         timeWasExplicit: Bool,
         pendingDate: Date?
     ) -> Date? {
-        let cal = Calendar.current
+        let cal = referenceCalendar
         // Caso fácil: input trae día+hora explícitos → usar input tal cual.
         if dayWasExplicit && timeWasExplicit, let extracted {
             return extracted
@@ -4833,7 +4877,7 @@ enum NovaResponder {
             let h = cal.component(.hour, from: extracted)
             let m = cal.component(.minute, from: extracted)
             let baseDay = cal.startOfDay(for: pendingDate)
-            return cal.date(bySettingHour: h, minute: m, second: 0, of: baseDay)
+            return NovaTimeFormatter.civilDate(on: baseDay, hour: h, minute: m, calendar: cal)
         }
         // Solo hora, sin pending → usar `extracted` (será hoy + h:m).
         if timeWasExplicit, let extracted {
@@ -4844,7 +4888,7 @@ enum NovaResponder {
             let h = cal.component(.hour, from: pendingDate)
             let m = cal.component(.minute, from: pendingDate)
             let baseDay = cal.startOfDay(for: extracted)
-            return cal.date(bySettingHour: h, minute: m, second: 0, of: baseDay)
+            return NovaTimeFormatter.civilDate(on: baseDay, hour: h, minute: m, calendar: cal)
         }
         // Solo día, sin pending o pending sin hora → devolver día (con 9:00
         // default que viene de extractDateTime). Caller decidirá si pide hora.
@@ -4855,26 +4899,13 @@ enum NovaResponder {
         return extracted
     }
 
-    /// True cuando el pending ya tenía una hora "real" (no el 9:00 default
-    /// que devuelve `extractDateTime` cuando solo había día).
+    /// Missing-field metadata distinguishes a requested 09:00 from a default.
     private static func pendingHadTime(pending: PendingClarification) -> Bool {
-        guard let date = pending.proposedDate else { return false }
-        // Si proposedDate tiene hora distinta de 9:00 exacto, asumimos
-        // que es una hora real (no el default).
-        let cal = Calendar.current
-        let h = cal.component(.hour, from: date)
-        let m = cal.component(.minute, from: date)
-        return !(h == 9 && m == 0)
+        pending.proposedDate != nil && !pending.missingFields.contains(.time)
     }
 
-    /// True si el input incluye día explícito (hoy/mañana/pasado mañana/
-    /// día de la semana).
-    private static func hasExplicitDayMarker(_ lower: String) -> Bool {
-        if lower.range(of: #"\bma(ñ|n)ana\b"#, options: .regularExpression) != nil { return true }
-        if lower.contains("hoy") { return true }
-        if lower.contains("pasado mañana") || lower.contains("pasado manana") { return true }
-        if nextWeekday(in: lower, calendar: .current, from: Date()) != nil { return true }
-        return false
+    static func hasExplicitDayMarker(_ lower: String) -> Bool {
+        dayMarker(in: lower) != nil
     }
 
     /// True si el input parece arrancar una nueva acción (no completar el
@@ -5037,11 +5068,14 @@ final class FocusDataStore: ObservableObject {
     private var outbox = FocusSyncOutbox()
     private var recoveryEventIDs: [UUID: UUID] = [:]
     private var recoveryTaskIDs: [UUID: UUID] = [:]
+    private var novaAppliedActionIDs: Set<String> = []
+    private var currentNovaActionID: String?
     private var syncTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
     private var retryAttempt = 0
     private let syncTransport: FocusSyncTransport
     private let schedulesNotifications: Bool
+    private let novaTransport: (NovaService.Request) async throws -> NovaService.Result
     @Published private(set) var pendingSyncCount = 0
     @Published private(set) var localSaveError: String?
     @Published private(set) var notificationPermissionDenied = false
@@ -5072,8 +5106,10 @@ final class FocusDataStore: ObservableObject {
     @Published private(set) var pendingDeleteEventIds: Set<UUID>
     @Published private(set) var pendingDeleteTaskIds: Set<UUID>
 
-    init(syncTransport: FocusSyncTransport = .live, restoreAccount: Bool = true, schedulesNotifications: Bool = true) {
+    init(syncTransport: FocusSyncTransport = .live, restoreAccount: Bool = true, schedulesNotifications: Bool = true,
+         novaTransport: @escaping (NovaService.Request) async throws -> NovaService.Result = NovaService.send) {
         self.syncTransport = syncTransport
+        self.novaTransport = novaTransport
         self.schedulesNotifications = schedulesNotifications
         var shouldRestore = restoreAccount
         #if DEBUG
@@ -5092,6 +5128,7 @@ final class FocusDataStore: ObservableObject {
         self.outbox = snapshot?.outbox ?? FocusSyncOutbox()
         self.recoveryEventIDs = snapshot?.recoveryEventIDs ?? [:]
         self.recoveryTaskIDs = snapshot?.recoveryTaskIDs ?? [:]
+        self.novaAppliedActionIDs = snapshot?.novaAppliedActionIDs ?? []
         self.pendingSyncCount = self.outbox.mutations.count
 
         // Sugerencias: NO pre-seedeamos demo en el store. Las demos viven
@@ -5452,6 +5489,7 @@ final class FocusDataStore: ObservableObject {
         outbox = snapshot?.outbox ?? FocusSyncOutbox()
         recoveryEventIDs = snapshot?.recoveryEventIDs ?? [:]
         recoveryTaskIDs = snapshot?.recoveryTaskIDs ?? [:]
+        novaAppliedActionIDs = snapshot?.novaAppliedActionIDs ?? []
         pendingSyncCount = outbox.mutations.count
         pendingDeleteEventIds = Set(outbox.mutations.filter { $0.entity == .event && $0.operation == .delete }.map(\.id))
         pendingDeleteTaskIds = Set(outbox.mutations.filter { $0.entity == .task && $0.operation == .delete }.map(\.id))
@@ -5614,7 +5652,7 @@ final class FocusDataStore: ObservableObject {
 
     @discardableResult
     private func persistSyncSnapshot() -> Bool {
-        let saved = FocusLocalStore.saveSync(FocusSyncSnapshot(events: events, tasks: tasks, outbox: outbox, recoveryEventIDs: recoveryEventIDs, recoveryTaskIDs: recoveryTaskIDs), forKey: .syncSnapshot)
+        let saved = FocusLocalStore.saveSync(FocusSyncSnapshot(events: events, tasks: tasks, outbox: outbox, recoveryEventIDs: recoveryEventIDs, recoveryTaskIDs: recoveryTaskIDs, novaAppliedActionIDs: novaAppliedActionIDs), forKey: .syncSnapshot)
         localSaveError = saved ? nil : "No pudimos guardar el cambio. Revisa el espacio disponible en tu iPhone e inténtalo de nuevo."
         if let localSaveError { syncState = .error(localSaveError) }
         return saved
@@ -5770,14 +5808,16 @@ final class FocusDataStore: ObservableObject {
     /// Mutations become visible as successful only after their data and outbox
     /// are atomically on disk. A failed write restores the previous UI state.
     private func commitLocalMutation(_ mutation: () -> Void) -> Bool {
-        let previous = FocusSyncSnapshot(events: events, tasks: tasks, outbox: outbox, recoveryEventIDs: recoveryEventIDs, recoveryTaskIDs: recoveryTaskIDs)
+        let previous = FocusSyncSnapshot(events: events, tasks: tasks, outbox: outbox, recoveryEventIDs: recoveryEventIDs, recoveryTaskIDs: recoveryTaskIDs, novaAppliedActionIDs: novaAppliedActionIDs)
         mutation()
+        if let currentNovaActionID { novaAppliedActionIDs.insert(currentNovaActionID) }
         guard persistSyncSnapshot() else {
             events = previous.events
             tasks = previous.tasks
             outbox = previous.outbox
             recoveryEventIDs = previous.recoveryEventIDs ?? [:]
             recoveryTaskIDs = previous.recoveryTaskIDs ?? [:]
+            novaAppliedActionIDs = previous.novaAppliedActionIDs ?? []
             refreshPendingDeletes()
             HapticManager.shared.warning()
             return false
@@ -6231,7 +6271,8 @@ final class FocusDataStore: ObservableObject {
     /// - `unsupported(typeName)` queda registrado en `ignored`.
     func applyBackendActions(
         _ actions: [BackendAction],
-        userText: String
+        userText: String,
+        actionIDs: [String] = []
     ) -> NovaApplyOutcome {
         var outcome = NovaApplyOutcome()
         let validation = NovaActionValidator.validate(actions: actions, userText: userText)
@@ -6241,16 +6282,25 @@ final class FocusDataStore: ObservableObject {
         }
         // Validate all references before the first mutation, so a stale proposal
         // cannot leave half an edit/delete batch applied.
-        for action in actions {
+        for (index, action) in actions.enumerated() {
+            if actionIDs.indices.contains(index), novaAppliedActionIDs.contains(actionIDs[index]) { continue }
             switch action {
             case .editEvent(let raw, _), .deleteEvent(let raw):
-                guard let id = parseEventId(raw), events.contains(where: { $0.id == id }) else {
+                guard let id = parseEventId(raw), var event = events.first(where: { $0.id == id }) else {
                     outcome.ignored = ["event_not_found"]
                     return outcome
                 }
-            case .toggleTask(let raw), .deleteTask(let raw):
-                guard let id = parseEventId(raw), tasks.contains(where: { $0.id == id }) else {
+                if case .editEvent(_, let updates) = action, !applyUpdates(updates, to: &event) {
+                    outcome.ignored = ["invalid_event_update"]
+                    return outcome
+                }
+            case .toggleTask(let raw), .deleteTask(let raw), .completeTask(let raw, _), .editTask(let raw, _):
+                guard let id = parseEventId(raw), var task = tasks.first(where: { $0.id == id }) else {
                     outcome.ignored = ["task_not_found"]
+                    return outcome
+                }
+                if case .editTask(_, let updates) = action, !applyTaskUpdates(updates, to: &task) {
+                    outcome.ignored = ["invalid_task_update"]
                     return outcome
                 }
             default: break
@@ -6270,7 +6320,21 @@ final class FocusDataStore: ObservableObject {
         }
         let isMultiEventBatch = creationCount > 1
 
-        actionLoop: for action in actions {
+        actionLoop: for (index, action) in actions.enumerated() {
+            let receipt = actionIDs.indices.contains(index) ? actionIDs[index] : nil
+            if let receipt, novaAppliedActionIDs.contains(receipt) {
+                outcome.summary = outcome.summary ?? "Esos cambios ya estaban aplicados."
+                continue
+            }
+            // Entity and recurring-series writes commit the receipt in the same
+            // atomic snapshot as their complete data and outbox mutations.
+            switch action {
+            case .addEvent, .addRecurringEvent, .editEvent, .deleteEvent, .addTask, .editTask, .completeTask, .toggleTask, .deleteTask:
+                currentNovaActionID = receipt
+            default: currentNovaActionID = nil
+            }
+            defer { currentNovaActionID = nil }
+            let ignoredBefore = outcome.ignored.count
             switch action {
             case .addEvent(let payload):
                 // Gate: si el usuario NO mencionó hora alguna en su texto
@@ -6304,6 +6368,11 @@ final class FocusDataStore: ObservableObject {
                         }
                         outcome.ignored.append("add_event(no_time_tasks_disabled)")
                     } else if let task = makeTaskFromTimelessEventPayload(payload) {
+                        if tasks.contains(where: { !$0.done && NovaResponder.normalizeForFuzzy($0.title) == NovaResponder.normalizeForFuzzy(task.title) && $0.dueDate == task.dueDate }) {
+                            outcome.summary = "Ya tenías «\(task.title)» en tus pendientes."
+                            outcome.ignored.append("add_event(duplicate_task)")
+                            continue
+                        }
                         guard addTask(task) else {
                             outcome.ignored.append("persistence_failed")
                             break actionLoop
@@ -6334,12 +6403,15 @@ final class FocusDataStore: ObservableObject {
                     // expandimos local detectando recurrence en userText.
                     // Cubre caso del usuario 2026-05-26: "todos los lunes
                     // tengo clases" creaba solo 1 evento. Ahora N (12 weekly).
-                    let created = expandRecurringEvent(
+                    guard let created = expandRecurringEvent(
                         payload: payload,
                         recurrence: backendRecur,
                         userText: userText,
                         isMultiEventBatch: isMultiEventBatch
-                    )
+                    ) else {
+                        outcome.ignored.append(localSaveError == nil ? "invalid_recurrence" : "persistence_failed")
+                        break actionLoop
+                    }
                     if !created.isEmpty {
                         outcome.didMutate = true
                         outcome.summary = "Listo. Te dejé «\(payload.title)» todos \(localRecurrence.label) (\(created.count) próximas)."
@@ -6358,7 +6430,7 @@ final class FocusDataStore: ObservableObject {
                             )
                         }
                     } else {
-                        outcome.ignored.append("add_event(recurrence_expand_failed)")
+                        outcome.summary = "Ya tenías esas ocurrencias en tu agenda."
                     }
                 } else if let event = makeEvent(from: payload, userText: userText, isMultiEventBatch: isMultiEventBatch) {
                     // Anti-duplicado en el path del backend. El local path
@@ -6397,7 +6469,10 @@ final class FocusDataStore: ObservableObject {
                 }
 
             case .addRecurringEvent(let payload, let recurrence):
-                let created = expandRecurringEvent(payload: payload, recurrence: recurrence, userText: userText, isMultiEventBatch: isMultiEventBatch)
+                guard let created = expandRecurringEvent(payload: payload, recurrence: recurrence, userText: userText, isMultiEventBatch: isMultiEventBatch) else {
+                    outcome.ignored.append(localSaveError == nil ? "invalid_recurrence" : "persistence_failed")
+                    break actionLoop
+                }
                 if !created.isEmpty {
                     outcome.didMutate = true
                     outcome.summary = "Agendé \(created.count) instancia\(created.count == 1 ? "" : "s") de «\(payload.title)»."
@@ -6412,7 +6487,7 @@ final class FocusDataStore: ObservableObject {
                         eventId: created.first?.id
                     )
                 } else {
-                    outcome.ignored.append("add_recurring_event(empty)")
+                    outcome.summary = "Ya tenías esas ocurrencias en tu agenda."
                 }
 
             case .editEvent(let idString, let updates):
@@ -6421,7 +6496,10 @@ final class FocusDataStore: ObservableObject {
                     outcome.ignored.append("edit_event(id_not_found)")
                     continue
                 }
-                applyUpdates(updates, to: &event)
+                guard applyUpdates(updates, to: &event) else {
+                    outcome.ignored.append("edit_event(invalid_time)")
+                    break actionLoop
+                }
                 guard updateEvent(event) else {
                     outcome.ignored.append("persistence_failed")
                     break actionLoop
@@ -6487,6 +6565,22 @@ final class FocusDataStore: ObservableObject {
                     outcome.ignored.append("add_task(invalid)")
                 }
 
+            case .completeTask(let idString, let done):
+                guard let id = parseEventId(idString), var task = tasks.first(where: { $0.id == id }) else { continue }
+                task.done = done
+                task.doneAt = done ? (task.doneAt ?? Date()) : nil
+                guard updateTask(task) else { outcome.ignored.append("persistence_failed"); break actionLoop }
+                outcome.didMutate = true
+                outcome.summary = done ? "Completé «\(task.title)»." : "«\(task.title)» vuelve a estar pendiente."
+                outcome.primaryTaskId = id
+
+            case .editTask(let idString, let updates):
+                guard let id = parseEventId(idString), var task = tasks.first(where: { $0.id == id }), applyTaskUpdates(updates, to: &task) else { continue }
+                guard updateTask(task) else { outcome.ignored.append("persistence_failed"); break actionLoop }
+                outcome.didMutate = true
+                outcome.summary = "Actualicé «\(task.title)»."
+                outcome.primaryTaskId = id
+
             case .toggleTask(let idString):
                 guard let id = parseEventId(idString),
                       tasks.contains(where: { $0.id == id }) else {
@@ -6536,6 +6630,10 @@ final class FocusDataStore: ObservableObject {
                     confidence: 0.95,
                     source: "llm_openai"
                 ))
+                guard NovaMemoryStore.shared.lastPersistenceSucceeded else {
+                    outcome.ignored.append("memory_persistence_failed")
+                    break actionLoop
+                }
                 outcome.didMutate = true
                 // Si el backend ya armó un userConfirmationText (reply),
                 // ese gana — usamos solo summary genérico como fallback.
@@ -6549,6 +6647,10 @@ final class FocusDataStore: ObservableObject {
                 // V2: el user pidió olvidar algo. "__all__" = clear total.
                 if key == "__all__" {
                     NovaMemoryStore.shared.clearAll()
+                    guard NovaMemoryStore.shared.lastPersistenceSucceeded else {
+                        outcome.ignored.append("memory_persistence_failed")
+                        break actionLoop
+                    }
                     outcome.didMutate = true
                     if (outcome.summary ?? "").isEmpty {
                         outcome.summary = "Listo, borré todas las memorias."
@@ -6556,7 +6658,13 @@ final class FocusDataStore: ObservableObject {
                 } else {
                     let matches = NovaMemoryStore.shared.allActiveMemoriesHuman(maxEntries: 100)
                         .filter { $0.text.lowercased().contains(key.lowercased()) }
-                    for m in matches { NovaMemoryStore.shared.deactivate(id: m.id) }
+                    for m in matches {
+                        NovaMemoryStore.shared.deactivate(id: m.id)
+                        if !NovaMemoryStore.shared.lastPersistenceSucceeded {
+                            outcome.ignored.append("memory_persistence_failed")
+                            break actionLoop
+                        }
+                    }
                     outcome.didMutate = outcome.didMutate || !matches.isEmpty
                     if (outcome.summary ?? "").isEmpty {
                         outcome.summary = matches.isEmpty
@@ -6567,6 +6675,14 @@ final class FocusDataStore: ObservableObject {
 
             case .unsupported(let typeName):
                 outcome.ignored.append("unsupported(\(typeName))")
+            }
+            if let receipt, outcome.ignored.count == ignoredBefore, !novaAppliedActionIDs.contains(receipt) {
+                novaAppliedActionIDs.insert(receipt)
+                if !persistSyncSnapshot() {
+                    novaAppliedActionIDs.remove(receipt)
+                    outcome.ignored.append("receipt_persistence_failed")
+                    break actionLoop
+                }
             }
         }
 
@@ -6654,8 +6770,7 @@ final class FocusDataStore: ObservableObject {
     private func makeEvent(
         from payload: BackendEventCreate,
         userText: String,
-        isMultiEventBatch: Bool = false,
-        allowPastRollForward: Bool = true
+        isMultiEventBatch: Bool = false
     ) -> FocusEvent? {
         // PASO 1: Limpiar título via normalizer (centralizado).
         // El backend puede devolver "Acuérdame buscar a Juan" sin limpiar
@@ -6677,7 +6792,7 @@ final class FocusDataStore: ObservableObject {
         guard !cleanedTitle.isEmpty else { return nil }
 
         let cal = Calendar.current
-        guard var startTime = NovaTimeFormatter.resolveDate(
+        guard let startTime = NovaTimeFormatter.resolveDate(
             dateString: payload.dateString,
             timeString: payload.timeString
         ) else { return nil }
@@ -6734,25 +6849,8 @@ final class FocusDataStore: ObservableObject {
             explicitEnd = end
         }
 
-        // PASO 3.5 (fix chat→Mi Día 2026-08-10): nunca crear en el pasado
-        // silenciosamente. El backend suele mandar dateString = HOY aunque
-        // la hora del usuario ya haya pasado ("remedios a las 8" a las 21h
-        // → hoy 08:00) y el recordatorio nacía vencido/oculto en Mi Día.
-        // Mismo roll-forward que el path local (hoy PM si alcanza, si no
-        // mañana), gateado en que el usuario NO haya anclado el día. En
-        // expansión recurrente se desactiva (`allowPastRollForward=false`):
-        // mover la primera ocurrencia duplicaría la del día siguiente.
-        if allowPastRollForward {
-            let rolled = NovaActionNormalizer.resolveNonPastStartTime(
-                startTime: startTime, userText: userText
-            )
-            if rolled.didRollForward {
-                explicitEnd = explicitEnd?.addingTimeInterval(
-                    rolled.startTime.timeIntervalSince(startTime)
-                )
-                startTime = rolled.startTime
-            }
-        }
+        // The validated plan owns its civil date. Never move an explicit
+        // backend date to another day or change AM to PM during persistence.
 
         // PASO 4: Sección. Si isReminder → .reminder. Si no, primero icon
         // del backend, luego heurística sobre el TÍTULO LIMPIO.
@@ -6920,7 +7018,7 @@ final class FocusDataStore: ObservableObject {
         let cleanedTitle = NovaActionNormalizer.cleanTitle(rawLabel)
         guard !cleanedTitle.isEmpty else { return nil }
         let priority = TaskPriority.fromBackendLabel(payload.priority)
-        let dueDate = payload.dateString.flatMap(NovaTimeFormatter.parseISODate).map { Calendar.current.startOfDay(for: $0) }
+        let dueDate = payload.dateString.flatMap { NovaTimeFormatter.parseISODate($0) }.map { Calendar.current.startOfDay(for: $0) }
         let category: TaskCategory = dueDate.map { Calendar.current.isDateInToday($0) ? .hoy : .semana }
             ?? TaskCategory.fromBackendLabel(payload.category)
         let linkedEventId = payload.linkedEventId.flatMap(parseEventId(_:))
@@ -6938,48 +7036,68 @@ final class FocusDataStore: ObservableObject {
 
     /// Aplica updates parciales a un evento. Solo toca los campos
     /// presentes en `BackendEventUpdates`.
-    private func applyUpdates(_ updates: BackendEventUpdates, to event: inout FocusEvent) {
+    private func applyTaskUpdates(_ updates: BackendTaskUpdates, to task: inout FocusTask) -> Bool {
+        guard updates.label != nil || updates.date != nil || updates.time != nil || updates.priority != nil
+            || updates.done != nil || updates.clearsDate || updates.clearsTime else { return false }
+        if let label = updates.label {
+            let title = label.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty, title.count <= 160 else { return false }
+            task.title = title
+        }
+        if updates.clearsDate { task.dueDate = nil; task.dueTime = nil }
+        if let date = updates.date {
+            guard let parsed = NovaTimeFormatter.parseISODate(date) else { return false }
+            task.dueDate = parsed
+        }
+        if updates.clearsTime { task.dueTime = nil }
+        if let time = updates.time {
+            guard let day = task.dueDate,
+                  let parsed = NovaTimeFormatter.resolveDate(dateString: NovaTimeFormatter.formatISODate(from: day), timeString: time) else { return false }
+            task.dueTime = parsed
+        } else if updates.date != nil, let oldTime = task.dueTime, let day = task.dueDate {
+            guard let moved = NovaTimeFormatter.resolveDate(dateString: NovaTimeFormatter.formatISODate(from: day), timeString: NovaTimeFormatter.formatHourMinute(from: oldTime)) else { return false }
+            task.dueTime = moved
+        }
+        if let priority = updates.priority {
+            guard ["alta", "media", "baja", "high", "medium", "low"].contains(priority.lowercased()) else { return false }
+            task.priority = .fromBackendLabel(priority)
+        }
+        if let done = updates.done { task.done = done; task.doneAt = done ? (task.doneAt ?? Date()) : nil }
+        return true
+    }
+
+    private func applyUpdates(_ updates: BackendEventUpdates, to event: inout FocusEvent) -> Bool {
+        guard updates.title != nil || updates.dateString != nil || updates.timeString != nil
+            || updates.endTimeString != nil || updates.location != nil || updates.reminderOffsets != nil
+            || updates.subtitle != nil else { return false }
+        if let title = updates.title, title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
         if let newTitle = updates.title?.trimmingCharacters(in: .whitespacesAndNewlines),
            !newTitle.isEmpty {
             event.title = newTitle
         }
-        let cal = Calendar.current
-        // Si hay date o time nuevos, recomponemos el startTime conservando
-        // los que NO vinieron.
-        if updates.dateString != nil || updates.timeString != nil {
-            let baseDate = updates.dateString.flatMap(NovaTimeFormatter.parseISODate)
-                ?? cal.startOfDay(for: event.startTime)
-            let (h, m): (Int, Int) = {
-                if let parsed = NovaTimeFormatter.parseHourMinute(updates.timeString) {
-                    return parsed
-                }
-                return (cal.component(.hour, from: event.startTime),
-                        cal.component(.minute, from: event.startTime))
-            }()
-            if let newStart = cal.date(bySettingHour: h, minute: m, second: 0, of: baseDate) {
-                event.startTime = newStart
-                // Si había rango explícito (no inferred), trasladar endTime
-                // manteniendo la duración.
-                if let oldEnd = event.endTime, event.inferredDuration != true {
-                    let delta = oldEnd.timeIntervalSince(event.startTime)
-                    event.endTime = newStart.addingTimeInterval(delta)
-                } else {
-                    // Recordatorio o duración inferida → 5 min después
-                    event.endTime = cal.date(byAdding: .minute, value: 5, to: newStart)
-                }
+        let cal = NovaTimeFormatter.calendar()
+        if updates.dateString != nil || updates.timeString != nil || updates.endTimeString != nil {
+            let date = updates.dateString ?? NovaTimeFormatter.formatISODate(from: event.startTime)
+            let time = updates.timeString ?? NovaTimeFormatter.formatHourMinute(from: event.startTime)
+            guard let newStart = NovaTimeFormatter.resolveDate(dateString: date, timeString: time) else { return false }
+            let oldStart = event.startTime
+            if let end = updates.endTimeString {
+                guard let newEnd = NovaTimeFormatter.resolveDate(dateString: date, timeString: end), newEnd > newStart else { return false }
+                event.endTime = newEnd
+                event.inferredDuration = false
+            } else if let oldEnd = event.endTime, event.inferredDuration != true {
+                let duration = oldEnd.timeIntervalSince(oldStart)
+                guard duration > 0 else { return false }
+                event.endTime = newStart.addingTimeInterval(duration)
+            } else {
+                event.endTime = cal.date(byAdding: .minute, value: 5, to: newStart)
             }
+            event.startTime = newStart
         }
-        if let newEnd = NovaTimeFormatter.resolveDate(
-            dateString: updates.dateString ?? NovaTimeFormatter.formatISODate(from: event.startTime),
-            timeString: updates.endTimeString
-        ), updates.endTimeString != nil, newEnd > event.startTime {
-            event.endTime = newEnd
-            event.inferredDuration = false
+        if let loc = updates.location?.trimmingCharacters(in: .whitespacesAndNewlines) {
+            event.location = loc.isEmpty ? nil : loc
         }
-        if let loc = updates.location?.trimmingCharacters(in: .whitespacesAndNewlines), !loc.isEmpty {
-            event.location = loc
-        }
-        if let newOffsets = updates.reminderOffsets, !newOffsets.isEmpty {
+        if let newOffsets = updates.reminderOffsets {
             event.reminderOffsets = newOffsets
             // Si el update trae notes paralelas, las preservamos. Si no, dejamos
             // las viejas (puede que el backend solo actualice offsets sin tocar
@@ -6993,6 +7111,7 @@ final class FocusDataStore: ObservableObject {
         if let newSubtitle = updates.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines) {
             event.subtitle = newSubtitle.isEmpty ? nil : newSubtitle
         }
+        return true
     }
 
     /// Expande un `add_recurring_event` a N `addEvent` locales. Conservador:
@@ -7058,99 +7177,86 @@ final class FocusDataStore: ObservableObject {
         }
     }
 
+    /// Prepare every occurrence before a single durable commit. No partial
+    /// series or completed receipt can survive a rejected date or disk write.
     private func expandRecurringEvent(
         payload: BackendEventCreate,
         recurrence: BackendRecurrence,
         userText: String,
         isMultiEventBatch: Bool = false
-    ) -> [FocusEvent] {
-        let cal = Calendar.current
+    ) -> [FocusEvent]? {
+        let cal = NovaTimeFormatter.calendar()
         guard let firstStart = NovaTimeFormatter.resolveDate(
             dateString: recurrence.startDate ?? payload.dateString,
             timeString: payload.timeString
-        ) else { return [] }
-
+        ) else { return nil }
         let pattern = recurrence.pattern.lowercased()
         let limit: Int
         let stride: Int
-
-        // Caps ampliados 2026-05-26: "todos los lunes" debe cubrir semestre.
         switch pattern {
-        case "daily":
-            limit = min(recurrence.count ?? 30, 60)
-            stride = 1
-        case "weekdays":
-            limit = min(recurrence.count ?? 44, 60)  // ~2 meses laborales
-            stride = 1
-        case "weekly":
-            limit = min(recurrence.count ?? 26, 52)  // semestre o más
-            stride = 7
-        default:
-            return []
+        case "daily": limit = min(recurrence.count ?? 30, 60); stride = 1
+        case "weekdays": limit = min(recurrence.count ?? 44, 60); stride = 1
+        case "weekly": limit = min(recurrence.count ?? 26, 52); stride = 7
+        default: return nil
         }
-
-        var created: [FocusEvent] = []
+        guard limit > 0 else { return nil }
         var current = firstStart
-        var added = 0
+        if pattern == "weekly", let target = recurrence.weekday {
+            guard (0...6).contains(target) else { return nil }
+            let offset = (target + 1 - cal.component(.weekday, from: current) + 7) % 7
+            guard let aligned = cal.date(byAdding: .day, value: offset, to: current) else { return nil }
+            current = aligned
+        }
+        var planned: [FocusEvent] = []
         var safety = 0
-        while added < limit && safety < 200 {
+        while planned.count < limit && safety < 200 {
             safety += 1
             let weekday = cal.component(.weekday, from: current)
-            let isWeekend = (weekday == 1 || weekday == 7)
-            let shouldCreate: Bool
-            switch pattern {
-            case "weekdays":
-                shouldCreate = !isWeekend
-            case "weekly":
-                if let target = recurrence.weekday {
-                    let targetSwiftWeekday = (target % 7) + 1   // 0=dom backend → 1=dom Swift
-                    shouldCreate = weekday == targetSwiftWeekday
-                } else {
-                    shouldCreate = true
-                }
-            default:
-                shouldCreate = true
+            if pattern != "weekdays" || (weekday != 1 && weekday != 7) {
+                let single = BackendEventCreate(title: payload.title, timeString: payload.timeString,
+                    endTimeString: payload.endTimeString, dateString: NovaTimeFormatter.formatISODate(from: current),
+                    section: payload.section, icon: payload.icon, reminderOffsets: payload.reminderOffsets,
+                    reminderNotes: payload.reminderNotes, location: payload.location, notes: payload.notes, subtitle: payload.subtitle)
+                guard let event = makeEvent(from: single, userText: userText,
+                    isMultiEventBatch: isMultiEventBatch) else { return nil }
+                planned.append(event)
             }
-
-            if shouldCreate {
-                let single = BackendEventCreate(
-                    title: payload.title,
-                    timeString: payload.timeString,
-                    endTimeString: payload.endTimeString,
-                    dateString: NovaTimeFormatter.formatISODate(from: current),
-                    section: payload.section,
-                    icon: payload.icon,
-                    reminderOffsets: payload.reminderOffsets,
-                    reminderNotes: payload.reminderNotes,
-                    location: payload.location,
-                    notes: payload.notes,
-                    subtitle: payload.subtitle
-                )
-                if let event = makeEvent(
-                    from: single,
-                    userText: userText,
-                    isMultiEventBatch: isMultiEventBatch,
-                    // Serie recurrente: cada ocurrencia se ancla a SU fecha
-                    // del patrón; roll-forward acá duplicaría la del día
-                    // siguiente cuando la primera ya pasó.
-                    allowPastRollForward: false
-                ) {
-                    if NovaActionNormalizer.isLikelyDuplicate(title: event.title, startTime: event.startTime, existingEvents: events) {
-                        added += 1
-                        current = cal.date(byAdding: .day, value: stride, to: current) ?? current
-                        continue
-                    }
-                    guard addEvent(event) else { break }
-                    created.append(event)
-                    added += 1
-                }
+            if planned.count < limit {
+                guard let next = cal.date(byAdding: .day, value: stride, to: current) else { return nil }
+                current = next
             }
-
-            // Avanzar al siguiente candidato.
-            guard let next = cal.date(byAdding: .day, value: stride, to: current) else { break }
-            current = next
         }
-        return created
+        guard planned.count == limit else { return nil }
+        return commitPreparedNovaEvents(planned)
+    }
+
+    /// The same transaction is used for local and remote recurring creations.
+    private func commitPreparedNovaEvents(_ planned: [FocusEvent]) -> [FocusEvent]? {
+        var newEvents: [FocusEvent] = []
+        for event in planned {
+            if !NovaActionNormalizer.isLikelyDuplicate(title: event.title, startTime: event.startTime,
+                                                       existingEvents: events + newEvents) {
+                newEvents.append(event)
+            }
+        }
+        guard commitLocalMutation({
+            events.append(contentsOf: newEvents)
+            events.sort { $0.startTime < $1.startTime }
+            for event in newEvents { enqueueSync(.event, id: event.id, operation: .upsert) }
+        }) else { return nil }
+        if !newEvents.isEmpty {
+            FocusTelemetry.recordFirstItem()
+            if newEvents.contains(where: { $0.isReminder == true || !($0.reminderOffsets?.isEmpty ?? true) }) {
+                FocusTelemetry.record(.reminderCreated)
+            }
+            requestSync()
+            resyncAllLocalNotifications()
+            HapticManager.shared.success()
+            if settings.novaMemoryEnabled {
+                for title in Set(newEvents.map(\.title)) { NovaMemoryStore.shared.passivelyLearnFromEvent(title: title) }
+            }
+        }
+        return newEvents
     }
 
     /// Mapeo conservador del `icon` del backend a `EventSection`.
@@ -7205,6 +7311,33 @@ final class FocusDataStore: ObservableObject {
         fileprivate let localIntents: [NovaIntent]
         fileprivate let userText: String
         fileprivate let generation: UUID
+        fileprivate var reviewedEvents: [FocusEvent] = []
+        fileprivate var reviewedTasks: [FocusTask] = []
+        fileprivate var localDeletionActions: [Int: BackendAction] = [:]
+        fileprivate var actionIDs: [String] = []
+        fileprivate var reviewedMemories: [NovaMemory]? = nil
+        fileprivate var reviewedPlan: [ProposedTaskAction]? = nil
+    }
+
+    private struct PendingNovaRequest: Codable {
+        let id: UUID
+        let textDigest: String
+        let createdAt: Date
+    }
+    private var lastNovaSubmission: (text: String, timestamp: Date)?
+
+    /// Retry identity contains no extra copy of a prompt and is scoped by the
+    /// same local partition as the user's conversation and data.
+    func prepareNovaRequestID(for text: String) -> UUID? {
+        let digest = SHA256.hash(data: Data(text.trimmingCharacters(in: .whitespacesAndNewlines).utf8))
+            .map { String(format: "%02x", $0) }.joined()
+        if let pending = FocusLocalStore.load(PendingNovaRequest.self, forKey: .novaPendingRequest),
+           pending.textDigest == digest, Date().timeIntervalSince(pending.createdAt) < 24 * 60 * 60 {
+            return pending.id
+        }
+        let pending = PendingNovaRequest(id: UUID(), textDigest: digest, createdAt: Date())
+        guard FocusLocalStore.saveSync(pending, forKey: .novaPendingRequest) else { return nil }
+        return pending.id
     }
 
     @Published private(set) var novaPendingProposal: NovaPendingProposal?
@@ -7220,17 +7353,21 @@ final class FocusDataStore: ObservableObject {
         novaPendingProposal = nil
         novaErrorMessage = nil
         novaLastFailedInput = nil
+        lastNovaSubmission = nil
+        currentNovaActionID = nil
+        FocusLocalStore.clear(.novaPendingRequest)
         isNovaTyping = false
     }
 
     func retryNovaMessage() {
         guard let text = novaLastFailedInput else { return }
-        sendNovaMessage(text)
+        sendNovaMessage(text, retrying: true)
     }
 
     func cancelNovaProposal() {
         guard novaPendingProposal != nil else { return }
         novaPendingProposal = nil
+        FocusLocalStore.clear(.novaPendingRequest)
         appendNovaReply("De acuerdo. No apliqué la propuesta.")
     }
 
@@ -7238,11 +7375,24 @@ final class FocusDataStore: ObservableObject {
         guard !isNovaTyping, let proposal = novaPendingProposal else { return }
         novaPendingProposal = nil
         guard proposal.generation == accountGeneration else { return }
-        if proposal.localIntents.isEmpty {
-            executeNovaActions(proposal.actions, userText: proposal.userText)
-        } else {
-            executeLocalNovaIntents(proposal.localIntents, userText: proposal.userText, confirmed: true)
+        if let memories = proposal.reviewedMemories, memories != NovaMemoryStore.shared.activeMemories {
+            failNova("La memoria cambió desde que revisaste la propuesta. Vuelve a pedir el cambio para revisarlo.", input: proposal.userText)
+            return
         }
+        if let plan = proposal.reviewedPlan { novaContext.pendingActionPlan = plan }
+        guard proposal.reviewedEvents.allSatisfy({ reviewed in events.first(where: { $0.id == reviewed.id }) == reviewed }),
+              proposal.reviewedTasks.allSatisfy({ reviewed in tasks.first(where: { $0.id == reviewed.id }) == reviewed }) else {
+            failNova("Los elementos cambiaron desde que revisaste la propuesta. Vuelve a pedir el cambio para confirmar la versión actual.", input: proposal.userText)
+            FocusLocalStore.clear(.novaPendingRequest)
+            return
+        }
+        if proposal.localIntents.isEmpty {
+            executeNovaActions(proposal.actions, userText: proposal.userText, actionIDs: proposal.actionIDs)
+        } else {
+            executeLocalNovaIntents(proposal.localIntents, userText: proposal.userText, confirmed: true,
+                                   frozenDeletions: proposal.localDeletionActions)
+        }
+        if novaErrorMessage == nil { FocusLocalStore.clear(.novaPendingRequest) }
     }
 
     private func appendNovaReply(_ reply: String, actionLabels: [String] = []) {
@@ -7259,7 +7409,9 @@ final class FocusDataStore: ObservableObject {
 
     /// Both capture surfaces use this single execution boundary. A reply is
     /// a plan until its mode, arguments and account snapshot have been checked.
-    func sendNovaMessage(_ text: String) {
+    func sendNovaMessage(_ text: String) { sendNovaMessage(text, retrying: false) }
+
+    private func sendNovaMessage(_ text: String, retrying: Bool) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isNovaTyping else { return }
         guard trimmed.count <= 4000 else {
@@ -7278,6 +7430,13 @@ final class FocusDataStore: ObservableObject {
             }
             novaPendingProposal = nil
         }
+        if !retrying, let last = lastNovaSubmission, last.text == trimmed,
+           Date().timeIntervalSince(last.timestamp) < 0.8 { return }
+        lastNovaSubmission = (trimmed, Date())
+        if let pending = FocusLocalStore.load(PendingNovaRequest.self, forKey: .novaPendingRequest) {
+            let digest = SHA256.hash(data: Data(trimmed.utf8)).map { String(format: "%02x", $0) }.joined()
+            if pending.textDigest != digest { FocusLocalStore.clear(.novaPendingRequest) }
+        }
         novaErrorMessage = nil
         novaLastFailedInput = nil
         FocusTelemetry.record(.novaRequest)
@@ -7288,6 +7447,10 @@ final class FocusDataStore: ObservableObject {
         persistNovaMessages()
         HapticManager.shared.tap()
 
+        if NovaResponder.invalidTemporalInput(trimmed) {
+            appendNovaReply("Esa fecha u hora no es válida o coincide con un cambio de horario. Dime una fecha y hora exactas antes de guardar.")
+            return
+        }
         if NovaActionValidator.requiresLocationTrigger(trimmed) {
             let base = trimmed.replacingOccurrences(of: #"(?i)\s+(?:cuando|al)\s+(?:lleg|sal|volv).*$"#, with: "", options: .regularExpression)
             let title = NovaActionNormalizer.cleanTitle(base)
@@ -7302,16 +7465,26 @@ final class FocusDataStore: ObservableObject {
             appendNovaReply(memoryReply)
             return
         }
+        if NovaMemoryPrivacy.isSensitive(trimmed), !NovaMemoryPrivacy.canRemember(trimmed, userText: trimmed),
+           trimmed.range(of: #"(?i)^(?:.+ es mi .+|mi .+ (?:es|se llama) .+|(?:prefiero|me gusta|no me gusta) .+)$"#, options: .regularExpression) != nil {
+            appendNovaReply("Entendido. No guardaré esa información en tu memoria.")
+            return
+        }
         let expanded = settings.novaMemoryEnabled
             ? NovaMemoryStore.shared.expandAliases(in: trimmed) : trimmed
         let intents = NovaResponder.parseAll(expanded, context: novaContext)
         // Learning a personal fact must not swallow another instruction.
         if settings.novaMemoryEnabled, intents.count == 1,
            !NovaActionNormalizer.userMentionedAnyTimeOfDay(in: trimmed),
-           !trimmed.lowercased().contains(" y "),
-           let learned = NovaMemoryStore.shared.tryLearnFromUserText(trimmed) {
-            appendNovaReply(replyForLearnedMemory(learned))
-            return
+           !trimmed.lowercased().contains(" y ") {
+            if let learned = NovaMemoryStore.shared.tryLearnFromUserText(trimmed) {
+                appendNovaReply(replyForLearnedMemory(learned))
+                return
+            }
+            if !NovaMemoryStore.shared.lastPersistenceSucceeded {
+                failNova("No pude guardar la memoria en este iPhone. Inténtalo de nuevo.", input: trimmed)
+                return
+            }
         }
         if syncCredentials == nil || (!intents.isEmpty && intents.allSatisfy(shouldShortCircuitLocally)) {
             executeLocalNovaIntents(intents, userText: trimmed)
@@ -7332,8 +7505,17 @@ final class FocusDataStore: ObservableObject {
         }.sorted { $0.startTime < $1.startTime }
         let discussedIds = novaContext.freshDiscussedEvents.map(\.eventId)
         let generation = accountGeneration
-        let requestID = UUID()
         guard let credentials = syncCredentials else { return }
+        guard NovaAIConsent.granted else {
+            failNova("Para usar la IA, revisa y acepta cómo se procesan tus mensajes en Ajustes.", input: trimmed)
+            return
+        }
+        guard let requestID = prepareNovaRequestID(for: trimmed) else {
+            failNova("No pude guardar la solicitud en este iPhone. Libera espacio e inténtalo de nuevo.", input: trimmed)
+            return
+        }
+        let sentEvents = Array(contextEvents.prefix(80))
+        let sentTasks = Array(tasks.filter { !$0.done }.prefix(50))
         isNovaTyping = true
         novaRequestID = requestID
         novaRequestTask = Task { [weak self] in
@@ -7346,20 +7528,32 @@ final class FocusDataStore: ObservableObject {
                 }
             }
             do {
-                let result = try await NovaService.send(
-                    message: trimmed, events: Array(contextEvents.prefix(80)),
-                    tasks: Array(self.tasks.filter { !$0.done }.prefix(50)), history: history,
-                    accessToken: credentials.accessToken, surface: .novaChat,
-                    discussedEventIds: discussedIds,
+                let result = try await self.novaTransport(NovaService.Request(
+                    message: trimmed, events: sentEvents,
+                    tasks: sentTasks, history: history,
+                    accessToken: credentials.accessToken,
+                    personality: NovaService.Personality(rawValue: self.settings.novaPersonality.rawValue) ?? .focus,
+                    surface: .novaChat, discussedEventIds: discussedIds,
                     userMemories: self.settings.novaMemoryEnabled
-                        ? NovaMemoryStore.shared.allActiveMemoriesHuman(maxEntries: 20).map { $0.text } : []
-                )
+                        ? NovaMemoryStore.shared.contextForRequest(trimmed) : [], requestID: requestID
+                ))
                 guard !Task.isCancelled, self.accountGeneration == generation,
                       self.novaRequestID == requestID else { return }
+                guard self.novaTargetsUnchanged(result, requestID: requestID, sentEvents: sentEvents, sentTasks: sentTasks) else {
+                    self.failNova("Los elementos cambiaron mientras preparaba la respuesta. Conservé tus cambios; vuelve a pedir la acción para usar la versión actual.", input: trimmed)
+                    FocusLocalStore.clear(.novaPendingRequest)
+                    return
+                }
                 self.receiveNovaResult(result, userText: trimmed)
             } catch {
                 guard !Task.isCancelled, self.accountGeneration == generation,
                       self.novaRequestID == requestID else { return }
+                if let error = error as? NovaServiceError,
+                   case .completedRetryableRequest(let completedID) = error, completedID == requestID {
+                    // Only a verified terminal response releases this identity.
+                    // A fresh paid attempt still requires the user's retry tap.
+                    FocusLocalStore.clear(.novaPendingRequest)
+                }
                 if let error = error as? NovaServiceError, case .offline = error {
                     self.executeLocalNovaIntents(intents, userText: trimmed)
                     self.appendNovaReply("Sin conexión. Los cambios guardados en este iPhone se sincronizarán cuando vuelvas a conectarte.")
@@ -7372,9 +7566,35 @@ final class FocusDataStore: ObservableObject {
         }
     }
 
+    private func novaTargetsUnchanged(_ result: NovaService.Result, requestID: UUID,
+                                      sentEvents: [FocusEvent], sentTasks: [FocusTask]) -> Bool {
+        let actions = result.mode == .proposal ? result.proposedActions : result.actions
+        for (index, action) in actions.enumerated() {
+            if novaAppliedActionIDs.contains(requestID.uuidString.lowercased() + ":" + String(index)) { continue }
+            switch action {
+            case .editEvent(let raw, _), .deleteEvent(let raw):
+                guard let id = UUID(uuidString: raw), let sent = sentEvents.first(where: { $0.id == id }),
+                      events.first(where: { $0.id == id }) == sent else { return false }
+            case .editTask(let raw, _), .completeTask(let raw, _), .toggleTask(let raw), .deleteTask(let raw):
+                guard let id = UUID(uuidString: raw), let sent = sentTasks.first(where: { $0.id == id }),
+                      tasks.first(where: { $0.id == id }) == sent else { return false }
+            default: break
+            }
+        }
+        return true
+    }
+
     func receiveNovaResult(_ result: NovaService.Result, userText: String) {
+        defer {
+            if novaErrorMessage == nil && novaPendingProposal == nil { FocusLocalStore.clear(.novaPendingRequest) }
+        }
         if result.smartActionsBlocked {
             failNova("\(AssistantBrand.displayName) no pudo aplicar los cambios en este momento. No se guardó ninguna acción de esta respuesta. Puedes crear o editar tus pendientes manualmente.", input: userText)
+            return
+        }
+        if (result.mode == .chatOnly || result.mode == .clarification || result.shouldAskUser || !result.confidence.isFinite || result.confidence < 0.55),
+           NovaService.claimsExecutedMutation(result.reply) {
+            failNova("La respuesta anunció cambios sin una acción verificable. No guardé ningún cambio de esa respuesta.", input: userText)
             return
         }
         if result.shouldAskUser || !result.confidence.isFinite || result.confidence < 0.55 || result.mode == .clarification {
@@ -7398,6 +7618,9 @@ final class FocusDataStore: ObservableObject {
             return
         }
         let actions = validation.safeActions
+        let actionIDs = result.requestId.flatMap(UUID.init(uuidString:)).map { id in
+            actions.indices.map { id.uuidString.lowercased() + ":" + String($0) }
+        } ?? []
         guard !actions.isEmpty else {
             failNova("No pude preparar una acción para esa solicitud. Inténtalo de nuevo con el nombre y la fecha.", input: userText)
             return
@@ -7409,13 +7632,18 @@ final class FocusDataStore: ObservableObject {
             novaPendingProposal = NovaPendingProposal(
                 summary: "Revisa estos cambios antes de aplicarlos.",
                 actionLabels: actions.map(novaActionLabel), actions: actions,
-                localIntents: [], userText: userText, generation: accountGeneration
+                localIntents: [], userText: userText, generation: accountGeneration,
+                reviewedEvents: reviewedEvents(for: actions), reviewedTasks: reviewedTasks(for: actions),
+                actionIDs: actionIDs,
+                reviewedMemories: actions.contains(where: { if case .forgetMemory = $0 { return true }; return false }) ? NovaMemoryStore.shared.activeMemories : nil
             )
             appendNovaReply("Preparé una propuesta. Revisa los cambios y pulsa Aplicar para confirmarlos.")
             return
         }
-        executeNovaActions(actions, userText: userText)
-        if novaErrorMessage == nil, let question = result.followUpQuestion, !question.isEmpty {
+        executeNovaActions(actions, userText: userText, actionIDs: actionIDs)
+        if novaErrorMessage == nil { FocusLocalStore.clear(.novaPendingRequest) }
+        if novaErrorMessage == nil, let question = result.followUpQuestion, !question.isEmpty,
+           !NovaService.claimsExecutedMutation(question) {
             appendNovaReply(question)
         }
     }
@@ -7433,20 +7661,55 @@ final class FocusDataStore: ObservableObject {
             guard let event = events.first(where: { $0.id.uuidString.lowercased() == id.lowercased() }) else { return "Eliminar evento" }
             return "Eliminar: \(event.title) · \(DateFormatters.shortDayMonth.string(from: event.startTime)) · \(DateFormatters.hourMinute.string(from: event.startTime))"
         case .deleteTask(let id): return "Eliminar: \(tasks.first { $0.id.uuidString.lowercased() == id.lowercased() }?.title ?? "tarea")"
-        case .toggleTask: return "Actualizar tarea"
+        case .completeTask(let id, let done):
+            let name = tasks.first { $0.id.uuidString.lowercased() == id.lowercased() }?.title ?? "tarea"
+            return "\(done ? "Completar" : "Volver a pendiente"): \(name)"
+        case .editTask(let id, let updates):
+            let name = tasks.first { $0.id.uuidString.lowercased() == id.lowercased() }?.title ?? "tarea"
+            let changes = [updates.label, updates.date, updates.time, updates.priority,
+                updates.clearsDate ? "Sin fecha" : nil, updates.clearsTime ? "Sin hora" : nil,
+                updates.done.map { $0 ? "Completada" : "Pendiente" }].compactMap { $0 }.joined(separator: " · ")
+            return "Editar \(name): \(changes)"
+        case .toggleTask: return "Cambiar el estado de la tarea"
         case .saveMemory: return "Guardar una preferencia"
         case .forgetMemory: return "Olvidar información guardada"
         case .remember, .unsupported: return "Acción no disponible"
         }
     }
 
-    private func executeNovaActions(_ actions: [BackendAction], userText: String) {
+    private func reviewedEvents(for actions: [BackendAction]) -> [FocusEvent] {
+        actions.compactMap { action in
+            switch action {
+            case .editEvent(let raw, _), .deleteEvent(let raw): return events.first { $0.id.uuidString.lowercased() == raw.lowercased() }
+            default: return nil
+            }
+        }
+    }
+
+    private func reviewedTasks(for actions: [BackendAction]) -> [FocusTask] {
+        actions.compactMap { action in
+            switch action {
+            case .editTask(let raw, _), .completeTask(let raw, _), .toggleTask(let raw), .deleteTask(let raw): return tasks.first { $0.id.uuidString.lowercased() == raw.lowercased() }
+            default: return nil
+            }
+        }
+    }
+
+    private func executeNovaActions(_ actions: [BackendAction], userText: String, actionIDs: [String] = []) {
         let validation = NovaActionValidator.validate(actions: actions, userText: userText)
         guard !validation.shouldAsk else {
             failNova("No pude validar todos los cambios. No apliqué la propuesta.", input: userText)
             return
         }
-        let outcome = applyBackendActions(validation.safeActions, userText: userText)
+        let outcome = applyBackendActions(validation.safeActions, userText: userText, actionIDs: actionIDs)
+        if outcome.ignored.contains(where: { $0.contains("persistence_failed") }) {
+            let receipt = [outcome.summary, outcome.details].compactMap { $0 }.joined(separator: "\n")
+            let failure = outcome.didMutate
+                ? receipt + "\nNo pude guardar el resto. Al reintentar, conservaré los cambios ya guardados."
+                : "No pude guardar los cambios en este iPhone. Inténtalo de nuevo."
+            failNova(failure, input: userText)
+            return
+        }
         if outcome.didMutate {
             FocusTelemetry.record(.novaActionSuccess)
             appendNovaReply([outcome.summary, outcome.details,
@@ -7459,7 +7722,8 @@ final class FocusDataStore: ObservableObject {
         }
     }
 
-    private func executeLocalNovaIntents(_ intents: [NovaIntent], userText: String, confirmed: Bool = false) {
+    private func executeLocalNovaIntents(_ intents: [NovaIntent], userText: String, confirmed: Bool = false,
+                                        frozenDeletions: [Int: BackendAction] = [:]) {
         guard !intents.isEmpty else {
             failNova("No pude interpretar la solicitud. Prueba con una tarea o un evento con fecha y hora.", input: userText)
             return
@@ -7469,6 +7733,31 @@ final class FocusDataStore: ObservableObject {
                 setPendingClarification(pending)
             }
             appendNovaReply(NovaResponder.reply(to: userText, context: novaContext))
+            return
+        }
+        let pending = novaContext.pendingIsActive ? novaContext.pendingClarification : nil
+        let dayIsExplicit = NovaResponder.hasExplicitDayMarker(userText.lowercased())
+            || pending.map { NovaResponder.hasExplicitDayMarker($0.originalInput.lowercased()) } == true
+        if !confirmed, !dayIsExplicit,
+           let pastIntent = intents.first(where: {
+               if case .createEvent(_, let date?, _, _, _, _, let recurrence, _, _) = $0 {
+                   return recurrence == nil && date < NovaResponder.referenceNow
+               }
+               return false
+           }) {
+            guard intents.count == 1,
+                  case .createEvent(let title, let date, _, let location, let section, let wantsReminder, _, _, _) = pastIntent else {
+                appendNovaReply("Una de esas horas ya pasó y falta el día. Dime el día de cada evento; todavía no guardé los cambios.")
+                return
+            }
+            let question = "Esa hora ya pasó hoy. ¿Quieres «\(title)» hoy o mañana a esa misma hora?"
+            setPendingClarification(PendingClarification(
+                originalInput: [pending?.originalInput, userText].compactMap { $0 }.joined(separator: " "),
+                kind: wantsReminder ? .reminder : .event, proposedTitle: title, proposedDate: date,
+                proposedSection: section, proposedLocation: location, wantsReminder: wantsReminder,
+                missingFields: [.date], questionAsked: question, source: .novaChat
+            ))
+            appendNovaReply(question)
             return
         }
         if !confirmed, NovaActionValidator.isEmotionalOrContextual(userText), intents.contains(where: {
@@ -7484,25 +7773,31 @@ final class FocusDataStore: ObservableObject {
             novaContext.updatedAt = Date()
             novaPendingProposal = NovaPendingProposal(summary: "Revisa estas tareas.",
                 actionLabels: plan.map { $0.title }, actions: [], localIntents: [.confirmActionPlan],
-                userText: userText, generation: accountGeneration)
+                userText: userText, generation: accountGeneration, reviewedPlan: plan)
             appendNovaReply("Preparé tus tareas. Revisa la propuesta antes de añadirlas.")
             return
         }
-        let deletions = intents.flatMap { intent -> [BackendAction] in
+        var localDeletionActions: [Int: BackendAction] = [:]
+        for (index, intent) in intents.enumerated() {
+            let deletion: BackendAction?
             switch intent {
             case .deleteLastItem:
-                if let id = novaContext.lastEventId { return [.deleteEvent(id: id.uuidString)] }
-                if let id = novaContext.lastTaskId { return [.deleteTask(id: id.uuidString)] }
-                return []
+                if let id = novaContext.lastEventId { deletion = .deleteEvent(id: id.uuidString) }
+                else if let id = novaContext.lastTaskId { deletion = .deleteTask(id: id.uuidString) }
+                else { deletion = nil }
             case .deleteEventByActivity(let activity):
-                return NovaResponder.findEventByApproxTitle(activity, in: events).map { [.deleteEvent(id: $0.id.uuidString)] } ?? []
-            default: return []
+                deletion = NovaResponder.findEventByApproxTitle(activity, in: events).map { .deleteEvent(id: $0.id.uuidString) }
+            default: deletion = nil
             }
+            if let deletion { localDeletionActions[index] = deletion }
         }
+        let deletions = localDeletionActions.keys.sorted().compactMap { localDeletionActions[$0] }
         if !confirmed, !deletions.isEmpty {
             novaPendingProposal = NovaPendingProposal(
                 summary: "Confirma qué quieres eliminar.", actionLabels: deletions.map(novaActionLabel),
-                actions: [], localIntents: intents, userText: userText, generation: accountGeneration
+                actions: [], localIntents: intents, userText: userText, generation: accountGeneration,
+                reviewedEvents: reviewedEvents(for: deletions), reviewedTasks: reviewedTasks(for: deletions),
+                localDeletionActions: localDeletionActions
             )
             appendNovaReply("Revisa los elementos que voy a eliminar y confirma la propuesta.")
             return
@@ -7514,7 +7809,16 @@ final class FocusDataStore: ObservableObject {
         let eventsBefore = events
         let tasksBefore = tasks
         var replies: [String] = []
-        for intent in intents {
+        for (index, intent) in intents.enumerated() {
+            if let deletion = frozenDeletions[index] {
+                let outcome = applyBackendActions([deletion], userText: userText)
+                guard outcome.didMutate, let summary = outcome.summary else {
+                    failNova("No pude guardar la eliminación. Revisa tus pendientes antes de repetirla.", input: userText)
+                    return
+                }
+                replies.append(summary)
+                continue
+            }
             if let reply = applyLocalNovaIntent(intent, userText: userText, isMultiIntent: intents.count > 1) {
                 if reply.hasPrefix("No pude guardar") {
                     failNova(reply, input: userText)
@@ -7697,25 +8001,10 @@ final class FocusDataStore: ObservableObject {
         switch intent {
         case .createEvent(let rawTitle, let when, let rawExplicitEnd, let location, let section, let wantsReminder, let recurrence, let segReminderOffset, let segReminderNote):
             guard let rawDate = when else { return nil }
-            // PASO 0 (fix chat→Mi Día 2026-08-10): nunca crear en el pasado
-            // silenciosamente. "Acuérdame de tomar mis remedios a las 8" a
-            // las 21h resolvía HOY 08:00 → recordatorio nacía vencido y Mi
-            // Día lo escondía del timeline. Si el usuario NO ancló el día y
-            // la hora ya pasó, saltamos a la próxima ocurrencia (hoy PM si
-            // alcanza; si no, mañana). Con recurrencia NO aplica: la serie
-            // se ancla al patrón, no a "ahora". El endTime explícito se
-            // traslada junto al inicio para conservar la duración.
-            let date: Date
-            if recurrence == nil {
-                date = NovaActionNormalizer.resolveNonPastStartTime(
-                    startTime: rawDate, userText: userText
-                ).startTime
-            } else {
-                date = rawDate
-            }
-            let explicitEnd: Date? = rawExplicitEnd.map {
-                $0.addingTimeInterval(date.timeIntervalSince(rawDate))
-            }
+            // Day ambiguity is resolved before execution. Preserve the exact
+            // civil date and range the user reviewed or explicitly selected.
+            let date = rawDate
+            let explicitEnd = rawExplicitEnd
             // PASO 1: Limpiar título via normalizer (mismo pipeline que
             // backend path → consistencia 100%).
             let cleanedTitle = NovaActionNormalizer.cleanTitle(rawTitle)
@@ -7870,34 +8159,23 @@ final class FocusDataStore: ObservableObject {
                 occurrences = [date]
             }
 
-            let firstEventId: UUID? = {
-                var lastId: UUID?
-                for (idx, startDate) in occurrences.enumerated() {
-                    // Duración: si endTime original es relativo al inicio,
-                    // mantenemos esa duración para todas las ocurrencias.
-                    let duration = end.timeIntervalSince(date)
-                    let occurEnd = startDate.addingTimeInterval(duration)
-                    let event = FocusEvent(
-                        title: title,
-                        startTime: startDate,
-                        endTime: occurEnd,
-                        section: effectiveSection,
-                        location: location,
-                        isReminder: isReminderFlag,
-                        inferredDuration: inferredFlag,
-                        reminderOffsets: extractedOffsets,
-                        reminderNotes: extractedNotes,
-                        subtitle: eventSubtitle
-                    )
-                    guard addEvent(event) else { return nil }
-                    if idx == 0 { lastId = event.id }
+            let sourceHour = cal.component(.hour, from: date)
+            let sourceMinute = cal.component(.minute, from: date)
+            var planned: [FocusEvent] = []
+            for candidate in occurrences {
+                guard let startDate = NovaTimeFormatter.civilDate(on: candidate, hour: sourceHour, minute: sourceMinute, calendar: cal) else {
+                    return "No pude guardar la serie: una hora no existe o se repite por el cambio de horario. Elige otra hora."
                 }
-                return lastId
-            }()
-
-            guard let firstEventId else {
-                return "No pude guardar todos los eventos. Revisa tu agenda antes de repetir la solicitud."
+                let duration = end.timeIntervalSince(date)
+                planned.append(FocusEvent(title: title, startTime: startDate,
+                    endTime: startDate.addingTimeInterval(duration), section: effectiveSection,
+                    location: location, isReminder: isReminderFlag, inferredDuration: inferredFlag,
+                    reminderOffsets: extractedOffsets, reminderNotes: extractedNotes, subtitle: eventSubtitle))
             }
+            guard let created = commitPreparedNovaEvents(planned) else {
+                return "No pude guardar la serie. No añadí ninguno de esos eventos. Inténtalo de nuevo."
+            }
+            guard let firstEventId = created.first?.id else { return "Ya tenías esas ocurrencias en tu agenda." }
             updateNovaContext(
                 from: userText,
                 title: title,
@@ -7927,7 +8205,7 @@ final class FocusDataStore: ObservableObject {
                     ? "\(mins) min antes"
                     : (mins % 60 == 0 ? "\(mins/60) h antes" : "\(mins/60) h \(mins%60) min antes")
                 if let note = extractedNotes?.first, !note.isEmpty {
-                    return "Listo. Te dejé «\(title)» \(dayLabel) a las \(timeLabel)\(recurrenceBit) y te aviso \(offsetLabel) para «\(note)»."
+                    return "Listo. Te dejé «\(title)» \(dayLabel) a las \(timeLabel)\(recurrenceBit) con un aviso guardado \(offsetLabel) para «\(note)»."
                 }
                 return "Listo. Te dejé «\(title)» \(dayLabel) a las \(timeLabel)\(recurrenceBit) con aviso \(offsetLabel)."
             }
@@ -8000,7 +8278,10 @@ final class FocusDataStore: ObservableObject {
                 }
             case .setTime(let h, let m):
                 let day = cal.startOfDay(for: event.startTime)
-                if let newStart = cal.date(bySettingHour: h, minute: m, second: 0, of: day) {
+                guard let newStart = NovaTimeFormatter.civilDate(on: day, hour: h, minute: m, calendar: cal) else {
+                    return "No pude guardar esa hora: no existe o se repite por el cambio de horario. Elige otra hora."
+                }
+                do {
                     // Preservar la naturaleza del evento al cambiar la hora.
                     // Antes: `endTime = newStart + 1h` SIEMPRE — convertía un
                     // recordatorio puntual ("dentista a las 4") en bloque de
@@ -8106,9 +8387,9 @@ final class FocusDataStore: ObservableObject {
                 ? "\(offsetMinutes) min antes"
                 : (offsetMinutes % 60 == 0 ? "\(offsetMinutes/60) h antes" : "\(offsetMinutes/60) h \(offsetMinutes%60) min antes")
             if let note, !note.isEmpty {
-                return "Listo. Te aviso \(offsetLabel) de «\(event.title)» para «\(note)»."
+                return "Guardé un aviso \(offsetLabel) de «\(event.title)» para «\(note)»."
             }
-            return "Listo. Te aviso \(offsetLabel) de «\(event.title)»."
+            return "Guardé un aviso \(offsetLabel) de «\(event.title)»."
 
         case .rescheduleEventByActivity(let activity, let hour, let minute):
             // Buscar evento existente; si no aparece NO creamos uno nuevo
@@ -8442,34 +8723,7 @@ final class FocusDataStore: ObservableObject {
         return note.isEmpty ? nil : "(\(note))"
     }
 
-    func runQuickAction(_ action: NovaQuickAction) {
-        novaMessages.append(NovaMessage(role: .user, content: action.userText))
-        persistNovaMessages()
-        HapticManager.shared.tap()
-        isNovaTyping = true
-
-        // Para "organizar mi día" usamos análisis REAL del estado del
-        // usuario (eventos hoy, tareas pendientes, huecos, back-to-back).
-        // El resto de quick actions tienen respuestas predefinidas que
-        // siguen teniendo sentido sin contexto.
-        let reply: String = {
-            switch action {
-            case .organizar:
-                return summarizeAndSuggest(forDayOrganization: action.userText)
-            default:
-                return action.novaReply
-            }
-        }()
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 700_000_000)
-            await MainActor.run {
-                guard let self else { return }
-                self.novaMessages.append(NovaMessage(role: .nova, content: reply))
-                self.persistNovaMessages()
-                self.isNovaTyping = false
-            }
-        }
-    }
+    func runQuickAction(_ action: NovaQuickAction) { sendNovaMessage(action.userText) }
 
     // MARK: - Memoria (comandos directos de chat)
 
@@ -8557,8 +8811,12 @@ final class FocusDataStore: ObservableObject {
                 .trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?¿¡ "))
             // Caso especial: "olvida todo" / "todo" → clear all.
             if ["todo", "todas", "toda", "todos"].contains(target.lowercased()) {
-                NovaMemoryStore.shared.clearAll()
-                return "Listo, borré todas las memorias que tenía guardadas."
+                let action = BackendAction.forgetMemory(key: "__all__")
+                novaPendingProposal = NovaPendingProposal(summary: "Confirma si quieres borrar tus memorias.",
+                    actionLabels: ["Olvidar todas las memorias guardadas"], actions: [action], localIntents: [],
+                    userText: trimmed, generation: accountGeneration,
+                    reviewedMemories: NovaMemoryStore.shared.activeMemories)
+                return "Revisa y confirma si quieres olvidar todas las memorias guardadas."
             }
             // Buscar memorias cuya key o value contenga `target`.
             let lowerTarget = target.lowercased()
@@ -8569,6 +8827,7 @@ final class FocusDataStore: ObservableObject {
             }
             for m in matches {
                 NovaMemoryStore.shared.deactivate(id: m.id)
+                if !NovaMemoryStore.shared.lastPersistenceSucceeded { return "No pude guardar el borrado de memoria. Inténtalo de nuevo." }
             }
             let label = matches.count == 1 ? "una memoria" : "\(matches.count) memorias"
             return "Listo, olvidé \(label) relacionada\(matches.count == 1 ? "" : "s") con «\(target)»."
@@ -8639,6 +8898,7 @@ final class FocusDataStore: ObservableObject {
         outbox = FocusSyncOutbox()
         recoveryEventIDs = [:]
         recoveryTaskIDs = [:]
+        novaAppliedActionIDs = []
         refreshPendingDeletes()
         suggestions = []
         novaMessages = []
@@ -8738,6 +8998,8 @@ final class NovaMemoryStore {
     private var userDefaultsKey: String { FocusLocalStore.scopedStorageKey(for: "focus.v1.nova.memories") }
     private let maxEntries = 200
     private var cache: [NovaMemory] = []
+    private var committedCache: [NovaMemory] = []
+    private(set) var lastPersistenceSucceeded = true
 
     private init() {
         loadFromDisk()
@@ -8840,6 +9102,13 @@ final class NovaMemoryStore {
     // MARK: - Persistencia
 
     private func loadFromDisk() {
+        if let saved = FocusLocalStore.load([NovaMemory].self, forKey: .novaMemories) {
+            cache = saved
+            committedCache = saved
+            lastPersistenceSucceeded = true
+            return
+        }
+        defer { committedCache = cache; lastPersistenceSucceeded = true }
         guard let data = UserDefaults.standard.data(forKey: userDefaultsKey) else {
             cache = []
             return
@@ -8855,13 +9124,34 @@ final class NovaMemoryStore {
     }
 
     private func saveToDisk() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        do {
-            let data = try encoder.encode(cache)
-            UserDefaults.standard.set(data, forKey: userDefaultsKey)
-        } catch {
-            debugLog("[NovaMemory] save failed: \(error)")
+        lastPersistenceSucceeded = FocusLocalStore.saveSync(cache, forKey: .novaMemories)
+        if lastPersistenceSucceeded { committedCache = cache }
+        else { cache = committedCache }
+    }
+
+    private func learn(_ memory: NovaMemory) -> NovaMemory? {
+        let saved = upsert(memory)
+        return lastPersistenceSucceeded ? saved : nil
+    }
+
+    /// Only relevant, bounded, non-sensitive context leaves this device.
+    func contextForRequest(_ text: String) -> [String] {
+        let stopWords: Set<String> = ["para", "como", "tengo", "quiero", "mañana", "hoy", "esta", "esto", "hacer", "puedes", "recuerda"]
+        func tokens(_ value: String) -> Set<String> {
+            Set(value.lowercased().folding(options: .diacriticInsensitive, locale: .current)
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { $0.count >= 4 && !stopWords.contains($0) })
+        }
+        let query = tokens(text)
+        var remaining = 1600
+        return activeMemories.filter {
+            !NovaMemoryPrivacy.isSensitive($0.key + " " + $0.value)
+                && !query.intersection(tokens($0.key + " " + $0.value)).isEmpty
+        }.prefix(8).compactMap { memory in
+            let line = String((memory.key + ": " + memory.value).prefix(240))
+            guard line.count <= remaining else { return nil }
+            remaining -= line.count
+            return line
         }
     }
 
@@ -8891,8 +9181,9 @@ extension NovaMemoryStore {
     /// el flujo normal.
     @discardableResult
     func tryLearnFromUserText(_ text: String) -> NovaMemory? {
+        lastPersistenceSucceeded = true
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
+        guard !trimmed.isEmpty, NovaMemoryPrivacy.canRemember(trimmed, userText: trimmed) else { return nil }
         let lower = trimmed.lowercased()
 
         // Patrón 1: "cuando diga X me refiero a Y" / "cuando digo X me refiero a Y"
@@ -8913,7 +9204,7 @@ extension NovaMemoryStore {
             // - si parece nombre propio → personAlias
             // - default → preference
             let cat: NovaMemoryCategory = inferCategoryFromValue(value, originalKey: key)
-            return upsert(NovaMemory(
+            return learn(NovaMemory(
                 category: cat, key: key, value: value,
                 confidence: 1.0, source: "user_explicit"
             ))
@@ -9002,7 +9293,7 @@ extension NovaMemoryStore {
 
             if looksLikePerson && !cleanKey.isEmpty {
                 let displayName = cleanKey.prefix(1).uppercased() + cleanKey.dropFirst()
-                return upsert(NovaMemory(
+                return learn(NovaMemory(
                     category: .personAlias,
                     key: cleanKey.lowercased(),
                     value: "\(displayName) (\(role))",
@@ -9013,7 +9304,7 @@ extension NovaMemoryStore {
 
         // Patrón 3: "prefiero ..." → preference
         if lower.hasPrefix("prefiero ") || lower.hasPrefix("me gusta ") {
-            return upsert(NovaMemory(
+            return learn(NovaMemory(
                 category: .preference, key: trimmed, value: trimmed,
                 confidence: 0.8, source: "user_explicit"
             ))
@@ -9037,7 +9328,7 @@ extension NovaMemoryStore {
             // Si "entity" empieza con "mi/tu/su" → relación familiar/profesional.
             // Guardamos doble: nombre → entity, entity → nombre (resolución
             // bidireccional sencilla).
-            return upsert(NovaMemory(
+            return learn(NovaMemory(
                 category: .personAlias,
                 key: name.lowercased(),
                 value: "\(name) (\(entity))",
@@ -9059,7 +9350,7 @@ extension NovaMemoryStore {
                 .trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?¿¡"))
             let name = String(trimmed[r2])
                 .trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?¿¡"))
-            return upsert(NovaMemory(
+            return learn(NovaMemory(
                 category: .personAlias,
                 key: name.lowercased(),
                 value: "\(name) (mi \(role))",
@@ -9085,7 +9376,7 @@ extension NovaMemoryStore {
             // Solo si name parece nombre propio (mayúscula al inicio o
             // varias palabras).
             if let first = name.first, first.isUppercase {
-                return upsert(NovaMemory(
+                return learn(NovaMemory(
                     category: .personAlias,
                     key: name.lowercased(),
                     value: "\(name) (mi \(role))",
@@ -9096,7 +9387,7 @@ extension NovaMemoryStore {
 
         // Patrón 7: "no me gusta X" / "no quiero X" → preference negativa.
         if lower.hasPrefix("no me gusta ") || lower.hasPrefix("no quiero ") || lower.hasPrefix("odio ") {
-            return upsert(NovaMemory(
+            return learn(NovaMemory(
                 category: .preference,
                 key: trimmed.lowercased(),
                 value: trimmed,
@@ -9117,6 +9408,7 @@ extension NovaMemoryStore {
     /// suave para "Urrutia". Próxima vez que diga "Urrutia" Nova tiene
     /// señal de que es una persona conocida.
     func passivelyLearnFromEvent(title: String) {
+        guard !NovaMemoryPrivacy.isSensitive(title) else { return }
         let lowerTitle = title.lowercased()
         // Patrón A: "[noun] con [Name]"
         if let regex = try? NSRegularExpression(
@@ -9225,7 +9517,7 @@ extension NovaMemoryStore {
             let ns = result as NSString
             let range = NSRange(location: 0, length: ns.length)
             let before = result
-            result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: alias.value)
+            result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: NSRegularExpression.escapedTemplate(for: alias.value))
             if result != before {
                 touchLastUsed(id: alias.id)
             }

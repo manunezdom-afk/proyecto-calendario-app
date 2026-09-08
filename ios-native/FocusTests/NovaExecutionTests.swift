@@ -8,9 +8,15 @@ final class NovaExecutionTests: XCTestCase {
     override func setUp() async throws {
         directory = FileManager.default.temporaryDirectory.appendingPathComponent("NovaExecutionTests-" + UUID().uuidString)
         FocusLocalStore.useTestingDirectory(directory)
+        NovaResponder.testTimeZone = nil
+        NovaMemoryStore.shared.reloadForCurrentAccount()
+        NovaMemoryStore.shared.clearAll()
     }
 
     override func tearDown() async throws {
+        NovaResponder.testReferenceDate = nil
+        NovaResponder.testTimeZone = nil
+        FocusLocalStore.testRejectSynchronousWrite = nil
         FocusLocalStore.flush()
         FocusLocalStore.clearAll()
         try? FileManager.default.removeItem(at: directory)
@@ -39,6 +45,29 @@ final class NovaExecutionTests: XCTestCase {
         NovaService.Result(reply: reply, actions: actions,
             smartActionsBlocked: blocked, smartActionsMessage: blockedMessage, confidence: confidence,
             shouldAskUser: ask, mode: mode, proposedActions: proposed, requestId: "test")
+    }
+
+    func testMemoryForgetAllAfterStoreRestartRequiresReviewAndPersistsEmptyMemory() throws {
+        let original = store()
+        original.settings.novaMemoryEnabled = true
+        original.sendNovaMessage("Cata es mi polola")
+        XCTAssertEqual(NovaMemoryStore.shared.activeMemories.count, 1)
+        FocusLocalStore.flush()
+        NovaMemoryStore.shared.reloadForCurrentAccount()
+        let restored = store()
+        restored.settings.novaMemoryEnabled = true
+        restored.sendNovaMessage("Qué sabes de mí")
+        XCTAssertTrue(restored.novaMessages.last?.content.contains("Cata") == true)
+        restored.sendNovaMessage("Olvida todo")
+        XCTAssertNotNil(restored.novaPendingProposal)
+        XCTAssertEqual(NovaMemoryStore.shared.activeMemories.count, 1)
+        restored.confirmNovaProposal()
+        XCTAssertNil(restored.novaErrorMessage, restored.novaMessages.map(\.content).joined(separator: "\n"))
+        XCTAssertTrue(NovaMemoryStore.shared.lastPersistenceSucceeded)
+        XCTAssertTrue(NovaMemoryStore.shared.activeMemories.isEmpty)
+        XCTAssertEqual(restored.novaMessages.last?.content, "Listo, borré todas las memorias.")
+        NovaMemoryStore.shared.reloadForCurrentAccount()
+        XCTAssertTrue(NovaMemoryStore.shared.activeMemories.isEmpty)
     }
 
     func testExistingConversationKeepsLegacyRoleAndOriginalWordsAfterRebranding() throws {
@@ -421,5 +450,523 @@ final class NovaDictationLifecycleTests: XCTestCase {
         service.receiveRecognitionUpdate(text: "Callback posterior", isFinal: false, error: nil,
                                          generation: currentGeneration)
         XCTAssertEqual(service.transcript, "Texto final")
+    }
+}
+
+extension NovaExecutionTests {
+    private var noNetwork: FocusSyncTransport {
+        FocusSyncTransport(fetchEvents: { _, _ in throw SupabaseSyncError.network("test offline") },
+            fetchTasks: { _, _ in throw SupabaseSyncError.network("test offline") },
+            upsertEvent: { _, _ in throw SupabaseSyncError.network("test offline") },
+            upsertTask: { _, _ in throw SupabaseSyncError.network("test offline") },
+            deleteEvent: { _, _ in throw SupabaseSyncError.network("test offline") },
+            deleteTask: { _, _ in throw SupabaseSyncError.network("test offline") })
+    }
+
+    func testMovingEventPreservesItsDurationAndSurvivesRestart() throws {
+        let store = store()
+        let start = try XCTUnwrap(NovaTimeFormatter.resolveDate(dateString: "2027-09-10", timeString: "10:00"))
+        let appointment = FocusEvent(title: "Dentista", startTime: start, endTime: start.addingTimeInterval(3600), inferredDuration: false)
+        XCTAssertTrue(store.addEvent(appointment))
+        let updates = BackendEventUpdates(title: nil, timeString: "12:00", endTimeString: nil,
+            dateString: nil, location: nil, reminderOffsets: nil, reminderNotes: nil)
+        store.receiveNovaResult(response([.editEvent(id: appointment.id.uuidString, updates: updates)]), userText: "mueve dentista a las 12")
+        let saved = try XCTUnwrap(FocusLocalStore.load(FocusSyncSnapshot.self, forKey: .syncSnapshot)?.events.first)
+        XCTAssertEqual(Calendar.current.component(.hour, from: saved.startTime), 12)
+        XCTAssertEqual(saved.endTime?.timeIntervalSince(saved.startTime), 3600)
+        XCTAssertEqual(store.events.first, saved)
+    }
+
+    func testInvalidEventEditRejectsWholeBatchBeforeFirstWrite() throws {
+        let store = store()
+        let appointment = FocusEvent(title: "Existente", startTime: Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970) + 7200))
+        XCTAssertTrue(store.addEvent(appointment))
+        let updates = BackendEventUpdates(title: nil, timeString: "12:00", endTimeString: nil,
+            dateString: "2027-02-30", location: nil, reminderOffsets: nil, reminderNotes: nil)
+        store.receiveNovaResult(response([event("Otro"), .editEvent(id: appointment.id.uuidString, updates: updates)]), userText: "crea otro y mueve existente")
+        XCTAssertEqual(store.events, [appointment])
+        XCTAssertEqual(FocusLocalStore.load(FocusSyncSnapshot.self, forKey: .syncSnapshot)?.events, [appointment])
+        XCTAssertNotNil(store.novaErrorMessage)
+    }
+
+    func testLocalDeletionNeverResolvesAReplacementAfterReview() throws {
+        let store = store()
+        let first = FocusEvent(title: "Gym", startTime: Date().addingTimeInterval(7200))
+        XCTAssertTrue(store.addEvent(first))
+        store.sendNovaMessage("borra gym")
+        XCTAssertNotNil(store.novaPendingProposal)
+        XCTAssertTrue(store.deleteEvent(first.id))
+        let replacement = FocusEvent(title: "Gym", startTime: first.startTime.addingTimeInterval(86400))
+        XCTAssertTrue(store.addEvent(replacement))
+        store.confirmNovaProposal()
+        XCTAssertEqual(store.events, [replacement])
+        XCTAssertNotNil(store.novaErrorMessage)
+    }
+
+    func testRemoteDeletionRequiresReviewAgainIfEventChanges() {
+        let store = store()
+        var appointment = FocusEvent(title: "Dentista", startTime: Date().addingTimeInterval(7200))
+        store.addEvent(appointment)
+        store.receiveNovaResult(response([.deleteEvent(id: appointment.id.uuidString)]), userText: "borra dentista")
+        appointment.title = "Dentista confirmado"
+        store.updateEvent(appointment)
+        store.confirmNovaProposal()
+        XCTAssertEqual(store.events, [appointment])
+        XCTAssertTrue(store.novaErrorMessage?.contains("cambiaron") == true)
+    }
+
+    func testChatWithoutActionsCannotClaimItSavedATask() {
+        let store = store()
+        store.receiveNovaResult(response([], mode: .chatOnly, reply: "Listo, creé la tarea."), userText: "comprar pan")
+        XCTAssertTrue(store.tasks.isEmpty)
+        XCTAssertTrue(store.events.isEmpty)
+        XCTAssertNotNil(store.novaErrorMessage)
+        XCTAssertFalse(store.novaMessages.contains { $0.content == "Listo, creé la tarea." })
+        XCTAssertFalse(NovaService.claimsExecutedMutation("Podemos pensar juntos cómo organizarlo."))
+        XCTAssertFalse(NovaService.claimsExecutedMutation("El proyecto Nova sigue pendiente."))
+    }
+
+    func testLegacyToggleReplayIsSkippedAfterRestartUsingAtomicReceipt() throws {
+        let store = store()
+        let task = FocusTask(title: "Comprar pan")
+        XCTAssertTrue(store.addTask(task))
+        let id = UUID().uuidString
+        let result = NovaService.Result(reply: "Preparé el cambio", actions: [.toggleTask(id: task.id.uuidString)],
+            smartActionsBlocked: false, smartActionsMessage: nil, confidence: 1, shouldAskUser: false,
+            mode: .chatWithAction, proposedActions: [], requestId: id)
+        store.receiveNovaResult(result, userText: "completa comprar pan")
+        XCTAssertEqual(store.tasks.first?.done, true)
+        let persisted = try XCTUnwrap(FocusLocalStore.load(FocusSyncSnapshot.self, forKey: .syncSnapshot))
+        XCTAssertTrue(persisted.novaAppliedActionIDs?.contains(id.lowercased() + ":0") == true)
+        let restarted = FocusDataStore(restoreAccount: false, schedulesNotifications: false)
+        restarted.receiveNovaResult(result, userText: "completa comprar pan")
+        XCTAssertEqual(restarted.tasks.first?.done, true)
+        XCTAssertEqual(restarted.tasks.count, 1)
+    }
+
+    func testExplicitTaskCompletionIsIdempotentAndEditingCanRemoveItsDate() throws {
+        let store = store()
+        let task = FocusTask(title: "Informe", dueDate: Date(), dueTime: Date())
+        XCTAssertTrue(store.addTask(task))
+        for _ in 0..<2 {
+            store.receiveNovaResult(response([.completeTask(id: task.id.uuidString, done: true)]), userText: "completa informe")
+        }
+        XCTAssertEqual(store.tasks.first?.done, true)
+        store.receiveNovaResult(response([.editTask(id: task.id.uuidString,
+            updates: BackendTaskUpdates(label: "Informe final", clearsDate: true))]), userText: "informe final sin fecha")
+        XCTAssertEqual(store.tasks.first?.title, "Informe final")
+        XCTAssertNil(store.tasks.first?.dueDate)
+        XCTAssertNil(store.tasks.first?.dueTime)
+        let saved = FocusLocalStore.load(FocusSyncSnapshot.self, forKey: .syncSnapshot)?.tasks.first
+        XCTAssertEqual(saved?.title, "Informe final")
+        XCTAssertEqual(saved?.done, true)
+        XCTAssertNil(saved?.dueDate)
+    }
+
+    func testDiskFailureCannotAcknowledgeAnActionOrItsReceipt() throws {
+        let store = store()
+        let task = FocusTask(title: "Informe")
+        XCTAssertTrue(store.addTask(task))
+        FocusLocalStore.flush()
+        let guest = directory.appendingPathComponent("guest")
+        try FileManager.default.removeItem(at: guest)
+        try Data("blocked directory".utf8).write(to: guest)
+        let result = NovaService.Result(reply: "Completado", actions: [.completeTask(id: task.id.uuidString, done: true)],
+            smartActionsBlocked: false, smartActionsMessage: nil, confidence: 1, shouldAskUser: false,
+            mode: .chatWithAction, proposedActions: [], requestId: UUID().uuidString)
+        store.receiveNovaResult(result, userText: "completa informe")
+        XCTAssertEqual(store.tasks.first?.done, false)
+        XCTAssertNotNil(store.localSaveError)
+        XCTAssertNotNil(store.novaErrorMessage)
+        XCTAssertFalse(store.novaMessages.last?.content.contains("Completé") == true)
+    }
+
+    func testLogicalRequestIdentitySurvivesRestartAndIsScopedToAccountAndText() throws {
+        let store = store()
+        let first = try XCTUnwrap(store.prepareNovaRequestID(for: "Compra pan"))
+        let restarted = FocusDataStore(restoreAccount: false, schedulesNotifications: false)
+        XCTAssertEqual(restarted.prepareNovaRequestID(for: "Compra pan"), first)
+        XCTAssertNotEqual(restarted.prepareNovaRequestID(for: "Compra leche"), first)
+        FocusLocalStore.activateAccount(UUID())
+        XCTAssertNotEqual(restarted.prepareNovaRequestID(for: "Compra pan"), first)
+        FocusLocalStore.activateAccount(nil)
+    }
+
+    func testTimeoutRetryReusesIdentityAndPersistsOnlyVerifiedActions() async throws {
+        var requests: [NovaService.Request] = []
+        let failed = expectation(description: "timeout returned")
+        let retried = expectation(description: "retry returned")
+        let store = FocusDataStore(syncTransport: noNetwork, restoreAccount: false, schedulesNotifications: false, novaTransport: { request in
+            requests.append(request)
+            if requests.count == 1 { failed.fulfill(); throw NovaServiceError.timeout }
+            retried.fulfill()
+            return NovaService.Result(reply: "Preparé la tarea", actions: [.addTask(BackendTaskCreate(label: "Pan", priority: nil, category: nil, linkedEventId: nil, parentTaskId: nil))], smartActionsBlocked: false,
+                smartActionsMessage: nil, confidence: 1, shouldAskUser: false, mode: .chatWithAction,
+                proposedActions: [], requestId: request.requestID.uuidString)
+        })
+        store.settings.novaMemoryEnabled = false
+        store.syncCredentials = .init(accessToken: "test-only", userId: UUID())
+        NovaAIConsent.grant()
+        defer { store.syncCredentials = nil; store.cancelNovaRequest(); NovaAIConsent.revoke() }
+        store.sendNovaMessage("añade comprar pan")
+        await fulfillment(of: [failed], timeout: 3)
+        for _ in 0..<20 where store.isNovaTyping { await Task.yield() }
+        XCTAssertTrue(store.tasks.isEmpty)
+        XCTAssertNotNil(store.novaLastFailedInput)
+        store.retryNovaMessage()
+        await fulfillment(of: [retried], timeout: 3)
+        for _ in 0..<20 where store.isNovaTyping { await Task.yield() }
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(requests.first?.requestID, requests.last?.requestID)
+        XCTAssertEqual(store.tasks.count, 1)
+        XCTAssertEqual(FocusLocalStore.load(FocusSyncSnapshot.self, forKey: .syncSnapshot)?.tasks, store.tasks)
+    }
+
+    func testCancelledLateResponseCannotWriteIntoAnotherGeneration() async throws {
+        let started = expectation(description: "request started")
+        var resume: CheckedContinuation<NovaService.Result, Never>?
+        let store = FocusDataStore(syncTransport: noNetwork, restoreAccount: false, schedulesNotifications: false, novaTransport: { _ in
+            await withCheckedContinuation { continuation in resume = continuation; started.fulfill() }
+        })
+        store.settings.novaMemoryEnabled = false
+        store.syncCredentials = .init(accessToken: "test-only", userId: UUID())
+        NovaAIConsent.grant()
+        defer { store.syncCredentials = nil; store.cancelNovaRequest(); NovaAIConsent.revoke() }
+        store.sendNovaMessage("añade comprar pan")
+        await fulfillment(of: [started], timeout: 3)
+        store.cancelNovaRequest()
+        let before = store.novaMessages
+        resume?.resume(returning: response([event()]))
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertTrue(store.events.isEmpty)
+        XCTAssertEqual(store.novaMessages, before)
+    }
+
+    func testMorningPeriodAndLaterWeekdayDoNotBecomeTomorrow() throws {
+        let timezone = try XCTUnwrap(TimeZone(identifier: "America/Santiago"))
+        let now = try XCTUnwrap(NovaTimeFormatter.resolveDate(dateString: "2027-09-07", timeString: "06:00", timezone: timezone))
+        NovaResponder.testReferenceDate = now
+        NovaResponder.testTimeZone = timezone
+        defer { NovaResponder.testReferenceDate = nil; NovaResponder.testTimeZone = nil }
+        let calendar = NovaTimeFormatter.calendar(timezone: timezone)
+        for (text, day) in [("dentista esta mañana a las 10", 7), ("dentista el lunes en la mañana a las 9", 13)] {
+            guard case .createEvent(_, let date, _, _, _, _, _, _, _) = NovaResponder.parse(text), let date else {
+                return XCTFail("Expected a dated event: \(text)")
+            }
+            XCTAssertEqual(calendar.component(.day, from: date), day, text)
+        }
+    }
+
+    func testInvalidDatesAndDSTGapOrFoldRequireClarification() throws {
+        let zone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        XCTAssertNil(NovaTimeFormatter.resolveDate(dateString: "2027-03-14", timeString: "02:30", timezone: zone))
+        XCTAssertNil(NovaTimeFormatter.resolveDate(dateString: "2027-11-07", timeString: "01:30", timezone: zone))
+        XCTAssertNotNil(NovaTimeFormatter.resolveDate(dateString: "2027-03-14", timeString: "03:30", timezone: zone))
+        XCTAssertNil(NovaTimeFormatter.resolveDate(dateString: "2027-02-30", timeString: "09:00", timezone: zone))
+        NovaResponder.testTimeZone = zone
+        defer { NovaResponder.testTimeZone = nil }
+        for phrase in ["dentista el 31 de febrero a las 10", "dentista 2027-02-30 a las 10", "dentista mañana a las 10:99", "dentista 2027-03-14 a las 02:30 am"] {
+            guard case .clarify = NovaResponder.parse(phrase) else { return XCTFail("Must clarify: \(phrase)") }
+        }
+    }
+
+    func testAbsoluteDateAndSequentialDateInheritance() throws {
+        let calendar = NovaTimeFormatter.calendar()
+        NovaResponder.testReferenceDate = calendar.date(from: DateComponents(year: 2027, month: 9, day: 7, hour: 6))
+        defer { NovaResponder.testReferenceDate = nil }
+        let intents = NovaResponder.parseAll("hoy dentista a las 10 y luego gimnasio a las 11 y luego mañana estudiar a las 15")
+        XCTAssertEqual(intents.count, 3)
+        let days = intents.compactMap { intent -> Int? in
+            guard case .createEvent(_, let date, _, _, _, _, _, _, _) = intent, let date else { return nil }
+            return calendar.component(.day, from: date)
+        }
+        XCTAssertEqual(days, [7, 7, 8])
+        guard case .createEvent(_, let date, _, _, _, _, _, _, _) = NovaResponder.parse("dentista el 18 de septiembre de 2027 a las 10"), let date else { return XCTFail("Expected absolute date") }
+        XCTAssertEqual(calendar.component(.day, from: date), 18)
+        XCTAssertEqual(calendar.component(.month, from: date), 9)
+    }
+
+    func testSensitiveCasualDisclosureCannotCreateMemoryLocallyOrRemotely() {
+        let store = store()
+        store.settings.novaMemoryEnabled = true
+        NovaMemoryStore.shared.reloadForCurrentAccount()
+        NovaMemoryStore.shared.clearAll()
+        store.sendNovaMessage("Ana es mi psicóloga")
+        XCTAssertTrue(NovaMemoryStore.shared.activeMemories.isEmpty)
+        XCTAssertTrue(store.tasks.isEmpty)
+        store.receiveNovaResult(response([.saveMemory(key: "Ana", value: "mi psicóloga", category: "person_alias")]), userText: "Ana es mi psicóloga")
+        XCTAssertTrue(NovaMemoryStore.shared.activeMemories.isEmpty)
+        XCTAssertNil(NovaMemoryStore.shared.tryLearnFromUserText("prefiero que mi contraseña sea secreta"))
+    }
+
+    func testRelevantMemoryDoesNotUploadUnrelatedSensitiveContext() {
+        let memory = NovaMemoryStore.shared
+        memory.reloadForCurrentAccount()
+        memory.clearAll()
+        memory.upsert(NovaMemory(category: .personAlias, key: "ana", value: "Ana (psicóloga)"))
+        memory.upsert(NovaMemory(category: .projectContext, key: "informe", value: "El informe trimestral se entrega a dirección"))
+        memory.upsert(NovaMemory(category: .courseAlias, key: "historia", value: "Historia contemporánea"))
+        let context = memory.contextForRequest("preparar informe trimestral")
+        XCTAssertEqual(context.count, 1)
+        XCTAssertTrue(context.first?.contains("informe") == true)
+        XCTAssertFalse(context.joined().contains("psicóloga"))
+        XCTAssertFalse(context.joined().contains("Historia"))
+    }
+
+    func testMemoryWriteFailureDoesNotClaimItLearnedOrLosePreviousMemory() throws {
+        let store = store()
+        store.settings.novaMemoryEnabled = true
+        let memory = NovaMemoryStore.shared
+        memory.reloadForCurrentAccount()
+        memory.clearAll()
+        memory.upsert(NovaMemory(category: .courseAlias, key: "historia", value: "Historia contemporánea"))
+        FocusLocalStore.flush()
+        let guest = directory.appendingPathComponent("guest")
+        try FileManager.default.removeItem(at: guest)
+        try Data("blocked".utf8).write(to: guest)
+        store.sendNovaMessage("Juan es mi coordinador")
+        XCTAssertNotNil(store.novaErrorMessage)
+        XCTAssertEqual(memory.activeMemories.map(\.key), ["historia"])
+        XCTAssertFalse(store.novaMessages.last?.content.contains("ya sé") == true)
+    }
+
+    func testLegacyParserBatteryReportsFailuresAsXCTestAssertions() {
+        let report = NovaActionNormalizerTests.runAll()
+        XCTAssertEqual(report, "✓ ALL TESTS PASSED", report)
+    }
+}
+
+
+extension NovaExecutionTests {
+    func testPendingDentistAcceptsExactMorningReplyFromUI() {
+        let calendar = NovaTimeFormatter.calendar()
+        let day = calendar.startOfDay(for: Date())
+        NovaResponder.testReferenceDate = calendar.date(bySettingHour: 8, minute: 0, second: 0, of: day)
+        let store = store()
+        store.sendNovaMessage("Ponme dentista")
+        XCTAssertTrue(store.events.isEmpty)
+        XCTAssertEqual(store.novaContext.pendingClarification?.proposedTitle, "Dentista", store.novaMessages.map(\.content).joined(separator: "\n"))
+        store.sendNovaMessage("A las 11 de la mañana")
+        XCTAssertEqual(store.events.count, 1, store.novaMessages.map(\.content).joined(separator: "\n"))
+        XCTAssertEqual(store.events.first?.title, "Dentista")
+        XCTAssertEqual(store.events.first.map { calendar.component(.hour, from: $0.startTime) }, 11)
+        XCTAssertEqual(store.events.first.map { calendar.startOfDay(for: $0.startTime) }, day)
+    }
+
+    func testPastMorningReplyAsksForDayAndHonorsEachExplicitChoice() throws {
+        let calendar = NovaTimeFormatter.calendar()
+        let day = calendar.startOfDay(for: Date())
+        NovaResponder.testReferenceDate = try XCTUnwrap(calendar.date(bySettingHour: 14, minute: 0, second: 0, of: day))
+        for (reply, dayOffset) in [("hoy", 0), ("mañana", 1)] {
+            let store = store()
+            store.sendNovaMessage("Ponme dentista")
+            store.sendNovaMessage("A las 11 de la mañana")
+            XCTAssertTrue(store.events.isEmpty, "A past hour without a day must not create tomorrow silently")
+            XCTAssertEqual(store.novaContext.pendingClarification?.missingFields, [.date])
+            XCTAssertEqual(store.novaContext.pendingClarification?.proposedTitle, "Dentista")
+            XCTAssertTrue(store.novaMessages.last?.content.contains("hoy o mañana") == true)
+            store.sendNovaMessage("sí")
+            XCTAssertTrue(store.events.isEmpty, "An affirmative answer does not choose a missing day")
+            store.sendNovaMessage(reply)
+            let saved = try XCTUnwrap(store.events.first, store.novaMessages.map(\.content).joined(separator: "\n"))
+            XCTAssertEqual(store.events.count, 1)
+            XCTAssertEqual(saved.title, "Dentista")
+            XCTAssertEqual(calendar.component(.hour, from: saved.startTime), 11)
+            XCTAssertEqual(calendar.startOfDay(for: saved.startTime), calendar.date(byAdding: .day, value: dayOffset, to: day))
+        }
+    }
+
+    func testPastNineAMClarificationKeepsNineAsAnExplicitTime() throws {
+        let calendar = NovaTimeFormatter.calendar()
+        let day = calendar.startOfDay(for: Date())
+        NovaResponder.testReferenceDate = calendar.date(bySettingHour: 14, minute: 0, second: 0, of: day)
+        let store = store()
+        store.sendNovaMessage("Ponme dentista")
+        store.sendNovaMessage("A las 9 de la mañana")
+        XCTAssertTrue(store.events.isEmpty)
+        store.sendNovaMessage("mañana")
+        let saved = try XCTUnwrap(store.events.first)
+        XCTAssertEqual(calendar.component(.hour, from: saved.startTime), 9)
+        XCTAssertEqual(calendar.startOfDay(for: saved.startTime), calendar.date(byAdding: .day, value: 1, to: day))
+    }
+
+    func testRemoteExplicitPastDateIsNeverShiftedDuringPersistence() throws {
+        let store = store()
+        let payload = BackendEventCreate(title: "Dentista", timeString: "11:00 AM", endTimeString: "12:00 PM",
+            dateString: "2001-09-10", section: nil, icon: "event", reminderOffsets: nil,
+            reminderNotes: nil, location: nil, notes: nil, subtitle: nil)
+        let outcome = store.applyBackendActions([.addEvent(payload)], userText: "dentista de 11 am a 12 pm")
+        XCTAssertTrue(outcome.didMutate)
+        let saved = try XCTUnwrap(store.events.first)
+        XCTAssertEqual(saved.startTime, NovaTimeFormatter.resolveDate(dateString: "2001-09-10", timeString: "11:00 AM"))
+        XCTAssertEqual(saved.endTime, NovaTimeFormatter.resolveDate(dateString: "2001-09-10", timeString: "12:00 PM"))
+    }
+
+    func testTerminal503ReleasesOnlyTheMatchingCompletedRequestForExplicitRetry() async throws {
+        for variant in ["completed", "no_flags", "wrong_id", "incomplete", "no_retry"] {
+            var requests: [NovaService.Request] = []
+            let failed = expectation(description: variant + " failed")
+            let retried = expectation(description: variant + " retried")
+            let store = FocusDataStore(syncTransport: noNetwork, restoreAccount: false, schedulesNotifications: false, novaTransport: { request in
+                requests.append(request)
+                if requests.count == 1 {
+                    var body: [String: Any] = ["error": "assistant_unavailable", "requestId": request.requestID.uuidString]
+                    if variant != "no_flags" {
+                        body["request_completed"] = variant != "incomplete"
+                        body["request_retryable"] = variant != "no_retry"
+                    }
+                    if variant == "wrong_id" { body["requestId"] = UUID().uuidString }
+                    let error = NovaService.unavailableError(from: try JSONSerialization.data(withJSONObject: body), requestID: request.requestID)
+                    failed.fulfill()
+                    throw error
+                }
+                retried.fulfill()
+                return NovaService.Result(reply: "Podemos seguir", actions: [], smartActionsBlocked: false,
+                    smartActionsMessage: nil, confidence: 1, shouldAskUser: false, mode: .chatOnly,
+                    proposedActions: [], requestId: request.requestID.uuidString)
+            })
+            store.settings.novaMemoryEnabled = false
+            store.syncCredentials = .init(accessToken: "test-only", userId: UUID())
+            NovaAIConsent.grant()
+            defer { store.syncCredentials = nil; store.cancelNovaRequest(); NovaAIConsent.revoke() }
+            store.sendNovaMessage("añade comprar pan")
+            await fulfillment(of: [failed], timeout: 3)
+            for _ in 0..<20 where store.isNovaTyping { await Task.yield() }
+            XCTAssertEqual(requests.count, 1, "No automatic paid retry")
+            XCTAssertTrue(store.tasks.isEmpty)
+            XCTAssertNotNil(store.novaLastFailedInput)
+            store.retryNovaMessage()
+            await fulfillment(of: [retried], timeout: 3)
+            for _ in 0..<20 where store.isNovaTyping { await Task.yield() }
+            XCTAssertEqual(requests.count, 2)
+            if variant == "completed" { XCTAssertNotEqual(requests.first?.requestID, requests.last?.requestID) }
+            else { XCTAssertEqual(requests.first?.requestID, requests.last?.requestID, variant) }
+        }
+    }
+
+    func testMorningFollowUpPreservesThePreviouslyRequestedDay() {
+        let store = store()
+        store.sendNovaMessage("mañana tengo dentista")
+        store.sendNovaMessage("a las 11 de la mañana")
+        XCTAssertTrue(store.events.first.map { Calendar.current.isDateInTomorrow($0.startTime) } == true,
+                      store.novaMessages.map(\.content).joined(separator: "\n"))
+    }
+
+    func testSecretsAreNeverLearnedEvenIfUserExplicitlyAsks() {
+        let memory = NovaMemoryStore.shared
+        for secret in ["PIN", "CVV", "token", "clave privada", "contraseña"] {
+            XCTAssertFalse(NovaMemoryPrivacy.canRemember(secret + " 1234", userText: "recuerda que mi " + secret + " es 1234"), secret)
+            let validation = NovaActionValidator.validate(actions: [.saveMemory(key: secret, value: "1234", category: "preference")], userText: "mi " + secret + " es 1234")
+            XCTAssertTrue(validation.shouldAsk, secret)
+            memory.upsert(NovaMemory(category: .preference, key: secret, value: "1234"))
+            XCTAssertTrue(memory.contextForRequest(secret).isEmpty, secret)
+        }
+    }
+
+    func testNonFiniteConfidenceCannotShowAnExecutionClaim() {
+        let store = store()
+        store.receiveNovaResult(response([], confidence: .nan, reply: "Listo, guardé tu tarea."), userText: "compra pan")
+        XCTAssertTrue(store.tasks.isEmpty)
+        XCTAssertNotNil(store.novaErrorMessage)
+        XCTAssertFalse(store.novaMessages.last?.content == "Listo, guardé tu tarea.")
+    }
+
+    func testTimelessEventAndReceiptUseASingleWriteAndReplayDoesNotDuplicate() throws {
+        let store = store()
+        let payload = BackendEventCreate(title: "Pan", timeString: nil, endTimeString: nil, dateString: "2027-09-10",
+            section: nil, icon: nil, reminderOffsets: nil, reminderNotes: nil, location: nil, notes: nil, subtitle: nil)
+        var writes = 0
+        FocusLocalStore.testRejectSynchronousWrite = { key in
+            guard key == .syncSnapshot else { return false }
+            writes += 1
+            return writes > 1
+        }
+        defer { FocusLocalStore.testRejectSynchronousWrite = nil }
+        let receipt = UUID().uuidString.lowercased() + ":0"
+        let outcome = store.applyBackendActions([.addEvent(payload)], userText: "compra pan", actionIDs: [receipt])
+        XCTAssertTrue(outcome.didMutate)
+        XCTAssertEqual(writes, 1)
+        XCTAssertTrue(FocusLocalStore.load(FocusSyncSnapshot.self, forKey: .syncSnapshot)?.novaAppliedActionIDs?.contains(receipt) == true)
+        let replay = store.applyBackendActions([.addEvent(payload)], userText: "compra pan", actionIDs: [receipt])
+        XCTAssertFalse(replay.didMutate)
+        XCTAssertEqual(store.tasks.count, 1)
+        XCTAssertEqual(writes, 1)
+    }
+
+    func testRecurringSeriesAndReceiptCommitAtomicallyInOneWrite() throws {
+        let store = store()
+        guard case .addEvent(let payload) = event("Estudiar") else { return XCTFail() }
+        let action = BackendAction.addRecurringEvent(payload, BackendRecurrence(pattern: "daily", weekday: nil, count: 3, startDate: "2027-09-10"))
+        var writes = 0
+        FocusLocalStore.testRejectSynchronousWrite = { key in
+            guard key == .syncSnapshot else { return false }
+            writes += 1
+            return writes > 1
+        }
+        defer { FocusLocalStore.testRejectSynchronousWrite = nil }
+        let receipt = UUID().uuidString.lowercased() + ":0"
+        let outcome = store.applyBackendActions([action], userText: "estudiar todos los días a las 11", actionIDs: [receipt])
+        XCTAssertTrue(outcome.didMutate)
+        XCTAssertEqual(store.events.count, 3)
+        XCTAssertEqual(writes, 1)
+        let saved = try XCTUnwrap(FocusLocalStore.load(FocusSyncSnapshot.self, forKey: .syncSnapshot))
+        XCTAssertEqual(saved.events.count, 3)
+        // This fixture is a guest: persist locally without scheduling uploads
+        // against a nonexistent account. Account outbox behavior has its own suite.
+        XCTAssertTrue(saved.outbox.mutations.isEmpty)
+        XCTAssertTrue(saved.novaAppliedActionIDs?.contains(receipt) == true)
+    }
+
+    func testFailedRecurringCommitLeavesNoPartialSeriesOrReceipt() {
+        let store = store()
+        guard case .addEvent(let payload) = event("Estudiar") else { return XCTFail() }
+        let action = BackendAction.addRecurringEvent(payload, BackendRecurrence(pattern: "daily", weekday: nil, count: 3, startDate: "2027-09-10"))
+        FocusLocalStore.testRejectSynchronousWrite = { $0 == .syncSnapshot }
+        defer { FocusLocalStore.testRejectSynchronousWrite = nil }
+        let outcome = store.applyBackendActions([action], userText: "estudiar todos los días a las 11", actionIDs: [UUID().uuidString + ":0"])
+        XCTAssertFalse(outcome.didMutate)
+        XCTAssertTrue(store.events.isEmpty)
+        XCTAssertEqual(store.pendingSyncCount, 0)
+        XCTAssertTrue(outcome.ignored.contains("persistence_failed"))
+        XCTAssertNil(FocusLocalStore.load(FocusSyncSnapshot.self, forKey: .syncSnapshot))
+    }
+
+    func testAnotherLocalGoalAndCompletedChatInvalidateOldRetryIdentity() throws {
+        let store = store()
+        let first = try XCTUnwrap(store.prepareNovaRequestID(for: "plan anterior"))
+        store.sendNovaMessage("comprar leche")
+        XCTAssertNotEqual(store.prepareNovaRequestID(for: "plan anterior"), first)
+        let chat = try XCTUnwrap(store.prepareNovaRequestID(for: "hola"))
+        store.receiveNovaResult(response([], mode: .chatOnly, reply: "Hola, ¿en qué te ayudo?"), userText: "hola")
+        XCTAssertNotEqual(store.prepareNovaRequestID(for: "hola"), chat)
+    }
+
+    func testManualEditWhileWaitingCannotBeOverwrittenByLatePlan() async throws {
+        let started = expectation(description: "request started")
+        var continuation: CheckedContinuation<NovaService.Result, Never>?
+        var receivedID: UUID?
+        let store = FocusDataStore(syncTransport: noNetwork, restoreAccount: false, schedulesNotifications: false, novaTransport: { request in
+            receivedID = request.requestID
+            return await withCheckedContinuation { continuation = $0; started.fulfill() }
+        })
+        store.settings.novaMemoryEnabled = false
+        var appointment = FocusEvent(title: "Dentista", startTime: Date().addingTimeInterval(7200))
+        XCTAssertTrue(store.addEvent(appointment))
+        store.syncCredentials = .init(accessToken: "test-only", userId: UUID())
+        NovaAIConsent.grant()
+        defer { store.syncCredentials = nil; store.cancelNovaRequest(); NovaAIConsent.revoke() }
+        // An open request reaches the remote transport; the delayed result targets this event.
+        store.sendNovaMessage("actualiza el título de Dentista")
+        await fulfillment(of: [started], timeout: 3)
+        appointment.title = "Dentista confirmado manualmente"
+        XCTAssertTrue(store.updateEvent(appointment))
+        let updates = BackendEventUpdates(title: "Dentista anterior", timeString: nil, endTimeString: nil,
+            dateString: nil, location: nil, reminderOffsets: nil, reminderNotes: nil)
+        continuation?.resume(returning: NovaService.Result(reply: "Preparé el cambio", actions: [.editEvent(id: appointment.id.uuidString, updates: updates)],
+            smartActionsBlocked: false, smartActionsMessage: nil, confidence: 1, shouldAskUser: false,
+            mode: .chatWithAction, proposedActions: [], requestId: receivedID?.uuidString))
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(store.events.first?.title, "Dentista confirmado manualmente")
+        XCTAssertTrue(store.novaErrorMessage?.contains("cambiaron") == true)
     }
 }

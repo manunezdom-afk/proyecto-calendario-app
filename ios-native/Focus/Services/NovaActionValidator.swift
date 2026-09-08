@@ -73,17 +73,21 @@ enum NovaActionValidator {
                 }
 
             case .addTask(let task):
-                if let reason = riskyTaskTitle(task.label) {
+                if let reason = riskyTaskTitle(task.label) ?? (task.dateString != nil && NovaTimeFormatter.parseISODate(task.dateString) == nil ? "Fecha inválida" : nil) {
                     rejected.append((action, reason))
                 } else {
                     safe.append(action)
                 }
 
+            case .saveMemory(let key, let value, _):
+                if NovaMemoryPrivacy.canRemember(key + " " + value, userText: userText) { safe.append(action) }
+                else { rejected.append((action, "La información sensible necesita una petición explícita para recordarla")) }
+
             case .unsupported:
                 rejected.append((action, "Acción no disponible"))
 
-            case .editEvent, .deleteEvent, .toggleTask, .deleteTask,
-                 .remember, .saveMemory, .forgetMemory:
+            case .editEvent, .editTask, .completeTask, .deleteEvent, .toggleTask, .deleteTask,
+                 .remember, .forgetMemory:
                 // Acciones de mantenimiento/edición + memoria — el riesgo es
                 // bajo, pasan tal cual. saveMemory/forgetMemory (V2 2026-05-27)
                 // van directo al NovaMemoryStore sin tocar calendario, así que
@@ -132,8 +136,11 @@ enum NovaActionValidator {
         if let date = event.dateString, NovaTimeFormatter.parseISODate(date) == nil {
             return "Fecha inválida"
         }
-        if let time = event.timeString, !time.isEmpty, NovaTimeFormatter.parseHourMinute(time) == nil {
-            return "Hora inválida"
+        if let time = event.timeString, !time.isEmpty {
+            guard let start = NovaTimeFormatter.resolveDate(dateString: event.dateString, timeString: time) else { return "Hora inválida o ambigua" }
+            if let end = event.endTimeString {
+                guard let endDate = NovaTimeFormatter.resolveDate(dateString: event.dateString, timeString: end), endDate > start else { return "Fin inválido" }
+            }
         }
         return nil
     }
@@ -425,7 +432,7 @@ enum NovaActionValidator {
             case .unsupported:
                 demoted.append(action)
 
-            case .editEvent, .deleteEvent, .toggleTask, .deleteTask,
+            case .editEvent, .editTask, .completeTask, .deleteEvent, .toggleTask, .deleteTask,
                  .remember, .saveMemory, .forgetMemory:
                 safe.append(action)
             }
@@ -646,3 +653,20 @@ enum NovaActionValidatorTests {
     }
 }
 #endif
+
+/// This policy applies to proposed memories, not to the user's messages or
+/// tasks. Casual disclosures must not create a durable sensitive profile.
+enum NovaMemoryPrivacy {
+    static func isSensitive(_ text: String) -> Bool {
+        text.range(of: #"(?i)\b(?:salud|diagn[oó]stic\w*|enfermedad\w*|c[aá]ncer|diabetes|vih|embaraz\w*|medicaci[oó]n|antidepresiv\w*|psic[oó]log\w*|psiquiatr\w*|terapeuta|terapia|depresi[oó]n|ansiedad|sexual\w*|orientaci[oó]n|religi[oó]n|cat[oó]lic\w*|musulm[aá]n\w*|jud[ií]\w*|pol[ií]tic\w*|partido pol[ií]tico|sueldo|salario|deuda\w*|cuenta bancaria|rut|pasaporte|documento de identidad|contrase[nñ]a|password|tarjeta de cr[eé]dito|pin|cvv|token|clave privada)\b"#,
+                   options: .regularExpression) != nil
+    }
+
+    static func canRemember(_ text: String, userText: String) -> Bool {
+        // Authentication/payment secrets never belong in conversational memory.
+        if text.range(of: #"(?i)\b(?:contrase[nñ]a|password|pin|cvv|token|clave privada|tarjeta de cr[eé]dito|pin|cvv|token|clave privada)\b"#, options: .regularExpression) != nil { return false }
+        guard isSensitive(text) else { return true }
+        return userText.range(of: #"(?i)^\s*(?:quiero que (?:recuerdes|guardes)|recuerda que|guarda (?:en tu memoria|que)|memoriza)\b"#,
+                              options: .regularExpression) != nil
+    }
+}

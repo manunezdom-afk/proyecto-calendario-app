@@ -4136,7 +4136,7 @@ enum NovaActionNormalizerTests {
             }
         }
 
-        let store = FocusDataStore()
+        let store = FocusDataStore(restoreAccount: false, schedulesNotifications: false)
         let userText = "mañana gym a las 7 y clase a las 10, acuérdame de llevar las zapatillas al gym"
         let cal = Calendar.current
         let tomorrow = cal.date(byAdding: .day, value: 1, to: Date()) ?? Date()
@@ -4253,7 +4253,7 @@ enum NovaActionNormalizerTests {
 
             for (i, c) in cases.enumerated() {
                 let n = i + 1
-                let store = FocusDataStore()
+                let store = FocusDataStore(restoreAccount: false, schedulesNotifications: false)
                 for ev in store.events { store.deleteEvent(ev.id) }
                 for t in store.tasks { store.deleteTask(t.id) }
                 let before = Set(store.events.map(\.id))
@@ -4524,7 +4524,7 @@ enum NovaActionNormalizerTests {
         // UserDefaults) para que el guard anti-duplicado no bloquee la
         // creación.
         func runLocal(_ text: String) -> (store: FocusDataStore, events: [FocusEvent], replies: [String], intentCount: Int) {
-            let store = FocusDataStore()
+            let store = FocusDataStore(restoreAccount: false, schedulesNotifications: false)
             let fixtureNeedles = ["dentista", "comprar remedios", "remedios"]
             for ev in store.events where fixtureNeedles.contains(where: { ev.title.lowercased().contains($0) }) {
                 store.deleteEvent(ev.id)

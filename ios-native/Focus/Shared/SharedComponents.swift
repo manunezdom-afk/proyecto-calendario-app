@@ -2193,7 +2193,7 @@ struct NovaAIConsentSheet: View {
                 }
                 .padding(.top, Theme.Spacing.xl)
 
-                Text("Para responder, tu mensaje y el contexto de tu agenda (eventos visibles, tareas y las memorias que guardaste) se envían a proveedores externos de inteligencia artificial: **DeepSeek** como principal, con OpenAI o Anthropic como alternativa. No se usan para publicidad ni se venden.")
+                Text("Para responder, tu mensaje y el contexto de tu agenda (eventos visibles, tareas y las memorias que guardaste) se envían a proveedores externos de inteligencia artificial: **Anthropic, DeepSeek u OpenAI**, según el proveedor habilitado para la solicitud. No se usan para publicidad ni se venden.")
                     .font(Theme.Typography.body)
                     .foregroundStyle(Theme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
