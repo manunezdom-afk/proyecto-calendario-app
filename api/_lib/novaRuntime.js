@@ -68,8 +68,11 @@ export function prepareNovaRoute(body, dateContext, route) {
     }
   }
 }
-const errorCode = error => error?.code || (error?.status ? `http_${error.status}`
-  : ['AbortError','TimeoutError'].includes(error?.name) ? 'timeout' : 'provider_error')
+// DOMException TimeoutError has numeric code 23; keep a useful closed error
+// category instead of leaking that implementation detail into routing metrics.
+const errorCode = error => ['AbortError','TimeoutError'].includes(error?.name) ? 'timeout'
+  : typeof error?.code === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(error.code) ? error.code
+    : error?.status ? `http_${error.status}` : 'provider_error'
 
 /** One production chat provider; every explicit attempt requires an atomic lease. */
 export async function executeNovaRequest({ admin, userId, requestId, body, plan,

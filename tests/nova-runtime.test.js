@@ -244,3 +244,12 @@ test('cache savings and reasoning metrics are measured; missing cache usage keep
   assert.equal(logs[0].metadata.cost_basis,'reservation');assert.equal(logs[0].metadata.cache_hit,undefined)
  }finally{restore()}
 })
+
+test('DOMException timeout code 23 is named timeout and retains its unknown paid reservation',async()=>{
+ const restore=environment(),logs=[];let attempts=0
+ try {
+  await invoke({provider:async()=>{if(++attempts===1)throw new DOMException('Synthetic timeout','TimeoutError');return response(wirePlan())},track:async e=>{logs.push(e);return{ok:true}}})
+  assert.equal(logs[0].error_type,'timeout');assert.equal(logs[0].metadata.cost_basis,'reservation');assert.ok(logs[0].cost_override_usd>0)
+  assert.equal(logs[1].metadata.escalation_reason,'timeout')
+ }finally{restore()}
+})

@@ -220,6 +220,21 @@ function matchesSchema(value, schema) {
 }
 export const isNovaWirePlan = payload => matchesSchema(payload, NOVA_PLAN_SCHEMA.schema)
 
+function confirmedPendingOffer(message, history) {
+  if (!/^(?:si|dale|ok|vale|claro|hazlo|confirmo)[.!]?$/i.test(norm(message))) return null
+  const last = history.at(-1), previous = history.at(-2)
+  if (last?.role !== 'assistant' || previous?.role !== 'user' || !/\?\s*$/.test(last.content || '')
+    || pastClaim.test(norm(last.content)) || /\b(?:listo|hecho|guardado|agendado|algo mas)\b/.test(norm(last.content))) return null
+  // An explicit user capture must precede the offer. Assistant prose alone,
+  // quoted instructions and already completed receipts never authorize writes.
+  if (!captureRequest(previous.content) || speculative(previous.content) || negativeMutation(previous.content)) return null
+  const offered = String(last.content || '').trim()
+  if (offered.length > 240 || (offered.match(/\?/g) || []).length !== 1
+    || /[\n"“”«»]|\b(?:ignora|instrucciones|system|prompt|contrase[nñ]a|token|borra\w*|elimina\w*|olvida\w*|cancela\w*)\b/i.test(offered)) return null
+  if (!/^¿?(?:te lo agendo|lo (?:dejo|agendo|programo|guardo|creo)|quieres que (?:lo )?(?:agende|cree|programe))\b/.test(norm(offered))) return null
+  return offered
+}
+
 export function activeIntentText(message, history = []) {
   const last = history.at(-1)
   // A prior user request is relevant only while answering a clarification.
@@ -230,7 +245,8 @@ export function activeIntentText(message, history = []) {
     && !pastClaim.test(norm(last.content))
   if (!continuation) return String(message || '')
   const previous = [...history].reverse().find(item => item?.role === 'user')?.content || ''
-  return `${previous}\n${message}`
+  const offer = confirmedPendingOffer(message, history)
+  return `${previous}\n${offer ? `${offer}\n` : ''}${message}`
 }
 
 /** Single, provider-independent gate. Returns a plan; persistence happens in Focus. */
@@ -281,6 +297,7 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
       continue
     }
     if (a.confidence === 'low') { reject('low_confidence'); continue }
+    if (speculative(userMessage)) { reject('speculative_intent'); continue }
     if (negatedAction(userMessage, a.type)) { reject('negated_mutation'); continue }
     if (a.dateISO != null && !validCivilDate(a.dateISO)) { reject('invalid_date'); continue }
     if (a.time != null && !validClockTime(a.time)) { reject('invalid_time'); continue }
@@ -293,7 +310,8 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
     }
     if (a.subtitle != null && !bounded(a.subtitle, 300, true)) { reject('invalid_subtitle'); continue }
     const source = norm(a.sourceText)
-    if (!source || source.length < 3 || !scopeNorm.includes(source)) { reject('missing_intent_evidence'); continue }
+    const shortConfirmation = source === norm(userMessage) && confirmedPendingOffer(userMessage, history) !== null
+    if (!source || (source.length < 3 && !shortConfirmation) || !scopeNorm.includes(source)) { reject('missing_intent_evidence'); continue }
     const recentDateCorrection = scope !== userMessage && incoming.length === 1 ? expectedCivilDate(userMessage, dateContext) : null
     const expectedDate = recentDateCorrection || expectedCivilDate(a.sourceText, dateContext)
     if (a.dateISO && expectedDate && a.dateISO !== expectedDate) { reject('date_changed_intent'); continue }
@@ -395,6 +413,11 @@ export function validateNovaPlan({ payload, userMessage = '', history = [], even
       } else {
         if (!a.dateISO || !a.time) { reject('missing_event_schedule'); continue }
         if (hasLocationTrigger(scope) || (!planning && !anyTimeSignal(scope.replace(/\balas?\s*(?=\d)/gi, 'a las ')))) { reject('missing_exact_time'); continue }
+        const reminderSource = incoming.length === 1 ? scopeNorm : source
+        if (a.type === 'create_event' && a.reminderOffsetMinutes == null
+          && /^(?:por favor[, ]+)?(?:avis\w*|recuerd\w*|acuerd\w*)\b/.test(reminderSource)) {
+          reject('reminder_type_conflict'); continue
+        }
         const reminder = a.type === 'create_reminder'
         const event = { title: a.title.trim(), date: a.dateISO, time: to12h(a.time),
           endTime: !reminder && a.durationMinutes > 0 && durationAllowed ? endAt(a.time, a.durationMinutes) : null,
