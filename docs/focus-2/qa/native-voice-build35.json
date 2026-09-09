@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "reportedAt": "2026-09-08T20:58:49-03:00",
+  "gitHeadAtReport": "7e5ecb7801d565b478a1be1e7ad8c1027cf43d93",
+  "version": "1.0",
+  "build": "35",
+  "change": "Removed duplicate minHeight44 only from the Terminar/Enviar labels. FocusPrimaryButtonStyle retains its minHeight54 and vertical padding15; compact detent remains390. Project build number changed34→35 for app/widget Debug/Release.",
+  "sourceSHA256": {
+    "ios-native/Focus/Views/VoiceDictationSheet.swift": "0d340eb969783d1828291ca61e556d706320c13e26fdc1ea1d7d1383f615e16f",
+    "ios-native/Focus.xcodeproj/project.pbxproj": "ee9a3839c0b10b00a9fd2c990b88e91a288f865ef54d05ec4bae7a21a2f408a8"
+  },
+  "simulatorUI": {
+    "test": "FocusUITests/FocusCoreFlowTests/testCompactVoiceCanCancelPermissionsAndReturnToUnchangedDraft",
+    "passed": 1,
+    "failed": 0,
+    "durationSeconds": 43.75,
+    "appearance": "dark",
+    "permissionState": "denied",
+    "log": "/tmp/focus-voice-compact-build35.log",
+    "xcresult": "/tmp/focus-2-derived/Logs/Test/Test-Focus-2026.09.08_20-49-05--0300.xcresult",
+    "command": "xcodebuild -project ios-native/Focus.xcodeproj -scheme Focus -destination 'platform=iOS Simulator,id=C9047B76-5F1A-4C37-B774-279DE16193F6' -derivedDataPath /tmp/focus-2-derived -parallel-testing-enabled NO -collect-test-diagnostics never -jobs 1 -only-testing:FocusUITests/FocusCoreFlowTests/testCompactVoiceCanCancelPermissionsAndReturnToUnchangedDraft test",
+    "asserted": "Cancel returns to the exact unchanged synthetic draft; no send.",
+    "visualReview": "Original screenshot inspected: Enviar is smaller and Volver al texto is fully visible with bottom space inside the compact390 sheet. No adaptive440/large detent change was needed.",
+    "screenshot": "docs/focus-2/qa/native-ux-build35/voice-compact-denied-dark.png",
+    "screenshotSHA256": "5a71543dbe33cd023e50eece221e25a23962143a183f7a4335ea33c5dc3275c7"
+  },
+  "physical": {
+    "signedDevelopmentBuild": "passed",
+    "buildLog": "/tmp/focus-ux-iphone-build35.log",
+    "install": "success",
+    "installReport": "/tmp/focus-ux-iphone-install35.json",
+    "installedAppVerification": "/tmp/focus-ux-iphone-app35.json",
+    "verifiedApp": {
+      "bundleIdentifier": "me.usefocus.app",
+      "name": "Focus",
+      "version": "1.0",
+      "bundleVersion": "35"
+    },
+    "launchAttempted": true,
+    "launchAttemptedAt": "2026-09-08T20:59:46-03:00",
+    "launchResult": "locked",
+    "launchReport": "/tmp/focus-ux-iphone-launch35.json",
+    "launchEvidence": "CoreDevice reported that SBMainWorkspace denied the launch because the device was locked and could not be unlocked.",
+    "dataResetOrUninstallPerformed": false,
+    "commandNote": "The exact paired-device build/install commands remain in local logs; no physical-device screenshots or account data are copied into this report."
+  },
+  "priorCoverage": {
+    "nativeLogicTests": 95,
+    "nativeLogicLog": "/tmp/focus-ux-native-tests-v3.log",
+    "build34UIReport": "docs/focus-2/qa/native-ux-build34.json",
+    "fullLogicOrOtherUIRepeatedForLayoutChange": false
+  },
+  "limitations": [
+    "The95 logic tests and5 build34 UI runs are prior coverage, not re-executed under build35.",
+    "The screenshot and voice UI use only synthetic simulator data and denied permission. No human speech, microphone quality, call interruption, physical haptics or FPS have been measured.",
+    "Build 35 was installed; its launch attempt at 20:59:46 was rejected because the physical phone was locked. No physical interaction or spoken-voice result is claimed."
+  ],
+  "paidAICalls": 0
+}

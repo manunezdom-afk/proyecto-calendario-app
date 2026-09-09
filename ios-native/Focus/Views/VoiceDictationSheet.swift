@@ -108,7 +108,7 @@ struct VoiceDictationSheet: View {
     @ViewBuilder private var controls: some View {
         if service.state == .listening {
             Button { service.stop() } label: {
-                Label("Terminar", systemImage: "stop.fill").frame(maxWidth: .infinity, minHeight: 44)
+                Label("Terminar", systemImage: "stop.fill").frame(maxWidth: .infinity)
             }
             .buttonStyle(FocusPrimaryButtonStyle()).accessibilityIdentifier("voice.stop")
         } else if !busy {
@@ -139,7 +139,7 @@ struct VoiceDictationSheet: View {
                         dismiss()
                     } label: {
                         Label(onSend == nil ? "Usar texto" : "Enviar", systemImage: "arrow.up")
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(FocusPrimaryButtonStyle()).accessibilityIdentifier("voice.use")
                 }

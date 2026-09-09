@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "title": "Focus build 34 — QA nativa del simulador",
+  "reportedAt": "2026-09-08T20:31:23-03:00",
+  "gitHeadAtReport": "ec5b36014aa80d64c6c9567da2a9ce7a2eb60e9d",
+  "scope": {
+    "platform": "iOS Simulator",
+    "deviceName": "Focus 2.0 QA",
+    "deviceID": "C9047B76-5F1A-4C37-B774-279DE16193F6",
+    "runtime": "iOS 26.4",
+    "screenshotPixels": [
+      1206,
+      2622
+    ],
+    "version": "1.0",
+    "build": "34",
+    "data": "Sólo datos sintéticos creados desde formularios nativos. Los tests usan --ui-testing --reset-fixture únicamente en este simulador. Ningún envío de IA, autenticación real, llamada pagada ni lectura de datos del iPhone físico."
+  },
+  "finalResult": {
+    "testExecutionsPassed": 5,
+    "testExecutionsFailed": 0,
+    "distinctTestCases": 3
+  },
+  "verified": [
+    "En claro y oscuro: alta manual, swipe parcial sobre Cell nativo, botón Eliminar rojo, borrado, Deshacer, restauración, swipe completo sin pulsar Eliminar, reinicio y ausencia en Hoy y Agenda.",
+    "En claro y oscuro: tres eventos con Tipo elegido explícitamente (Estudio, Entrenamiento y Reunión), capturas de Hoy y Agenda; después del reinicio cada formulario conserva su Tipo.",
+    "Inspección visual de capturas: Estudio violeta, Entrenamiento verde y Reunión ocre/dorado, coherentes entre Hoy y Agenda y adaptados al tema. No es una prueba automatizada de píxeles ni de categorización por IA.",
+    "Dictado compacto en estado de permiso denegado: muestra el borrador sintético y alternativa de escribir; Cancelar conserva exactamente el borrador y no envía nada."
+  ],
+  "testRuns": [
+    {
+      "test": "testHomeSwipeDeleteUndoAndRestart",
+      "appearance": "light",
+      "passed": 1,
+      "failed": 0,
+      "durationSeconds": 120.256,
+      "evidenceSummary": "Test Case '-[FocusUITests.FocusCoreFlowTests testHomeSwipeDeleteUndoAndRestart]' passed (120.256 seconds).",
+      "commands": [
+        "xcrun simctl ui C9047B76-5F1A-4C37-B774-279DE16193F6 appearance light",
+        "xcodebuild -project ios-native/Focus.xcodeproj -scheme Focus -destination 'platform=iOS Simulator,id=C9047B76-5F1A-4C37-B774-279DE16193F6' -derivedDataPath /tmp/focus-2-derived -parallel-testing-enabled NO -collect-test-diagnostics never -jobs 1 -only-testing:FocusUITests/FocusCoreFlowTests/testHomeSwipeDeleteUndoAndRestart test > /tmp/focus-home-swipe-light-v4.log 2>&1"
+      ],
+      "log": "/tmp/focus-home-swipe-light-v4.log",
+      "xcresult": "/tmp/focus-2-derived/Logs/Test/Test-Focus-2026.09.08_20-12-05--0300.xcresult",
+      "xcresultRetainedAtReport": false
+    },
+    {
+      "test": "testHomeSwipeDeleteUndoAndRestart",
+      "appearance": "dark",
+      "passed": 1,
+      "failed": 0,
+      "durationSeconds": 76.021,
+      "evidenceSummary": "Test Case '-[FocusUITests.FocusCoreFlowTests testHomeSwipeDeleteUndoAndRestart]' passed (76.021 seconds).",
+      "commands": [
+        "xcrun simctl ui C9047B76-5F1A-4C37-B774-279DE16193F6 appearance dark",
+        "xcodebuild -project ios-native/Focus.xcodeproj -scheme Focus -destination 'platform=iOS Simulator,id=C9047B76-5F1A-4C37-B774-279DE16193F6' -derivedDataPath /tmp/focus-2-derived -parallel-testing-enabled NO -collect-test-diagnostics never -jobs 1 -only-testing:FocusUITests/FocusCoreFlowTests/testHomeSwipeDeleteUndoAndRestart test > /tmp/focus-home-swipe-dark-v1.log 2>&1"
+      ],
+      "log": "/tmp/focus-home-swipe-dark-v1.log",
+      "xcresult": "/tmp/focus-2-derived/Logs/Test/Test-Focus-2026.09.08_20-16-24--0300.xcresult",
+      "xcresultRetainedAtReport": false
+    },
+    {
+      "test": "testManualCategoriesKeepTheirTypesAndColorsAfterRestart",
+      "appearance": "light",
+      "passed": 1,
+      "failed": 0,
+      "durationSeconds": 166.898,
+      "evidenceSummary": "Test Case '-[FocusUITests.FocusCoreFlowTests testManualCategoriesKeepTheirTypesAndColorsAfterRestart]' passed (166.898 seconds).",
+      "commands": [
+        "xcrun simctl ui C9047B76-5F1A-4C37-B774-279DE16193F6 appearance light",
+        "xcodebuild -project ios-native/Focus.xcodeproj -scheme Focus -destination 'platform=iOS Simulator,id=C9047B76-5F1A-4C37-B774-279DE16193F6' -derivedDataPath /tmp/focus-2-derived -parallel-testing-enabled NO -collect-test-diagnostics never -jobs 1 -only-testing:FocusUITests/FocusCoreFlowTests/testManualCategoriesKeepTheirTypesAndColorsAfterRestart test > /tmp/focus-categories-light-v1.log 2>&1"
+      ],
+      "log": "/tmp/focus-categories-light-v1.log",
+      "xcresult": "/tmp/focus-2-derived/Logs/Test/Test-Focus-2026.09.08_20-20-03--0300.xcresult",
+      "xcresultRetainedAtReport": true
+    },
+    {
+      "test": "testManualCategoriesKeepTheirTypesAndColorsAfterRestart",
+      "appearance": "dark",
+      "passed": 1,
+      "failed": 0,
+      "durationSeconds": 128.755,
+      "evidenceSummary": "Test Case '-[FocusUITests.FocusCoreFlowTests testManualCategoriesKeepTheirTypesAndColorsAfterRestart]' passed (128.755 seconds).",
+      "commands": [
+        "xcrun simctl ui C9047B76-5F1A-4C37-B774-279DE16193F6 appearance dark",
+        "xcodebuild -project ios-native/Focus.xcodeproj -scheme Focus -destination 'platform=iOS Simulator,id=C9047B76-5F1A-4C37-B774-279DE16193F6' -derivedDataPath /tmp/focus-2-derived -parallel-testing-enabled NO -collect-test-diagnostics never -jobs 1 -only-testing:FocusUITests/FocusCoreFlowTests/testManualCategoriesKeepTheirTypesAndColorsAfterRestart test-without-building > /tmp/focus-categories-dark-v1.log 2>&1"
+      ],
+      "log": "/tmp/focus-categories-dark-v1.log",
+      "xcresult": "/tmp/focus-2-derived/Logs/Test/Test-Focus-2026.09.08_20-23-59--0300.xcresult",
+      "xcresultRetainedAtReport": true
+    },
+    {
+      "test": "testCompactVoiceCanCancelPermissionsAndReturnToUnchangedDraft",
+      "appearance": "dark",
+      "passed": 1,
+      "failed": 0,
+      "durationSeconds": 20.105,
+      "evidenceSummary": "Test Case '-[FocusUITests.FocusCoreFlowTests testCompactVoiceCanCancelPermissionsAndReturnToUnchangedDraft]' passed (20.105 seconds).",
+      "commands": [
+        "xcrun simctl ui C9047B76-5F1A-4C37-B774-279DE16193F6 appearance dark",
+        "xcodebuild -project ios-native/Focus.xcodeproj -scheme Focus -destination 'platform=iOS Simulator,id=C9047B76-5F1A-4C37-B774-279DE16193F6' -derivedDataPath /tmp/focus-2-derived -parallel-testing-enabled NO -collect-test-diagnostics never -jobs 1 -only-testing:FocusUITests/FocusCoreFlowTests/testCompactVoiceCanCancelPermissionsAndReturnToUnchangedDraft test-without-building > /tmp/focus-voice-compact-final-v1.log 2>&1"
+      ],
+      "log": "/tmp/focus-voice-compact-final-v1.log",
+      "xcresult": "/tmp/focus-2-derived/Logs/Test/Test-Focus-2026.09.08_20-28-41--0300.xcresult",
+      "xcresultRetainedAtReport": true
+    }
+  ],
+  "historicalPermissionEvidence": {
+    "log": "/tmp/focus-ux-ui-tests-v1.log",
+    "voiceTestPassed": true,
+    "durationSeconds": 92.056,
+    "systemActionObserved": "No permitir",
+    "xcresult": "/tmp/focus-2-derived/Logs/Test/Test-Focus-2026.09.08_19-47-51--0300.xcresult",
+    "xcresultRetainedAtReport": false,
+    "note": "La ejecución inicial mezcló dos tests: voz pasó y el test de swipe falló por el helper de foco. Su bundle fue rotado; el log conserva el resultado y la acción del permiso."
+  },
+  "resolvedIssues": [
+    {
+      "issue": "El campo event.title podía existir antes de obtener foco de teclado.",
+      "fix": "Esperar navegación/teclado y reintentar sólo el foco, nunca la escritura ni el guardado.",
+      "log": "/tmp/focus-ux-ui-tests-v1.log"
+    },
+    {
+      "issue": "El identificador today.event se heredaba en una etiqueta horaria de 49pt, insuficiente para el gesto.",
+      "fix": "Seleccionar el Cell nativo que contiene el título. Gesto parcial 90→50% y completo 98→2% de la fila.",
+      "logs": [
+        "/tmp/focus-home-swipe-light-v2.log",
+        "/tmp/focus-home-swipe-light-v3.log"
+      ]
+    },
+    {
+      "issue": "Hora española partida en dos líneas y Eliminar azul por tint heredado.",
+      "fix": "MiDiaView usa lineLimit(1)/minimumScaleFactor(0.8) y el botón destructivo tint rojo explícito. Las capturas finales ya contienen ambas correcciones."
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "docs/focus-2/qa/native-ux-build34/agenda-dark.png",
+      "sha256": "7e4555a3799a23c3d90e876c559068b97ab07c7b5f6bd9c8d2da43a5a83b5541",
+      "source": "XCTest attachment, synthetic simulator data, original PNG unmodified"
+    },
+    {
+      "path": "docs/focus-2/qa/native-ux-build34/agenda-light.png",
+      "sha256": "0259ac92d65aa82a8766dfdceb7eb55534bc4465e20933e683289285a03640fb",
+      "source": "XCTest attachment, synthetic simulator data, original PNG unmodified"
+    },
+    {
+      "path": "docs/focus-2/qa/native-ux-build34/home-dark.png",
+      "sha256": "1043779716e2402e84471ac49d06864b0bf08494b326abdb898ee96a9d35b9a0",
+      "source": "XCTest attachment, synthetic simulator data, original PNG unmodified"
+    },
+    {
+      "path": "docs/focus-2/qa/native-ux-build34/home-light.png",
+      "sha256": "f8e57d6453820ad4a33ef00c48e6c5e441e7402cdab56a0213c8639d9636bce7",
+      "source": "XCTest attachment, synthetic simulator data, original PNG unmodified"
+    },
+    {
+      "path": "docs/focus-2/qa/native-ux-build34/swipe-dark.png",
+      "sha256": "18a7a41ee6379fc433639e58db7a1c8da57f6a57184f1cef02cc4f569532a3af",
+      "source": "XCTest attachment, synthetic simulator data, original PNG unmodified"
+    },
+    {
+      "path": "docs/focus-2/qa/native-ux-build34/swipe-light.png",
+      "sha256": "04897a05595295744aec70559053828e1abae677ba5f71de1b79e8093766f3ee",
+      "source": "XCTest attachment, synthetic simulator data, original PNG unmodified"
+    },
+    {
+      "path": "docs/focus-2/qa/native-ux-build34/undo-dark.png",
+      "sha256": "5fc0de0a9ac8e24a4e463b2fca3617093e9764abe2c890af139009c53d70d9c2",
+      "source": "XCTest attachment, synthetic simulator data, original PNG unmodified"
+    },
+    {
+      "path": "docs/focus-2/qa/native-ux-build34/undo-light.png",
+      "sha256": "416099fd537ca2ea93fcbc11c8c3f827b48e4c2f82362773787c5b7b8156dbdb",
+      "source": "XCTest attachment, synthetic simulator data, original PNG unmodified"
+    },
+    {
+      "path": "docs/focus-2/qa/native-ux-build34/voice-compact-denied-dark.png",
+      "sha256": "57c11e36e6e264005d79c2442f85f51ae6a91fb6b9d7116202fb8713bb2c90b4",
+      "source": "XCTest attachment, synthetic simulator data, original PNG unmodified"
+    }
+  ],
+  "sourceSHA256AtReport": {
+    "ios-native/Focus/Views/MiDiaView.swift": "86441e12d0be3678fe8149a55c0c80438e2958abd0951163b962a185e24f1030",
+    "ios-native/Focus/Views/CalendarioView.swift": "80f89c08581ff680229ba4230ee7b198d60d15f5dcd2134b72015362405cbc3e",
+    "ios-native/Focus/Views/VoiceDictationSheet.swift": "fc022753dddd556b8f106b21bc87c7833688058bfea0083cb25642e8d2dce4a8",
+    "ios-native/Focus/Services/NovaLiveService.swift": "d20b3d29f88bc00e979adc7ccf3837d5bf4a73b56965e1af9a0f638341239767",
+    "ios-native/Focus/Models/FocusEvent.swift": "e46c7d9e67d859df5db998126f7886eca580e7ebd4e8d66f6f1dd030641e84ca",
+    "ios-native/FocusUITests/FocusCoreFlowTests.swift": "24b61bcc4795a2437e1d8396a8466667a9fa949ba60b54299d0c5c2ab24a837f"
+  },
+  "physicalSmoke": {
+    "class": "FocusPhysicalSmokeTests",
+    "test": "testExistingHomeAndDictationCanBeOpenedAndCancelledWithoutChangingDraft",
+    "executedByThisReport": false,
+    "behavior": "Clase independiente sin fixture ni flags UI-test: activa la sesión actual, abre Hoy/Dictar/Cancelar y compara el borrador sólo en RAM. No acepta ni rechaza permisos automáticamente. Ante un permiso sin Cancelar vuelve a Home del sistema y registra skip. Sus capturas potencialmente privadas deben quedar fuera del repo.",
+    "separateOwner": "La ejecución física la coordina el agente principal; este informe no afirma que haya pasado."
+  },
+  "limitations": [
+    "No se ha validado una frase hablada por una persona, calidad del micrófono real, precisión/latencia de transcripción ni la forma de onda durante voz humana.",
+    "No se ha ensayado una llamada, interrupción real de audio, cambio de ruta Bluetooth o bloqueo/background en el teléfono físico.",
+    "No hay medición de FPS, suavidad o haptics físicos. Durations de XCTest son tiempos de ejecución de pruebas y no métricas de rendimiento del producto.",
+    "Estas capturas corresponden a un simulador de 402×874 puntos, con tamaño de texto estándar. No certifican VoiceOver, todos los tamaños dinámicos ni todos los dispositivos.",
+    "Los logs y bundles /tmp son evidencia local temporal y pueden rotarse. Las capturas sintéticas seleccionadas y este JSON se conservan en el repo."
+  ]
+}

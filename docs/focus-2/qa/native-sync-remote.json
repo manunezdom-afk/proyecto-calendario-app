@@ -1,0 +1,173 @@
+{
+  "kind": "remote_supabase_native_sync_contract",
+  "status": "passed",
+  "paidAICalls": 0,
+  "table": "focus_events",
+  "eventIDHash": "fd14ad45d51e7e8ebd6e6bcff18072583c9a47e51393d2d02ce0d357a05dce7b",
+  "checks": [
+    {
+      "stage": "created",
+      "passed": true,
+      "inclusiveRows": 1,
+      "activeRows": 1
+    },
+    {
+      "stage": "tombstoned",
+      "passed": true,
+      "inclusiveRows": 1,
+      "activeRows": 0
+    },
+    {
+      "stage": "restored_same_id",
+      "passed": true,
+      "inclusiveRows": 1,
+      "activeRows": 1
+    },
+    {
+      "stage": "deleted_idempotently",
+      "passed": true,
+      "inclusiveRows": 1,
+      "activeRows": 0
+    }
+  ],
+  "http": [
+    {
+      "stage": "verify_account_marker",
+      "method": "GET",
+      "status": 200,
+      "authorization": "service_ownership_or_error_cleanup"
+    },
+    {
+      "stage": "own_password_login",
+      "method": "POST",
+      "status": 200,
+      "authorization": "anon_password_login"
+    },
+    {
+      "stage": "new_uuid_absence",
+      "method": "GET",
+      "status": 200,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "native_upsert",
+      "method": "POST",
+      "status": 201,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "created_inclusive_read",
+      "method": "GET",
+      "status": 200,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "created_active_read",
+      "method": "GET",
+      "status": 200,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "native_tombstone",
+      "method": "PATCH",
+      "status": 204,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "tombstoned_inclusive_read",
+      "method": "GET",
+      "status": 200,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "tombstoned_active_read",
+      "method": "GET",
+      "status": 200,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "native_same_id_undo",
+      "method": "POST",
+      "status": 200,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "restored_same_id_inclusive_read",
+      "method": "GET",
+      "status": 200,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "restored_same_id_active_read",
+      "method": "GET",
+      "status": 200,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "native_final_delete",
+      "method": "PATCH",
+      "status": 204,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "native_final_delete_replay",
+      "method": "PATCH",
+      "status": 204,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "deleted_idempotently_inclusive_read",
+      "method": "GET",
+      "status": 200,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "deleted_idempotently_active_read",
+      "method": "GET",
+      "status": 200,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "cleanup_verify_event_marker",
+      "method": "GET",
+      "status": 200,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "cleanup_exact_event",
+      "method": "DELETE",
+      "status": 204,
+      "authorization": "own_user_jwt"
+    },
+    {
+      "stage": "cleanup_verify_absent",
+      "method": "GET",
+      "status": 200,
+      "authorization": "own_user_jwt"
+    }
+  ],
+  "cleanup": {
+    "status": "confirmed_absent",
+    "usedServiceFallback": false
+  },
+  "limitations": [
+    "Serial REST contract with the native payload, not an app swipe E2E or concurrent-device conflict test."
+  ],
+  "executionCommand": "node /tmp/focus-native-sync-contract.mjs --live --window-authorized",
+  "offlineValidation": {
+    "command": "node --test /tmp/focus-native-sync-contract.test.mjs",
+    "passed": 8,
+    "failed": 0
+  },
+  "scriptSHA256": "aaf4bf4d6946fa1edfa929d97ab878fc4bd34f4ebc0d056eb30b6eec2e96d792",
+  "testScriptSHA256": "7c2478051df1a3be85f6bb865f19ee415d5c712e1684688461462a6d36e23244",
+  "contractSources": [
+    "ios-native/Focus/Services/SupabaseSyncService.swift",
+    "supabase/migrations/018_focus_native_v1.sql",
+    "supabase/migrations/019_focus_events_subtitle_reminders.sql"
+  ],
+  "gitHeadAtReport": "ec5b36014aa80d64c6c9567da2a9ce7a2eb60e9d",
+  "credentialHandling": "Credentials remain in private local files; the user JWT existed only in process memory. No credentials or account identifiers are included in this report.",
+  "storageBoundary": "This contract exercised only native public.focus_events. Web public.events, tasks, suggestions and the AI ledger were not queried or mutated.",
+  "reproductionNote": "The private /tmp scripts are deliberately not copied into the repository because this one-off authorized run pins a private synthetic account checkpoint. Commands and SHA-256 fingerprints are retained; a new run needs a verified synthetic account and explicit coordination."
+}
