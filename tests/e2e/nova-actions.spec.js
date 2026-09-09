@@ -1,12 +1,8 @@
 import { test, expect } from '@playwright/test'
 
-// Tests del parsing de acciones que emite Nova. En propose mode (default), las
-// acciones no se ejecutan directo: se encolan como sugerencias y se muestran
-// como chips "Propuesta: …" debajo del último mensaje. Estos tests validan
-// el camino crítico: respuesta del LLM → JSON parseado → chip correcto en UI.
-//
-// Mockear el endpoint nos permite forzar respuestas conocidas (LLM reales son
-// no-determinísticos) y validar bugs específicos de regresión.
+// Propuestas explícitas del contrato vigente de Hilante. Ninguna se guarda
+// antes de aprobarla. Todo proveedor y tráfico externo están interceptados.
+test.use({ serviceWorkers: 'block', screenshot: 'off', trace: 'off' })
 
 const TODAY = new Date().toISOString().slice(0, 10)
 
@@ -15,6 +11,9 @@ async function skipOnboarding(page) {
     localStorage.setItem('focus_onboarding_completed_v1', '1')
     localStorage.setItem('focus_welcome_last', new Date().toISOString().slice(0, 10))
     localStorage.setItem('focus_hint_welcome-intro-v1', '1')
+    localStorage.setItem('focus_hint_empty-day-v1', '1')
+    localStorage.setItem('focus_install_dismissed', 'true')
+    localStorage.setItem('focus_ai_consent_v2', '1')
     localStorage.setItem('focus_boot_splash_seen', '1')
   })
 }
@@ -24,13 +23,13 @@ async function mockNovaResponse(page, body) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, requestId: route.request().headers()['x-request-id'] }),
     })
   })
 }
 
 async function openNovaAndSend(page, message) {
-  const pill = page.getByRole('button', { name: /abrir nova/i })
+  const pill = page.getByRole('button', { name: /abrir hilante/i })
   await expect(pill).toBeVisible({ timeout: 10_000 })
   await pill.click()
   const input = page.getByPlaceholder(/escribe o habla/i)
@@ -39,15 +38,23 @@ async function openNovaAndSend(page, message) {
   await page.getByRole('button', { name: /enviar mensaje/i }).click()
 }
 
-test.describe('Nova — parsing de acciones', () => {
+test.describe('Hilante — representación de propuestas', () => {
   test.beforeEach(async ({ page }) => {
+    await page.route('**/*', route => ['localhost', '127.0.0.1'].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort())
+    await page.route('**/api/ai-capabilities', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runtime: 'focus-openai-v1', chat_provider: 'openai' }) }))
     await skipOnboarding(page)
   })
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status !== 'passed') return
+    const saved = await page.evaluate(() => Object.keys(localStorage).filter(key => /^focus_(events|tasks)/.test(key))
+      .flatMap(key => { try { const rows = JSON.parse(localStorage.getItem(key)); return Array.isArray(rows) ? rows : [] } catch { return [] } }))
+    expect(saved).toHaveLength(0)
+  })
 
-  test('add_event genera chip "Propuesta: crear ..."', async ({ page }) => {
+  test('add_event explícitamente propuesto muestra un chip', async ({ page }) => {
     await mockNovaResponse(page, {
-      reply: 'Lo agendo para hoy a las 14:00.',
-      actions: [{
+      reply: 'Revisa el almuerzo propuesto para hoy.',
+      mode: 'proposal', actions: [], proposed_actions: [{
         type: 'add_event',
         event: {
           title: 'Almuerzo con María',
@@ -63,16 +70,16 @@ test.describe('Nova — parsing de acciones', () => {
     await openNovaAndSend(page, 'almuerzo con maría a las 2 PM')
 
     // El chip de propuesta debe aparecer con el título exacto
-    await expect(page.getByText(/Propuesta: crear "Almuerzo con María"/i)).toBeVisible({ timeout: 6_000 })
+    await expect(page.getByText(/Crear: Almuerzo con María/i)).toBeVisible({ timeout: 6_000 })
 
     // El botón "Abrir bandeja" aparece para sugerencias propuestas
     await expect(page.getByRole('button', { name: /abrir bandeja/i })).toBeVisible()
   })
 
-  test('add_task genera chip "Propuesta: añadir tarea ..."', async ({ page }) => {
+  test('add_task explícitamente propuesto muestra un chip', async ({ page }) => {
     await mockNovaResponse(page, {
-      reply: 'Te lo apunto en tareas.',
-      actions: [{
+      reply: 'Revisa la tarea propuesta.',
+      mode: 'proposal', actions: [], proposed_actions: [{
         type: 'add_task',
         task: { label: 'Comprar pan', priority: 'Media', category: 'hoy' },
       }],
@@ -80,24 +87,24 @@ test.describe('Nova — parsing de acciones', () => {
     await page.goto('/?view=calendar')
     await openNovaAndSend(page, 'comprar pan')
 
-    await expect(page.getByText(/Propuesta: añadir tarea "Comprar pan"/i)).toBeVisible({ timeout: 6_000 })
+    await expect(page.getByText(/Crear tarea: Comprar pan/i)).toBeVisible({ timeout: 6_000 })
   })
 
   test('add_recurring_event genera chip único (no N chips)', async ({ page }) => {
     await mockNovaResponse(page, {
-      reply: 'Listo, lo agendo todos los lunes por 3 meses.',
-      actions: [{
+      reply: 'Propuesta de doce sesiones de yoga preparada.',
+      mode: 'proposal', actions: [], proposed_actions: [{
         type: 'add_recurring_event',
-        event: { title: 'Yoga', time: '8:00 AM', endTime: '9:00 AM', section: 'focus', icon: 'event' },
-        recurrence: { pattern: 'weekly', weekday: 1 },
+        event: { title: 'Yoga', date: TODAY, time: '8:00 AM', endTime: '9:00 AM', section: 'focus', icon: 'event' },
+        recurrence: { pattern: 'weekly', weekday: 1, startDate: TODAY, count: 12 },
       }],
     })
     await page.goto('/?view=calendar')
     await openNovaAndSend(page, 'yoga todos los lunes a las 8')
 
     // UNA sola propuesta para crear (no 12 chips). El cliente expande al aplicar.
-    await expect(page.getByText(/Propuesta: crear recurrente "Yoga"/i)).toBeVisible({ timeout: 6_000 })
-    const chips = page.getByText(/Propuesta:/i)
+    await expect(page.getByText(/Crear: Yoga/i)).toBeVisible({ timeout: 6_000 })
+    const chips = page.getByText(/Crear: Yoga/i)
     expect(await chips.count()).toBe(1)
   })
 
@@ -115,17 +122,16 @@ test.describe('Nova — parsing de acciones', () => {
     // El reply aparece en el chat
     await expect(page.getByText(/¿Cuánto dura\?/)).toBeVisible({ timeout: 6_000 })
 
-    // Pero NO debe haber ningún chip "Propuesta:"
-    await page.waitForTimeout(500)
-    expect(await page.getByText(/Propuesta:/i).count()).toBe(0)
+    // La aclaración no produce chips ni cambios guardados.
+    expect(await page.getByText(/^(Crear:|Crear tarea:)/i).count()).toBe(0)
     // Tampoco botón "Abrir bandeja" — no hay sugerencias encoladas.
     expect(await page.getByRole('button', { name: /abrir bandeja/i }).count()).toBe(0)
   })
 
   test('múltiples acciones de tipos distintos generan múltiples chips', async ({ page }) => {
     await mockNovaResponse(page, {
-      reply: 'Listo, lo agendo y te dejo la tarea relacionada.',
-      actions: [
+      reply: 'Revisa el evento y la tarea propuestos.',
+      mode: 'proposal', actions: [], proposed_actions: [
         {
           type: 'add_event',
           event: { title: 'Reunión con Nico', time: '3:00 PM', endTime: '3:30 PM', date: TODAY, section: 'evening', icon: 'groups' },
@@ -139,11 +145,10 @@ test.describe('Nova — parsing de acciones', () => {
     await page.goto('/?view=calendar')
     await openNovaAndSend(page, 'reunión con Nico 3pm y prepara agenda')
 
-    await expect(page.getByText(/Propuesta: crear "Reunión con Nico"/i)).toBeVisible({ timeout: 6_000 })
-    await expect(page.getByText(/Propuesta: añadir tarea "Preparar agenda para Nico"/i)).toBeVisible()
+    await expect(page.getByText(/Crear: Reunión con Nico/i)).toBeVisible({ timeout: 6_000 })
+    await expect(page.getByText(/Crear tarea: Preparar agenda para Nico/i)).toBeVisible()
 
-    // El reply muestra el suffix "+ 2 propuestas" o equivalente plural
-    // (el componente decide; aquí solo validamos que ambas chips coexisten)
+    // Ambas acciones permanecen en revisión, sin guardar eventos ni tareas.
   })
 
   test('JSON malformado del backend → mensaje de error legible', async ({ page }) => {

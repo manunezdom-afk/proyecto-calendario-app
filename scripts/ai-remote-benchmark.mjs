@@ -71,6 +71,26 @@ export function settledReplayUnavailable(output,replay,before,after,attemptsBefo
     && isDeepStrictEqual(attemptsBefore,attemptsAfter)
 }
 
+export function reservedTerminalReplayUnavailable(output,replay,before,after,attemptsBefore,attemptsAfter,cached,message) {
+  const held = attemptsAfter.map(attempt=>valueNumber(attempt.actual_usd??attempt.reserved_usd))
+  const accounted = valueNumber(after?.actual_usd)
+  return output.httpStatus===503 && output.body?.request_completed===true
+    && ((replay.httpStatus===401 && replay.body?.error==='auth_required')
+      || (replay.httpStatus===503 && replay.body?.error==='assistant_unavailable' && replay.body.requestId===output.body.requestId))
+    && (!replay.body?.requestId || replay.body.requestId===output.body.requestId)
+    && before?.state==='failed' && after?.state==='failed'
+    && ['id','user_id','request_id','lease_id','actual_usd','reserved_usd'].every(key=>before[key]===after[key] && after[key]!=null)
+    && after.request_id===output.body.requestId && accounted!==null && accounted<=MAX_REQUEST_USD
+    && held.every(value=>value!==null) && accounted+1e-9>=held.reduce((sum,value)=>sum+value,0)
+    && attemptsAfter.every(attempt=>['started','settled'].includes(attempt.state))
+    && isDeepStrictEqual(attemptsBefore,attemptsAfter)
+    && ['id','user_id','request_id','lease_id','state','actual_usd','reserved_usd'].every(key=>cached?.[key]===after[key])
+    && cached.action_type==='nova_message'
+    && cached.fingerprint===createHash('sha256').update(message.trim()).digest('hex')
+    && Date.parse(cached.response_expires_at)>Date.now()
+    && isDeepStrictEqual(cached.response,{httpStatus:503,body:output.body})
+}
+
 // curl's config and response files are private; credentials never enter argv,
 // shell strings or console output. Vercel CLI supplies its own protection bypass.
 export function vercelFocusFetch(origin,{execImpl=exec}={}) {
@@ -120,7 +140,9 @@ export async function runRemoteBenchmark(options,{env=process.env,fetchImpl=fetc
       objectivePassRate:attempted.length?attempted.filter(r=>r.verdict?.pass).length/attempted.length:null,
       ...summarizeBenchmarkCosts(rows,telemetry),recordedRunChargeUSD:options.live?recordedCost:null,latencyPopulation:'successful_http_200',p50Ms:percentile(latencies,.5),p95Ms:percentile(latencies,.95),
       replayChecks:rows.filter(r=>r.replayVerified).length,replayAvailabilityFailures:rows.filter(r=>r.replayAvailabilityFailure).length,
-      providerAttempts:rows.reduce((n,r)=>n+r.attempts.length,0),humanConversationScore:null,metrics:summarizeAIMetrics(telemetry)}
+      providerAttempts:rows.reduce((n,r)=>n+r.attempts.length,0),
+      providerAttemptsBasis:'Admission attempt rows; a started reservation without usage does not prove a provider call or bill.',
+      humanConversationScore:null,metrics:summarizeAIMetrics(telemetry)}
     if(writeReport)try {writeSnapshot(reportPath,report)}catch {
       report.checkpointWriteFailed=true
       if(required)throw new BenchError('checkpoint_write_failed')
@@ -201,13 +223,23 @@ export async function runRemoteBenchmark(options,{env=process.env,fetchImpl=fetc
         row.replayObservation={...replay,latencyMs:replayLatencyMs}
         ledger=await ownedLedger();observed=await evidence(ledger)
         row.attempts=observed.attempts.filter(a=>a.request_row_id===requestRow.id)
-        row.replayVerified=verifyBenchmarkReplay(output,replay,count,row.attempts.length)
+        const after=ledger.find(r=>r.id===requestRow.id)
+        const unchangedAccounting=['id','user_id','request_id','lease_id','state','actual_usd','reserved_usd'].every(key=>requestRow[key]===after?.[key])
+          && isDeepStrictEqual(attemptsBefore,row.attempts)
+        let conservativeTerminal=false
+        if(output.httpStatus===503 && after?.state==='failed' && [401,503].includes(replay.httpStatus)) {
+          const cached=await request(`/rest/v1/focus_ai_requests?select=id,user_id,request_id,lease_id,state,actual_usd,reserved_usd,action_type,fingerprint,response,response_expires_at&id=eq.${after.id}&user_id=eq.${user.id}&request_id=eq.${requestId}&limit=1`)
+          conservativeTerminal=cached.ok && Array.isArray(cached.data) && cached.data.length===1
+            && reservedTerminalReplayUnavailable(output,replay,requestRow,after,attemptsBefore,row.attempts,cached.data[0],c.input)
+        }
+        row.replayVerified=verifyBenchmarkReplay(output,replay,count,row.attempts.length) && unchangedAccounting
+          && (output.httpStatus!==503 || conservativeTerminal)
         if(!row.replayVerified){
           row.verdict={pass:false,fails:[...(row.verdict.fails||[]),'replay_mismatch']}
-          const after=ledger.find(r=>r.id===requestRow.id)
-          if(settledReplayUnavailable(output,replay,requestRow,after,attemptsBefore,row.attempts)) {
-            row.replayAvailabilityFailure={httpStatus:503,originalStillCompleted:true,attemptsUnchanged:true,
-              accountingUnchanged:true,retryPerformed:false,caseStillFailed:true}
+          if(settledReplayUnavailable(output,replay,requestRow,after,attemptsBefore,row.attempts) || conservativeTerminal) {
+            row.replayAvailabilityFailure={httpStatus:replay.httpStatus,originalStillCompleted:output.httpStatus===200,
+              originalTerminalFailed:conservativeTerminal,unknownUsageCoveredByReservation:conservativeTerminal,
+              attemptsUnchanged:true,accountingUnchanged:true,retryPerformed:false,caseStillFailed:true}
           } else throw new BenchError('replay_mismatch')
         }
       }

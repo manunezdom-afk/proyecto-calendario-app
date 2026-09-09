@@ -1,10 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import { readFileSync,writeFileSync,statSync,existsSync,mkdtempSync,rmSync,readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseRemoteBenchmarkOptions,runRemoteBenchmark,vercelFocusFetch,mayStartRemoteRequest,writeAtomicBenchmarkReport } from '../scripts/ai-remote-benchmark.mjs'
+import { parseRemoteBenchmarkOptions,runRemoteBenchmark,vercelFocusFetch,mayStartRemoteRequest,writeAtomicBenchmarkReport,reservedTerminalReplayUnavailable } from '../scripts/ai-remote-benchmark.mjs'
 import { EXPECTED_SUPABASE_URL } from '../scripts/ai-remote-check.mjs'
 const origin='https://focus-app-test-manunezdom-9658s-projects.vercel.app'
 const env={SUPABASE_URL:EXPECTED_SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY:'private-service',SUPABASE_ANON_KEY:'private-anon',FOCUS_VERCEL_BYPASS:'private-bypass'}
@@ -12,7 +12,7 @@ const cases=Array.from({length:3},(_,i)=>({id:'T'+i,cat:'tasks',input:'comprar p
 const options=(extra=[])=>parseRemoteBenchmarkOptions(['--live','--base-url',origin,'--limit','3','--users','1',...extra])
 const reply=(data,status=200)=>new Response(JSON.stringify(data),{status})
 
-function fake({cost=.01,uncertain=false,legacy=false,ownerMismatch=false,extraReplay=false,terminalFailure=false,unavailableReplay=false,changedReplayLedger=false}={}) {
+function fake({cost=.01,uncertain=false,legacy=false,ownerMismatch=false,extraReplay=false,terminalFailure=false,unavailableReplay=false,changedReplayLedger=false,terminalUnstarted=false,replayUnauthorized=false,changedReplayCost=false}={}) {
  const users=new Map(),ledger=new Map(),attempts=[],events=[],calls=[];let paid=0
  const fetchImpl=async(url,request={})=>{
   const u=new URL(url),path=u.pathname,body=request.body?JSON.parse(request.body):{},method=request.method||'GET'
@@ -24,14 +24,16 @@ function fake({cost=.01,uncertain=false,legacy=false,ownerMismatch=false,extraRe
    const id=request.headers['X-Request-Id'],userId=request.headers.Authorization.replace('Bearer private-token-','')
    let row=[...ledger.values()].find(r=>r.request_id===id)
    if(!row){
-    paid++;row={id:randomUUID(),request_id:id,lease_id:randomUUID(),user_id:userId,state:uncertain?'in_progress':terminalFailure?'failed':'completed',actual_usd:uncertain?null:cost,reserved_usd:.25,fingerprint:'synthetic'}
-    row.response={requestId:id,reply:'Pendiente para guardar.',mode:'chat_with_action',actions:[{type:'add_task',task:{label:'Comprar pan'}}],proposed_actions:[],validation:{ok:true,issues:[]}};if(terminalFailure)row.response={requestId:id,error:'assistant_unavailable',request_completed:true,request_retryable:true,actions:[],proposed_actions:[]};ledger.set(row.id,row)
-    attempts.push({request_row_id:row.id,model:'gpt-5.6-luna',attempt_index:0,state:uncertain?'started':'settled',actual_usd:row.actual_usd,reserved_usd:.25})
-    if(!uncertain)events.push({user_id:userId,action_type:'nova_message',model_used:'gpt-5.6-luna',input_tokens:1000,output_tokens:200,estimated_cost_usd:cost,metadata:{request_id:id,admission_lease_id:row.lease_id,cost_basis:'provider_usage',usage_source:'openai_usage'}})
+    if(!terminalUnstarted)paid++;row={id:randomUUID(),request_id:id,lease_id:randomUUID(),user_id:userId,state:uncertain?'in_progress':terminalFailure?'failed':'completed',actual_usd:uncertain?null:cost,reserved_usd:.25,fingerprint:createHash('sha256').update(body.message.trim()).digest('hex'),action_type:'nova_message',response_expires_at:new Date(Date.now()+60000).toISOString()}
+    row.response={requestId:id,reply:'Pendiente para guardar.',mode:'chat_with_action',actions:[{type:'add_task',task:{label:'Comprar pan'}}],proposed_actions:[],validation:{ok:true,issues:[]}};if(terminalFailure)row.response={requestId:id,error:'assistant_unavailable',request_completed:true,request_retryable:true,actions:[],proposed_actions:[]};row.response={httpStatus:terminalFailure?503:200,body:row.response};ledger.set(row.id,row)
+    attempts.push({request_row_id:row.id,model:'gpt-5.6-luna',attempt_index:0,state:uncertain||terminalUnstarted?'started':'settled',actual_usd:terminalUnstarted?null:row.actual_usd,reserved_usd:terminalUnstarted?cost:.25})
+    if(!uncertain&&!terminalUnstarted)events.push({user_id:userId,action_type:'nova_message',model_used:'gpt-5.6-luna',input_tokens:1000,output_tokens:200,estimated_cost_usd:cost,metadata:{request_id:id,admission_lease_id:row.lease_id,cost_basis:'provider_usage',usage_source:'openai_usage'}})
     if(uncertain)throw new Error('private-token unknown transport')
    }else if(extraReplay){paid++;attempts.push({request_row_id:row.id,model:'gpt-5.6-terra',attempt_index:1,state:'settled',actual_usd:.02});row.actual_usd+=.02}
+   else if(replayUnauthorized)return reply({error:'auth_required'},401)
+   else if(changedReplayCost){row.actual_usd+=.01}
    else if(unavailableReplay){if(changedReplayLedger)row.state='in_progress';return reply({requestId:id,error:'assistant_unavailable',actions:[],proposed_actions:[]},503)}
-   return reply(row.response,terminalFailure?503:200)
+   return reply(row.response.body,row.response.httpStatus)
   }
   assert.equal(u.origin,EXPECTED_SUPABASE_URL)
   assert.equal(request.headers['x-vercel-protection-bypass'],undefined)
@@ -139,6 +141,27 @@ test('a replay outage cannot continue when durable state changed after the first
  assert.equal(server.paid,1);assert.equal(report.summary.attempted,1)
  assert.equal(report.summary.replayAvailabilityFailures,0);assert.equal(report.cleanup.verified,1)
 })
+
+test('terminal failure may retain unobserved usage only when immutable reservations cover it and the durable response is verified',()=>{
+ const row={id:'row',user_id:'owner',request_id:'request',lease_id:'lease',state:'failed',actual_usd:.005,reserved_usd:.043}
+ const output={httpStatus:503,body:{requestId:'request',error:'assistant_unavailable',request_completed:true,actions:[],proposed_actions:[]}}
+ const replay={httpStatus:401,body:{error:'auth_required'}}
+ const attempts=[{request_row_id:'row',state:'started',reserved_usd:.005,actual_usd:null}]
+ const cached={...row,action_type:'nova_message',fingerprint:createHash('sha256').update('comprar pan').digest('hex'),response:output,response_expires_at:new Date(Date.now()+60000).toISOString()}
+ const accepts=(patch={})=>reservedTerminalReplayUnavailable(patch.output||output,patch.replay||replay,row,patch.after||row,attempts,patch.attempts||attempts,patch.cached||cached,'comprar pan')
+ assert.equal(accepts(),true)
+ assert.equal(accepts({replay:{httpStatus:503,body:{error:'assistant_unavailable',requestId:'request'}}}),true)
+ for(const patch of [
+  {after:{...row,actual_usd:.001}}, {after:{...row,state:'in_progress'}}, {after:{...row,lease_id:'changed'}},
+  {attempts:[...attempts,{state:'started',reserved_usd:.005}]}, {attempts:[{...attempts[0],actual_usd:0}]},
+  {cached:{...cached,action_type:'another'}}, {cached:{...cached,user_id:'another'}}, {cached:{...cached,fingerprint:'different'}},
+  {cached:{...cached,response_expires_at:new Date(0).toISOString()}}, {cached:{...cached,response:{...output,httpStatus:200}}},
+  {output:{...output,body:{...output.body,request_completed:false}}},
+  {replay:{httpStatus:429,body:{error:'rate_limit'}}}, {replay:{httpStatus:503,body:{error:'request_conflict'}}},
+  {replay:{httpStatus:503,body:{error:'assistant_unavailable'}}},
+  {replay:{httpStatus:503,body:{error:'assistant_unavailable',requestId:'different'}}}
+ ]) assert.equal(accepts(patch),false,JSON.stringify(patch))
+})
 test('Vercel CLI receives only private config path; rejects redirects to other origins',async()=>{
  let configPath
  const transport=vercelFocusFetch(origin,{execImpl:async(binary,args)=>{
@@ -169,4 +192,23 @@ test('durable failed requests replay without paying again and remain failed benc
  assert.equal(report.summary.attempted,3);assert.equal(report.summary.replayChecks,3);assert.equal(server.paid,3)
  assert.ok(report.rows.every(row=>row.verdict.fails.includes('runtime_http_503')))
  assert.equal(report.cleanup.verified,1);assert.equal(server.users.size,0)
+})
+
+test('lost begin authorization and unavailable replay keep the whole reservation, unknown usage and failed cases without another provider call',async()=>{
+ const server=fake({terminalFailure:true,terminalUnstarted:true,replayUnauthorized:true,cost:.005}),report=await run(server)
+ assert.equal(report.status,'completed',report.errorCode);assert.equal(report.summary.attempted,3)
+ assert.equal(report.summary.objectivePass,0);assert.equal(report.summary.replayAvailabilityFailures,3)
+ assert.equal(server.paid,0);assert.equal(report.summary.providerAttempts,3,'authorization rows do not prove provider calls')
+ assert.equal(report.summary.totalObservedCostUSD,null);assert.equal(report.summary.recordedRunChargeUSD,.015)
+ assert.equal(report.cleanup.verified,1);assert.equal(server.users.size,0)
+ assert.equal(server.calls.filter(c=>c.path==='/api/focus-assistant').length,6)
+ const ids=server.calls.filter(c=>c.path==='/api/focus-assistant').map(c=>c.headers['X-Request-Id'])
+ assert.equal(new Set(ids).size,3);assert.equal(ids[0],ids[1]);assert.equal(ids[2],ids[3]);assert.equal(ids[4],ids[5])
+})
+
+test('identical terminal HTTP replies cannot hide changed durable costs',async()=>{
+ const server=fake({terminalFailure:true,changedReplayCost:true}),report=await run(server)
+ assert.equal(report.status,'failed');assert.equal(report.errorCode,'replay_mismatch')
+ assert.equal(report.summary.attempted,1);assert.equal(report.summary.replayChecks,0)
+ assert.equal(report.summary.recordedRunChargeUSD,.02);assert.equal(report.cleanup.verified,1)
 })
