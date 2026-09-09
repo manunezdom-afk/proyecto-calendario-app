@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Hoy responde a una sola pregunta: qué puedo hacer ahora.
 struct MiDiaView: View {
@@ -9,7 +10,7 @@ struct MiDiaView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.openURL) private var openURL
     @State private var draft = ""
-    @State private var showNovaResult = false
+    @State private var captureFocused = false
     @State private var showNewTask = false
     @State private var showNewEvent = false
     @State private var editingTask: FocusTask?
@@ -52,6 +53,7 @@ struct MiDiaView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             List {
                 Group {
                     VStack(alignment: .leading, spacing: 10) {
@@ -72,13 +74,19 @@ struct MiDiaView: View {
                     .padding(.top, 16)
 
                     VStack(alignment: .leading, spacing: 16) {
-                        NovaCaptureField(text: $draft, identifier: "capture", placeholder: "¿Qué tienes en mente?") {
-                            showNovaResult = true
-                        }
-                        if showNovaResult || store.isNovaTyping || store.novaPendingProposal != nil || store.novaErrorMessage != nil {
-                            NovaFeedbackView(showLatestReply: true)
-                        }
+                        NovaCaptureField(text: $draft, identifier: "capture", placeholder: "¿Qué tienes en mente?",
+                                         onFocusChange: { captureFocused = $0 }) {}
+                            .background {
+                                GeometryReader { geometry in
+                                    Color.clear.preference(key: HomeCaptureHeightKey.self, value: geometry.size.height)
+                                }
+                            }
+                            .onPreferenceChange(HomeCaptureHeightKey.self) { _ in
+                                if captureFocused { proxy.scrollTo("today.capture", anchor: .top) }
+                            }
+                        NovaFeedbackView(showLatestReply: true)
                     }
+                    .id("today.capture")
 
                     syncNotice
 
@@ -134,6 +142,15 @@ struct MiDiaView: View {
                 .listRowInsets(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+            }
+            #if DEBUG
+            .onAppear { HilantePresentationFixture.install(in: store) }
+            #endif
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                guard captureFocused else { return }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                    proxy.scrollTo("today.capture", anchor: .top)
+                }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
@@ -200,6 +217,7 @@ struct MiDiaView: View {
                 NuevoEventoSheet(editing: event) {
                     saveEvent($0, editing: true)
                 }
+            }
             }
         }
     }
@@ -554,4 +572,9 @@ struct MiDiaView: View {
             }
         }
     }
+}
+
+private struct HomeCaptureHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

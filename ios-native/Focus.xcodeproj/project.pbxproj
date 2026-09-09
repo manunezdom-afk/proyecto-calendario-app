@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F20000000000000000000003 /* HilantePresentationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000013; };
+		F20000000000000000000002 /* HilantePresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000012; };
+		F20000000000000000000001 /* HilantePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000011; };
 		2A622D009FD0AD00A8D8A542 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2AB4C7B506486883955572BB /* PrivacyInfo.xcprivacy */; };
 		5596EA02C6335EABCD9CCE74 /* NovaExecutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 848EE3A9C333736872FEFC8C /* NovaExecutionTests.swift */; };
 		7EB646956F11C8F0ABF9C416 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3BB5CF907453E746026AF1E5 /* Foundation.framework */; };
@@ -101,6 +104,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F20000000000000000000013 /* HilantePresentationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HilantePresentationUITests.swift; sourceTree = "<group>"; };
+		F20000000000000000000012 /* HilantePresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HilantePresentationTests.swift; sourceTree = "<group>"; };
+		F20000000000000000000011 /* HilantePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HilantePresentation.swift; sourceTree = "<group>"; };
 		0F61FC8E12865D84AB673C7C /* FocusTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FocusTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2AB4C7B506486883955572BB /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		304FB960A2ED3A4D9CE34FE8 /* FocusCoreFlowTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FocusCoreFlowTests.swift; sourceTree = "<group>"; };
@@ -200,6 +206,7 @@
 			children = (
 				304FB960A2ED3A4D9CE34FE8 /* FocusCoreFlowTests.swift */,
 				F10000000000000000000013 /* HomePriorityUITests.swift */,
+				F20000000000000000000013 /* HilantePresentationUITests.swift */,
 			);
 			name = FocusUITests;
 			path = FocusUITests;
@@ -219,6 +226,7 @@
 				3DAFCBF2F8D5B3D4FF4B9DEE /* FocusDataStoreTests.swift */,
 				848EE3A9C333736872FEFC8C /* NovaExecutionTests.swift */,
 				F10000000000000000000012 /* HomePriorityTests.swift */,
+				F20000000000000000000012 /* HilantePresentationTests.swift */,
 			);
 			name = FocusTests;
 			path = FocusTests;
@@ -294,6 +302,7 @@
 			children = (
 				FA0000000000000000000050 /* Theme.swift */,
 				FA0000000000000000000072 /* SharedComponents.swift */,
+				F20000000000000000000011 /* HilantePresentation.swift */,
 				FA0000000000000000000075 /* FocusConfig.swift */,
 			);
 			path = Shared;
@@ -517,6 +526,7 @@
 			files = (
 				DBA464EDE8EC0D8ACEA423D3 /* FocusCoreFlowTests.swift in Sources */,
 				F10000000000000000000003 /* HomePriorityUITests.swift in Sources */,
+				F20000000000000000000003 /* HilantePresentationUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -527,6 +537,7 @@
 				D5279C2FCC21B38F2BC30375 /* FocusDataStoreTests.swift in Sources */,
 				5596EA02C6335EABCD9CCE74 /* NovaExecutionTests.swift in Sources */,
 				F10000000000000000000002 /* HomePriorityTests.swift in Sources */,
+				F20000000000000000000002 /* HilantePresentationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -538,6 +549,7 @@
 				FA0000000000000000000017 /* ContentView.swift in Sources */,
 				FA0000000000000000000040 /* Theme.swift in Sources */,
 				FA0000000000000000000082 /* SharedComponents.swift in Sources */,
+				F20000000000000000000001 /* HilantePresentation.swift in Sources */,
 				FA0000000000000000000085 /* FocusConfig.swift in Sources */,
 				FA0000000000000000000041 /* FocusEvent.swift in Sources */,
 				FA0000000000000000000042 /* FocusTask.swift in Sources */,

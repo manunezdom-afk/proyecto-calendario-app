@@ -139,10 +139,12 @@ private struct NovaConversationEntry: View {
                 Text(message.role == .user ? "Tu petición" : AssistantBrand.displayName)
                     .font(.caption.weight(.medium)).foregroundStyle(Theme.Colors.textSecondary)
             }
-            Text(message.content)
-                .font(.body).lineSpacing(3).foregroundStyle(Theme.Colors.textPrimary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if message.role == .nova {
+                HilanteText(content: message.content)
+            } else {
+                Text(message.content).font(.body).foregroundStyle(Theme.Colors.textPrimary)
+                    .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+            }
             if !message.actionLabels.isEmpty {
                 NovaSavedActionsView(labels: message.actionLabels)
             }
@@ -159,7 +161,7 @@ private struct NovaSavedActionsView: View {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(Theme.Colors.success).accessibilityHidden(true)
-                    Text(label).foregroundStyle(Theme.Colors.textPrimary)
+                    Text(HilanteText.inline(label)).foregroundStyle(Theme.Colors.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }.font(.subheadline)
             }
@@ -176,8 +178,10 @@ struct NovaCaptureField: View {
     @Binding var text: String
     var identifier: String
     var placeholder: String
+    var onFocusChange: (Bool) -> Void = { _ in }
     var onSend: () -> Void
-    @FocusState private var focused: Bool
+    @State private var focused = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showVoice = false
     @State private var sendAfterDictation = false
     @State private var reviewAfterDictation = false
@@ -193,13 +197,15 @@ struct NovaCaptureField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 10) {
-                TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Theme.Colors.textSecondary), axis: .vertical)
-                    .font(.body).foregroundStyle(Theme.Colors.textPrimary)
-                    .lineLimit(1...5).focused($focused)
-                    .submitLabel(.send).onSubmit { submit() }
-                    .frame(minHeight: 26)
-                    .padding(.horizontal, 4)
-                    .accessibilityLabel("Escribe a \(AssistantBrand.displayName)").accessibilityIdentifier("\(identifier).input")
+                ZStack(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text(placeholder).font(.body).foregroundStyle(Theme.Colors.textSecondary)
+                            .padding(.top, 7).allowsHitTesting(false).accessibilityHidden(true)
+                    }
+                    HilanteTextInput(text: $text, focused: $focused, identifier: "\(identifier).input")
+                }
+                .padding(.horizontal, 4)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: text)
                 controls
             }
             .focusSurface(radius: 26, padding: 14)
@@ -212,6 +218,7 @@ struct NovaCaptureField: View {
                     .font(.caption).foregroundStyle(Theme.Colors.danger)
             }
         }
+        .onChange(of: focused) { _, value in onFocusChange(value) }
         .sheet(isPresented: $showVoice, onDismiss: {
             if sendAfterDictation {
                 sendAfterDictation = false
@@ -285,6 +292,12 @@ struct NovaCaptureField: View {
 /// Mismo estado de progreso, propuesta y recuperación en ambas superficies.
 struct NovaFeedbackView: View {
     @EnvironmentObject private var store: FocusDataStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @EnvironmentObject private var nav: NavigationCoordinator
+    @State private var now = Date()
+    @State private var replyContext: Int?
+    @State private var contextChanged = false
+    @Environment(\.scenePhase) private var scenePhase
     var showLatestReply: Bool
 
     var body: some View {
@@ -292,28 +305,22 @@ struct NovaFeedbackView: View {
             if store.isNovaTyping {
                 progress
             } else if showLatestReply, store.novaPendingProposal == nil, store.novaErrorMessage == nil,
-                      let reply = store.novaMessages.last, reply.role == .nova {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 8) {
-                        FocusMark(size: 24)
-                        Text(AssistantBrand.displayName).font(.caption.weight(.medium)).foregroundStyle(Theme.Colors.textSecondary)
-                    }
-                    Text(reply.content).font(.subheadline).foregroundStyle(Theme.Colors.textPrimary)
-                        .lineSpacing(3).textSelection(.enabled).accessibilityIdentifier("capture.result")
-                    if !reply.actionLabels.isEmpty { NovaSavedActionsView(labels: reply.actionLabels) }
-                }.focusSurface(radius: 22, padding: 18)
+                      let reply = store.novaMessages.last, reply.role == .nova,
+                      HomeReplyPhase.resolve(reply, now: now, contextChanged: contextChanged) != .hidden {
+                replyCard(reply, phase: HomeReplyPhase.resolve(reply, now: now, contextChanged: contextChanged))
+                    .transition(.opacity)
             }
             if let proposal = store.novaPendingProposal {
                 VStack(alignment: .leading, spacing: 16) {
                     Label("Revisa antes de aplicar", systemImage: "square.and.pencil")
                         .font(.headline).foregroundStyle(Theme.Colors.textPrimary)
-                    Text(proposal.summary).font(.subheadline).foregroundStyle(Theme.Colors.textSecondary)
+                    HilanteText(content: proposal.summary, compact: true)
                     VStack(alignment: .leading, spacing: 12) {
                         ForEach(Array(proposal.actionLabels.enumerated()), id: \.offset) { _, label in
                             HStack(alignment: .top, spacing: 10) {
                                 Image(systemName: "arrow.right").foregroundStyle(Theme.Colors.focusAccent)
                                     .accessibilityHidden(true)
-                                Text(label).foregroundStyle(Theme.Colors.textPrimary)
+                                Text(HilanteText.inline(label)).foregroundStyle(Theme.Colors.textPrimary)
                             }.font(.subheadline)
                         }
                     }
@@ -321,23 +328,91 @@ struct NovaFeedbackView: View {
                 }.focusSurface(radius: 24, padding: 20)
             }
             if let error = store.novaErrorMessage { errorCard(error) }
-        }.accessibilityElement(children: .contain)
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: store.novaMessages.last?.id)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: replyPhase)
+        .onChange(of: store.novaMessages.last?.id, initial: true) { _, _ in
+            now = Date(); replyContext = contextSignature; contextChanged = false
+        }
+        .onChange(of: contextSignature) { _, signature in
+            if !store.isNovaTyping, let replyContext, replyContext != signature { contextChanged = true }
+        }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { now = Date() } }
+        .task(id: store.novaMessages.last?.id) {
+            guard showLatestReply else { return }
+            guard let reply = store.novaMessages.last else { return }
+            let calendar = Calendar.current
+            let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: reply.timestamp))
+                ?? reply.timestamp.addingTimeInterval(600)
+            let deadlines = [reply.timestamp.addingTimeInterval(90), min(reply.timestamp.addingTimeInterval(600), midnight)].sorted()
+            for deadline in deadlines {
+                let delay = deadline.timeIntervalSinceNow
+                if delay > 0 {
+                    do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+                }
+                now = Date()
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var contextSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(store.tasks); hasher.combine(store.events); hasher.combine(store.systemEvents)
+        return hasher.finalize()
+    }
+
+    private var replyPhase: HomeReplyPhase {
+        guard let reply = store.novaMessages.last else { return .hidden }
+        return HomeReplyPhase.resolve(reply, now: now, contextChanged: contextChanged)
+    }
+
+    private func replyCard(_ reply: NovaMessage, phase: HomeReplyPhase) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                FocusMark(size: 24)
+                Text(phase == .compact ? "Para tener en cuenta" : AssistantBrand.displayName)
+                    .font(.caption.weight(.medium)).foregroundStyle(Theme.Colors.textSecondary)
+            }
+            // A bounded excerpt keeps Home scannable; the original always lives in Hilante.
+            let blocks = HilanteText.blocks(reply.content)
+            let previewBlocks = phase == .compact ? blocks.filter { !$0.heading } : blocks
+            let excerpt = previewBlocks.prefix(phase == .compact ? 1 : 3).map { block in
+                (block.marker.map { "\($0) " } ?? "") + (block.heading ? "**\(block.text)**" : block.text)
+            }.joined(separator: "\n")
+            Text(HilanteText.inline(excerpt))
+                .font(.subheadline).foregroundStyle(Theme.Colors.textPrimary)
+                .lineSpacing(3).lineLimit(phase == .compact ? 2 : 6)
+                .accessibilityIdentifier("capture.result")
+            if phase == .fresh, !reply.actionLabels.isEmpty {
+                NovaSavedActionsView(labels: Array(reply.actionLabels.prefix(2)))
+            }
+            Button { nav.openNova() } label: {
+                HStack(spacing: 5) {
+                    Text("Ver en Hilante")
+                    Image(systemName: "arrow.up.right").font(.caption2.weight(.semibold))
+                }.font(.caption.weight(.medium)).frame(minHeight: 44)
+            }
+            .foregroundStyle(Theme.Colors.focusAccent)
+            .accessibilityIdentifier("capture.history")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .focusSurface(radius: 22, padding: 18)
     }
 
     private var progress: some View {
         HStack(spacing: 12) {
-            ProgressView().controlSize(.small).tint(Theme.Colors.focusAccent)
-            Text("Organizando tu petición…")
-                .font(.subheadline).foregroundStyle(Theme.Colors.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
+            HilanteThinkingMark()
             Spacer(minLength: 0)
             Button("Cancelar") { store.cancelNovaRequest(preservingProposal: true) }
-                .font(.subheadline.weight(.medium)).foregroundStyle(Theme.Colors.focusAccent)
-                .frame(minHeight: 44)
+                .font(.caption.weight(.medium)).foregroundStyle(Theme.Colors.textSecondary)
+                .frame(minWidth: 60, minHeight: 44)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(Theme.Colors.focusAccentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Theme.Colors.focusAccentSoft, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Hilante está pensando")
         .accessibilityIdentifier("nova.progress")
     }
 
