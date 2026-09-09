@@ -76,6 +76,7 @@ export function reservedTerminalReplayUnavailable(output,replay,before,after,att
   const accounted = valueNumber(after?.actual_usd)
   return output.httpStatus===503 && output.body?.request_completed===true
     && ((replay.httpStatus===401 && replay.body?.error==='auth_required')
+      || (replay.httpStatus===503 && replay.body?.error==='auth_unavailable')
       || (replay.httpStatus===503 && replay.body?.error==='assistant_unavailable' && replay.body.requestId===output.body.requestId))
     && (!replay.body?.requestId || replay.body.requestId===output.body.requestId)
     && before?.state==='failed' && after?.state==='failed'

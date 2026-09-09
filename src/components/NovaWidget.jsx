@@ -1,4 +1,5 @@
 import { clearEventReference, rememberEventReceipt, consumeEventReference } from '../utils/assistantEventReference.js'
+import { assistantTransportFailure } from '../utils/assistantTransportFailure.js'
 import { appendProposalRequest, PROPOSAL_CONTEXT_LIMIT } from '../utils/pendingProposal.js'
 import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -745,11 +746,12 @@ function NovaWidget({
       if (outcome.ok || !prepared.ok) { requestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'widget') }
     } catch (err) {
       if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
-      if (err.code === 'assistant_updating') setInput(msg)
+      const transportMessage = assistantTransportFailure(err)
+      if (err.code === 'assistant_updating' || transportMessage) setInput(msg)
       if (err.completedRetryable) { requestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'widget') }
-      const errMsg = err?.message && typeof err.message === 'string' && err.message.length < 200
+      const errMsg = transportMessage || (err?.message && typeof err.message === 'string' && err.message.length < 200
         ? err.message
-        : novaSay('error_connection', readPreferenceSync('novaPersonality'))
+        : novaSay('error_connection', readPreferenceSync('novaPersonality')))
       historyRef.current = [...historyRef.current, { role: 'assistant', content: errMsg }]
       setChatHistory([...historyRef.current])
       setReply('')

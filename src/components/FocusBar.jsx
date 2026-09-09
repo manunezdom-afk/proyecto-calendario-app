@@ -1,4 +1,5 @@
 import { clearEventReference, rememberEventReceipt, consumeEventReference } from '../utils/assistantEventReference.js'
+import { assistantTransportFailure } from '../utils/assistantTransportFailure.js'
 import { appendProposalRequest, PROPOSAL_CONTEXT_LIMIT } from '../utils/pendingProposal.js'
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -56,7 +57,7 @@ async function callFocusAssistant({ message, events, tasks, memories, history, r
     // Sin esto, una desconexión de red o un AbortController por timeout dejaba
     // al cliente colgado en "Focus está pensando…". Ahora propagamos un código
     // que el caller mapea a un mensaje útil.
-    const aborted = netErr?.name === 'AbortError'
+    const aborted = ['AbortError', 'TimeoutError'].includes(netErr?.name)
     const err = new Error(aborted ? 'timeout' : 'network_error')
     err.code = aborted ? 'timeout' : 'network_error'
     throw err
@@ -472,16 +473,17 @@ export default function FocusBar({
       if (outcome.ok || !prepared.ok) { requestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'focusbar') }
     } catch (err) {
       if (!mountedRef.current || liveRef.current.epoch !== sentContext.epoch) return
-      if (err.code === 'assistant_updating') setText(msg)
+      const transportMessage = assistantTransportFailure(err)
+      if (err.code === 'assistant_updating' || transportMessage) setText(msg)
       if (err.completedRetryable) { requestRef.current = null; clearLogicalRequest(localStorage, sentContext.userId, 'focusbar') }
       // Mensaje preciso por código. Si callFocusAssistant ya armó un texto
       // amigable, usamos ese; si no, caemos al fallback genérico de Nova.
       // Siempre liberamos isThinking en el finally — el spinner no debe
       // sobrevivir a un error.
       console.warn('[Nova] focus-assistant fallo:', err?.code || err?.message || err)
-      const errMsg = err?.message && err.message !== 'error' && err.message !== err.code
+      const errMsg = transportMessage || (err?.message && err.message !== 'error' && err.message !== err.code
         ? err.message
-        : novaSay('error_connection', readPreferenceSync('novaPersonality'))
+        : novaSay('error_connection', readPreferenceSync('novaPersonality')))
       setReply({ content: errMsg, actions: [] })
     } finally {
       busyRef.current = false

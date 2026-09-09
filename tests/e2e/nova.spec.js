@@ -327,6 +327,49 @@ test.describe('Hilante — consentimiento y resultado verificable', () => {
     expect(ids[1]).not.toBe(ids[0])
   })
 
+  for (const surface of ['Hilante', 'Mi Día']) {
+    test(`una desconexión en ${surface} conserva el borrador y reintenta el mismo UUID`, async ({ page }) => {
+      const requests = []
+      const title = `Lectura de red ${surface} E2E`
+      const message = `Crea ${title} hoy a las 10:00;  llevar agua`
+      await page.route('**/api/focus-assistant', async route => {
+        const requestId = route.request().headers()['x-request-id']
+        requests.push({ requestId, body: route.request().postDataJSON() })
+        // Abort the browser transport itself: no JSON/HTTP error is received.
+        if (requests.length === 1) return route.abort('failed')
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+          requestId, mode: 'chat_with_action', confidence: 1, reply: 'Cambio preparado.',
+          actions: [{ type: 'add_event', event: { title, date: TODAY, time: '10:00' } }], proposed_actions: [],
+        }) })
+      })
+      if (surface === 'Hilante') await openHilante(page)
+      else {
+        await page.goto('/')
+        await page.evaluate(() => localStorage.setItem('focus_ai_consent_v2', '1'))
+      }
+      const composer = surface === 'Hilante' ? input(page) : page.getByRole('textbox').first()
+      const submit = () => surface === 'Hilante' ? sendButton(page) : page.getByRole('button', { name: 'arrow_upward', exact: true })
+      await composer.fill(message)
+      await submit().click()
+      await expect(page.getByText('No pude conectar. Tu mensaje sigue aquí; vuelve a intentarlo.', { exact: true })).toBeVisible()
+      await expect(page.getByText('Failed to fetch', { exact: true })).toHaveCount(0)
+      await expect(composer).toHaveValue(message)
+      await expect(submit()).toBeEnabled()
+      expect(requests).toHaveLength(1)
+      expect((await savedEvents(page)).filter(event => event.title === title)).toHaveLength(0)
+
+      // Retry uses the preserved text, without typing it again or a new identity.
+      await submit().click()
+      await expect(page.getByText(`Añadí ${title} en este dispositivo.`, { exact: true }).first()).toBeVisible()
+      await expect.poll(async () => (await savedEvents(page)).filter(event => event.title === title).length).toBe(1)
+      await expect(composer).toHaveValue('')
+      expect(requests).toHaveLength(2)
+      expect(requests[0].requestId).toMatch(/^[0-9a-f-]{36}$/i)
+      expect(requests[1].requestId).toBe(requests[0].requestId)
+      expect(requests.map(request => request.body.message)).toEqual([message, message])
+    })
+  }
+
   test('doble click no duplica solicitud; el envío permanece bloqueado durante la espera', async ({ page }) => {
     let calls = 0
     let finish

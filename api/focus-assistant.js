@@ -7,7 +7,7 @@ import { fetchWeather, describeWeatherCode } from './_lib/weather.js'
 import { buildDateContext, addCivilDays } from './_lib/dateContext.js'
 import { validCivilDate } from './_lib/novaContract.js'
 import { rejectCrossSiteUnsafe, setCorsHeaders } from './_lib/security.js'
-import { getSupabaseAdmin, getUserIdFromAuth } from './_supabaseAdmin.js'
+import { getSupabaseAdmin, getUserFromAuthDetailed } from './_supabaseAdmin.js'
 import { getUserPlan } from './_lib/usageLimits.js'
 export const maxDuration = 60
 
@@ -19,13 +19,16 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
   if (rejectCrossSiteUnsafe(req, res)) return
   if (rateLimited(clientIp(req), { max: 30, windowMs: 60_000 })) return res.status(429).json({ error: 'rate_limit', message: 'Demasiadas solicitudes. Espera un momento.' })
-  const userId = await getUserIdFromAuth(req)
-  if (!userId) return res.status(401).json({ error: 'auth_required', message: `Inicia sesión para hablar con ${ASSISTANT_NAME}.` })
+  res.setHeader('Cache-Control', 'no-store')
+  const auth = await getUserFromAuthDetailed(req)
+  if (auth.status === 'unavailable') return res.status(503).json({ error: 'auth_unavailable',
+    message: 'No pudimos comprobar tu sesión por un momento. Conserva este mensaje y vuelve a intentarlo.', actions: [], proposed_actions: [] })
+  if (auth.status !== 'authenticated') return res.status(401).json({ error: 'auth_required', message: `Inicia sesión para hablar con ${ASSISTANT_NAME}.` })
+  const userId = auth.user.id
   if (req.body?.mode === 'today-context') return handleTodayContext(req, res, userId)
   const validated = sanitizeNovaRequest(req.body)
   if (validated.error) return res.status(400).json({ error: validated.error })
   const requestId = novaRequestId(req.headers['x-request-id'])
-  res.setHeader('Cache-Control', 'no-store')
   const admin = getSupabaseAdmin()
   const plan = await getUserPlan(admin, userId)
   try {

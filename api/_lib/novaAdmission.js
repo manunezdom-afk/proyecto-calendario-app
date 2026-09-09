@@ -67,7 +67,11 @@ function admissionDiagnostic(operation, outcome, started, signal, error) {
     outcome: failure, duration_ms: Math.max(0, Date.now() - started) }))
 }
 export async function admissionRPC(admin, name, args) {
-  const started = Date.now(), signal = AbortSignal.timeout(3000)
+  // A recorded begin ACK timed out at 3002ms before any provider call. Give only
+  // that authorization up to 5s, within the runtime's existing 43s clock and the
+  // transport's 6s cap. Keep the post-provider settlement/finalization tail at
+  // 3s per operation; never retry a mutating RPC after an uncertain ACK.
+  const started = Date.now(), signal = AbortSignal.timeout(name === 'focus_ai_begin_attempt' ? 5000 : 3000)
   if (typeof admin?.rpc !== 'function') {
     admissionDiagnostic(name, 'missing_client', started)
     return { status: 'unavailable' }

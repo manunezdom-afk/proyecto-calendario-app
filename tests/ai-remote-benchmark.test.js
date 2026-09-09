@@ -150,6 +150,7 @@ test('terminal failure may retain unobserved usage only when immutable reservati
  const cached={...row,action_type:'nova_message',fingerprint:createHash('sha256').update('comprar pan').digest('hex'),response:output,response_expires_at:new Date(Date.now()+60000).toISOString()}
  const accepts=(patch={})=>reservedTerminalReplayUnavailable(patch.output||output,patch.replay||replay,row,patch.after||row,attempts,patch.attempts||attempts,patch.cached||cached,'comprar pan')
  assert.equal(accepts(),true)
+ assert.equal(accepts({replay:{httpStatus:503,body:{error:'auth_unavailable'}}}),true)
  assert.equal(accepts({replay:{httpStatus:503,body:{error:'assistant_unavailable',requestId:'request'}}}),true)
  for(const patch of [
   {after:{...row,actual_usd:.001}}, {after:{...row,state:'in_progress'}}, {after:{...row,lease_id:'changed'}},
