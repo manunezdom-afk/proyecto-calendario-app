@@ -57,6 +57,9 @@
 		FA00000000000000000000EB /* FocusWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000EA /* FocusWidget.swift */; };
 		FA00000000000000000000F7 /* FocusWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000E7 /* FocusWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		FAA000000000000000000102 /* NovaLocalRoutingPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA000000000000000000101 /* NovaLocalRoutingPolicy.swift */; };
+		F10000000000000000000001 /* HomePriority.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000011 /* HomePriority.swift */; };
+		F10000000000000000000002 /* HomePriorityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000012 /* HomePriorityTests.swift */; };
+		F10000000000000000000003 /* HomePriorityUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000013 /* HomePriorityUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -153,6 +156,9 @@
 		FA00000000000000000000EC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		FA00000000000000000000ED /* FocusWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FocusWidget.entitlements; sourceTree = "<group>"; };
 		FAA000000000000000000101 /* NovaLocalRoutingPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovaLocalRoutingPolicy.swift; sourceTree = "<group>"; };
+		F10000000000000000000011 /* HomePriority.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomePriority.swift; sourceTree = "<group>"; };
+		F10000000000000000000012 /* HomePriorityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomePriorityTests.swift; sourceTree = "<group>"; };
+		F10000000000000000000013 /* HomePriorityUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomePriorityUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -193,6 +199,7 @@
 			isa = PBXGroup;
 			children = (
 				304FB960A2ED3A4D9CE34FE8 /* FocusCoreFlowTests.swift */,
+				F10000000000000000000013 /* HomePriorityUITests.swift */,
 			);
 			name = FocusUITests;
 			path = FocusUITests;
@@ -211,6 +218,7 @@
 			children = (
 				3DAFCBF2F8D5B3D4FF4B9DEE /* FocusDataStoreTests.swift */,
 				848EE3A9C333736872FEFC8C /* NovaExecutionTests.swift */,
+				F10000000000000000000012 /* HomePriorityTests.swift */,
 			);
 			name = FocusTests;
 			path = FocusTests;
@@ -296,6 +304,7 @@
 			children = (
 				FA0000000000000000000051 /* FocusEvent.swift */,
 				FA0000000000000000000052 /* FocusTask.swift */,
+				F10000000000000000000011 /* HomePriority.swift */,
 				FA0000000000000000000053 /* Suggestion.swift */,
 				FA0000000000000000000054 /* NovaMessage.swift */,
 				FA0000000000000000000070 /* AppSettings.swift */,
@@ -507,6 +516,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DBA464EDE8EC0D8ACEA423D3 /* FocusCoreFlowTests.swift in Sources */,
+				F10000000000000000000003 /* HomePriorityUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -516,6 +526,7 @@
 			files = (
 				D5279C2FCC21B38F2BC30375 /* FocusDataStoreTests.swift in Sources */,
 				5596EA02C6335EABCD9CCE74 /* NovaExecutionTests.swift in Sources */,
+				F10000000000000000000002 /* HomePriorityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -530,6 +541,7 @@
 				FA0000000000000000000085 /* FocusConfig.swift in Sources */,
 				FA0000000000000000000041 /* FocusEvent.swift in Sources */,
 				FA0000000000000000000042 /* FocusTask.swift in Sources */,
+				F10000000000000000000001 /* HomePriority.swift in Sources */,
 				FA0000000000000000000043 /* Suggestion.swift in Sources */,
 				FA0000000000000000000044 /* NovaMessage.swift in Sources */,
 				FA0000000000000000000080 /* AppSettings.swift in Sources */,

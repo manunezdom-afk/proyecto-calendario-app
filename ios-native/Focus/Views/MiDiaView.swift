@@ -33,23 +33,21 @@ struct MiDiaView: View {
         }
     }
 
-    private var todayTasks: [FocusTask] {
-        let dated = pendingTasks.filter {
-            if let due = $0.dueDate { return due < (Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: Date())) ?? Date()) }
-            return $0.category == .hoy || $0.priority == .alta
-        }
-        return dated.isEmpty ? Array(pendingTasks.filter { $0.dueDate == nil }.prefix(3)) : dated
+    private var priorityPlan: HomePriorityPlan {
+        HomePriorityPlanner.makePlan(
+            tasks: store.tasks,
+            events: store.events + store.systemEvents,
+            suggestions: store.settings.smartSuggestionsEnabled ? store.pendingSuggestions : []
+        )
     }
 
     private var dayEvents: [FocusEvent] {
-        store.eventsFor(date: Date()).filter { $0.status != .cancelled && $0.status != .done }
-    }
-
-    private var overdueReminders: [FocusEvent] {
-        store.events.filter {
-            $0.isReminder == true && $0.status != .done && $0.status != .cancelled &&
-            $0.startTime < Calendar.current.startOfDay(for: Date())
-        }.sorted { $0.startTime < $1.startTime }
+        let now = Date()
+        return store.eventsFor(date: now).filter {
+            guard $0.status != .cancelled && $0.status != .done else { return false }
+            if $0.isReminder == true { return $0.startTime >= now }
+            return ($0.endTime ?? $0.startTime) >= now
+        }
     }
 
     var body: some View {
@@ -98,33 +96,7 @@ struct MiDiaView: View {
                     if store.tasks.isEmpty && store.events.isEmpty && store.systemEvents.isEmpty {
                         firstStep
                     } else {
-                        if !todayTasks.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                sectionTitle("Lo importante", count: todayTasks.count)
-                                VStack(spacing: 0) {
-                                    ForEach(Array(todayTasks.prefix(5).enumerated()), id: \.element.id) { index, task in
-                                        todayTaskRow(task)
-                                        if index < min(todayTasks.count, 5) - 1 { Divider().padding(.leading, 52) }
-                                    }
-                                }.background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 22))
-                                if todayTasks.count > 5 {
-                                    Button("Ver los \(todayTasks.count) pendientes") { nav.selectedTab = .tareas }
-                                        .font(.subheadline.weight(.medium)).frame(minHeight: 44)
-                                }
-                            }
-                        } else if !pendingTasks.isEmpty {
-                            Button { nav.selectedTab = .tareas } label: {
-                                Label(pendingTasks.count == 1 ? "Tienes 1 pendiente para después" : "Tienes \(pendingTasks.count) pendientes para después", systemImage: "checklist")
-                                    .font(.subheadline).frame(minHeight: 44)
-                            }
-                        }
-
-                        if !overdueReminders.isEmpty {
-                            Group {
-                                sectionTitle("Avisos por atender", count: overdueReminders.count)
-                                ForEach(overdueReminders.prefix(5)) { event in eventRow(event, overdue: true) }
-                            }
-                        }
+                        importantSection
 
                         Group {
                             HStack {
@@ -328,7 +300,86 @@ struct MiDiaView: View {
         }.accessibilityElement(children: .combine).accessibilityAddTraits(.isHeader)
     }
 
-    private func todayTaskRow(_ task: FocusTask) -> some View {
+    private var importantSection: some View {
+        let plan = priorityPlan
+        return VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Lo importante")
+                    .font(.headline)
+                    .foregroundStyle(Theme.Colors.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                Text(plan.summary)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("today.priority.header")
+
+            if !plan.items.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(plan.items.enumerated()), id: \.element.id) { index, item in
+                        attentionRow(item)
+                        if index < plan.items.count - 1 { Divider().padding(.leading, 60) }
+                    }
+                }
+                .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            } else if plan.recommendation == nil {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.title3)
+                        .foregroundStyle(Theme.Colors.success)
+                        .accessibilityHidden(true)
+                    Text(pendingTasks.isEmpty
+                         ? "Tu agenda contiene lo próximo; no hay pendientes que reclamen atención."
+                         : "Tus demás pendientes pueden esperar. Focus los mantiene en su lista.")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .accessibilityIdentifier("today.priority.empty")
+            }
+
+            if let recommendation = plan.recommendation {
+                recommendationRow(recommendation)
+            }
+
+            if plan.hiddenTaskCount > 0 || plan.hiddenReminderCount > 0 {
+                HStack(spacing: 16) {
+                    if plan.hiddenTaskCount > 0 {
+                        Button("Ver demás pendientes") { nav.selectedTab = .tareas }
+                    }
+                    if plan.hiddenReminderCount > 0 {
+                        Button("Revisar avisos") { nav.openCalendar(on: Date()) }
+                    }
+                }
+                .font(.subheadline.weight(.medium))
+                .frame(minHeight: 44)
+            } else if plan.items.isEmpty && !pendingTasks.isEmpty {
+                Button("Ver pendientes") { nav.selectedTab = .tareas }
+                    .font(.subheadline.weight(.medium))
+                    .frame(minHeight: 44)
+            }
+        }
+    }
+
+    @ViewBuilder private func attentionRow(_ item: HomePriorityPlan.Item) -> some View {
+        switch item.content {
+        case .task(let task):
+            todayTaskRow(task, reason: item.reason, tone: item.tone)
+        case .reminder(let event):
+            overdueReminderRow(event, reason: item.reason)
+        }
+    }
+
+    private func todayTaskRow(
+        _ task: FocusTask,
+        reason: String,
+        tone: HomePriorityPlan.Item.Tone
+    ) -> some View {
         HStack(spacing: 8) {
             Button {
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
@@ -342,17 +393,100 @@ struct MiDiaView: View {
             Button { editingTask = task } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(task.title).font(.body.weight(.medium)).foregroundStyle(.primary)
-                    HStack(spacing: 8) {
-                        if let due = task.dueDate, due < Calendar.current.startOfDay(for: Date()) {
-                            Text("Atrasada").foregroundStyle(Theme.Colors.danger)
-                        } else if task.priority == .alta {
-                            Text("Prioridad alta").foregroundStyle(Theme.Colors.warning)
-                        }
-                        if let label = task.dueLabel { Text(label).foregroundStyle(.secondary) }
-                    }.font(.caption)
+                    Text(reason)
+                        .font(.caption)
+                        .foregroundStyle(priorityToneColor(tone))
                 }.frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            }.buttonStyle(.plain)
-        }.padding(.horizontal, 8).padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("today.priority.task.open.\(task.id.uuidString)")
+        }
+        .padding(.horizontal, 8).padding(.vertical, 6)
+    }
+
+    private func overdueReminderRow(_ event: FocusEvent, reason: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "bell.badge.fill")
+                .font(.body.weight(.medium))
+                .foregroundStyle(Theme.Colors.danger)
+                .frame(width: 44, height: 52)
+                .accessibilityHidden(true)
+            Button {
+                if event.effectiveSource == .local { editingEvent = event }
+                else if let url = URL(string: "calshow:\(event.startTime.timeIntervalSinceReferenceDate)") { openURL(url) }
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(event.title).font(.body.weight(.medium)).foregroundStyle(.primary)
+                    Text(reason).font(.caption).foregroundStyle(Theme.Colors.danger)
+                }
+                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            if event.effectiveSource == .local {
+                Button {
+                    var done = event
+                    done.status = .done
+                    if store.updateEvent(done) { toast.success("Recordatorio completado") }
+                } label: {
+                    Image(systemName: "checkmark.circle")
+                        .font(.title2)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Completar recordatorio \(event.title)")
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 6)
+    }
+
+    private func recommendationRow(_ suggestion: NovaSuggestion) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            FocusMark(size: 30)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("HILANTE RECOMIENDA")
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1)
+                    .foregroundStyle(Theme.Colors.novaAccent)
+                    .accessibilityIdentifier("today.priority.recommendation")
+                Text(suggestion.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.Colors.textPrimary)
+                Text(suggestion.detail)
+                    .font(.caption)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Revisar con Hilante") {
+                    nav.openNova(prompt: "Ayúdame con esta recomendación: \(suggestion.title). \(suggestion.detail)")
+                }
+                .font(.subheadline.weight(.medium))
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("today.priority.recommendation.open")
+            }
+            Spacer(minLength: 0)
+            Button {
+                store.updateSuggestion(suggestion.id, status: .dismissed)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Theme.Colors.textSecondary)
+            .accessibilityLabel("Descartar recomendación")
+            .accessibilityIdentifier("today.priority.recommendation.dismiss")
+        }
+        .padding(16)
+        .background(Theme.Colors.novaAccent.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func priorityToneColor(_ tone: HomePriorityPlan.Item.Tone) -> Color {
+        switch tone {
+        case .urgent: return Theme.Colors.danger
+        case .today: return Theme.Colors.textSecondary
+        case .important: return Theme.Colors.warning
+        }
     }
 
     private func eventRow(_ event: FocusEvent, overdue: Bool = false) -> some View {
