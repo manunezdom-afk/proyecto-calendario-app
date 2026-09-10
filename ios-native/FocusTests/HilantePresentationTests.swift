@@ -101,3 +101,112 @@ final class ScheduledCommitmentTests: XCTestCase {
         XCTAssertFalse(subject.novaMessages.last?.content.contains("Te dejé") == true)
     }
 }
+
+@MainActor
+final class HomeReplyPersistenceTests: XCTestCase {
+    private var directory: URL!
+    override func setUp() async throws {
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent("HomeReply-" + UUID().uuidString)
+        FocusLocalStore.useTestingDirectory(directory)
+        NovaResponder.testReferenceDate = Calendar.current.startOfDay(for: Date()).addingTimeInterval(10 * 3600)
+    }
+    override func tearDown() async throws {
+        NovaResponder.testReferenceDate = nil
+        FocusLocalStore.testRejectSynchronousWrite = nil
+        FocusLocalStore.flush()
+        try? FileManager.default.removeItem(at: directory)
+    }
+    private func store() -> FocusDataStore {
+        FocusDataStore(syncTransport: .init(fetchEvents: { _, _ in [] }, fetchTasks: { _, _ in [] },
+            upsertEvent: { _, _ in }, upsertTask: { _, _ in }, deleteEvent: { _, _ in }, deleteTask: { _, _ in }),
+            restoreAccount: false, schedulesNotifications: false, novaTransport: { _ in
+            XCTFail("Home presentation must never call AI")
+            throw URLError(.notConnectedToInternet)
+        })
+    }
+    func testDismissalKeepsEventTasksHistoryAndOutboxAcrossRelaunch() throws {
+        let subject = store()
+        _ = subject.addTask(FocusTask(title: "Tarea que se conserva"))
+        subject.sendNovaMessage("a las 5 tengo que irme")
+        let reply = try XCTUnwrap(subject.homeReply)
+        let events = subject.events, tasks = subject.tasks, history = subject.novaMessages
+        let outbox = subject.pendingSyncCount
+        XCTAssertTrue(subject.dismissHomeReply(reply.id))
+        XCTAssertNil(subject.homeReply)
+        subject.refreshHomeReply()
+        XCTAssertNil(subject.homeReply)
+        let restored = store()
+        XCTAssertNil(restored.homeReply)
+        XCTAssertEqual(restored.homeReplyState?.hiddenReason, .dismissed)
+        XCTAssertEqual(restored.events.map(\.id), events.map(\.id))
+        XCTAssertEqual(restored.tasks.map(\.id), tasks.map(\.id))
+        XCTAssertEqual(restored.novaMessages.map(\.id), history.map(\.id))
+        XCTAssertEqual(restored.pendingSyncCount, outbox)
+        XCTAssertEqual(Calendar.current.component(.hour, from: try XCTUnwrap(restored.events.first).startTime), 17)
+        restored.sendNovaMessage("a las 7 paso a buscar a Juan")
+        XCTAssertNotNil(restored.homeReply)
+        XCTAssertNotEqual(restored.homeReply?.id, reply.id)
+        XCTAssertFalse(restored.dismissHomeReply(reply.id))
+        XCTAssertNotNil(restored.homeReply)
+    }
+    func testNewReplySurvivesReconstructionAndSemanticNoOpSync() throws {
+        let subject = store()
+        subject.sendNovaMessage("a las 5 tengo que irme")
+        let id = try XCTUnwrap(subject.homeReply?.id)
+        subject.events[0].lastSyncedAt = Date()
+        XCTAssertEqual(subject.homeReply?.id, id)
+        XCTAssertEqual(store().homeReply?.id, id)
+    }
+    func testContextInvalidationCannotResurrectEvenWhenContextIsRestored() throws {
+        let subject = store()
+        subject.recordInlineNovaTurn(userText: "Hola", assistantReply: "Tu día")
+        let original = subject.tasks
+        subject.tasks.append(FocusTask(title: "Cambio real"))
+        XCTAssertNil(subject.homeReply)
+        subject.tasks = original
+        XCTAssertNil(subject.homeReply)
+        XCTAssertEqual(store().homeReplyState?.hiddenReason, .contextChanged)
+    }
+    func testExpiryIsTerminalEvenIfClockMovesBackAndHistoryRemains() throws {
+        let subject = store()
+        subject.recordInlineNovaTurn(userText: "Hola", assistantReply: "Tu día")
+        let reply = try XCTUnwrap(subject.homeReply)
+        subject.refreshHomeReply(now: reply.timestamp.addingTimeInterval(91))
+        XCTAssertEqual(subject.homeReplyPhase, .compact)
+        subject.refreshHomeReply(now: reply.timestamp.addingTimeInterval(601))
+        XCTAssertNil(subject.homeReply)
+        subject.refreshHomeReply(now: reply.timestamp.addingTimeInterval(30))
+        XCTAssertNil(subject.homeReply)
+        XCTAssertNil(store().homeReply)
+        XCTAssertEqual(subject.novaMessages.last?.id, reply.id)
+    }
+    func testFailedDismissalDoesNotPretendItWasSaved() throws {
+        let subject = store()
+        subject.recordInlineNovaTurn(userText: "Hola", assistantReply: "Tu día")
+        let id = try XCTUnwrap(subject.homeReply?.id)
+        FocusLocalStore.testRejectSynchronousWrite = { $0 == .homeReply }
+        XCTAssertFalse(subject.dismissHomeReply(id))
+        XCTAssertEqual(subject.homeReply?.id, id)
+    }
+    func testHistoryRemovalAndAccountSwitchCannotPublishOldReplies() throws {
+        let subject = store()
+        subject.recordInlineNovaTurn(userText: "Hola", assistantReply: "Tu día")
+        let id = try XCTUnwrap(subject.homeReply?.id)
+        subject.novaMessages.append(NovaMessage(role: .user, content: "Otro mensaje"))
+        subject.novaMessages.removeLast()
+        XCTAssertNil(subject.homeReply)
+        XCTAssertEqual(subject.homeReplyState?.messageID, id)
+        subject.applyAuthChange(accessToken: "synthetic", userId: UUID())
+        XCTAssertNil(subject.homeReply)
+        XCTAssertNil(subject.homeReplyState)
+        subject.applyAuthChange(accessToken: nil, userId: nil)
+        XCTAssertNil(subject.homeReply)
+        XCTAssertEqual(subject.homeReplyState?.messageID, id)
+    }
+    func testLegacyHistoryIsNeverPromotedOnLaunch() {
+        FocusLocalStore.saveSync([NovaMessage(role: .nova, content: "Antigua")], forKey: .novaMessages)
+        let subject = store()
+        XCTAssertEqual(subject.novaMessages.count, 1)
+        XCTAssertNil(subject.homeReply)
+    }
+}

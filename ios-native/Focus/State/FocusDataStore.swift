@@ -5042,16 +5042,37 @@ enum NovaResponder {
 /// properties ni en cada body render — evita loops de SwiftUI.
 @MainActor
 final class FocusDataStore: ObservableObject {
-    @Published var events: [FocusEvent]
+    @Published var events: [FocusEvent] { didSet { refreshHomeReply() } }
     /// Eventos del calendario del iPhone (EventKit, `source: .apple`).
     /// Array SEPARADO de `events` a propósito: `SupabaseSyncService` lee
     /// `events` y jamás debe subir a la nube un evento que no es de Focus.
     /// Solo se mergean en la capa de lectura (`eventsFor(date:)`). No se
     /// persisten — se re-fetchean del sistema en cada launch/refresh.
-    @Published private(set) var systemEvents: [FocusEvent] = []
-    @Published var tasks: [FocusTask]
+    @Published private(set) var systemEvents: [FocusEvent] = [] { didSet { refreshHomeReply() } }
+    @Published var tasks: [FocusTask] { didSet { refreshHomeReply() } }
     @Published var suggestions: [NovaSuggestion]
-    @Published var novaMessages: [NovaMessage]
+    @Published var novaMessages: [NovaMessage] {
+        didSet {
+            guard !restoringHomeReply else { return }
+            // Removing a pending user turn or reloading history cannot republish an old reply.
+            if let reply = novaMessages.last, reply.role == .nova,
+               !oldValue.contains(where: { $0.id == reply.id }),
+               novaErrorMessage == nil, novaPendingProposal == nil {
+                publishHomeReply(reply)
+            } else if novaMessages.last?.id != oldValue.last?.id {
+                hideHomeReply(reason: .superseded)
+            }
+        }
+    }
+    @Published private(set) var homeReplyState: HomeReplyState?
+    @Published private(set) var homeReplyPhase: HomeReplyPhase = .hidden
+    private var restoringHomeReply = true
+    private var homeReplyDeadlineTask: Task<Void, Never>?
+
+    var homeReply: NovaMessage? {
+        guard homeReplyPhase != .hidden, let id = homeReplyState?.messageID else { return nil }
+        return novaMessages.first { $0.id == id && $0.role == .nova }
+    }
     @Published var settings: AppSettings
     /// Memoria de sesión para Nova. NO persiste a disco — se reinicia con
     /// cada launch. Permite resolver "agéndalo X" o "y X" usando el último
@@ -5120,12 +5141,19 @@ final class FocusDataStore: ObservableObject {
          novaTransport: @escaping (NovaService.Request) async throws -> NovaService.Result = NovaService.send) {
         self.syncTransport = syncTransport
         self.novaTransport = novaTransport
+        #if DEBUG
+        self.schedulesNotifications = schedulesNotifications && !CommandLine.arguments.contains("--ui-testing")
+        #else
         self.schedulesNotifications = schedulesNotifications
+        #endif
         var shouldRestore = restoreAccount
         #if DEBUG
         if CommandLine.arguments.contains("--ui-testing") {
             shouldRestore = false
-            FocusLocalStore.activateAccount(nil)
+            // Device QA must never reset the user's real guest partition.
+            let qaRoot = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Focus/UITests", isDirectory: true)
+            FocusLocalStore.useTestingDirectory(qaRoot)
             if CommandLine.arguments.contains("--reset-fixture") { FocusLocalStore.clearAll() }
         }
         #endif
@@ -5188,6 +5216,7 @@ final class FocusDataStore: ObservableObject {
         }
         NovaMemoryStore.shared.reloadForCurrentAccount()
         refreshSystemEvents()
+        restoreHomeReply()
     }
 
     // MARK: - Calendario del sistema (EventKit, read-only)
@@ -5493,6 +5522,8 @@ final class FocusDataStore: ObservableObject {
     }
 
     private func loadCurrentAccount() {
+        restoringHomeReply = true
+        homeReplyDeadlineTask?.cancel()
         let snapshot = FocusLocalStore.load(FocusSyncSnapshot.self, forKey: .syncSnapshot)
         events = snapshot?.events ?? []
         tasks = snapshot?.tasks ?? []
@@ -5514,7 +5545,79 @@ final class FocusDataStore: ObservableObject {
         notificationPermissionDenied = false
         systemEvents = []
         refreshSystemEvents()
+        restoreHomeReply()
         syncWidgetSnapshot()
+    }
+
+    private var homeReplyContext: String {
+        HomeReplyState.context(tasks: tasks, events: events + systemEvents)
+    }
+
+    private func restoreHomeReply() {
+        // Legacy history is deliberately not promoted into Home on launch.
+        homeReplyState = FocusLocalStore.load(HomeReplyState.self, forKey: .homeReply)
+        restoringHomeReply = false
+        refreshHomeReply()
+        scheduleHomeReplyDeadline()
+    }
+
+    private func publishHomeReply(_ reply: NovaMessage) {
+        guard homeReplyState?.messageID != reply.id else { return }
+        let state = HomeReplyState(message: reply, context: homeReplyContext)
+        guard FocusLocalStore.saveSync(state, forKey: .homeReply) else { return }
+        homeReplyState = state
+        refreshHomeReply()
+        scheduleHomeReplyDeadline()
+    }
+
+    /// Called by domain changes, the app lifecycle and one deadline task;
+    /// no view-local flags, randomized hashes or polling determine relevance.
+    func refreshHomeReply(now: Date = Date()) {
+        guard !restoringHomeReply else { return }
+        guard let state = homeReplyState else { homeReplyPhase = .hidden; return }
+        if state.hiddenReason == nil {
+            if state.phase(at: now) == .hidden { hideHomeReply(reason: .expired) }
+            else if state.context != homeReplyContext { hideHomeReply(reason: .contextChanged) }
+            else if !novaMessages.contains(where: { $0.id == state.messageID }) { hideHomeReply(reason: .superseded) }
+        }
+        let phase = homeReplyState?.phase(at: now) ?? .hidden
+        if homeReplyPhase != phase { homeReplyPhase = phase }
+    }
+
+    @discardableResult
+    private func hideHomeReply(reason: HomeReplyState.HiddenReason) -> Bool {
+        guard !restoringHomeReply, var state = homeReplyState, state.hiddenReason == nil else { return true }
+        state.hiddenReason = reason
+        let saved = FocusLocalStore.saveSync(state, forKey: .homeReply)
+        // A manual dismissal is acknowledged only when its persistence succeeds.
+        guard saved || reason != .dismissed else { return false }
+        homeReplyDeadlineTask?.cancel()
+        homeReplyState = state
+        homeReplyPhase = .hidden
+        return saved
+    }
+
+    @discardableResult
+    func dismissHomeReply(_ messageID: UUID) -> Bool {
+        guard homeReplyState?.messageID == messageID else { return false }
+        return hideHomeReply(reason: .dismissed)
+    }
+
+    private func scheduleHomeReplyDeadline() {
+        homeReplyDeadlineTask?.cancel()
+        guard let state = homeReplyState, state.hiddenReason == nil else { return }
+        let generation = accountGeneration
+        homeReplyDeadlineTask = Task { [weak self] in
+            for deadline in Set([min(state.compactAt, state.expiresAt), state.expiresAt]).sorted() {
+                let delay = deadline.timeIntervalSinceNow
+                if delay > 0 {
+                    do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+                }
+                guard !Task.isCancelled, let self, self.accountGeneration == generation,
+                      self.homeReplyState?.messageID == state.messageID else { return }
+                self.refreshHomeReply()
+            }
+        }
     }
 
     private func requestSync() {
@@ -5713,6 +5816,9 @@ final class FocusDataStore: ObservableObject {
     /// mínimo: t=título, s/e=epoch inicio/fin, c=hex. Se llama en cada
     /// persistEvents() y refreshSystemEvents() — barato (pocos KB).
     func syncWidgetSnapshot() {
+        #if DEBUG
+        if CommandLine.arguments.contains("--ui-testing") { return }
+        #endif
         guard let defaults = UserDefaults(suiteName: "group.me.usefocus.app") else { return }
         let cal = Calendar.current
         let today = (events + systemEvents)
@@ -8949,6 +9055,8 @@ final class FocusDataStore: ObservableObject {
     /// Clears the active partition only, including memory, widget state and
     /// pending writes. Other accounts and unassigned recovery data stay isolated.
     func clearAllLocalData() {
+        restoringHomeReply = true
+        homeReplyDeadlineTask?.cancel()
         accountGeneration = UUID()
         syncTask?.cancel()
         syncTask = nil
@@ -8966,9 +9074,12 @@ final class FocusDataStore: ObservableObject {
         refreshPendingDeletes()
         suggestions = []
         novaMessages = []
+        homeReplyState = nil
+        homeReplyPhase = .hidden
         settings = .defaults
         novaContext = NovaContext()
         systemEvents = []
+        restoringHomeReply = false
         dismissedDemoEventTitles = []
         dismissedDemoTaskTitles = []
         lastSyncAt = nil

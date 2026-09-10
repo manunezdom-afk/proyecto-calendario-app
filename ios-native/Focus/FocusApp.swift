@@ -124,6 +124,7 @@ struct FocusApp: App {
             // parser local (bug 2026-05-28).
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
+                    dataStore.refreshHomeReply()
                     authStore.refreshIfNeeded()
                     Task { await dataStore.fetchRemoteAndMerge() }
                     dataStore.refreshSystemEvents()

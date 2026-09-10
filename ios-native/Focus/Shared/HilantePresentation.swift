@@ -1,5 +1,50 @@
 import SwiftUI
 import UIKit
+import CryptoKit
+
+/// A presentation receipt, scoped to the account. Never owns domain mutations
+/// or conversation text. Hidden is terminal for this exact message identity.
+struct HomeReplyState: Codable, Equatable {
+    enum HiddenReason: String, Codable { case dismissed, expired, contextChanged, superseded }
+    let messageID: UUID
+    let timestamp: Date
+    let compactAt: Date
+    let expiresAt: Date
+    let context: String
+    var hiddenReason: HiddenReason?
+
+    init(message: NovaMessage, context: String, calendar: Calendar = .current) {
+        messageID = message.id
+        timestamp = message.timestamp
+        compactAt = timestamp.addingTimeInterval(90)
+        let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: timestamp))
+            ?? timestamp.addingTimeInterval(600)
+        expiresAt = min(timestamp.addingTimeInterval(message.actionLabels.isEmpty ? 600 : 90), midnight)
+        self.context = context
+    }
+
+    func phase(at now: Date) -> HomeReplyPhase {
+        guard hiddenReason == nil, now >= timestamp, now < expiresAt else { return .hidden }
+        return now < compactAt ? .fresh : .compact
+    }
+
+    /// Stable across processes, array ordering and nonsemantic sync metadata.
+    static func context(tasks: [FocusTask], events: [FocusEvent]) -> String {
+        struct Snapshot: Encodable { let tasks: [FocusTask]; let events: [FocusEvent] }
+        let normalized = events.map { event in
+            var copy = event
+            copy.lastSyncedAt = nil
+            copy.externalCalendarColorHex = nil
+            return copy
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let snapshot = Snapshot(tasks: tasks.sorted { $0.id.uuidString < $1.id.uuidString },
+                                events: normalized.sorted { $0.id.uuidString < $1.id.uuidString })
+        return SHA256.hash(data: (try? encoder.encode(snapshot)) ?? Data()).map { String(format: "%02x", $0) }.joined()
+    }
+}
 
 /// Home is a glance at the present. History is never mutated by this policy.
 enum HomeReplyPhase: Equatable {
@@ -7,13 +52,8 @@ enum HomeReplyPhase: Equatable {
 
     static func resolve(_ message: NovaMessage, now: Date = Date(), contextChanged: Bool = false,
                         calendar: Calendar = .current) -> Self {
-        let age = now.timeIntervalSince(message.timestamp)
-        guard message.role == .nova, age >= 0, calendar.isDate(message.timestamp, inSameDayAs: now),
-              !contextChanged else { return .hidden }
-        if age < 90 { return .fresh }
-        // Execution receipts belong in history once the immediate acknowledgement has passed.
-        guard message.actionLabels.isEmpty, age < 600 else { return .hidden }
-        return .compact
+        guard message.role == .nova, !contextChanged else { return .hidden }
+        return HomeReplyState(message: message, context: "", calendar: calendar).phase(at: now)
     }
 }
 
@@ -125,7 +165,7 @@ struct HilanteTextInput: UIViewRepresentable {
         } else if !view.isFirstResponder && view.text != text && view.markedTextRange == nil {
             view.text = text
         }
-        view.placeholderLabel.text = placeholder
+        view.placeholderLabel.text = sizeCategory.isAccessibilityCategory ? "Escribe aquí…" : placeholder
         view.refreshLayout()
         if focused && !view.isFirstResponder { view.becomeFirstResponder() }
     }
@@ -165,7 +205,9 @@ struct HilanteTextInput: UIViewRepresentable {
             placeholderLabel.font = font
             guard bounds.width > 0 else { return }
             let line = font?.lineHeight ?? 22
-            let natural = sizeThatFits(CGSize(width: bounds.width, height: .greatestFiniteMagnitude)).height
+            let placeholderHeight = text.isEmpty
+                ? placeholderLabel.sizeThatFits(CGSize(width: bounds.width, height: .greatestFiniteMagnitude)).height + 14 : 0
+            let natural = max(placeholderHeight, sizeThatFits(CGSize(width: bounds.width, height: .greatestFiniteMagnitude)).height)
             let target = min(min(160, line * 5 + 14), max(line + 14, natural))
             placeholderLabel.frame = CGRect(x: 0, y: 7, width: bounds.width,
                 height: placeholderLabel.sizeThatFits(CGSize(width: bounds.width, height: .greatestFiniteMagnitude)).height)
@@ -174,36 +216,105 @@ struct HilanteTextInput: UIViewRepresentable {
     }
 }
 
-struct HilanteThinkingMark: View {
+/// Focus's two interlaced strokes. Listening geometry is driven only by measured
+/// energy; autonomous movement is reserved for processing, while visible/active.
+struct HilanteLivingMark: View {
+    enum Phase { case resting, listening, processing, ready, unavailable }
+    let phase: Phase
+    var level: Float = 0
+    var size: CGFloat = 84
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var breathing = false
+    @Environment(\.scenePhase) private var scenePhase
+
+    private var energy: CGFloat {
+        guard phase == .listening, !reduceMotion, level.isFinite else { return 0 }
+        return CGFloat(min(max(level, 0), 1))
+    }
 
     var body: some View {
-        FocusMark(size: 38)
-            .scaleEffect(reduceMotion ? 1 : (breathing ? 1.04 : 0.96))
-            .opacity(reduceMotion ? 1 : (breathing ? 1 : 0.65))
-            .animation(reduceMotion ? nil : .easeInOut(duration: 1.15).repeatForever(autoreverses: true), value: breathing)
-            .onAppear { breathing = true }
-            .onDisappear { breathing = false }
+        ZStack {
+            Ellipse()
+                .fill(Theme.Colors.accentGradient.opacity(phase == .resting ? 0.09 : 0.12 + energy * 0.16))
+                .frame(width: size * (1.3 + energy * 0.25), height: size * (0.9 + energy * 0.3))
+                .blur(radius: size * 0.3)
+            if phase == .processing && !reduceMotion && scenePhase == .active {
+                HilanteProcessingGlyph(size: size)
+            } else {
+                HilanteMarkGlyph(size: size, energy: energy, sweep: 0)
+                    .scaleEffect(phase == .ready && !reduceMotion ? 0.92 : 1)
+            }
+            if phase == .ready || phase == .unavailable || (phase == .listening && reduceMotion) {
+                Image(systemName: phase == .ready ? "checkmark" : phase == .unavailable ? "mic.slash" : "mic.fill")
+                    .font(.system(size: size * 0.17, weight: .semibold))
+                    .foregroundStyle(Theme.Colors.focusAccent)
+                    .padding(6).background(Theme.Colors.background, in: Circle())
+                    .offset(x: size * 0.4, y: size * 0.3)
+            }
+        }
+        .frame(width: size, height: size)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: energy)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: phase)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct HilanteMarkGlyph: View {
+    let size: CGFloat
+    let energy: CGFloat
+    let sweep: CGFloat
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * (0.18 + energy * 0.06), style: .continuous)
+                .stroke(Theme.Colors.accentGradient, style: StrokeStyle(lineWidth: size * 0.054, lineCap: .round))
+                .frame(width: size * (0.47 + energy * 0.06), height: size * (0.61 + energy * 0.12))
+                .rotationEffect(.degrees(38 + energy * 13 + sweep * 9))
+            RoundedRectangle(cornerRadius: size * (0.18 + energy * 0.04), style: .continuous)
+                .trim(from: 0.08, to: 0.78)
+                .stroke(Theme.Colors.accentGradient, style: StrokeStyle(lineWidth: size * 0.054, lineCap: .round))
+                .frame(width: size * (0.47 + energy * 0.08), height: size * (0.61 + energy * 0.06))
+                .rotationEffect(.degrees(-38 - energy * 11 + sweep * 9))
+        }
+    }
+}
+
+private struct HilanteProcessingGlyph: View {
+    let size: CGFloat
+    @State private var moving = false
+    var body: some View {
+        HilanteMarkGlyph(size: size, energy: 0, sweep: moving ? 1 : -1)
+            .scaleEffect(moving ? 1.04 : 0.96)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { moving = true }
+            }
+    }
+}
+
+struct HilanteThinkingMark: View {
+    var body: some View {
+        HilanteLivingMark(phase: .processing, size: 38)
     }
 }
 
 #if DEBUG
-/// Opt-in synthetic UI states. No credentials, transport, or persisted conversation.
+/// Opt-in synthetic UI states in the isolated UI-test partition. No transport.
 @MainActor
 enum HilantePresentationFixture {
     static func install(in store: FocusDataStore) {
         let args = CommandLine.arguments
+        if args.contains("--ui-testing") {
+            if args.contains("--appearance=dark") { store.settings.appearance = .dark }
+            if args.contains("--appearance=light") { store.settings.appearance = .light }
+        }
         if args.contains("--ui-testing"), let preview = args.first(where: { $0.hasPrefix("--home-preview=") }) {
             let day = Calendar.current.startOfDay(for: Date())
             NovaResponder.testReferenceDate = day.addingTimeInterval(10 * 3600)
             if store.tasks.isEmpty && store.events.isEmpty && store.novaMessages.isEmpty {
                 let mode = String(preview.split(separator: "=").last ?? "")
-                let count = mode == "three" ? 3 : mode == "one" ? 1 : 0
+                let count = ["three", "activities"].contains(mode) ? 3 : mode == "one" ? 1 : 0
                 for title in ["Cerrar la propuesta", "Revisar el presupuesto", "Preparar la reunión"].prefix(count) {
                     _ = store.addTask(FocusTask(title: title, priority: .alta, dueDate: day))
                 }
-                if mode == "agenda" {
+                if ["agenda", "activities"].contains(mode) {
                     _ = store.addEvent(FocusEvent(title: "Reunión de equipo", startTime: day.addingTimeInterval(10.5 * 3600),
                         endTime: day.addingTimeInterval(11 * 3600), section: .reunion))
                 }
@@ -230,6 +341,7 @@ enum HilantePresentationFixture {
         store.novaMessages = [NovaMessage(role: .user, content: "Ayúdame a ordenar el día"),
                               NovaMessage(role: .nova, content: content, timestamp: Date().addingTimeInterval(-age))]
         if mode == "thinking" { store.novaMessages.removeLast(); store.isNovaTyping = true }
+        FocusLocalStore.saveSync(store.novaMessages, forKey: .novaMessages)
     }
 }
 #endif

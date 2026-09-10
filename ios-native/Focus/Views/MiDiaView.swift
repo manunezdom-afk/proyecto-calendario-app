@@ -9,6 +9,7 @@ struct MiDiaView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var draft = ""
     @State private var homeNow = NovaResponder.referenceNow
     @State private var captureFocused = false
@@ -61,15 +62,24 @@ struct MiDiaView: View {
         agendaLeads && !store.isNovaTyping && store.novaPendingProposal == nil && store.novaErrorMessage == nil
     }
 
+    private var quietDay: Bool {
+        priorityPlan.items.isEmpty && priorityPlan.recommendation == nil && dayEvents.isEmpty
+    }
+
+    private var hasFeedback: Bool {
+        store.isNovaTyping || store.novaPendingProposal != nil || store.novaErrorMessage != nil || store.homeReply != nil
+    }
+
     private var headline: String {
         if priorityPlan.items.contains(where: { $0.tone == .urgent }) { return "Primero, lo esencial." }
         if agendaLeads { return "Tu día está en marcha." }
         if !priorityPlan.items.isEmpty { return "Un paso a la vez." }
-        return "Tu día, a tu ritmo."
+        return "Hoy, con espacio."
     }
 
     var body: some View {
         NavigationStack {
+            GeometryReader { viewport in
             ScrollViewReader { proxy in
             List {
                 Group {
@@ -87,7 +97,10 @@ struct MiDiaView: View {
                     }
                     .padding(.top, 16)
 
-                    VStack(alignment: .leading, spacing: 16) {
+                    if quietDay && !captureFocused {
+                        quietPresence(compact: hasFeedback, height: viewport.size.height)
+                    }
+
                         NovaCaptureField(text: $draft, identifier: "capture", placeholder: "¿Qué tienes en mente?",
                                          onFocusChange: { captureFocused = $0 }) {}
                             .background {
@@ -98,9 +111,20 @@ struct MiDiaView: View {
                             .onPreferenceChange(HomeCaptureHeightKey.self) { _ in
                                 if captureFocused { proxy.scrollTo("today.capture", anchor: .top) }
                             }
-                        if !feedbackBelowAgenda { NovaFeedbackView(showLatestReply: true) }
+                            .id("today.capture")
+                    if quietDay && !hasFeedback && draft.isEmpty && !captureFocused {
+                        Button {
+                            draft = "Recuérdame llamar mañana a las 10"
+                        } label: {
+                            Text("Prueba: “Recuérdame llamar mañana a las 10”")
+                                .font(.caption).foregroundStyle(Theme.Colors.textSecondary)
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Escribe el ejemplo en el composer para que puedas editarlo")
+                        .accessibilityIdentifier("today.capture.suggestion")
                     }
-                    .id("today.capture")
+                    if !feedbackBelowAgenda && hasFeedback { NovaFeedbackView(showLatestReply: true) }
 
                     syncNotice
 
@@ -117,18 +141,12 @@ struct MiDiaView: View {
 
                     if agendaLeads {
                         agendaSection
-                        if feedbackBelowAgenda { NovaFeedbackView(showLatestReply: true) }
+                        if feedbackBelowAgenda && hasFeedback { NovaFeedbackView(showLatestReply: true) }
                     }
                     if !priorityPlan.items.isEmpty || priorityPlan.recommendation != nil {
                         importantSection
                     }
                     if !agendaLeads && !dayEvents.isEmpty { agendaSection }
-                    if priorityPlan.items.isEmpty && dayEvents.isEmpty && priorityPlan.recommendation == nil
-                        && !store.isNovaTyping && store.novaPendingProposal == nil
-                        && !(store.novaMessages.last.map { HomeReplyPhase.resolve($0) != .hidden } ?? false) {
-                        firstStep
-                    }
-
                         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: homeNow) ?? homeNow
                         let next = store.eventsFor(date: tomorrow).filter { $0.status != .cancelled && $0.status != .done }
                         if let first = next.first {
@@ -159,12 +177,17 @@ struct MiDiaView: View {
                     proxy.scrollTo("today.capture", anchor: .top)
                 }
             }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { homeNow = NovaResponder.referenceNow }
+            }
             .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
                 homeNow = NovaResponder.referenceNow
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: dayEvents.map(\.id))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: quietDay)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: hasFeedback)
             .background { FocusAmbientBackground(intensity: 0.85) }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Hoy")
@@ -229,6 +252,7 @@ struct MiDiaView: View {
                 }
             }
             }
+            }
         }
     }
 
@@ -244,20 +268,25 @@ struct MiDiaView: View {
         return saved
     }
 
-    private var firstStep: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "sun.horizon").font(.title2.weight(.light))
-                .foregroundStyle(Theme.Colors.focusAccent).accessibilityHidden(true)
-            Text("Espacio para lo que venga.")
-                .font(.subheadline).foregroundStyle(Theme.Colors.textSecondary)
-            Spacer(minLength: 0)
-            Button { showNewTask = true } label: {
-                Image(systemName: "plus").frame(width: 44, height: 44)
+    private func quietPresence(compact: Bool, height: CGFloat) -> some View {
+        let smallViewport = height < 650
+        return VStack(alignment: .leading, spacing: 18) {
+            if !dynamicTypeSize.isAccessibilitySize {
+                HilanteLivingMark(phase: .resting, size: compact ? 62 : smallViewport ? 72 : 94)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, compact ? 8 : smallViewport ? 4 : 18)
             }
-            .accessibilityLabel("Crear una tarea manualmente")
-            .accessibilityIdentifier("today.manualTask")
+            if !compact {
+                Text("Sin actividades para hoy")
+                    .font(.title3.weight(.medium)).foregroundStyle(Theme.Colors.textPrimary)
+                Text(dynamicTypeSize.isAccessibilitySize ? "Dile a Hilante qué quieres guardar."
+                     : "Una idea, un pendiente o un plan.\nDile a Hilante qué quieres guardar.")
+                    .font(.subheadline).foregroundStyle(Theme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(.vertical, 12)
+        .padding(.top, compact || smallViewport || dynamicTypeSize.isAccessibilitySize ? 0 : min(36, height * 0.045))
+        .padding(.bottom, compact ? 0 : 6)
         .accessibilityIdentifier("today.priority.empty")
     }
 

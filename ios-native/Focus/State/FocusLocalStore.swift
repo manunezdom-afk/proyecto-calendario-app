@@ -10,6 +10,7 @@ enum FocusLocalStore {
         case events = "focus.v1.events"
         case suggestions = "focus.v1.suggestions"
         case novaMessages = "focus.v1.novaMessages"
+        case homeReply = "focus.v1.homeReply"
         case settings = "focus.v1.settings"
         case dismissedDemoEvents = "focus.v1.dismissedDemoEvents"
         case dismissedDemoTasks = "focus.v1.dismissedDemoTasks"

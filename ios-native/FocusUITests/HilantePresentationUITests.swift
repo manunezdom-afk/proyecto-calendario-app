@@ -67,7 +67,7 @@ final class HilantePresentationUITests: XCTestCase {
         capture("Hilante full Markdown reply")
         app.terminate(); launch("compact")
         XCTAssertTrue(result.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Para tener en cuenta"].exists)
+        XCTAssertTrue(app.buttons["capture.history"].exists)
         capture("Home compact reply")
         app.terminate(); launch("expiring")
         XCTAssertTrue(result.waitForExistence(timeout: 5))
@@ -155,5 +155,192 @@ final class HomeCommitmentUITests: XCTestCase {
         let emptied = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", ""), object: input)
         XCTAssertEqual(XCTWaiter.wait(for: [emptied], timeout: 5), .completed)
         shot("Composer vacío después de borrar")
+    }
+}
+
+final class HomeReleaseCandidateUITests: XCTestCase {
+    private let app = XCUIApplication()
+    override func setUpWithError() throws { continueAfterFailure = false }
+    private func launch(_ args: [String] = [], reset: Bool = true) {
+        app.launchArguments = ["--ui-testing", "--home-preview=empty"] + args
+        if reset { app.launchArguments.append("--reset-fixture") }
+        app.launch()
+        if !app.textViews["capture.input"].waitForExistence(timeout: 5) { app.swipeUp() }
+        XCTAssertTrue(app.textViews["capture.input"].waitForExistence(timeout: 10))
+    }
+    private func shot(_ title: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = title; attachment.lifetime = .keepAlways; add(attachment)
+    }
+    private var reply: XCUIElement { app.staticTexts["capture.result"] }
+    private func tab(_ name: String) {
+        let target = app.tabBars.buttons[name]
+        target.tap()
+        if !target.isSelected { target.tap() }
+        XCTAssertTrue(target.isSelected)
+    }
+    private func lifecycle() {
+        for name in ["Hilante", "Hoy", "Pendientes", "Hoy", "Agenda", "Hoy"] { tab(name) }
+        XCUIDevice.shared.press(.home)
+        app.activate()
+    }
+    func testReplySwipeOnlyHidesPresentationAndSurvivesLifecycle() {
+        launch()
+        let input = app.textViews["capture.input"]
+        input.tap(); input.typeText("a las 5 tengo que irme")
+        app.buttons["capture.send"].tap()
+        XCTAssertTrue(reply.waitForExistence(timeout: 5))
+        let cardText = reply.label
+        // The small iPhone may place feedback below the tab bar.
+        for _ in 0..<3 where reply.frame.maxY >= app.tabBars.firstMatch.frame.minY { app.swipeUp() }
+        // A partial swipe exposes the explicit, non-destructive action.
+        reply.swipeLeft()
+        XCTAssertTrue(app.buttons["Quitar"].waitForExistence(timeout: 3))
+        shot("Home Quitar solo respuesta")
+        app.buttons["Quitar"].tap()
+        XCTAssertFalse(reply.exists)
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Salir")).firstMatch.exists)
+        lifecycle()
+        XCTAssertFalse(reply.exists)
+        app.terminate(); launch(reset: false)
+        XCTAssertFalse(reply.exists)
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Salir")).firstMatch.exists)
+        shot("Home descarte persistido con evento intacto")
+        tab("Agenda")
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Salir")).firstMatch.exists
+                      || app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Salir")).firstMatch.exists)
+        tab("Hilante")
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", cardText)).firstMatch.exists)
+        tab("Hoy")
+        input.tap(); input.typeText("a las 7 paso a buscar a Juan")
+        app.buttons["capture.send"].tap()
+        XCTAssertTrue(reply.waitForExistence(timeout: 5))
+        XCTAssertTrue(reply.label.contains("Juan"))
+    }
+    func testFreshReplyAndExpiredReplyAcrossFullLifecycle() {
+        launch(["--hilante-preview=short"])
+        XCTAssertTrue(reply.waitForExistence(timeout: 5))
+        let text = reply.label
+        lifecycle()
+        XCTAssertEqual(reply.label, text)
+        app.terminate(); launch(reset: false)
+        XCTAssertEqual(reply.label, text)
+        app.terminate(); launch(["--hilante-preview=expired"])
+        XCTAssertFalse(reply.exists)
+        lifecycle()
+        XCTAssertFalse(reply.exists)
+        app.terminate(); launch(reset: false)
+        XCTAssertFalse(reply.exists)
+    }
+    func testVisualHomeMatrixInBothAppearances() {
+        for appearance in ["light", "dark"] {
+            for mode in ["empty", "reply", "agenda", "activities", "three"] {
+                app.launchArguments = ["--ui-testing", "--reset-fixture", "--home-preview=\(mode)", "--appearance=\(appearance)"]
+                if mode == "reply" { app.launchArguments.append("--hilante-preview=short") }
+                app.launch()
+                XCTAssertTrue(app.textViews["capture.input"].waitForExistence(timeout: 10))
+                XCTAssertTrue(app.buttons["capture.voice"].isHittable)
+                if ["empty", "reply"].contains(mode) { XCTAssertTrue(app.otherElements["today.priority.empty"].exists) }
+                if mode == "agenda" { XCTAssertFalse(app.staticTexts["Lo importante"].exists) }
+                shot("RC Home \(mode) \(appearance)")
+                app.terminate()
+            }
+        }
+    }
+    func testVoiceReviewEditingCancelAndSend() {
+        launch(["--voice-preview=review"])
+        app.buttons["capture.voice"].tap()
+        let transcript = app.descendants(matching: .any).matching(identifier: "voice.transcript").firstMatch
+        XCTAssertTrue(transcript.waitForExistence(timeout: 5))
+        shot("RC voz revisar")
+        transcript.tap(); transcript.typeText(" hoy")
+        XCTAssertTrue((transcript.value as? String)?.contains("hoy") == true)
+        shot("RC voz editar con teclado")
+        app.buttons["voice.cancel"].tap()
+        XCTAssertEqual(app.textViews["capture.input"].value as? String, "")
+        app.buttons["capture.voice"].tap()
+        XCTAssertTrue(app.buttons["voice.use"].waitForExistence(timeout: 5))
+        app.buttons["voice.use"].tap()
+        XCTAssertTrue(reply.waitForExistence(timeout: 5))
+        XCTAssertTrue(reply.label.contains("Salir"))
+    }
+    func testAccessibilityText() {
+        launch(["--voice-preview=review", "--appearance=dark",
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        for _ in 0..<3 where !app.buttons["capture.voice"].isHittable { app.swipeUp() }
+        XCTAssertTrue(app.buttons["capture.voice"].isHittable)
+        shot("RC Home accesibilidad texto máximo")
+        app.buttons["capture.voice"].tap()
+        XCTAssertTrue(app.buttons["voice.cancel"].waitForExistence(timeout: 5))
+        shot("RC voz accesibilidad texto máximo")
+        for _ in 0..<3 where !app.buttons["voice.use"].isHittable { app.swipeUp() }
+        XCTAssertTrue(app.buttons["voice.use"].isHittable)
+        XCTAssertEqual(app.buttons["voice.cancel"].label, "Cancelar dictado")
+        shot("RC voz controles accesibles")
+    }
+
+    func testVoiceVisualStatesAndDenial() {
+        for appearance in ["light", "dark"] {
+            for mode in ["listening", "processing", "denied", "review"] {
+                launch(["--voice-preview=\(mode)", "--appearance=\(appearance)"])
+                app.buttons["capture.voice"].tap()
+                XCTAssertTrue(app.buttons["voice.cancel"].waitForExistence(timeout: 5))
+                if mode == "listening" { XCTAssertTrue(app.buttons["voice.stop"].isHittable) }
+                if mode == "denied" { XCTAssertTrue(app.buttons["voice.settings"].isHittable) }
+                XCTAssertFalse(app.staticTexts["Tu voz en Focus"].exists)
+                shot("RC voz \(mode) \(appearance)")
+                app.buttons["voice.cancel"].tap()
+                app.terminate()
+            }
+        }
+    }
+}
+
+final class HomeRCMicrophoneTests: XCTestCase {
+    func testPhysicalMicrophoneInterruptionSilenceAndCancel() throws {
+        #if targetEnvironment(simulator)
+        throw XCTSkip("Necesita el micrófono del iPhone físico.")
+        #else
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--reset-fixture", "--home-preview=empty"]
+        app.launch()
+        let input = app.textViews["capture.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 15))
+        input.tap(); input.typeText("Borrador de prueba")
+        app.buttons["capture.voice"].tap()
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for _ in 0..<2 {
+            if system.alerts.firstMatch.waitForExistence(timeout: 2) {
+                let allow = system.alerts.buttons.matching(NSPredicate(format: "label == 'Permitir' OR label == 'Allow' OR label == 'OK' OR label == 'Aceptar'")).firstMatch
+                if allow.exists { allow.tap() }
+            }
+        }
+        func shot(_ name: String) {
+            let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a)
+        }
+        shot("RC iPhone micrófono real")
+        guard app.buttons["voice.stop"].waitForExistence(timeout: 3) else {
+            app.buttons["voice.cancel"].tap()
+            throw XCTSkip("Micrófono o reconocimiento local no disponible en la configuración del iPhone.")
+        }
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(app.buttons["voice.retry"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["voice.stop"].exists)
+        shot("RC iPhone dictado tras background")
+        app.buttons["voice.cancel"].tap()
+        XCTAssertEqual(input.value as? String, "Borrador de prueba")
+        app.buttons["capture.voice"].tap()
+        XCTAssertTrue(app.buttons["voice.stop"].waitForExistence(timeout: 4))
+        // Actual microphone silence; there is no injected transcript or audio.
+        guard app.buttons["voice.retry"].waitForExistence(timeout: 12) else {
+            app.buttons["voice.cancel"].tap()
+            throw XCTSkip("El micrófono detecta sonido ambiente; silencio real pendiente.")
+        }
+        shot("RC iPhone silencio")
+        app.buttons["voice.cancel"].tap()
+        XCTAssertEqual(input.value as? String, "Borrador de prueba")
+        #endif
     }
 }

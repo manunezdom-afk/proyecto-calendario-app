@@ -183,6 +183,7 @@ struct NovaCaptureField: View {
     @State private var focused = false
     @State private var inputHeight: CGFloat = 40
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showVoice = false
     @State private var sendAfterDictation = false
     @State private var reviewAfterDictation = false
@@ -248,8 +249,12 @@ struct NovaCaptureField: View {
     private var controls: some View {
         HStack(spacing: 8) {
             Button { focused = false; sendAfterDictation = false; reviewAfterDictation = false; showVoice = true } label: {
-                Label("Dictar", systemImage: "mic")
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize { Text("Dictar") }
+                    else { Label("Dictar", systemImage: "mic").labelStyle(.titleAndIcon) }
+                }
                     .font(.subheadline.weight(.medium))
+                    .lineLimit(1).fixedSize(horizontal: true, vertical: false)
                     .frame(minWidth: 44, minHeight: 44)
                     .padding(.horizontal, 6)
             }
@@ -257,11 +262,13 @@ struct NovaCaptureField: View {
             .accessibilityLabel("Dictar").accessibilityIdentifier("\(identifier).voice")
             .disabled(store.isNovaTyping)
             Spacer(minLength: 0)
-            Text(text.count > 1500 ? "\(text.count)/\(maxLength)" : "A tu ritmo")
-                .font(.caption).foregroundStyle(Theme.Colors.textSecondary)
-                .lineLimit(1).accessibilityHidden(true)
+            if !dynamicTypeSize.isAccessibilitySize {
+                Text(text.count > 1500 ? "\(text.count)/\(maxLength)" : "A tu ritmo")
+                    .font(.caption).foregroundStyle(Theme.Colors.textSecondary)
+                    .lineLimit(1).accessibilityHidden(true)
+            }
             Button(action: submit) {
-                Image(systemName: "arrow.up").font(.body.weight(.semibold))
+                Image(systemName: "arrow.up").font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(canSend ? Color.white : Theme.Colors.textSecondary)
                     .frame(width: 44, height: 44)
                     .background(canSend ? Theme.Colors.actionFill : Theme.Colors.surfaceHigh, in: Circle())
@@ -293,10 +300,7 @@ struct NovaFeedbackView: View {
     @EnvironmentObject private var store: FocusDataStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var nav: NavigationCoordinator
-    @State private var now = Date()
-    @State private var replyContext: Int?
-    @State private var contextChanged = false
-    @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var toast: ToastManager
     var showLatestReply: Bool
 
     var body: some View {
@@ -304,9 +308,8 @@ struct NovaFeedbackView: View {
             if store.isNovaTyping {
                 progress
             } else if showLatestReply, store.novaPendingProposal == nil, store.novaErrorMessage == nil,
-                      let reply = store.novaMessages.last, reply.role == .nova,
-                      HomeReplyPhase.resolve(reply, now: now, contextChanged: contextChanged) != .hidden {
-                replyCard(reply, phase: HomeReplyPhase.resolve(reply, now: now, contextChanged: contextChanged))
+                      let reply = store.homeReply {
+                replyCard(reply)
                     .transition(.opacity)
             }
             if let proposal = store.novaPendingProposal {
@@ -328,64 +331,39 @@ struct NovaFeedbackView: View {
             }
             if let error = store.novaErrorMessage { errorCard(error) }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: store.novaMessages.last?.id)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: replyPhase)
-        .onChange(of: store.novaMessages.last?.id, initial: true) { _, _ in
-            now = Date(); replyContext = contextSignature; contextChanged = false
-        }
-        .onChange(of: contextSignature) { _, signature in
-            if !store.isNovaTyping, let replyContext, replyContext != signature { contextChanged = true }
-        }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { now = Date() } }
-        .task(id: store.novaMessages.last?.id) {
-            guard showLatestReply else { return }
-            guard let reply = store.novaMessages.last else { return }
-            let calendar = Calendar.current
-            let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: reply.timestamp))
-                ?? reply.timestamp.addingTimeInterval(600)
-            let deadlines = [reply.timestamp.addingTimeInterval(90), min(reply.timestamp.addingTimeInterval(600), midnight)].sorted()
-            for deadline in deadlines {
-                let delay = deadline.timeIntervalSinceNow
-                if delay > 0 {
-                    do { try await Task.sleep(for: .seconds(delay)) } catch { return }
-                }
-                now = Date()
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: store.homeReply?.id)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if showLatestReply, !store.isNovaTyping, store.novaPendingProposal == nil,
+               store.novaErrorMessage == nil, let reply = store.homeReply {
+                Button { dismissReply(reply.id) } label: { Label("Quitar", systemImage: "eye.slash") }
+                    .tint(Theme.Colors.focusAccent)
+                    .accessibilityIdentifier("capture.hide")
             }
         }
         .accessibilityElement(children: .contain)
     }
 
-    private var contextSignature: Int {
-        var hasher = Hasher()
-        hasher.combine(store.tasks); hasher.combine(store.events); hasher.combine(store.systemEvents)
-        return hasher.finalize()
+    private func dismissReply(_ id: UUID) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.24)) {
+            if store.dismissHomeReply(id) { HapticManager.shared.tick() }
+            else { toast.show(.warning("No pude guardar este cambio. Intenta quitar la tarjeta de nuevo.")) }
+        }
     }
 
-    private var replyPhase: HomeReplyPhase {
-        guard let reply = store.novaMessages.last else { return .hidden }
-        return HomeReplyPhase.resolve(reply, now: now, contextChanged: contextChanged)
-    }
-
-    private func replyCard(_ reply: NovaMessage, phase: HomeReplyPhase) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func replyCard(_ reply: NovaMessage) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 FocusMark(size: 24)
-                Text(phase == .compact ? "Para tener en cuenta" : AssistantBrand.displayName)
+                Text(AssistantBrand.displayName)
                     .font(.caption.weight(.medium)).foregroundStyle(Theme.Colors.textSecondary)
             }
-            // A bounded excerpt keeps Home scannable; the original always lives in Hilante.
-            let blocks = HilanteText.blocks(reply.content)
-            let previewBlocks = phase == .compact ? blocks.filter { !$0.heading } : blocks
-            let excerpt = previewBlocks.prefix(phase == .compact ? 1 : 3).map { block in
-                (block.marker.map { "\($0) " } ?? "") + (block.heading ? "**\(block.text)**" : block.text)
-            }.joined(separator: "\n")
+            // Only a short excerpt; execution labels would duplicate the agenda.
+            let excerpt = HilanteText.blocks(reply.content).filter { !$0.heading }
+                .prefix(2).map(\.text).joined(separator: " ")
             Text(HilanteText.inline(excerpt))
                 .font(.subheadline).foregroundStyle(Theme.Colors.textPrimary)
-                .lineSpacing(3).lineLimit(phase == .compact ? 2 : 6)
+                .lineSpacing(2).lineLimit(3)
                 .accessibilityIdentifier("capture.result")
-            if phase == .fresh, !reply.actionLabels.isEmpty {
-                NovaSavedActionsView(labels: Array(reply.actionLabels.prefix(2)))
-            }
             Button { nav.openNova() } label: {
                 HStack(spacing: 5) {
                     Text("Ver en Hilante")
@@ -396,7 +374,11 @@ struct NovaFeedbackView: View {
             .accessibilityIdentifier("capture.history")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .focusSurface(radius: 22, padding: 18)
+        .focusSurface(radius: 22, padding: 16)
+        .accessibilityAction(named: "Quitar de Home") { dismissReply(reply.id) }
+        .contextMenu {
+            Button("Quitar de Home", systemImage: "eye.slash") { dismissReply(reply.id) }
+        }
     }
 
     private var progress: some View {
