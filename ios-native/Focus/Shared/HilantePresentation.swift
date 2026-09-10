@@ -73,18 +73,22 @@ struct HilanteText: View {
     }
 }
 
-/// UIKit owns text layout, selection and caret scrolling; SwiftUI owns the outer height.
+/// One UIKit text system owns glyphs, placeholder, selection and caret scrolling.
+/// Only the outer height animates; editing never cross-fades text snapshots.
 struct HilanteTextInput: UIViewRepresentable {
-    @Binding var text: String
-    @Binding var focused: Bool
+    var text: String
+    var focused: Bool
+    var onTextChange: (String) -> Void
+    var onFocusChange: (Bool) -> Void
+    @Binding var height: CGFloat
+    var placeholder: String
     var identifier: String
     @Environment(\.sizeCategory) private var sizeCategory
 
-    func makeUIView(context: Context) -> UITextView {
-        let view = UITextView()
+    func makeUIView(context: Context) -> ComposerTextView {
+        let view = ComposerTextView()
         view.delegate = context.coordinator
         view.backgroundColor = .clear
-        view.font = .preferredFont(forTextStyle: .body)
         view.adjustsFontForContentSizeCategory = true
         view.textColor = .label
         view.tintColor = UIColor(Theme.Colors.focusAccent)
@@ -95,24 +99,35 @@ struct HilanteTextInput: UIViewRepresentable {
         view.returnKeyType = .default
         view.accessibilityLabel = "Escribe a Hilante"
         view.accessibilityIdentifier = identifier
+        view.heightChanged = { [weak coordinator = context.coordinator] value in
+            DispatchQueue.main.async {
+                guard let coordinator, abs(coordinator.parent.height - value) > 0.5 else { return }
+                coordinator.parent.height = value
+            }
+        }
         return view
     }
 
-    func updateUIView(_ view: UITextView, context: Context) {
+    func updateUIView(_ view: ComposerTextView, context: Context) {
         context.coordinator.parent = self
-        if view.text != text { view.text = text; view.invalidateIntrinsicContentSize() }
-        view.font = .preferredFont(forTextStyle: .body)
-        if focused && !view.isFirstResponder { view.becomeFirstResponder() }
+        // Resetting font/text during marked-text composition can invalidate glyph layout.
+        let font = UIFont.preferredFont(forTextStyle: .body)
+        if view.font != font { view.font = font }
+        // End editing before applying an external clear (send/dictation).
         if !focused && view.isFirstResponder { view.resignFirstResponder() }
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
-        guard let width = proposal.width, width > 0 else { return nil }
-        let line = uiView.font?.lineHeight ?? 22
-        let natural = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
-        // Five lines at default type, bounded even at accessibility sizes and with a keyboard.
-        let maximum = min(160, line * 5 + 14)
-        return CGSize(width: width, height: min(maximum, max(line + 14, natural)))
+        // While editing, UIKit is authoritative. A queued SwiftUI height update
+        // can carry an older binding value; replaying it here duplicates glyphs
+        // or restores characters that the user just deleted.
+        if text.isEmpty && !view.text.isEmpty {
+            // Sending is an explicit clear, including any pending marked text.
+            view.unmarkText()
+            view.text = ""
+        } else if !view.isFirstResponder && view.text != text && view.markedTextRange == nil {
+            view.text = text
+        }
+        view.placeholderLabel.text = placeholder
+        view.refreshLayout()
+        if focused && !view.isFirstResponder { view.becomeFirstResponder() }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -120,11 +135,42 @@ struct HilanteTextInput: UIViewRepresentable {
         var parent: HilanteTextInput
         init(_ parent: HilanteTextInput) { self.parent = parent }
         func textViewDidChange(_ textView: UITextView) {
-            parent.text = textView.text
-            textView.invalidateIntrinsicContentSize()
+            (textView as? ComposerTextView)?.refreshLayout()
+            parent.onTextChange(textView.text)
         }
-        func textViewDidBeginEditing(_ textView: UITextView) { parent.focused = true }
-        func textViewDidEndEditing(_ textView: UITextView) { parent.focused = false }
+        func textViewDidBeginEditing(_ textView: UITextView) { parent.onFocusChange(true) }
+        func textViewDidEndEditing(_ textView: UITextView) { parent.onFocusChange(false) }
+    }
+
+    final class ComposerTextView: UITextView {
+        let placeholderLabel = UILabel()
+        var heightChanged: ((CGFloat) -> Void)?
+        override init(frame: CGRect, textContainer: NSTextContainer?) {
+            super.init(frame: frame, textContainer: textContainer)
+            font = .preferredFont(forTextStyle: .body)
+            placeholderLabel.numberOfLines = 0
+            placeholderLabel.textColor = .secondaryLabel
+            placeholderLabel.isUserInteractionEnabled = false
+            placeholderLabel.isAccessibilityElement = false
+            addSubview(placeholderLabel)
+        }
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            refreshLayout()
+        }
+        func refreshLayout() {
+            // Hidden synchronously with UIKit's edit, without a SwiftUI removal transition.
+            placeholderLabel.isHidden = !text.isEmpty
+            placeholderLabel.font = font
+            guard bounds.width > 0 else { return }
+            let line = font?.lineHeight ?? 22
+            let natural = sizeThatFits(CGSize(width: bounds.width, height: .greatestFiniteMagnitude)).height
+            let target = min(min(160, line * 5 + 14), max(line + 14, natural))
+            placeholderLabel.frame = CGRect(x: 0, y: 7, width: bounds.width,
+                height: placeholderLabel.sizeThatFits(CGSize(width: bounds.width, height: .greatestFiniteMagnitude)).height)
+            heightChanged?(ceil(target))
+        }
     }
 }
 
@@ -148,6 +194,21 @@ struct HilanteThinkingMark: View {
 enum HilantePresentationFixture {
     static func install(in store: FocusDataStore) {
         let args = CommandLine.arguments
+        if args.contains("--ui-testing"), let preview = args.first(where: { $0.hasPrefix("--home-preview=") }) {
+            let day = Calendar.current.startOfDay(for: Date())
+            NovaResponder.testReferenceDate = day.addingTimeInterval(10 * 3600)
+            if store.tasks.isEmpty && store.events.isEmpty && store.novaMessages.isEmpty {
+                let mode = String(preview.split(separator: "=").last ?? "")
+                let count = mode == "three" ? 3 : mode == "one" ? 1 : 0
+                for title in ["Cerrar la propuesta", "Revisar el presupuesto", "Preparar la reunión"].prefix(count) {
+                    _ = store.addTask(FocusTask(title: title, priority: .alta, dueDate: day))
+                }
+                if mode == "agenda" {
+                    _ = store.addEvent(FocusEvent(title: "Reunión de equipo", startTime: day.addingTimeInterval(10.5 * 3600),
+                        endTime: day.addingTimeInterval(11 * 3600), section: .reunion))
+                }
+            }
+        }
         guard args.contains("--ui-testing"), let flag = args.first(where: { $0.hasPrefix("--hilante-preview=") }),
               store.novaMessages.isEmpty else { return }
         let mode = String(flag.split(separator: "=").last ?? "")

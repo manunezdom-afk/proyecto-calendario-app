@@ -38,7 +38,8 @@ final class HilantePresentationUITests: XCTestCase {
         XCTAssertLessThan(send.frame.maxY, app.keyboards.firstMatch.frame.minY + 1)
         capture("Home multiline internal scrolling keyboard")
         input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (input.value as? String)?.count ?? 0))
-        XCTAssertEqual(input.value as? String, "")
+        let emptied = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", ""), object: input)
+        XCTAssertEqual(XCTWaiter.wait(for: [emptied], timeout: 5), .completed)
         XCTAssertLessThanOrEqual(input.frame.height, shortHeight + 1)
         capture("Home composer collapsed")
         app.terminate()
@@ -86,5 +87,73 @@ final class HilantePresentationUITests: XCTestCase {
         app.buttons["Cancelar"].tap()
         XCTAssertFalse(app.otherElements["nova.progress"].exists)
         XCTAssertFalse(result.exists)
+    }
+}
+
+final class HomeCommitmentUITests: XCTestCase {
+    private let app = XCUIApplication()
+    override func setUpWithError() throws { continueAfterFailure = false }
+    private func launch(_ mode: String, reset: Bool = true) {
+        app.launchArguments = ["--ui-testing", "--home-preview=\(mode)"]
+        if reset { app.launchArguments.append("--reset-fixture") }
+        if mode == "recommendation" { app.launchArguments.append("--hilante-preview=compact") }
+        app.launch()
+        XCTAssertTrue(app.textViews["capture.input"].waitForExistence(timeout: 15))
+    }
+    private func shot(_ title: String) {
+        let a = XCTAttachment(screenshot: app.screenshot()); a.name = title; a.lifetime = .keepAlways; add(a)
+    }
+    func testExactDepartureCreatesAgendaAndSurvivesRelaunch() {
+        launch("departure")
+        let input = app.textViews["capture.input"]
+        input.tap(); input.typeText("tengo que salir a las 3:20")
+        app.buttons["capture.send"].tap()
+        let result = app.staticTexts["capture.result"]
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        XCTAssertTrue(result.label.contains("Salir"), result.label)
+        let cleared = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", ""), object: input)
+        XCTAssertEqual(XCTWaiter.wait(for: [cleared], timeout: 5), .completed)
+        // Look through the scroll view too: SwiftUI may expose the row as a cell.
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "today.event.")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Salir")).firstMatch.isHittable)
+        for _ in 0..<2 where !row.isHittable { app.swipeUp() }
+        shot("Compromiso guardado en Home")
+        app.terminate(); launch("departure", reset: false)
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Salir")).firstMatch.exists)
+        shot("Compromiso persistido tras relanzar")
+    }
+    func testContextualHomeStates() {
+        for mode in ["empty", "one", "three", "agenda", "recommendation"] {
+            launch(mode)
+            let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "today.priority.task.open."))
+            XCTAssertEqual(rows.count, mode == "three" ? 3 : mode == "one" ? 1 : 0)
+            XCTAssertFalse(app.staticTexts["No hay nada urgente ahora."].exists)
+            if mode == "recommendation" { XCTAssertFalse(app.staticTexts["Espacio para lo que venga."].exists) }
+            shot("Home contextual \(mode)")
+            app.swipeUp()
+            shot("Home contenido \(mode)")
+            app.terminate()
+        }
+    }
+    func testFastEditingOneToFiveLinesAndDeletion() {
+        launch("empty")
+        let input = app.textViews["capture.input"]
+        input.tap()
+        var value = ""
+        for index in 1...5 {
+            let next = (index == 1 ? "" : "\n") + "Línea \(index) escrita rápidamente"
+            value += next
+            input.typeText(next)
+            XCTAssertEqual(input.value as? String, value)
+            XCTAssertLessThanOrEqual(input.frame.height, 161)
+            XCTAssertTrue(app.buttons["capture.send"].isHittable)
+            shot("Composer \(index) líneas")
+        }
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count))
+        let emptied = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", ""), object: input)
+        XCTAssertEqual(XCTWaiter.wait(for: [emptied], timeout: 5), .completed)
+        shot("Composer vacío después de borrar")
     }
 }

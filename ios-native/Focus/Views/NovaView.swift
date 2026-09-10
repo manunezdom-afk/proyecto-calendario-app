@@ -181,6 +181,7 @@ struct NovaCaptureField: View {
     var onFocusChange: (Bool) -> Void = { _ in }
     var onSend: () -> Void
     @State private var focused = false
+    @State private var inputHeight: CGFloat = 40
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showVoice = false
     @State private var sendAfterDictation = false
@@ -197,15 +198,13 @@ struct NovaCaptureField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 10) {
-                ZStack(alignment: .topLeading) {
-                    if text.isEmpty {
-                        Text(placeholder).font(.body).foregroundStyle(Theme.Colors.textSecondary)
-                            .padding(.top, 7).allowsHitTesting(false).accessibilityHidden(true)
-                    }
-                    HilanteTextInput(text: $text, focused: $focused, identifier: "\(identifier).input")
-                }
-                .padding(.horizontal, 4)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: text)
+                HilanteTextInput(text: text, focused: focused,
+                                 onTextChange: { text = $0 }, onFocusChange: { focused = $0 },
+                                 height: $inputHeight, placeholder: placeholder, identifier: "\(identifier).input")
+                    .transaction { $0.animation = nil }
+                    .frame(height: inputHeight)
+                    .padding(.horizontal, 4)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: inputHeight)
                 controls
             }
             .focusSurface(radius: 26, padding: 14)

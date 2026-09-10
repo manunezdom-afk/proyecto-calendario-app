@@ -1809,6 +1809,16 @@ enum NovaResponder {
             )
         }
 
+        // Explicit commitments share the normal execution/persistence boundary.
+        // Context continuations above retain precedence; never strip the action verb.
+        if let title = NovaLocalRoutingPolicy.scheduledCommitmentTitle(trimmed) {
+            guard let when = extractDateTime(from: lower) else {
+                return .clarify(reason: .eventNeedsDateTime(title: title))
+            }
+            return .createEvent(title: title, when: when, endTime: nil,
+                                location: nil, section: guessSection(for: title), wantsReminder: false)
+        }
+
         // ──────────────────────────────────────────────────────────────
         // 2. Borrar ejemplos / demo — siempre redirige a Ajustes.
         // ──────────────────────────────────────────────────────────────

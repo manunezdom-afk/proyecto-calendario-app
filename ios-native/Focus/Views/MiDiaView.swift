@@ -10,6 +10,7 @@ struct MiDiaView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.openURL) private var openURL
     @State private var draft = ""
+    @State private var homeNow = NovaResponder.referenceNow
     @State private var captureFocused = false
     @State private var showNewTask = false
     @State private var showNewEvent = false
@@ -20,7 +21,7 @@ struct MiDiaView: View {
     @State private var externalDeletionNotice = false
 
     private var dateLabel: String {
-        let value = Date().formatted(.dateTime.weekday(.wide).day().month(.wide))
+        let value = homeNow.formatted(.dateTime.weekday(.wide).day().month(.wide))
         return value.prefix(1).uppercased() + value.dropFirst()
     }
 
@@ -38,17 +39,33 @@ struct MiDiaView: View {
         HomePriorityPlanner.makePlan(
             tasks: store.tasks,
             events: store.events + store.systemEvents,
-            suggestions: store.settings.smartSuggestionsEnabled ? store.pendingSuggestions : []
+            suggestions: store.settings.smartSuggestionsEnabled ? store.pendingSuggestions : [], now: homeNow
         )
     }
 
     private var dayEvents: [FocusEvent] {
-        let now = Date()
+        let now = homeNow
         return store.eventsFor(date: now).filter {
             guard $0.status != .cancelled && $0.status != .done else { return false }
             if $0.isReminder == true { return $0.startTime >= now }
             return ($0.endTime ?? $0.startTime) >= now
         }
+    }
+
+    private var agendaLeads: Bool {
+        !dayEvents.isEmpty && !priorityPlan.items.contains { $0.tone == .urgent }
+            && (priorityPlan.items.isEmpty || dayEvents[0].startTime.timeIntervalSince(homeNow) <= 90 * 60)
+    }
+
+    private var feedbackBelowAgenda: Bool {
+        agendaLeads && !store.isNovaTyping && store.novaPendingProposal == nil && store.novaErrorMessage == nil
+    }
+
+    private var headline: String {
+        if priorityPlan.items.contains(where: { $0.tone == .urgent }) { return "Primero, lo esencial." }
+        if agendaLeads { return "Tu día está en marcha." }
+        if !priorityPlan.items.isEmpty { return "Un paso a la vez." }
+        return "Tu día, a tu ritmo."
     }
 
     var body: some View {
@@ -61,15 +78,12 @@ struct MiDiaView: View {
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(Theme.Colors.textSecondary)
                             .accessibilityIdentifier("today.date")
-                        Text("Vamos con tu día.")
-                            .font(Theme.Typography.displayHero)
+                        Text(headline)
+                            .font(.largeTitle.weight(.semibold))
                             .tracking(-0.8)
                             .foregroundStyle(Theme.Colors.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityAddTraits(.isHeader)
-                        Text("Lo que tienes en mente, empieza aquí.")
-                            .font(.body)
-                            .foregroundStyle(Theme.Colors.textSecondary)
                     }
                     .padding(.top, 16)
 
@@ -84,7 +98,7 @@ struct MiDiaView: View {
                             .onPreferenceChange(HomeCaptureHeightKey.self) { _ in
                                 if captureFocused { proxy.scrollTo("today.capture", anchor: .top) }
                             }
-                        NovaFeedbackView(showLatestReply: true)
+                        if !feedbackBelowAgenda { NovaFeedbackView(showLatestReply: true) }
                     }
                     .id("today.capture")
 
@@ -101,27 +115,21 @@ struct MiDiaView: View {
                         }.accessibilityIdentifier("today.completed")
                     }
 
-                    if store.tasks.isEmpty && store.events.isEmpty && store.systemEvents.isEmpty {
-                        firstStep
-                    } else {
+                    if agendaLeads {
+                        agendaSection
+                        if feedbackBelowAgenda { NovaFeedbackView(showLatestReply: true) }
+                    }
+                    if !priorityPlan.items.isEmpty || priorityPlan.recommendation != nil {
                         importantSection
+                    }
+                    if !agendaLeads && !dayEvents.isEmpty { agendaSection }
+                    if priorityPlan.items.isEmpty && dayEvents.isEmpty && priorityPlan.recommendation == nil
+                        && !store.isNovaTyping && store.novaPendingProposal == nil
+                        && !(store.novaMessages.last.map { HomeReplyPhase.resolve($0) != .hidden } ?? false) {
+                        firstStep
+                    }
 
-                        Group {
-                            HStack {
-                                sectionTitle("Tu agenda", count: dayEvents.count)
-                                Spacer()
-                                Button("Ver agenda") { nav.openCalendar(on: Date()) }
-                                    .font(.subheadline.weight(.medium)).frame(minHeight: 44)
-                            }
-                            if dayEvents.isEmpty {
-                                Text("Hoy no tienes eventos. Hay espacio para avanzar a tu ritmo.")
-                                    .font(.body).foregroundStyle(.secondary)
-                            } else {
-                                ForEach(dayEvents) { event in eventRow(event) }
-                            }
-                        }
-
-                        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+                        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: homeNow) ?? homeNow
                         let next = store.eventsFor(date: tomorrow).filter { $0.status != .cancelled && $0.status != .done }
                         if let first = next.first {
                             Button { nav.openCalendar(on: tomorrow) } label: {
@@ -137,20 +145,22 @@ struct MiDiaView: View {
                                 }.padding(16).background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 22))
                             }.buttonStyle(.plain)
                         }
-                    }
                 }
                 .listRowInsets(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             }
             #if DEBUG
-            .onAppear { HilantePresentationFixture.install(in: store) }
+            .onAppear { HilantePresentationFixture.install(in: store); homeNow = NovaResponder.referenceNow }
             #endif
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
                 guard captureFocused else { return }
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                     proxy.scrollTo("today.capture", anchor: .top)
                 }
+            }
+            .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+                homeNow = NovaResponder.referenceNow
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
@@ -235,61 +245,34 @@ struct MiDiaView: View {
     }
 
     private var firstStep: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: "circle.dotted.circle")
-                    .font(.system(size: 26, weight: .light))
-                    .foregroundStyle(Theme.Colors.focusAccent)
-                    .frame(width: 44, height: 44)
-                    .background(Theme.Colors.focusAccentSoft, in: RoundedRectangle(cornerRadius: 14))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("Empieza por una cosa.")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(Theme.Colors.textPrimary)
-                    Text("Una tarea, un plan o eso que no quieres olvidar.")
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.Colors.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "sun.horizon").font(.title2.weight(.light))
+                .foregroundStyle(Theme.Colors.focusAccent).accessibilityHidden(true)
+            Text("Espacio para lo que venga.")
+                .font(.subheadline).foregroundStyle(Theme.Colors.textSecondary)
+            Spacer(minLength: 0)
+            Button { showNewTask = true } label: {
+                Image(systemName: "plus").frame(width: 44, height: 44)
             }
-            Button {
-                draft = "Tengo que estudiar economía mañana"
-            } label: {
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("PRUEBA A DECIR").font(.caption2.weight(.semibold)).tracking(1.2)
-                            .foregroundStyle(Theme.Colors.textSecondary)
-                        Text("Estudiar economía mañana")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(Theme.Colors.textPrimary)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "arrow.up.left")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Theme.Colors.focusAccent)
-                        .frame(width: 36, height: 36)
-                        .background(Theme.Colors.surface, in: Circle())
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .background(Theme.Colors.surfaceTinted, in: RoundedRectangle(cornerRadius: 18))
-            }.buttonStyle(.plain).accessibilityIdentifier("today.example")
-            Button {
-                showNewTask = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus")
-                    Text("Crear una tarea manualmente")
-                }
-                .font(.subheadline.weight(.medium))
-                .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Theme.Colors.focusAccent)
+            .accessibilityLabel("Crear una tarea manualmente")
             .accessibilityIdentifier("today.manualTask")
         }
-        .focusSurface(radius: 26, padding: 20)
+        .padding(.vertical, 12)
+        .accessibilityIdentifier("today.priority.empty")
+    }
+
+    @ViewBuilder private var agendaSection: some View {
+        HStack {
+            sectionTitle("Tu agenda", count: dayEvents.count)
+            Spacer()
+            Button { nav.openCalendar(on: homeNow) } label: {
+                Image(systemName: "arrow.up.right").font(.subheadline.weight(.semibold))
+                    .frame(width: 44, height: 44)
+            }.accessibilityLabel("Ver agenda")
+        }
+        ForEach(Array(dayEvents.enumerated()), id: \.element.id) { index, event in
+            eventRow(event, featured: agendaLeads && index == 0)
+        }
     }
 
     @ViewBuilder private var syncNotice: some View {
@@ -322,14 +305,10 @@ struct MiDiaView: View {
         let plan = priorityPlan
         return VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Lo importante")
+                Text(plan.items.isEmpty ? "Una idea para hoy" : "Lo importante")
                     .font(.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
                     .accessibilityAddTraits(.isHeader)
-                Text(plan.summary)
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("today.priority.header")
@@ -341,24 +320,8 @@ struct MiDiaView: View {
                         if index < plan.items.count - 1 { Divider().padding(.leading, 60) }
                     }
                 }
-                .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            } else if plan.recommendation == nil {
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle")
-                        .font(.title3)
-                        .foregroundStyle(Theme.Colors.success)
-                        .accessibilityHidden(true)
-                    Text(pendingTasks.isEmpty
-                         ? "Tu agenda contiene lo próximo; no hay pendientes que reclamen atención."
-                         : "Tus demás pendientes pueden esperar. Focus los mantiene en su lista.")
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.Colors.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(16)
-                .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .accessibilityIdentifier("today.priority.empty")
+                .padding(.vertical, 4)
+                .background(Theme.Colors.surface.opacity(0.55), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             }
 
             if let recommendation = plan.recommendation {
@@ -507,19 +470,20 @@ struct MiDiaView: View {
         }
     }
 
-    private func eventRow(_ event: FocusEvent, overdue: Bool = false) -> some View {
+    private func eventRow(_ event: FocusEvent, overdue: Bool = false, featured: Bool = false) -> some View {
         let accessible = dynamicTypeSize.isAccessibilitySize
-        let layout = accessible
+        let layout = (accessible || featured)
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
             : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
         return layout {
             VStack(alignment: .leading, spacing: 4) {
                 Text(event.startTime, format: .dateTime.hour().minute())
-                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .font(featured ? .largeTitle.weight(.semibold).monospacedDigit() : .subheadline.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(featured ? Theme.Colors.focusAccent : Theme.Colors.textSecondary)
                     .lineLimit(1).minimumScaleFactor(0.8)
                 if overdue { Text(event.startTime, format: .dateTime.day().month(.abbreviated)).font(.caption).foregroundStyle(Theme.Colors.danger) }
-            }.frame(width: accessible ? nil : 62, alignment: .leading)
-            if !accessible {
+            }.frame(width: (accessible || featured) ? nil : 62, alignment: .leading)
+            if !accessible && !featured {
                 RoundedRectangle(cornerRadius: 2).fill(event.accentColor).frame(width: 3)
                     .accessibilityHidden(true)
             }
@@ -531,7 +495,7 @@ struct MiDiaView: View {
                     HStack(spacing: 6) {
                         Image(systemName: event.effectiveSource == .local ? event.section.symbol : "calendar")
                             .font(.caption).foregroundStyle(event.accentColor).accessibilityHidden(true)
-                        Text(event.title).font(.body.weight(.medium)).foregroundStyle(.primary)
+                        Text(event.title).font(featured ? .title2.weight(.semibold) : .body.weight(.medium)).foregroundStyle(.primary)
                     }
                     if let subtitle = event.subtitle, !subtitle.isEmpty {
                         Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
@@ -554,7 +518,16 @@ struct MiDiaView: View {
                 } label: { Image(systemName: "checkmark.circle").font(.title2).frame(width: 44, height: 44) }
                 .accessibilityLabel("Completar recordatorio \(event.title)")
             }
-        }.fixedSize(horizontal: false, vertical: true).focusSurface(radius: 20, padding: 16)
+        }.fixedSize(horizontal: false, vertical: true)
+        .padding(featured ? 22 : 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            if featured {
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(LinearGradient(colors: [Theme.Colors.focusAccent.opacity(0.16), Theme.Colors.novaAccent.opacity(0.07)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .overlay { RoundedRectangle(cornerRadius: 26).strokeBorder(Theme.Colors.focusAccent.opacity(0.12), lineWidth: 1) }
+            }
+        }
         .accessibilityIdentifier("today.event.\(event.id.uuidString)")
         .swipeActions(edge: .trailing, allowsFullSwipe: event.effectiveSource == .local) {
             if event.effectiveSource == .local {
